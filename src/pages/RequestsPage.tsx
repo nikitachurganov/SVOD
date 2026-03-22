@@ -10,6 +10,7 @@ import {
   Space,
   Table,
   Tag,
+  Tooltip,
   Typography,
   theme,
 } from 'antd';
@@ -105,6 +106,33 @@ export const RequestsPage = () => {
             {record.title}
           </Link>
         ),
+      },
+      {
+        title: 'Описание',
+        dataIndex: 'ai_summary',
+        key: 'ai_summary',
+        width: 350,
+        responsive: ['md'],
+        render: (value: RequestResponse['ai_summary']) => {
+          const text = value?.summary;
+          return text ? (
+            <Tooltip title={text}>
+              <span
+                style={{
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
+                {text}
+              </span>
+            </Tooltip>
+          ) : (
+            <Typography.Text type="secondary">Нет описания</Typography.Text>
+          );
+        },
       },
       {
         title: 'Номер заявки',
@@ -266,6 +294,13 @@ export const RequestsPage = () => {
                     <Card key={record.id} size="small" title={record.title}>
                       <Space direction="vertical" size={4} style={{ width: '100%' }}>
                         <Typography.Text type="secondary">№ {record.id}</Typography.Text>
+                        <Typography.Paragraph
+                          type="secondary"
+                          ellipsis={{ rows: 2 }}
+                          style={{ margin: 0 }}
+                        >
+                          {record.ai_summary?.summary || 'Нет описания'}
+                        </Typography.Paragraph>
                         <Typography.Text>
                           Автор:{' '}
                           {record.author

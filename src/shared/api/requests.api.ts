@@ -16,6 +16,7 @@ export interface RequestResponse {
   created_at: string;
   updated_at: string;
   form_snapshot?: unknown | null;
+  ai_summary?: { summary: string; priority: string; tags: string[] } | null;
 }
 
 export interface CreateRequestPayload {

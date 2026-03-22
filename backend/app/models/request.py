@@ -28,6 +28,7 @@ class Request(Base):
     data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="open")
     form_snapshot: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    ai_summary: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     closed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

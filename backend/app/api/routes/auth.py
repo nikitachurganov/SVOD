@@ -1,4 +1,7 @@
-from fastapi import APIRouter
+from typing import Annotated
+
+from fastapi import APIRouter, Depends
+from fastapi.security import OAuth2PasswordRequestForm
 
 from app.api.deps import CurrentUser, DbSession
 from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse
@@ -15,6 +18,15 @@ async def register(payload: RegisterRequest, session: DbSession) -> TokenRespons
 
 @router.post("/login", response_model=TokenResponse)
 async def login(payload: LoginRequest, session: DbSession) -> TokenResponse:
+    return await auth_service.login(session, payload)
+
+
+@router.post("/token", response_model=TokenResponse)
+async def token_login(
+    form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
+    session: DbSession,
+) -> TokenResponse:
+    payload = LoginRequest(email=form_data.username, password=form_data.password)
     return await auth_service.login(session, payload)
 
 

@@ -8,6 +8,7 @@ from app.models.request import Request
 from app.models.user import User
 from app.repositories import request_repository
 from app.schemas.request import (
+    AISummaryResponse,
     CreateRequestPayload,
     RequestResponse,
     UpdateRequestPayload,
@@ -27,6 +28,16 @@ def _to_author(author: User | None) -> PublicAuthorResponse | None:
     )
 
 
+def _to_ai_summary(data: dict | None) -> AISummaryResponse | None:
+    if not data:
+        return None
+    return AISummaryResponse(
+        summary=data.get("summary", ""),
+        priority=data.get("priority", "medium"),
+        tags=data.get("tags", []),
+    )
+
+
 def _to_response(req: Request) -> RequestResponse:
     return RequestResponse(
         id=str(req.id),
@@ -41,6 +52,7 @@ def _to_response(req: Request) -> RequestResponse:
         created_at=req.created_at.isoformat(),
         updated_at=req.updated_at.isoformat(),
         form_snapshot=req.form_snapshot,
+        ai_summary=_to_ai_summary(req.ai_summary),
     )
 
 

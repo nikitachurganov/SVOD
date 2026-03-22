@@ -25,6 +25,12 @@ class PatchStatusPayload(BaseModel):
     status: str = Field(..., min_length=1)
 
 
+class AISummaryResponse(BaseModel):
+    summary: str
+    priority: str
+    tags: list[str]
+
+
 class RequestResponse(BaseModel):
     id: str
     title: str
@@ -38,3 +44,4 @@ class RequestResponse(BaseModel):
     created_at: str
     updated_at: str
     form_snapshot: Any | None = None
+    ai_summary: AISummaryResponse | None = None

@@ -13,5 +13,6 @@ export interface RequestEntity {
   created_at: string;
   updated_at: string;
   form_snapshot?: FormEntity | null;
+  ai_summary?: { summary: string; priority: string; tags: string[] } | null;
 }
 
