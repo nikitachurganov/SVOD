@@ -8,6 +8,7 @@ from app.schemas.user import PublicAuthorResponse
 class CreateRequestPayload(BaseModel):
     title: str = Field(..., min_length=1, max_length=500)
     form_id: str
+    organization_id: str | None = None
     data: Any = None
     status: str = "open"
     form_snapshot: Any = None
@@ -25,10 +26,10 @@ class PatchStatusPayload(BaseModel):
 
 
 class RequestResponse(BaseModel):
-    """Matches the frontend RequestResponse interface."""
     id: str
     title: str
     form_id: str
+    organization_id: str | None
     data: Any
     status: str
     closedAt: str | None

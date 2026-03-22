@@ -20,6 +20,7 @@ import {
   type FormResponse,
 } from '../shared/api/forms.api';
 import { createRequest } from '../shared/api/requests.api';
+import { useOrganization } from '../shared/context/organization.context';
 import { uploadFieldFiles, type FileMetadata } from '../shared/api/files.api';
 import type { Field, FieldOption, FormEntity } from '../types/form';
 import { mapDataToSnapshot } from '../shared/utils/mapDataToSnapshot';
@@ -51,6 +52,7 @@ export const CreateRequestPage = () => {
   const navigate = useNavigate();
   const { token } = theme.useToken();
   const { notification } = App.useApp();
+  const { activeOrganization } = useOrganization();
 
   const [forms, setForms] = useState<FormResponse[]>([]);
   const [loadingForms, setLoadingForms] = useState(true);
@@ -67,7 +69,7 @@ export const CreateRequestPage = () => {
 
   useEffect(() => {
     setLoadingForms(true);
-    getForms()
+    getForms(activeOrganization?.id)
       .then((data) => {
         setForms(data);
         setError(null);
@@ -76,7 +78,7 @@ export const CreateRequestPage = () => {
         setError(err instanceof Error ? err.message : 'Не удалось загрузить формы');
       })
       .finally(() => setLoadingForms(false));
-  }, []);
+  }, [activeOrganization?.id]);
   const selectedForm = useMemo(
     () => forms.find((f) => f.id === selectedFormId),
     [forms, selectedFormId],
@@ -260,6 +262,7 @@ export const CreateRequestPage = () => {
       await createRequest({
         title: meta.title,
         form_id: meta.formId,
+        organization_id: activeOrganization?.id ?? null,
         data: alignedData,
         form_snapshot: snapshot,
       });

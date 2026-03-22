@@ -29,6 +29,7 @@ def _to_response(form: Form) -> FormResponse:
         name=form.name,
         description=form.description or "",
         pages=form.fields if isinstance(form.fields, list) else [],
+        organization_id=str(form.organization_id) if form.organization_id else None,
         created_by_user_id=str(form.created_by_user_id) if form.created_by_user_id else None,
         author=_to_author(form.author),
         created_at=form.created_at.isoformat(),
@@ -36,8 +37,13 @@ def _to_response(form: Form) -> FormResponse:
     )
 
 
-async def list_forms(session: AsyncSession) -> list[FormResponse]:
-    forms = await form_repository.get_all(session)
+async def list_forms(
+    session: AsyncSession, organization_id: uuid.UUID | None = None
+) -> list[FormResponse]:
+    if organization_id is not None:
+        forms = await form_repository.get_all_by_org(session, organization_id)
+    else:
+        forms = await form_repository.get_all(session)
     return [_to_response(f) for f in forms]
 
 
@@ -51,10 +57,12 @@ async def get_form(session: AsyncSession, form_id: str) -> FormResponse:
 async def create_form(
     session: AsyncSession, payload: CreateFormRequest, current_user: User
 ) -> FormResponse:
+    org_id = uuid.UUID(payload.organization_id) if payload.organization_id else None
     form = Form(
         name=payload.name,
         description=payload.description,
         created_by_user_id=current_user.id,
+        organization_id=org_id,
         fields=payload.pages,
     )
     form = await form_repository.create(session, form)

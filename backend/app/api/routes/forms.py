@@ -1,4 +1,6 @@
-from fastapi import APIRouter
+import uuid
+
+from fastapi import APIRouter, Query
 
 from app.api.deps import CurrentUser, DbSession
 from app.schemas.form import CreateFormRequest, FormResponse, UpdateFormRequest
@@ -8,8 +10,12 @@ router = APIRouter()
 
 
 @router.get("", response_model=list[FormResponse])
-async def list_forms(session: DbSession, _user: CurrentUser) -> list[FormResponse]:
-    return await form_service.list_forms(session)
+async def list_forms(
+    session: DbSession,
+    _user: CurrentUser,
+    organization_id: uuid.UUID | None = Query(default=None),
+) -> list[FormResponse]:
+    return await form_service.list_forms(session, organization_id=organization_id)
 
 
 @router.get("/{form_id}", response_model=FormResponse)

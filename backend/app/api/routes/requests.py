@@ -1,4 +1,6 @@
-from fastapi import APIRouter
+import uuid
+
+from fastapi import APIRouter, Query
 
 from app.api.deps import CurrentUser, DbSession
 from app.schemas.request import (
@@ -14,9 +16,11 @@ router = APIRouter()
 
 @router.get("", response_model=list[RequestResponse])
 async def list_requests(
-    session: DbSession, _user: CurrentUser
+    session: DbSession,
+    _user: CurrentUser,
+    organization_id: uuid.UUID | None = Query(default=None),
 ) -> list[RequestResponse]:
-    return await request_service.list_requests(session)
+    return await request_service.list_requests(session, organization_id=organization_id)
 
 
 @router.get("/{request_id}", response_model=RequestResponse)

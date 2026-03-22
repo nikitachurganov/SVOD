@@ -9,8 +9,8 @@ from typing import Sequence, Union
 
 from alembic import op
 
-revision: str = "004_backfill_author_for_existing_forms_and_requests"
-down_revision: Union[str, None] = "003_add_author_to_forms_and_requests"
+revision: str = "004_backfill_authors"
+down_revision: Union[str, None] = "003_add_author"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

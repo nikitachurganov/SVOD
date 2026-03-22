@@ -7,6 +7,7 @@ export interface RequestResponse {
   id: string;
   title: string;
   form_id: string;
+  organization_id: string | null;
   data: unknown;
   status: RequestStatus;
   closedAt: string | null;
@@ -20,6 +21,7 @@ export interface RequestResponse {
 export interface CreateRequestPayload {
   title: string;
   form_id: string;
+  organization_id?: string | null;
   data: unknown;
   status?: RequestStatus;
   form_snapshot?: unknown;
@@ -32,8 +34,9 @@ export interface UpdateRequestPayload {
   data?: unknown;
 }
 
-export const getRequests = async (): Promise<RequestResponse[]> => {
-  const { data } = await api.get<RequestResponse[]>('/requests');
+export const getRequests = async (organizationId?: string | null): Promise<RequestResponse[]> => {
+  const params = organizationId ? { organization_id: organizationId } : {};
+  const { data } = await api.get<RequestResponse[]>('/requests', { params });
   return data;
 };
 
@@ -48,6 +51,7 @@ export const createRequest = async (
   const { data } = await api.post<RequestResponse>('/requests', {
     title: payload.title,
     form_id: payload.form_id,
+    organization_id: payload.organization_id ?? null,
     data: payload.data,
     status: payload.status ?? 'open',
     form_snapshot: payload.form_snapshot ?? null,

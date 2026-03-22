@@ -43,3 +43,11 @@ class User(Base):
     created_requests: Mapped[list["Request"]] = relationship(  # noqa: F821
         back_populates="author", lazy="selectin"
     )
+    owned_organizations: Mapped[list["Organization"]] = relationship(  # noqa: F821
+        back_populates="owner",
+        lazy="noload",
+        foreign_keys="[Organization.owner_user_id]",
+    )
+    organization_memberships: Mapped[list["OrganizationMember"]] = relationship(  # noqa: F821
+        back_populates="user", lazy="noload"
+    )

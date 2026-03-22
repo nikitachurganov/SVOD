@@ -32,6 +32,7 @@ def _to_response(req: Request) -> RequestResponse:
         id=str(req.id),
         title=req.title,
         form_id=str(req.form_id),
+        organization_id=str(req.organization_id) if req.organization_id else None,
         data=req.data,
         status=req.status,
         closedAt=req.closed_at.isoformat() if req.closed_at else None,
@@ -43,8 +44,13 @@ def _to_response(req: Request) -> RequestResponse:
     )
 
 
-async def list_requests(session: AsyncSession) -> list[RequestResponse]:
-    requests = await request_repository.get_all(session)
+async def list_requests(
+    session: AsyncSession, organization_id: uuid.UUID | None = None
+) -> list[RequestResponse]:
+    if organization_id is not None:
+        requests = await request_repository.get_all_by_org(session, organization_id)
+    else:
+        requests = await request_repository.get_all(session)
     return [_to_response(r) for r in requests]
 
 
@@ -58,10 +64,12 @@ async def get_request(session: AsyncSession, request_id: int) -> RequestResponse
 async def create_request(
     session: AsyncSession, payload: CreateRequestPayload, current_user: User
 ) -> RequestResponse:
+    org_id = uuid.UUID(payload.organization_id) if payload.organization_id else None
     req = Request(
         title=payload.title,
         form_id=uuid.UUID(payload.form_id),
         created_by_user_id=current_user.id,
+        organization_id=org_id,
         data=payload.data,
         status=payload.status,
         form_snapshot=payload.form_snapshot,

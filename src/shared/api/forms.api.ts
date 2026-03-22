@@ -39,6 +39,7 @@ export interface CreateFormPayload {
   name: string;
   description?: string;
   pages: CreateFormPagePayload[];
+  organization_id?: string | null;
 }
 
 /** Body used when updating an existing form */
@@ -54,6 +55,7 @@ export interface FormResponse {
   name: string;
   description: string;
   pages: CreateFormPagePayload[];
+  organization_id: string | null;
   created_by_user_id: string | null;
   author: AuthorPreview | null;
   created_at: string;
@@ -188,8 +190,9 @@ export const pagesPayloadToInstances = (
 
 // ─── API ──────────────────────────────────────────────────────────────────────
 
-export const getForms = async (): Promise<FormResponse[]> => {
-  const { data } = await api.get<FormResponse[]>('/forms');
+export const getForms = async (organizationId?: string | null): Promise<FormResponse[]> => {
+  const params = organizationId ? { organization_id: organizationId } : {};
+  const { data } = await api.get<FormResponse[]>('/forms', { params });
   return data.map((row) => ({
     ...row,
     pages: row.pages ?? normalizePagesFromApi(row.pages),
@@ -211,6 +214,7 @@ export const createForm = async (
     name: payload.name,
     description: payload.description ?? null,
     pages: payload.pages,
+    organization_id: payload.organization_id ?? null,
   });
   return data;
 };

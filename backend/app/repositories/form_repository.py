@@ -13,6 +13,17 @@ async def get_all(session: AsyncSession) -> list[Form]:
     return list(result.scalars().all())
 
 
+async def get_all_by_org(session: AsyncSession, org_id: uuid.UUID) -> list[Form]:
+    stmt = (
+        select(Form)
+        .options(selectinload(Form.author))
+        .where(Form.organization_id == org_id)
+        .order_by(Form.created_at.desc())
+    )
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+
 async def get_by_id(session: AsyncSession, form_id: uuid.UUID) -> Form | None:
     stmt = select(Form).options(selectinload(Form.author)).where(Form.id == form_id)
     result = await session.execute(stmt)

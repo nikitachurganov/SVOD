@@ -17,6 +17,7 @@ import { PlusOutlined } from '@ant-design/icons';
 import { Link, useNavigate } from 'react-router-dom';
 import { deleteForm, getForms, type FormResponse } from '../shared/api/forms.api';
 import { buildDisplayName } from '../shared/utils/userName';
+import { useOrganization } from '../shared/context/organization.context';
 
 const { Title } = Typography;
 
@@ -41,6 +42,7 @@ export const FormsPage = () => {
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
   const contentPadding = isMobile ? token.paddingSM : screens.lg ? token.paddingLG : token.paddingMD;
+  const { activeOrganization } = useOrganization();
 
   const [forms, setForms] = useState<FormResponse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,7 +51,7 @@ export const FormsPage = () => {
 
   const loadForms = useCallback(() => {
     setLoading(true);
-    getForms()
+    getForms(activeOrganization?.id)
       .then((data) => {
         setForms(data);
         setError(null);
@@ -60,7 +62,7 @@ export const FormsPage = () => {
       .finally(() => {
         setLoading(false);
       });
-  }, []);
+  }, [activeOrganization?.id]);
 
   useEffect(() => {
     loadForms();

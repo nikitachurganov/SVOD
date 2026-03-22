@@ -1,3 +1,5 @@
+import uuid
+
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -11,8 +13,23 @@ async def get_all(session: AsyncSession) -> list[Request]:
     return list(result.scalars().all())
 
 
+async def get_all_by_org(session: AsyncSession, org_id: uuid.UUID) -> list[Request]:
+    stmt = (
+        select(Request)
+        .options(selectinload(Request.author))
+        .where(Request.organization_id == org_id)
+        .order_by(Request.created_at.desc())
+    )
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+
 async def get_by_id(session: AsyncSession, request_id: int) -> Request | None:
-    stmt = select(Request).options(selectinload(Request.author)).where(Request.id == request_id)
+    stmt = (
+        select(Request)
+        .options(selectinload(Request.author))
+        .where(Request.id == request_id)
+    )
     result = await session.execute(stmt)
     return result.scalar_one_or_none()
 

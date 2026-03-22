@@ -22,6 +22,7 @@ import {
   type RequestResponse,
 } from '../shared/api/requests.api';
 import { buildDisplayName } from '../shared/utils/userName';
+import { useOrganization } from '../shared/context/organization.context';
 
 const { Title } = Typography;
 
@@ -47,6 +48,7 @@ export const RequestsPage = () => {
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
   const contentPadding = isMobile ? token.paddingSM : screens.lg ? token.paddingLG : token.paddingMD;
+  const { activeOrganization } = useOrganization();
 
   const [requests, setRequests] = useState<RequestResponse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,7 +57,7 @@ export const RequestsPage = () => {
 
   const loadRequests = useCallback(() => {
     setLoading(true);
-    getRequests()
+    getRequests(activeOrganization?.id)
       .then((data) => {
         setRequests(data);
         setError(null);
@@ -66,7 +68,7 @@ export const RequestsPage = () => {
       .finally(() => {
         setLoading(false);
       });
-  }, []);
+  }, [activeOrganization?.id]);
 
   useEffect(() => {
     loadRequests();
