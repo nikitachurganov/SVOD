@@ -1,9 +1,8 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 
-from app.api.deps import CurrentUser, DbSession, get_current_user
-from app.models.user import User
+from app.api.deps import CurrentUser, DbSession
 from app.schemas.request import (
     AISummaryResponse,
     CreateRequestPayload,
@@ -34,7 +33,9 @@ async def get_request(
 
 @router.post("", response_model=RequestResponse, status_code=201)
 async def create_request(
-    payload: CreateRequestPayload, session: DbSession, user: CurrentUser
+    payload: CreateRequestPayload,
+    session: DbSession,
+    user: CurrentUser,
 ) -> RequestResponse:
     return await request_service.create_request(session, payload, user)
 
@@ -63,7 +64,7 @@ async def patch_status(
 async def generate_summary(
     request_id: int,
     session: DbSession,
-    _user: User = Depends(get_current_user),
+    _user: CurrentUser,
 ) -> AISummaryResponse:
     try:
         result = await request_summary_service.generate_summary(session, request_id)
@@ -76,7 +77,7 @@ async def generate_summary(
 async def get_summary(
     request_id: int,
     session: DbSession,
-    _user: User = Depends(get_current_user),
+    _user: CurrentUser,
 ) -> AISummaryResponse | None:
     try:
         data = await request_summary_service.get_summary(session, request_id)

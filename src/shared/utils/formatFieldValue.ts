@@ -1,4 +1,4 @@
-import type { Field } from '../types/form';
+import type { Field, FieldOption } from '../../types/form';
 
 /**
  * Converts a raw stored value into a human-readable string based on the field's type.
@@ -41,7 +41,7 @@ export function formatFieldValue(
     if (!field.options || !field.options.length) {
       return value || '—';
     }
-    const opt = field.options.find((o) => o.id === value);
+    const opt = field.options.find((o: FieldOption) => o.id === value);
     return opt?.label ?? '—';
   }
 

@@ -11,7 +11,7 @@ import {
   SideNavItems,
   SideNavLink,
 } from '@carbon/react';
-import { Add, ChevronDown } from '@carbon/react/icons';
+import { Add } from '@carbon/react/icons';
 import { GlobalScrollbarStyles } from './shared/ui/GlobalScrollbarStyles';
 import {
   Navigate,
@@ -22,6 +22,10 @@ import {
   useNavigate,
 } from 'react-router-dom';
 import { useAuth } from './shared/context/auth.context';
+import {
+  AppShellPanelsProvider,
+  useAppShellPanels,
+} from './shared/context/appShellPanels.context';
 import { useOrganization } from './shared/context/organization.context';
 import { HeaderProfilePanel } from './components/layout/ProfileBlock';
 import { OrganizationSwitcher } from './components/layout/OrganizationSwitcher';
@@ -82,12 +86,13 @@ const NoOrganizationState = ({ onCreateClick }: { onCreateClick: () => void }) =
   </div>
 );
 
-const AppLayout = () => {
+const AppLayoutContent = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const isDesktop = useMediaQuery('(min-width: 1056px)');
   const selectedKey = getSelectedMenuKey(location.pathname);
   const { user, profile } = useAuth();
+  const { closeAuxiliaryPanels } = useAppShellPanels();
 
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -98,6 +103,7 @@ const AppLayout = () => {
 
   useEffect(() => {
     setMobileSidebarOpen(false);
+    setIsProfileOpen(false);
   }, [location.pathname]);
 
   const displayName =
@@ -119,6 +125,11 @@ const AppLayout = () => {
   const openCreateOrg = () => {
     setCreateOrgOpen(true);
     setIsProfileOpen(false);
+  };
+
+  const handleProfileTriggerClick = () => {
+    closeAuxiliaryPanels();
+    setIsProfileOpen((v) => !v);
   };
 
   return (
@@ -150,25 +161,28 @@ const AppLayout = () => {
           <button
             type="button"
             className="app-profile-trigger"
-            aria-label="Открыть меню профиля"
+            aria-label={
+              isProfileOpen ? 'Закрыть меню профиля' : 'Открыть меню профиля'
+            }
             aria-expanded={isProfileOpen}
-            onClick={() => setIsProfileOpen((v) => !v)}
+            aria-haspopup="true"
+            onClick={handleProfileTriggerClick}
           >
             <span className="app-profile-avatar">{initials}</span>
             <span className="app-profile-text">
               <span className="app-profile-name">{resolvedName}</span>
               <span className="app-profile-email">{resolvedEmail}</span>
             </span>
-            <ChevronDown size={16} />
           </button>
         </HeaderGlobalBar>
 
-        <HeaderProfilePanel
-          open={isProfileOpen}
-          onClose={() => setIsProfileOpen(false)}
-          onCreateOrg={openCreateOrg}
-        />
       </Header>
+
+      <HeaderProfilePanel
+        open={isProfileOpen}
+        onClose={() => setIsProfileOpen(false)}
+        onCreateOrg={openCreateOrg}
+      />
 
       <div className="app-shell-body">
         {!isDesktop && mobileSidebarOpen && (
@@ -245,6 +259,12 @@ const AppLayout = () => {
     </>
   );
 };
+
+const AppLayout = () => (
+  <AppShellPanelsProvider>
+    <AppLayoutContent />
+  </AppShellPanelsProvider>
+);
 
 const FullPageLoader = () => (
   <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}>

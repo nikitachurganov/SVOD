@@ -15,8 +15,9 @@ import {
   Tile,
   Tooltip,
 } from '@carbon/react';
-import { ArrowLeft, Document, Download } from '@carbon/react/icons';
+import { ArrowLeft, ChevronLeft, ChevronRight, Document, Download } from '@carbon/react/icons';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useRegisterAuxiliaryPanelCloser } from '../shared/context/appShellPanels.context';
 import { getRequestWithForm, type RequestWithForm } from '../services/requestService';
 import { closeRequest, deleteRequest } from '../shared/api/requests.api';
 import { formatFieldValue } from '../shared/utils/formatFieldValue';
@@ -71,6 +72,12 @@ export const RequestViewPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const showAiPanel = useMediaQuery('(min-width: 1200px)');
+  const [rightAuxiliaryPanelOpen, setRightAuxiliaryPanelOpen] = useState(true);
+
+  useRegisterAuxiliaryPanelCloser(
+    () => setRightAuxiliaryPanelOpen(false),
+    showAiPanel,
+  );
 
   const [{ data, loading, error }, setState] = useState<RequestDetailsState>({
     data: null,
@@ -315,6 +322,29 @@ export const RequestViewPage = () => {
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {showAiPanel && (
+              <Tooltip
+                label={
+                  rightAuxiliaryPanelOpen
+                    ? 'Скрыть правую панель'
+                    : 'Показать правую панель'
+                }
+                align="bottom"
+              >
+                <Button
+                  kind="ghost"
+                  size="sm"
+                  hasIconOnly
+                  renderIcon={rightAuxiliaryPanelOpen ? ChevronRight : ChevronLeft}
+                  iconDescription={
+                    rightAuxiliaryPanelOpen
+                      ? 'Скрыть правую панель'
+                      : 'Показать правую панель'
+                  }
+                  onClick={() => setRightAuxiliaryPanelOpen((o) => !o)}
+                />
+              </Tooltip>
+            )}
             {data?.request && (
               <Button
                 kind="secondary"
@@ -818,7 +848,7 @@ export const RequestViewPage = () => {
             </div>
 
             {/* Right: AI suggestions panel (hidden on smaller screens) */}
-            {showAiPanel && (
+            {showAiPanel && rightAuxiliaryPanelOpen && (
               <div
                 style={{
                   width: 360,

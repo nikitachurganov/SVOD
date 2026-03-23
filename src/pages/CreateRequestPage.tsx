@@ -413,7 +413,8 @@ export const CreateRequestPage = () => {
                 selectedItem={comboBoxItems.find((item) => item.id === selectedFormId) ?? null}
                 invalid={!!metaErrors.formId}
                 invalidText={metaErrors.formId}
-                onChange={({ selectedItem }: { selectedItem: { id: string; text: string } | null }) => {
+                onChange={(data) => {
+                  const selectedItem = data.selectedItem ?? null;
                   const value = selectedItem?.id;
                   setSelectedFormId(value);
                   setMetaErrors((prev) => ({ ...prev, formId: undefined }));

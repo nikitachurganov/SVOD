@@ -1,5 +1,6 @@
 import api from '../lib/api';
 import type { AuthorPreview } from '../../types/author';
+import type { AISummary } from '../../types/request';
 
 export type RequestStatus = 'open' | 'closed';
 
@@ -16,7 +17,7 @@ export interface RequestResponse {
   created_at: string;
   updated_at: string;
   form_snapshot?: unknown | null;
-  ai_summary?: { summary: string; priority: string; tags: string[] } | null;
+  ai_summary?: AISummary | null;
 }
 
 export interface CreateRequestPayload {

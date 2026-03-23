@@ -35,9 +35,10 @@ export const OrganizationSwitcher = ({ onCreateClick }: Props) => {
         items={items}
         itemToString={(item: { id: string; text: string } | null) => item?.text ?? ''}
         selectedItem={selectedItem}
-        onChange={({ selectedItem: item }: { selectedItem: { id: string; text: string } | null }) => {
+        onChange={({ selectedItem: item }) => {
           if (item) setActiveOrganizationId(item.id);
         }}
+        titleText="Выберите организацию"
         label="Выберите организацию"
         hideLabel
       />

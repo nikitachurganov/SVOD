@@ -1,4 +1,4 @@
-import { getRequestById, type RequestResponse } from '../shared/api/requests.api';
+import { getRequestById } from '../shared/api/requests.api';
 import { getFormById, pagesPayloadToInstances, type FormResponse } from '../shared/api/forms.api';
 import type { FormFieldInstance, FormPageInstance } from '../shared/types/form-builder.types';
 import { parseRequestData } from '../shared/utils/parseRequestData';
@@ -78,6 +78,7 @@ export async function getRequestWithForm(id: string): Promise<RequestWithForm> {
       created_at: requestRow.created_at,
       updated_at: requestRow.updated_at,
       form_snapshot: snapshot,
+      ai_summary: requestRow.ai_summary ?? null,
     };
 
     return { request, form, parsedData: parsedData };

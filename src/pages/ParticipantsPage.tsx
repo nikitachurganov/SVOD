@@ -2,12 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   DataTable,
   Table,
+  TableContainer,
   TableHead,
   TableRow,
   TableHeader,
   TableBody,
   TableCell,
-  TableContainer,
   TableToolbar,
   TableToolbarContent,
   Button,
@@ -155,53 +155,127 @@ export const ParticipantsPage = () => {
   return (
     <div style={{ display: 'flex', flex: 1, flexDirection: 'column', height: '100%', minHeight: 0 }}>
       {error ? (
-        <div style={{ padding: 16 }}>
-          <InlineNotification kind="error" title="Ошибка загрузки" subtitle={error} lowContrast actions={<Button kind="ghost" size="sm" onClick={() => void load()}>Повторить</Button>} />
+        <div
+          style={{
+            padding: 16,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 8,
+            alignItems: 'flex-start',
+          }}
+        >
+          <InlineNotification kind="error" title="Ошибка загрузки" subtitle={error} lowContrast />
+          <Button kind="ghost" size="sm" onClick={() => void load()}>
+            Повторить
+          </Button>
         </div>
       ) : (
         <Tabs>
-          <div style={{ background: 'var(--cds-layer-01)', borderBottom: '1px solid var(--cds-border-subtle)', padding: '12px 16px 0' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <h4 style={{ margin: 0 }}>Участники</h4>
-              {isOwner && <Button size="sm" renderIcon={Add} onClick={() => setInviteOpen(true)}>Пригласить</Button>}
-            </div>
+          {/* Page header: title then tabs */}
+          <div
+            style={{
+              background: 'var(--cds-layer-01)',
+              borderBottom: '1px solid var(--cds-border-subtle)',
+              padding: '12px 16px 0',
+            }}
+          >
+            <h4 style={{ margin: '0 0 12px' }}>Участники</h4>
             <TabList aria-label="Участники">
               <Tab>В организации</Tab>
               {isOwner && <Tab>Приглашения</Tab>}
             </TabList>
           </div>
+
           <TabPanels>
+            {/* Members tab */}
             <TabPanel style={{ padding: 0 }}>
               {loading ? (
-                <div style={{ padding: 16 }}><DataTableSkeleton headers={MEMBER_HEADERS} rowCount={5} /></div>
+                <div style={{ padding: 16 }}>
+                  <DataTableSkeleton headers={MEMBER_HEADERS} rowCount={5} />
+                </div>
               ) : (
                 <DataTable rows={memberRows} headers={MEMBER_HEADERS}>
-                  {({ rows: cRows, headers, getTableProps, getHeaderProps, getRowProps }: { rows: { id: string; cells: { id: string; info: { header: string }; value: unknown }[] }[]; headers: { key: string; header: string }[]; getTableProps: () => Record<string, unknown>; getHeaderProps: (o: { header: { key: string; header: string } }) => Record<string, unknown>; getRowProps: (o: { row: { id: string } }) => Record<string, unknown>; }) => (
-                    <Table {...getTableProps()} size="lg">
-                      <TableHead><TableRow>{headers.map((h) => { const { key: _k, ...hp } = getHeaderProps({ header: h }); return <TableHeader key={h.key} {...hp}>{h.header}</TableHeader>; })}</TableRow></TableHead>
-                      <TableBody>
-                        {cRows.length === 0 ? <TableRow><TableCell colSpan={headers.length} style={{ textAlign: 'center' }}>Нет участников</TableCell></TableRow>
-                        : cRows.map((row) => { const { key: _k, ...rp } = getRowProps({ row }); return <TableRow key={row.id} {...rp}>{row.cells.map((c) => <TableCell key={c.id}>{renderMemberCell(c.info.header, c.value, row.id)}</TableCell>)}</TableRow>; })}
-                      </TableBody>
-                    </Table>
+                  {({ rows: cRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
+                    <TableContainer>
+                      {isOwner && (
+                        <TableToolbar>
+                          <TableToolbarContent>
+                            <Button renderIcon={Add} onClick={() => setInviteOpen(true)}>
+                              Пригласить
+                            </Button>
+                          </TableToolbarContent>
+                        </TableToolbar>
+                      )}
+                      <Table {...getTableProps()} size="lg">
+                        <TableHead>
+                          <TableRow>
+                            {headers.map((h) => {
+                              const { key: _k, ...hp } = getHeaderProps({ header: h });
+                              return <TableHeader key={h.key} {...hp}>{h.header}</TableHeader>;
+                            })}
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {cRows.length === 0
+                            ? <TableRow><TableCell colSpan={headers.length} style={{ textAlign: 'center' }}>Нет участников</TableCell></TableRow>
+                            : cRows.map((row) => {
+                                const { key: _k, ...rp } = getRowProps({ row });
+                                return (
+                                  <TableRow key={row.id} {...rp}>
+                                    {row.cells.map((c) => (
+                                      <TableCell key={c.id}>
+                                        {renderMemberCell(c.info.header, c.value, row.id)}
+                                      </TableCell>
+                                    ))}
+                                  </TableRow>
+                                );
+                              })}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
                   )}
                 </DataTable>
               )}
             </TabPanel>
+
+            {/* Invitations tab */}
             {isOwner && (
               <TabPanel style={{ padding: 0 }}>
                 {loading ? (
-                  <div style={{ padding: 16 }}><DataTableSkeleton headers={INVITE_HEADERS} rowCount={3} /></div>
+                  <div style={{ padding: 16 }}>
+                    <DataTableSkeleton headers={INVITE_HEADERS} rowCount={3} />
+                  </div>
                 ) : (
                   <DataTable rows={inviteRows} headers={INVITE_HEADERS}>
-                    {({ rows: cRows, headers, getTableProps, getHeaderProps, getRowProps }: { rows: { id: string; cells: { id: string; info: { header: string }; value: unknown }[] }[]; headers: { key: string; header: string }[]; getTableProps: () => Record<string, unknown>; getHeaderProps: (o: { header: { key: string; header: string } }) => Record<string, unknown>; getRowProps: (o: { row: { id: string } }) => Record<string, unknown>; }) => (
-                      <Table {...getTableProps()} size="lg">
-                        <TableHead><TableRow>{headers.map((h) => { const { key: _k, ...hp } = getHeaderProps({ header: h }); return <TableHeader key={h.key} {...hp}>{h.header}</TableHeader>; })}</TableRow></TableHead>
-                        <TableBody>
-                          {cRows.length === 0 ? <TableRow><TableCell colSpan={headers.length} style={{ textAlign: 'center' }}>Нет ожидающих приглашений</TableCell></TableRow>
-                          : cRows.map((row) => { const { key: _k, ...rp } = getRowProps({ row }); return <TableRow key={row.id} {...rp}>{row.cells.map((c) => <TableCell key={c.id}>{renderInviteCell(c.info.header, c.value)}</TableCell>)}</TableRow>; })}
-                        </TableBody>
-                      </Table>
+                    {({ rows: cRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
+                      <TableContainer>
+                        <Table {...getTableProps()} size="lg">
+                          <TableHead>
+                            <TableRow>
+                              {headers.map((h) => {
+                                const { key: _k, ...hp } = getHeaderProps({ header: h });
+                                return <TableHeader key={h.key} {...hp}>{h.header}</TableHeader>;
+                              })}
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {cRows.length === 0
+                              ? <TableRow><TableCell colSpan={headers.length} style={{ textAlign: 'center' }}>Нет ожидающих приглашений</TableCell></TableRow>
+                              : cRows.map((row) => {
+                                  const { key: _k, ...rp } = getRowProps({ row });
+                                  return (
+                                    <TableRow key={row.id} {...rp}>
+                                      {row.cells.map((c) => (
+                                        <TableCell key={c.id}>
+                                          {renderInviteCell(c.info.header, c.value)}
+                                        </TableCell>
+                                      ))}
+                                    </TableRow>
+                                  );
+                                })}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
                     )}
                   </DataTable>
                 )}

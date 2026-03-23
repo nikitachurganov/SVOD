@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import datetime, timezone
 
@@ -7,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.request import Request
 from app.models.user import User
 from app.repositories import request_repository
+from app.services import request_summary_service
 from app.schemas.request import (
     AISummaryResponse,
     CreateRequestPayload,
@@ -14,6 +16,8 @@ from app.schemas.request import (
     UpdateRequestPayload,
 )
 from app.schemas.user import PublicAuthorResponse
+
+logger = logging.getLogger(__name__)
 
 
 def _to_author(author: User | None) -> PublicAuthorResponse | None:
@@ -88,7 +92,16 @@ async def create_request(
     )
     req = await request_repository.create(session, req)
     await session.commit()
-    return _to_response(req)
+
+    try:
+        await request_summary_service.generate_summary(session, req.id)
+    except Exception:
+        logger.exception("AI summary generation failed for request %s", req.id)
+        await session.rollback()
+
+    # Reload with selectinload(author) so the response includes ai_summary and author.
+    req = await request_repository.get_by_id(session, req.id)  # type: ignore[assignment]
+    return _to_response(req)  # type: ignore[arg-type]
 
 
 async def update_request(

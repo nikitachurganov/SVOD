@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Modal, Button, Loading, Tag } from '@carbon/react';
+import { Modal, Button, Loading } from '@carbon/react';
 import { Checkmark, Close } from '@carbon/react/icons';
 import {
   acceptInvitation,

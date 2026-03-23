@@ -105,8 +105,19 @@ export const FormsPage = () => {
   return (
     <div style={{ display: 'flex', flex: 1, flexDirection: 'column', height: '100%', minHeight: 0 }}>
       {error ? (
-        <div style={{ padding: 16 }}>
-          <InlineNotification kind="error" title="Ошибка загрузки" subtitle={error} lowContrast actions={<Button kind="ghost" size="sm" onClick={loadForms}>Повторить</Button>} />
+        <div
+          style={{
+            padding: 16,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 8,
+            alignItems: 'flex-start',
+          }}
+        >
+          <InlineNotification kind="error" title="Ошибка загрузки" subtitle={error} lowContrast />
+          <Button kind="ghost" size="sm" onClick={loadForms}>
+            Повторить
+          </Button>
         </div>
       ) : loading ? (
         <div style={{ padding: 16 }}>
@@ -114,13 +125,7 @@ export const FormsPage = () => {
         </div>
       ) : (
         <DataTable rows={paginatedRows} headers={HEADERS} isSortable>
-          {({ rows: carbonRows, headers, getTableProps, getHeaderProps, getRowProps }: {
-            rows: { id: string; cells: { id: string; info: { header: string }; value: unknown }[] }[];
-            headers: { key: string; header: string }[];
-            getTableProps: () => Record<string, unknown>;
-            getHeaderProps: (opts: { header: { key: string; header: string } }) => Record<string, unknown>;
-            getRowProps: (opts: { row: { id: string } }) => Record<string, unknown>;
-          }) => (
+          {({ rows: carbonRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
             <TableContainer title="Реестр форм" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
               <TableToolbar>
                 <TableToolbarContent>

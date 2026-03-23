@@ -88,7 +88,7 @@ export const AuthPage = () => {
     setLoading(true);
     setErrorText(null);
     try {
-      const result = await signUp({
+      await signUp({
         firstName: signUpFields.firstName.trim(),
         lastName: signUpFields.lastName.trim(),
         middleName: signUpFields.middleName?.trim() || undefined,

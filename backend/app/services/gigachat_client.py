@@ -10,6 +10,8 @@ logger = logging.getLogger(__name__)
 
 _COMPLETIONS_URL = "https://gigachat.devices.sberbank.ru/api/v1/chat/completions"
 
+_FALLBACK_RESULT = {"summary": "", "priority": "medium", "tags": []}
+
 
 async def summarize_text(text: str) -> dict:
     """Send text to GigaChat and return parsed JSON response."""
@@ -59,8 +61,28 @@ async def summarize_text(text: str) -> dict:
     content = data["choices"][0]["message"]["content"]
     logger.debug("GigaChat raw response: %s", content)
 
+    return _parse_response(content)
+
+
+def _parse_response(content: str) -> dict:
+    """Parse the model response as JSON, falling back gracefully on malformed output."""
     cleaned = content.strip()
     if cleaned.startswith("```"):
         cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
         cleaned = cleaned.rsplit("```", 1)[0]
-    return json.loads(cleaned)
+
+    try:
+        parsed = json.loads(cleaned)
+    except (json.JSONDecodeError, ValueError):
+        logger.warning("GigaChat returned non-JSON response, using fallback: %s", cleaned[:300])
+        return {**_FALLBACK_RESULT, "summary": cleaned[:500]}
+
+    if not isinstance(parsed, dict):
+        logger.warning("GigaChat returned non-object JSON, using fallback")
+        return {**_FALLBACK_RESULT, "summary": str(parsed)[:500]}
+
+    return {
+        "summary": parsed.get("summary", ""),
+        "priority": parsed.get("priority", "medium") if parsed.get("priority") in ("low", "medium", "high") else "medium",
+        "tags": parsed.get("tags", []) if isinstance(parsed.get("tags"), list) else [],
+    }

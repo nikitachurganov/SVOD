@@ -15,7 +15,6 @@ import {
   Tooltip,
   Button,
   InlineNotification,
-  Loading,
   DataTableSkeleton,
 } from '@carbon/react';
 import { Add, TrashCan, View } from '@carbon/react/icons';
@@ -101,16 +100,20 @@ export const RequestsPage = () => {
 
   const rows = useMemo(
     () =>
-      requests.map((r) => ({
-        id: r.id,
-        title: r.title,
-        ai_summary: r.ai_summary?.summary ?? null,
-        created_at: r.created_at,
-        author: r.author ? buildDisplayName(r.author) : 'Неизвестный автор',
-        updated_at: r.updated_at,
-        status: r.status,
-        actions: r.id,
-      })),
+      requests.map((r) => {
+        const raw = r.ai_summary?.summary ?? '';
+        const summary = raw.replace(/^SUCCESS\s*/i, '').trim() || null;
+        return {
+          id: r.id,
+          title: r.title,
+          ai_summary: summary,
+          created_at: r.created_at,
+          author: r.author ? buildDisplayName(r.author) : 'Неизвестный автор',
+          updated_at: r.updated_at,
+          status: r.status,
+          actions: r.id,
+        };
+      }),
     [requests],
   );
 
@@ -203,18 +206,19 @@ export const RequestsPage = () => {
       }}
     >
       {error ? (
-        <div style={{ padding: 16 }}>
-          <InlineNotification
-            kind="error"
-            title="Ошибка загрузки"
-            subtitle={error}
-            lowContrast
-            actions={
-              <Button kind="ghost" size="sm" onClick={loadRequests}>
-                Повторить
-              </Button>
-            }
-          />
+        <div
+          style={{
+            padding: 16,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 8,
+            alignItems: 'flex-start',
+          }}
+        >
+          <InlineNotification kind="error" title="Ошибка загрузки" subtitle={error} lowContrast />
+          <Button kind="ghost" size="sm" onClick={loadRequests}>
+            Повторить
+          </Button>
         </div>
       ) : loading ? (
         <div style={{ padding: 16 }}>
@@ -222,19 +226,7 @@ export const RequestsPage = () => {
         </div>
       ) : (
         <DataTable rows={paginatedRows} headers={HEADERS} isSortable>
-          {({
-            rows: carbonRows,
-            headers,
-            getTableProps,
-            getHeaderProps,
-            getRowProps,
-          }: {
-            rows: { id: string; cells: { id: string; info: { header: string }; value: unknown }[] }[];
-            headers: { key: string; header: string }[];
-            getTableProps: () => Record<string, unknown>;
-            getHeaderProps: (opts: { header: { key: string; header: string } }) => Record<string, unknown>;
-            getRowProps: (opts: { row: { id: string } }) => Record<string, unknown>;
-          }) => (
+          {({ rows: carbonRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
             <TableContainer
               title="Реестр заявок"
               style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}
