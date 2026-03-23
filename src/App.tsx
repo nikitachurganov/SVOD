@@ -1,20 +1,18 @@
-import { useState } from 'react';
+import { useEffect, useState, type MouseEvent } from 'react';
 import {
+  Header,
+  HeaderMenuButton,
+  HeaderName,
+  HeaderGlobalBar,
+  SkipToContent,
+  Loading,
   Button,
-  Empty,
-  Grid,
-  Layout,
-  Spin,
-  Typography,
-  theme,
-} from 'antd';
+  SideNav,
+  SideNavItems,
+  SideNavLink,
+} from '@carbon/react';
+import { Add, ChevronDown } from '@carbon/react/icons';
 import { GlobalScrollbarStyles } from './shared/ui/GlobalScrollbarStyles';
-import {
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
-  PlusOutlined,
-} from '@ant-design/icons';
-import type { MenuProps } from 'antd';
 import {
   Navigate,
   Outlet,
@@ -25,6 +23,9 @@ import {
 } from 'react-router-dom';
 import { useAuth } from './shared/context/auth.context';
 import { useOrganization } from './shared/context/organization.context';
+import { HeaderProfilePanel } from './components/layout/ProfileBlock';
+import { OrganizationSwitcher } from './components/layout/OrganizationSwitcher';
+import { buildDisplayName } from './shared/utils/userName';
 import { CreateFormPage } from './pages/CreateFormPage';
 import { EditFormPage } from './pages/EditFormPage';
 import { ParticipantsPage } from './pages/ParticipantsPage';
@@ -36,128 +37,206 @@ import { RequestViewPage } from './pages/RequestViewPage';
 import { AuthPage } from './pages/AuthPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
-import { Sidebar, getSelectedMenuKey } from './components/layout/Sidebar';
 import { CreateOrganizationModal } from './components/layout/CreateOrganizationModal';
 
-const { Content } = Layout;
-const { Text } = Typography;
-
-// ---------------------------------------------------------------------------
-// No Organization Empty State
-// ---------------------------------------------------------------------------
-
-const NoOrganizationState = ({ onCreateClick }: { onCreateClick: () => void }) => {
-  const { token } = theme.useToken();
-  return (
-    <div
-      style={{
-        flex: 1,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: token.paddingLG,
-        background: token.colorBgLayout,
-      }}
-    >
-      <Empty description="Для начала работы необходимо создать организацию">
-        <Button type="primary" icon={<PlusOutlined />} onClick={onCreateClick}>
-          Создать организацию
-        </Button>
-      </Empty>
-    </div>
-  );
+const useMediaQuery = (query: string): boolean => {
+  const [matches, setMatches] = useState(() => window.matchMedia(query).matches);
+  useEffect(() => {
+    const mql = window.matchMedia(query);
+    const handler = (e: MediaQueryListEvent) => setMatches(e.matches);
+    mql.addEventListener('change', handler);
+    return () => mql.removeEventListener('change', handler);
+  }, [query]);
+  return matches;
 };
 
-// ---------------------------------------------------------------------------
-// App Layout
-// ---------------------------------------------------------------------------
+const NAV_ITEMS = [
+  { key: 'requests', label: 'Заявки', path: '/requests' },
+  { key: 'forms', label: 'Формы', path: '/forms' },
+  { key: 'participants', label: 'Участники', path: '/participants' },
+];
+
+export const getSelectedMenuKey = (pathname: string): string => {
+  const matched = NAV_ITEMS.find((item) => pathname.startsWith(item.path));
+  return matched?.key ?? 'requests';
+};
+
+const NoOrganizationState = ({ onCreateClick }: { onCreateClick: () => void }) => (
+  <div
+    style={{
+      flex: 1,
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 16,
+      padding: 32,
+    }}
+  >
+    <p style={{ color: 'var(--cds-text-secondary)', margin: 0 }}>
+      Для начала работы необходимо создать организацию
+    </p>
+    <Button renderIcon={Add} onClick={onCreateClick}>
+      Создать организацию
+    </Button>
+  </div>
+);
 
 const AppLayout = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { token } = theme.useToken();
-  const screens = Grid.useBreakpoint();
+  const isDesktop = useMediaQuery('(min-width: 1056px)');
   const selectedKey = getSelectedMenuKey(location.pathname);
-  const [collapsed, setCollapsed] = useState(false);
+  const { user, profile } = useAuth();
+
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [createOrgOpen, setCreateOrgOpen] = useState(false);
 
   const { organizations, isLoading: isOrgLoading } = useOrganization();
   const hasOrganizations = organizations.length > 0;
 
-  const isCompact = !screens.lg;
+  useEffect(() => {
+    setMobileSidebarOpen(false);
+  }, [location.pathname]);
 
-  const handleMenuClick: MenuProps['onClick'] = ({ key }) => {
-    const routes: Record<string, string> = {
-      requests: '/requests',
-      forms: '/forms',
-      participants: '/participants',
-    };
-    if (routes[key]) {
-      navigate(routes[key]);
-      if (isCompact) setCollapsed(true);
-    }
+  const displayName =
+    profile &&
+    buildDisplayName({
+      lastName: profile.lastName,
+      firstName: profile.firstName,
+      middleName: profile.middleName,
+    });
+  const resolvedName = displayName || 'Пользователь';
+  const resolvedEmail = profile?.email ?? user?.email ?? 'Нет email';
+  const initials = resolvedName.charAt(0).toUpperCase();
+
+  const handleNav = (path: string) => {
+    navigate(path);
+    setMobileSidebarOpen(false);
   };
 
-  const openCreateOrg = () => setCreateOrgOpen(true);
+  const openCreateOrg = () => {
+    setCreateOrgOpen(true);
+    setIsProfileOpen(false);
+  };
 
   return (
     <>
       <GlobalScrollbarStyles />
-      <Layout style={{ height: '100vh', overflow: 'hidden' }}>
-        <Sidebar
-          collapsed={isCompact ? collapsed : false}
-          collapsedWidth={isCompact ? 0 : 64}
-          selectedKey={selectedKey}
-          onMenuClick={handleMenuClick}
-          onBreakpoint={(broken) => setCollapsed(broken)}
+
+      <Header aria-label="Сервис Деск">
+        <SkipToContent href="#main-content" />
+        {!isDesktop && (
+          <HeaderMenuButton
+            aria-label="Открыть боковую навигацию"
+            aria-expanded={mobileSidebarOpen}
+            onClick={() => setMobileSidebarOpen((v) => !v)}
+            isActive={mobileSidebarOpen}
+          />
+        )}
+        <HeaderName
+          href="/"
+          prefix=""
+          onClick={(e: MouseEvent<HTMLAnchorElement>) => {
+            e.preventDefault();
+            navigate('/');
+          }}
+        >
+          Сервис Деск
+        </HeaderName>
+
+        <HeaderGlobalBar>
+          <button
+            type="button"
+            className="app-profile-trigger"
+            aria-label="Открыть меню профиля"
+            aria-expanded={isProfileOpen}
+            onClick={() => setIsProfileOpen((v) => !v)}
+          >
+            <span className="app-profile-avatar">{initials}</span>
+            <span className="app-profile-text">
+              <span className="app-profile-name">{resolvedName}</span>
+              <span className="app-profile-email">{resolvedEmail}</span>
+            </span>
+            <ChevronDown size={16} />
+          </button>
+        </HeaderGlobalBar>
+
+        <HeaderProfilePanel
+          open={isProfileOpen}
+          onClose={() => setIsProfileOpen(false)}
           onCreateOrg={openCreateOrg}
         />
+      </Header>
 
-        <Layout style={{ overflow: 'hidden', minHeight: 0 }}>
-          {isCompact && (
-            <div
-              style={{
-                height: 48,
-                display: 'flex',
-                alignItems: 'center',
-                paddingInline: 16,
-                background: token.colorBgContainer,
-                borderBottom: `1px solid ${token.colorBorderSecondary}`,
-                flexShrink: 0,
-              }}
-            >
-              <Button
-                type="text"
-                icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-                onClick={() => setCollapsed((v) => !v)}
-                aria-label="Меню"
-              />
-              <Text strong style={{ marginLeft: 12 }}>Сервис Деск</Text>
-            </div>
-          )}
-          <Content
-            style={{
-              display: 'flex',
-              flex: 1,
-              minHeight: 0,
-              overflow: 'hidden',
-              background: token.colorBgLayout,
-            }}
+      <div className="app-shell-body">
+        {!isDesktop && mobileSidebarOpen && (
+          <button
+            type="button"
+            className="app-mobile-sidebar-backdrop"
+            aria-label="Закрыть боковую навигацию"
+            onClick={() => setMobileSidebarOpen(false)}
+          />
+        )}
+
+        <div className="app-layout-shell">
+          <aside
+            className={`app-layout-left-sidebar ${!isDesktop && mobileSidebarOpen ? 'app-layout-left-sidebar--open' : ''}`}
+            aria-label="Боковая навигация"
           >
+            <SideNav
+              isFixedNav={false}
+              expanded
+              isChildOfHeader={false}
+              aria-label="Навигация"
+              className="app-side-nav"
+            >
+              <SideNavItems className="app-side-nav-items">
+                {NAV_ITEMS.map((item) => (
+                  <SideNavLink
+                    key={item.key}
+                    isActive={selectedKey === item.key}
+                    href={item.path}
+                    onClick={(e: MouseEvent<HTMLAnchorElement>) => {
+                      e.preventDefault();
+                      handleNav(item.path);
+                    }}
+                  >
+                    {item.label}
+                  </SideNavLink>
+                ))}
+              </SideNavItems>
+
+              <div className="app-side-nav-org">
+                <OrganizationSwitcher onCreateClick={openCreateOrg} />
+              </div>
+            </SideNav>
+          </aside>
+
+          <main id="main-content" className="app-layout-main">
             {isOrgLoading ? (
               <div style={{ flex: 1, display: 'grid', placeItems: 'center' }}>
-                <Spin />
+                <Loading withOverlay={false} />
               </div>
             ) : !hasOrganizations ? (
               <NoOrganizationState onCreateClick={openCreateOrg} />
             ) : (
-              <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  flex: 1,
+                  minHeight: 0,
+                  overflow: 'hidden',
+                  flexDirection: 'column',
+                }}
+              >
                 <Outlet />
               </div>
             )}
-          </Content>
-        </Layout>
-      </Layout>
+          </main>
+        </div>
+      </div>
 
       <CreateOrganizationModal
         open={createOrgOpen}
@@ -167,38 +246,26 @@ const AppLayout = () => {
   );
 };
 
-// ---------------------------------------------------------------------------
-// Auth guards
-// ---------------------------------------------------------------------------
-
 const FullPageLoader = () => (
   <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}>
-    <Spin size="large" />
+    <Loading withOverlay={false} />
   </div>
 );
 
 const ProtectedLayout = () => {
   const { user, isAuthLoading } = useAuth();
   const location = useLocation();
-
   if (isAuthLoading) return <FullPageLoader />;
   if (!user) return <Navigate to="/auth" replace state={{ from: location.pathname }} />;
-
   return <AppLayout />;
 };
 
 const PublicOnlyAuthPage = () => {
   const { user, isAuthLoading } = useAuth();
-
   if (isAuthLoading) return <FullPageLoader />;
   if (user) return <Navigate to="/requests" replace />;
-
   return <AuthPage />;
 };
-
-// ---------------------------------------------------------------------------
-// Router
-// ---------------------------------------------------------------------------
 
 const router = createBrowserRouter([
   { path: '/auth/forgot-password', element: <ForgotPasswordPage /> },
@@ -222,5 +289,4 @@ const router = createBrowserRouter([
 ]);
 
 const App = () => <RouterProvider router={router} />;
-
 export default App;

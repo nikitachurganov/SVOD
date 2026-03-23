@@ -1,25 +1,21 @@
 import { useEffect, useState } from 'react';
 import {
-  Avatar,
-  Alert,
-  App,
   Breadcrumb,
+  BreadcrumbItem,
   Button,
-  Card,
-  Descriptions,
-  Divider,
-  Grid,
-  Image,
-  Popconfirm,
-  Space,
-  Spin,
+  InlineNotification,
+  Loading,
+  Modal,
+  Tab,
+  TabList,
+  TabPanel,
+  TabPanels,
   Tabs,
   Tag,
-  Timeline,
-  Typography,
-  theme,
-} from 'antd';
-import { ArrowLeftOutlined, FileOutlined, DownloadOutlined } from '@ant-design/icons';
+  Tile,
+  Tooltip,
+} from '@carbon/react';
+import { ArrowLeft, Document, Download } from '@carbon/react/icons';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { getRequestWithForm, type RequestWithForm } from '../services/requestService';
 import { closeRequest, deleteRequest } from '../shared/api/requests.api';
@@ -34,8 +30,6 @@ interface StoredFileMeta {
   file_size?: number;
   file_url: string;
 }
-
-const { Title, Text } = Typography;
 
 type RequestDetailsState = {
   data: RequestWithForm | null;
@@ -59,13 +53,24 @@ const formatDateTime = (iso: string | null | undefined): string => {
   return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 };
 
+const useMediaQuery = (query: string): boolean => {
+  const [matches, setMatches] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia(query).matches : false,
+  );
+  useEffect(() => {
+    const mql = window.matchMedia(query);
+    const handler = (e: MediaQueryListEvent) => setMatches(e.matches);
+    mql.addEventListener('change', handler);
+    setMatches(mql.matches);
+    return () => mql.removeEventListener('change', handler);
+  }, [query]);
+  return matches;
+};
+
 export const RequestViewPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { token } = theme.useToken();
-  const { message, notification } = App.useApp();
-  const screens = Grid.useBreakpoint();
-  const showAiPanel = !!screens.xl;
+  const showAiPanel = useMediaQuery('(min-width: 1200px)');
 
   const [{ data, loading, error }, setState] = useState<RequestDetailsState>({
     data: null,
@@ -74,7 +79,16 @@ export const RequestViewPage = () => {
   });
   const [deleting, setDeleting] = useState(false);
   const [closing, setClosing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'info' | 'history' | 'people'>('info');
+  const [activeTabIndex, setActiveTabIndex] = useState(0);
+
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
+  const [inlineNotification, setInlineNotification] = useState<{
+    kind: 'success' | 'error';
+    title: string;
+    subtitle?: string;
+  } | null>(null);
+  const [aiMessage, setAiMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -107,10 +121,10 @@ export const RequestViewPage = () => {
           flex: 1,
           alignItems: 'center',
           justifyContent: 'center',
-          background: token.colorBgLayout,
+          background: 'var(--cds-background)',
         }}
       >
-        <Spin size="large" />
+        <Loading withOverlay={false} />
       </div>
     );
   }
@@ -142,11 +156,6 @@ export const RequestViewPage = () => {
     isNonEmptyValue((activeDataSource as Record<string, unknown>)[key]),
   );
 
-  /**
-   * Normalizes stored file data into a uniform metadata array.
-   * Handles both new format (array of { file_name, file_url, ... }) and
-   * legacy format (array of plain filename strings / single string).
-   */
   const normalizeFileValues = (raw: unknown): StoredFileMeta[] => {
     if (raw == null) return [];
 
@@ -188,15 +197,17 @@ export const RequestViewPage = () => {
     setDeleting(true);
     try {
       await deleteRequest(data.request.id);
-      notification.success({ title: 'Заявка удалена' });
+      setInlineNotification({ kind: 'success', title: 'Заявка удалена' });
       navigate('/requests');
     } catch (err) {
-      notification.error({
+      setInlineNotification({
+        kind: 'error',
         title: 'Ошибка удаления',
-        description: err instanceof Error ? err.message : 'Попробуйте ещё раз.',
+        subtitle: err instanceof Error ? err.message : 'Попробуйте ещё раз.',
       });
     } finally {
       setDeleting(false);
+      setDeleteConfirmOpen(false);
     }
   };
 
@@ -222,17 +233,30 @@ export const RequestViewPage = () => {
             }
           : prev,
       );
-      notification.success({ title: 'Заявка закрыта' });
+      setInlineNotification({ kind: 'success', title: 'Заявка закрыта' });
     } catch (err) {
-      notification.error({
+      setInlineNotification({
+        kind: 'error',
         title: 'Ошибка закрытия',
-        description: err instanceof Error ? err.message : 'Попробуйте ещё раз.',
+        subtitle: err instanceof Error ? err.message : 'Попробуйте ещё раз.',
       });
     } finally {
       setClosing(false);
+      setCloseConfirmOpen(false);
     }
   };
 
+  const statusTagType = (status: string) => {
+    if (status === 'closed') return 'red';
+    if (status === 'open') return 'blue';
+    return 'warm-gray';
+  };
+
+  const statusLabel = (status: string) => {
+    if (status === 'closed') return 'Закрыта';
+    if (status === 'open') return 'Открыта';
+    return 'В работе';
+  };
 
   return (
     <div
@@ -246,27 +270,21 @@ export const RequestViewPage = () => {
       {/* Header */}
       <div
         style={{
-          background: token.colorBgContainer,
-          borderBottom: `1px solid ${token.colorBorderSecondary}`,
+          background: 'var(--cds-layer)',
+          borderBottom: '1px solid var(--cds-border-subtle)',
           padding: '12px 24px 16px',
           flexShrink: 0,
         }}
       >
         {data?.request && (
-          <Breadcrumb
-            style={{ marginBottom: 8 }}
-            items={[
-              {
-                title: <Link to="/requests">Заявки</Link>,
-              },
-              {
-                title: data.request.title,
-              },
-            ]}
-          />
+          <Breadcrumb noTrailingSlash style={{ marginBottom: 8 }}>
+            <BreadcrumbItem>
+              <Link to="/requests">Заявки</Link>
+            </BreadcrumbItem>
+            <BreadcrumbItem isCurrentPage>{data.request.title}</BreadcrumbItem>
+          </Breadcrumb>
         )}
 
-        {/* Top row: back button + title + subtitle + (future) actions */}
         <div
           style={{
             display: 'flex',
@@ -276,145 +294,136 @@ export const RequestViewPage = () => {
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Button
-              type="text"
-              icon={<ArrowLeftOutlined />}
+              kind="ghost"
+              size="sm"
+              hasIconOnly
+              renderIcon={ArrowLeft}
+              iconDescription="Вернуться к реестру заявок"
               onClick={() => navigate('/requests')}
-              style={{ padding: '0 4px' }}
-              aria-label="Вернуться к реестру заявок"
             />
             <div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                <Title level={4} style={{ margin: 0 }}>
+                <h4 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 600 }}>
                   {pageTitle}
-                </Title>
+                </h4>
                 {data?.request && (
-                  <Text type="secondary" style={{ fontSize: 13 }}>
+                  <span style={{ fontSize: 13, color: 'var(--cds-text-secondary)' }}>
                     № {data.request.id}
-                  </Text>
+                  </span>
                 )}
               </div>
             </div>
           </div>
-          {/* Right side: actions */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {data?.request && (
-              <Popconfirm
-                title="Вы уверены, что хотите закрыть заявку?"
-                okText="Да"
-                cancelText="Отмена"
-                onConfirm={handleCloseRequest}
-                disabled={data.request.status === 'closed'}
+              <Button
+                kind="secondary"
+                size="sm"
+                disabled={data.request.status === 'closed' || closing}
+                onClick={() => setCloseConfirmOpen(true)}
               >
-                <Button
-                  type="default"
-                  loading={closing}
-                  disabled={data.request.status === 'closed'}
-                >
-                  Закрыть заявку
-                </Button>
-              </Popconfirm>
+                {closing ? 'Закрытие…' : 'Закрыть заявку'}
+              </Button>
             )}
             {data?.request && (
-              <Popconfirm
-                title="Вы уверены, что хотите удалить заявку?"
-                okText="Удалить"
-                cancelText="Отмена"
-                okButtonProps={{ danger: true }}
-                onConfirm={handleDelete}
+              <Button
+                kind="danger"
+                size="sm"
+                disabled={deleting}
+                onClick={() => setDeleteConfirmOpen(true)}
               >
-                <Button
-                  danger
-                  loading={deleting}
-                >
-                  Удалить
-                </Button>
-              </Popconfirm>
+                {deleting ? 'Удаление…' : 'Удалить'}
+              </Button>
             )}
           </div>
         </div>
 
         {/* Metadata block (inside header) */}
         {data?.request && (
-          <Descriptions
-            column={{ xs: 1, sm: 2, md: 3 }}
-            bordered={false}
-            size="small"
-            style={{ marginTop: 12, fontSize: 13 }}
-            items={[
-              {
-                key: 'status',
-                label: <Text type="secondary" style={{ fontSize: 13, marginRight: 8 }}>Статус</Text>,
-                children: (
-                  <Tag
-                    color={
-                      data.request.status === 'closed'
-                        ? 'error'
-                        : data.request.status === 'open'
-                        ? 'processing'
-                        : 'warning'
-                    }
-                  >
-                    {data.request.status === 'closed'
-                      ? 'Закрыта'
-                      : data.request.status === 'open'
-                      ? 'Открыта'
-                      : 'В работе'}
-                  </Tag>
-                ),
-              },
-              {
-                key: 'type',
-                label: <Text type="secondary" style={{ fontSize: 13, marginRight: 8 }}>Тип заявки</Text>,
-                children: (
-                  <Text style={{ fontSize: 13 }}>
-                    {data.request.form_snapshot?.title?.trim() || formTitle || '—'}
-                  </Text>
-                ),
-              },
-              {
-                key: 'author',
-                label: <Text type="secondary" style={{ fontSize: 13, marginRight: 8 }}>Автор</Text>,
-                children: data.request.author ? (
-                  <Space direction="vertical" size={0}>
-                    <Text style={{ fontSize: 13 }}>{buildDisplayName(data.request.author)}</Text>
-                    <Text type="secondary" style={{ fontSize: 12 }}>
-                      {data.request.author.email}
-                    </Text>
-                  </Space>
-                ) : (
-                  <Text style={{ fontSize: 13 }}>Неизвестный автор</Text>
-                ),
-              },
-              {
-                key: 'createdAt',
-                label: <Text type="secondary" style={{ fontSize: 13, marginRight: 8 }}>Дата создания</Text>,
-                children: (
-                  <Text style={{ fontSize: 13 }}>
-                    {formatDate(data.request.created_at)}
-                  </Text>
-                ),
-              },
-              {
-                key: 'updatedAt',
-                label: <Text type="secondary" style={{ fontSize: 13, marginRight: 8 }}>Дата изменения</Text>,
-                children: (
-                  <Text style={{ fontSize: 13 }}>
-                    {formatDate(data.request.updated_at ?? data.request.created_at)}
-                  </Text>
-                ),
-              },
-              
-            ]}
-          />
+          <div
+            style={{
+              marginTop: 12,
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+              gap: '8px 24px',
+              fontSize: 13,
+            }}
+          >
+            <div>
+              <span style={{ color: 'var(--cds-text-secondary)', marginRight: 8 }}>Статус</span>
+              <Tag type={statusTagType(data.request.status)} size="sm">
+                {statusLabel(data.request.status)}
+              </Tag>
+            </div>
+            <div>
+              <span style={{ color: 'var(--cds-text-secondary)', marginRight: 8 }}>Тип заявки</span>
+              <span style={{ fontSize: 13 }}>
+                {data.request.form_snapshot?.title?.trim() || formTitle || '—'}
+              </span>
+            </div>
+            <div>
+              <span style={{ color: 'var(--cds-text-secondary)', marginRight: 8 }}>Автор</span>
+              {data.request.author ? (
+                <span>
+                  <span style={{ fontSize: 13 }}>{buildDisplayName(data.request.author)}</span>
+                  <br />
+                  <span style={{ fontSize: 12, color: 'var(--cds-text-secondary)' }}>
+                    {data.request.author.email}
+                  </span>
+                </span>
+              ) : (
+                <span style={{ fontSize: 13 }}>Неизвестный автор</span>
+              )}
+            </div>
+            <div>
+              <span style={{ color: 'var(--cds-text-secondary)', marginRight: 8 }}>Дата создания</span>
+              <span style={{ fontSize: 13 }}>
+                {formatDate(data.request.created_at)}
+              </span>
+            </div>
+            <div>
+              <span style={{ color: 'var(--cds-text-secondary)', marginRight: 8 }}>Дата изменения</span>
+              <span style={{ fontSize: 13 }}>
+                {formatDate(data.request.updated_at ?? data.request.created_at)}
+              </span>
+            </div>
+          </div>
         )}
       </div>
+
+      {/* Close Confirmation Modal */}
+      <Modal
+        open={closeConfirmOpen}
+        modalHeading="Закрыть заявку?"
+        primaryButtonText="Да"
+        secondaryButtonText="Отмена"
+        onRequestSubmit={handleCloseRequest}
+        onRequestClose={() => setCloseConfirmOpen(false)}
+        size="xs"
+      >
+        <p>Вы уверены, что хотите закрыть заявку?</p>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        open={deleteConfirmOpen}
+        danger
+        modalHeading="Удалить заявку?"
+        primaryButtonText="Удалить"
+        secondaryButtonText="Отмена"
+        onRequestSubmit={handleDelete}
+        onRequestClose={() => setDeleteConfirmOpen(false)}
+        size="xs"
+      >
+        <p>Вы уверены, что хотите удалить заявку?</p>
+      </Modal>
 
       {/* Content */}
       <div
         style={{
           flex: 1,
           minHeight: 0,
-          background: token.colorBgLayout,
+          background: 'var(--cds-background)',
           overflow: 'hidden',
         }}
       >
@@ -427,17 +436,28 @@ export const RequestViewPage = () => {
               minHeight: '60vh',
             }}
           >
-            <Spin size="large" />
+            <Loading withOverlay={false} />
           </div>
         ) : error ? (
-          <Alert type="error" showIcon message="Ошибка загрузки" description={error} />
+          <div style={{ padding: 24 }}>
+            <InlineNotification
+              kind="error"
+              title="Ошибка загрузки"
+              subtitle={error}
+              lowContrast
+              hideCloseButton
+            />
+          </div>
         ) : !data ? (
-          <Alert
-            type="error"
-            showIcon
-            message="Заявка не найдена"
-            description="Проверьте корректность ссылки или вернитесь к реестру заявок."
-          />
+          <div style={{ padding: 24 }}>
+            <InlineNotification
+              kind="error"
+              title="Заявка не найдена"
+              subtitle="Проверьте корректность ссылки или вернитесь к реестру заявок."
+              lowContrast
+              hideCloseButton
+            />
+          </div>
         ) : (
           <div
             style={{
@@ -458,118 +478,138 @@ export const RequestViewPage = () => {
                 height: '100%',
               }}
             >
+              {inlineNotification && (
+                <div style={{ marginBottom: 16 }}>
+                  <InlineNotification
+                    kind={inlineNotification.kind}
+                    title={inlineNotification.title}
+                    subtitle={inlineNotification.subtitle}
+                    lowContrast
+                    onCloseButtonClick={() => setInlineNotification(null)}
+                  />
+                </div>
+              )}
+
               <Tabs
-                activeKey={activeTab}
-                onChange={(key) =>
-                  setActiveTab(key as 'info' | 'history' | 'people')
+                selectedIndex={activeTabIndex}
+                onChange={({ selectedIndex }: { selectedIndex: number }) =>
+                  setActiveTabIndex(selectedIndex)
                 }
-                type="line"
-                items={[
-                  { key: 'info', label: 'Информация' },
-                  { key: 'history', label: 'История' },
-                  { key: 'people', label: 'Люди', disabled: true },
-                ]}
-              />
-
-              <div
-                style={{
-                  flex: 1,
-                  minHeight: 0,
-                  overflow: 'auto',
-                }}
               >
-                {activeTab === 'info' && (
-                  <>
-                    {fields.length > 0 ? (
-                      <div
-                        style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: 16,
-                        }}
-                      >
-                        {hasMissingFilledFields && (
-                          <Alert
-                            type="warning"
-                            showIcon
-                            message="Форма была изменена после создания заявки"
-                            description="Некоторые поля могут не отображаться."
-                          />
-                        )}
-                        {/* TODO: Store form snapshot in request at creation time
-                            to prevent ID mismatch when form is edited later. */}
-                        {fields.map((field) => {
-                          if (
-                            field.type === 'file_image' ||
-                            field.type === 'file_vector' ||
-                            field.type === 'file_document'
-                          ) return null;
+                <TabList aria-label="Разделы заявки">
+                  <Tab>Информация</Tab>
+                  <Tab>История</Tab>
+                  <Tab disabled>Люди</Tab>
+                </TabList>
+                <TabPanels>
+                  {/* Info tab */}
+                  <TabPanel>
+                    <div
+                      style={{
+                        flex: 1,
+                        minHeight: 0,
+                        overflow: 'auto',
+                        paddingTop: 16,
+                      }}
+                    >
+                      {fields.length > 0 ? (
+                        <div
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 16,
+                          }}
+                        >
+                          {hasMissingFilledFields && (
+                            <InlineNotification
+                              kind="warning"
+                              title="Форма была изменена после создания заявки"
+                              subtitle="Некоторые поля могут не отображаться."
+                              lowContrast
+                              hideCloseButton
+                            />
+                          )}
+                          {/* TODO: Store form snapshot in request at creation time
+                              to prevent ID mismatch when form is edited later. */}
+                          {fields.map((field) => {
+                            if (
+                              field.type === 'file_image' ||
+                              field.type === 'file_vector' ||
+                              field.type === 'file_document'
+                            ) return null;
 
-                          const rawValue = activeDataSource[field.id];
-                          if (rawValue === undefined) return null;
+                            const rawValue = activeDataSource[field.id];
+                            if (rawValue === undefined) return null;
 
-                          const formatted = formatFieldValue(field, rawValue);
-                          return (
-                            <div key={field.id}>
-                              <Text
-                                type="secondary"
-                                style={{ fontSize: 12, marginBottom: 4, display: 'block' }}
-                              >
-                                {field.label || 'Без названия'}
-                              </Text>
-                              <Text style={{ fontSize: 14, fontWeight: 500 }}>
-                                {formatted}
-                              </Text>
-                            </div>
-                          );
-                        })}
+                            const formatted = formatFieldValue(field, rawValue);
+                            return (
+                              <div key={field.id}>
+                                <span
+                                  style={{
+                                    fontSize: 12,
+                                    marginBottom: 4,
+                                    display: 'block',
+                                    color: 'var(--cds-text-secondary)',
+                                  }}
+                                >
+                                  {field.label || 'Без названия'}
+                                </span>
+                                <span style={{ fontSize: 14, fontWeight: 500 }}>
+                                  {formatted}
+                                </span>
+                              </div>
+                            );
+                          })}
 
-                        {(() => {
-                          const fileFields = fields.filter(
-                            (f) =>
-                              f.type === 'file_image' ||
-                              f.type === 'file_vector' ||
-                              f.type === 'file_document',
-                          );
-                          const nonEmptyFileFields = fileFields.filter(
-                            (f) => normalizeFileValues(activeDataSource[f.id]).length > 0,
-                          );
-                          if (!nonEmptyFileFields.length) return null;
+                          {(() => {
+                            const fileFields = fields.filter(
+                              (f) =>
+                                f.type === 'file_image' ||
+                                f.type === 'file_vector' ||
+                                f.type === 'file_document',
+                            );
+                            const nonEmptyFileFields = fileFields.filter(
+                              (f) => normalizeFileValues(activeDataSource[f.id]).length > 0,
+                            );
+                            if (!nonEmptyFileFields.length) return null;
 
-                          return (
-                            <div style={{ marginTop: token.marginSM }}>
-                              <Title level={5} style={{ marginBottom: token.marginSM }}>
-                                Файлы
-                              </Title>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                                {nonEmptyFileFields.map((field) => {
-                                  const fileMetas = normalizeFileValues(activeDataSource[field.id]);
+                            return (
+                              <div style={{ marginTop: 8 }}>
+                                <h5 style={{ marginBottom: 8, fontSize: '0.875rem', fontWeight: 600 }}>
+                                  Файлы
+                                </h5>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                                  {nonEmptyFileFields.map((field) => {
+                                    const fileMetas = normalizeFileValues(activeDataSource[field.id]);
 
-                                  return (
-                                    <div key={field.id}>
-                                      <Text
-                                        type="secondary"
-                                        style={{ fontSize: 12, marginBottom: 8, display: 'block' }}
-                                      >
-                                        {field.label || 'Без названия'}
-                                      </Text>
+                                    return (
+                                      <div key={field.id}>
+                                        <span
+                                          style={{
+                                            fontSize: 12,
+                                            marginBottom: 8,
+                                            display: 'block',
+                                            color: 'var(--cds-text-secondary)',
+                                          }}
+                                        >
+                                          {field.label || 'Без названия'}
+                                        </span>
 
-                                      {field.type === 'file_image' ? (
-                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-                                          <Image.PreviewGroup>
+                                        {field.type === 'file_image' ? (
+                                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
                                             {fileMetas.map((meta, idx) => (
                                               <div
                                                 key={meta.id ?? `${meta.file_name}-${idx}`}
                                                 style={{
-                                                  border: `1px solid ${token.colorBorderSecondary}`,
-                                                  borderRadius: token.borderRadius,
+                                                  border: '1px solid var(--cds-border-subtle)',
+                                                  borderRadius: 4,
                                                   overflow: 'hidden',
                                                   maxWidth: 300,
-                                                  background: token.colorBgContainer,
+                                                  background: 'var(--cds-layer)',
                                                 }}
                                               >
                                                 {meta.file_url ? (
-                                                  <Image
+                                                  <img
                                                     src={meta.file_url}
                                                     alt={meta.file_name}
                                                     style={{
@@ -578,21 +618,21 @@ export const RequestViewPage = () => {
                                                       objectFit: 'contain',
                                                       display: 'block',
                                                     }}
-                                                    fallback="data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22200%22%20height%3D%22100%22%3E%3Crect%20fill%3D%22%23f0f0f0%22%20width%3D%22200%22%20height%3D%22100%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20dominant-baseline%3D%22middle%22%20text-anchor%3D%22middle%22%20fill%3D%22%23999%22%20font-size%3D%2214%22%3EОшибка%3C%2Ftext%3E%3C%2Fsvg%3E"
                                                   />
                                                 ) : (
                                                   <div style={{ padding: 16, textAlign: 'center' }}>
-                                                    <FileOutlined
-                                                      style={{ fontSize: 32, color: token.colorTextQuaternary }}
+                                                    <Document
+                                                      size={32}
+                                                      style={{ color: 'var(--cds-text-disabled)' }}
                                                     />
                                                   </div>
                                                 )}
                                                 <div
                                                   style={{
                                                     padding: '6px 10px',
-                                                    borderTop: `1px solid ${token.colorBorderSecondary}`,
+                                                    borderTop: '1px solid var(--cds-border-subtle)',
                                                     fontSize: 12,
-                                                    color: token.colorTextSecondary,
+                                                    color: 'var(--cds-text-secondary)',
                                                     display: 'flex',
                                                     justifyContent: 'space-between',
                                                     alignItems: 'center',
@@ -612,198 +652,302 @@ export const RequestViewPage = () => {
                                                 </div>
                                               </div>
                                             ))}
-                                          </Image.PreviewGroup>
-                                        </div>
-                                      ) : (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                          {fileMetas.map((meta, idx) => (
-                                            <div
-                                              key={meta.id ?? `${meta.file_name}-${idx}`}
-                                              style={{
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: 10,
-                                                padding: '8px 12px',
-                                                border: `1px solid ${token.colorBorderSecondary}`,
-                                                borderRadius: token.borderRadius,
-                                                background: token.colorBgContainer,
-                                              }}
-                                            >
-                                              <FileOutlined
-                                                style={{ fontSize: 18, color: token.colorTextSecondary }}
-                                              />
-                                              <div style={{ flex: 1, minWidth: 0 }}>
-                                                <Text
-                                                  style={{
-                                                    fontSize: 14,
-                                                    fontWeight: 500,
-                                                    display: 'block',
-                                                    overflow: 'hidden',
-                                                    textOverflow: 'ellipsis',
-                                                    whiteSpace: 'nowrap',
-                                                  }}
-                                                >
-                                                  {meta.file_name}
-                                                </Text>
-                                                {(meta.file_type || meta.file_size) && (
-                                                  <Text type="secondary" style={{ fontSize: 12 }}>
-                                                    {[meta.file_type, formatSize(meta.file_size)]
-                                                      .filter(Boolean)
-                                                      .join(' · ')}
-                                                  </Text>
+                                          </div>
+                                        ) : (
+                                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                            {fileMetas.map((meta, idx) => (
+                                              <div
+                                                key={meta.id ?? `${meta.file_name}-${idx}`}
+                                                style={{
+                                                  display: 'flex',
+                                                  alignItems: 'center',
+                                                  gap: 10,
+                                                  padding: '8px 12px',
+                                                  border: '1px solid var(--cds-border-subtle)',
+                                                  borderRadius: 4,
+                                                  background: 'var(--cds-layer)',
+                                                }}
+                                              >
+                                                <Document
+                                                  size={18}
+                                                  style={{ color: 'var(--cds-text-secondary)' }}
+                                                />
+                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                  <span
+                                                    style={{
+                                                      fontSize: 14,
+                                                      fontWeight: 500,
+                                                      display: 'block',
+                                                      overflow: 'hidden',
+                                                      textOverflow: 'ellipsis',
+                                                      whiteSpace: 'nowrap',
+                                                    }}
+                                                  >
+                                                    {meta.file_name}
+                                                  </span>
+                                                  {(meta.file_type || meta.file_size) && (
+                                                    <span
+                                                      style={{
+                                                        fontSize: 12,
+                                                        color: 'var(--cds-text-secondary)',
+                                                      }}
+                                                    >
+                                                      {[meta.file_type, formatSize(meta.file_size)]
+                                                        .filter(Boolean)
+                                                        .join(' · ')}
+                                                    </span>
+                                                  )}
+                                                </div>
+                                                {meta.file_url && (
+                                                  <Tooltip label="Скачать" align="top">
+                                                    <a
+                                                      href={meta.file_url}
+                                                      target="_blank"
+                                                      rel="noopener noreferrer"
+                                                      style={{
+                                                        display: 'inline-flex',
+                                                        color: 'var(--cds-link-primary)',
+                                                      }}
+                                                    >
+                                                      <Download size={16} />
+                                                    </a>
+                                                  </Tooltip>
                                                 )}
                                               </div>
-                                              {meta.file_url && (
-                                                <a
-                                                  href={meta.file_url}
-                                                  target="_blank"
-                                                  rel="noopener noreferrer"
-                                                  title="Скачать"
-                                                >
-                                                  <DownloadOutlined style={{ fontSize: 16 }} />
-                                                </a>
-                                              )}
-                                            </div>
-                                          ))}
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                })}
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      ) : (
+                        <span style={{ color: 'var(--cds-text-secondary)' }}>
+                          У связанной формы нет полей.
+                        </span>
+                      )}
+                    </div>
+                  </TabPanel>
+
+                  {/* History tab */}
+                  <TabPanel>
+                    <div style={{ paddingTop: 16 }}>
+                      {data?.request && (
+                        <div
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            position: 'relative',
+                            paddingLeft: 24,
+                          }}
+                        >
+                          {/* Timeline line */}
+                          <div
+                            style={{
+                              position: 'absolute',
+                              left: 7,
+                              top: 6,
+                              bottom: 6,
+                              width: 2,
+                              background: 'var(--cds-border-subtle)',
+                            }}
+                          />
+
+                          {/* Created event */}
+                          <div style={{ position: 'relative', paddingBottom: 24 }}>
+                            <div
+                              style={{
+                                position: 'absolute',
+                                left: -20,
+                                top: 4,
+                                width: 12,
+                                height: 12,
+                                borderRadius: '50%',
+                                background: 'var(--cds-icon-primary)',
+                                border: '2px solid var(--cds-layer)',
+                              }}
+                            />
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                              <span style={{ fontWeight: 500 }}>Заявка создана</span>
+                              <span style={{ fontSize: 12, color: 'var(--cds-text-secondary)' }}>
+                                {formatDateTime(data.request.created_at)}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Closed event */}
+                          {data.request.status === 'closed' && data.request.closedAt && (
+                            <div style={{ position: 'relative', paddingBottom: 24 }}>
+                              <div
+                                style={{
+                                  position: 'absolute',
+                                  left: -20,
+                                  top: 4,
+                                  width: 12,
+                                  height: 12,
+                                  borderRadius: '50%',
+                                  background: 'var(--cds-icon-primary)',
+                                  border: '2px solid var(--cds-layer)',
+                                }}
+                              />
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                <span style={{ fontWeight: 500 }}>Заявка закрыта</span>
+                                <span style={{ fontSize: 12, color: 'var(--cds-text-secondary)' }}>
+                                  {formatDateTime(data.request.closedAt)}
+                                </span>
                               </div>
                             </div>
-                          );
-                        })()}
-                      </div>
-                    ) : (
-                      <Text type="secondary">У связанной формы нет полей.</Text>
-                    )}
-                  </>
-                )}
-                {activeTab === 'history' && data?.request && (
-                  <Timeline
-                    items={[
-                      {
-                        children: (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                            <Text style={{ fontWeight: 500 }}>Заявка создана</Text>
-                            <Text type="secondary" style={{ fontSize: 12 }}>
-                              {formatDateTime(data.request.created_at)}
-                            </Text>
-                          </div>
-                        ),
-                      },
-                      ...(data.request.status === 'closed' && data.request.closedAt
-                        ? [
-                            {
-                              children: (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                  <Text style={{ fontWeight: 500 }}>Заявка закрыта</Text>
-                                  <Text type="secondary" style={{ fontSize: 12 }}>
-                                    {formatDateTime(data.request.closedAt)}
-                                  </Text>
-                                </div>
-                              ),
-                            },
-                          ]
-                        : []),
-                    ]}
-                  />
-                )}
-              </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </TabPanel>
+
+                  {/* People tab (disabled placeholder) */}
+                  <TabPanel>
+                    <span style={{ color: 'var(--cds-text-secondary)' }}>
+                      Раздел находится в разработке.
+                    </span>
+                  </TabPanel>
+                </TabPanels>
+              </Tabs>
             </div>
 
             {/* Right: AI suggestions panel (hidden on smaller screens) */}
-            {showAiPanel && <div
-              style={{
-                width: 360,
-                flexShrink: 0,
-                height: '100%',
-              }}
-            >
+            {showAiPanel && (
               <div
                 style={{
-                  background: token.colorBgContainer,
+                  width: 360,
+                  flexShrink: 0,
                   height: '100%',
-                  borderLeft: `1px solid ${token.colorBorderSecondary}`,
-                  padding: 16,
-                  overflowY: 'auto',
                 }}
               >
-                <Space direction="vertical" size={token.marginMD} style={{ width: '100%' }}>
-                  <Card
-                    size="small"
-                    title={<Text strong>Чего не хватает</Text>}
-                    styles={{ body: { paddingTop: token.paddingSM } }}
-                  >
-                    <Text type="secondary">
-                      ИИ может проанализировать заявку и подсказать, какой информации может не
-                      хватать или что может быть непонятно исполнителям.
-                    </Text>
-                    <Divider style={{ marginBlock: token.marginSM }} />
-                    <Text type="secondary">
-                      Заглушка: здесь будут отображаться недостающие детали и подсказки для уточнения.
-                    </Text>
-                  </Card>
+                <div
+                  style={{
+                    background: 'var(--cds-layer)',
+                    height: '100%',
+                    borderLeft: '1px solid var(--cds-border-subtle)',
+                    padding: 16,
+                    overflowY: 'auto',
+                  }}
+                >
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16, width: '100%' }}>
+                    <Tile style={{ padding: 16 }}>
+                      <span style={{ display: 'block', fontWeight: 600, marginBottom: 8 }}>
+                        Чего не хватает
+                      </span>
+                      <span style={{ color: 'var(--cds-text-secondary)', display: 'block' }}>
+                        ИИ может проанализировать заявку и подсказать, какой информации может не
+                        хватать или что может быть непонятно исполнителям.
+                      </span>
+                      <hr
+                        style={{
+                          border: 'none',
+                          borderTop: '1px solid var(--cds-border-subtle)',
+                          margin: '12px 0',
+                        }}
+                      />
+                      <span style={{ color: 'var(--cds-text-secondary)', display: 'block' }}>
+                        Заглушка: здесь будут отображаться недостающие детали и подсказки для уточнения.
+                      </span>
+                    </Tile>
 
-                  <Card
-                    size="small"
-                    title={<Text strong>Генерация ТЗ</Text>}
-                    styles={{ body: { paddingTop: token.paddingSM } }}
-                  >
-                    <Text type="secondary">
-                      Сформировать техническое задание для исполнителя на основе информации из
-                      заявки.
-                    </Text>
-                    <Divider style={{ marginBlock: token.marginSM }} />
-                    <Button
-                      type="primary"
-                      onClick={() => message.info('Генерация ТЗ будет доступна позже')}
-                    >
-                      Сгенерировать ТЗ
-                    </Button>
-                  </Card>
+                    <Tile style={{ padding: 16 }}>
+                      <span style={{ display: 'block', fontWeight: 600, marginBottom: 8 }}>
+                        Генерация ТЗ
+                      </span>
+                      <span style={{ color: 'var(--cds-text-secondary)', display: 'block' }}>
+                        Сформировать техническое задание для исполнителя на основе информации из
+                        заявки.
+                      </span>
+                      <hr
+                        style={{
+                          border: 'none',
+                          borderTop: '1px solid var(--cds-border-subtle)',
+                          margin: '12px 0',
+                        }}
+                      />
+                      <Button
+                        kind="primary"
+                        size="sm"
+                        onClick={() => setAiMessage('Генерация ТЗ будет доступна позже')}
+                      >
+                        Сгенерировать ТЗ
+                      </Button>
+                      {aiMessage && (
+                        <div style={{ marginTop: 8 }}>
+                          <InlineNotification
+                            kind="info"
+                            subtitle={aiMessage}
+                            lowContrast
+                            onCloseButtonClick={() => setAiMessage(null)}
+                          />
+                        </div>
+                      )}
+                    </Tile>
 
-                  <Card
-                    size="small"
-                    title={<Text strong>Кому перенаправить</Text>}
-                    styles={{ body: { paddingTop: token.paddingSM } }}
-                  >
-                    <Text type="secondary">
-                      ИИ может предложить, кому лучше передать эту заявку на исполнение.
-                    </Text>
-                    <Divider style={{ marginBlock: token.marginSM }} />
-                    <Space direction="vertical" size={token.paddingSM} style={{ width: '100%' }}>
-                      <Space align="center" size={token.paddingSM}>
-                        <Avatar>АК</Avatar>
-                        <div>
-                          <Text style={{ display: 'block' }}>Алексей Ковалев</Text>
-                          <Text type="secondary">Backend‑разработчик</Text>
-                        </div>
-                      </Space>
-                      <Space align="center" size={token.paddingSM}>
-                        <Avatar>МС</Avatar>
-                        <div>
-                          <Text style={{ display: 'block' }}>Мария Смирнова</Text>
-                          <Text type="secondary">QA / Автоматизация</Text>
-                        </div>
-                      </Space>
-                      <Space align="center" size={token.paddingSM}>
-                        <Avatar>ИД</Avatar>
-                        <div>
-                          <Text style={{ display: 'block' }}>Иван Демидов</Text>
-                          <Text type="secondary">DevOps‑инженер</Text>
-                        </div>
-                      </Space>
-                    </Space>
-                  </Card>
-                </Space>
+                    <Tile style={{ padding: 16 }}>
+                      <span style={{ display: 'block', fontWeight: 600, marginBottom: 8 }}>
+                        Кому перенаправить
+                      </span>
+                      <span style={{ color: 'var(--cds-text-secondary)', display: 'block' }}>
+                        ИИ может предложить, кому лучше передать эту заявку на исполнение.
+                      </span>
+                      <hr
+                        style={{
+                          border: 'none',
+                          borderTop: '1px solid var(--cds-border-subtle)',
+                          margin: '12px 0',
+                        }}
+                      />
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        {[
+                          { initials: 'АК', name: 'Алексей Ковалев', role: 'Backend‑разработчик' },
+                          { initials: 'МС', name: 'Мария Смирнова', role: 'QA / Автоматизация' },
+                          { initials: 'ИД', name: 'Иван Демидов', role: 'DevOps‑инженер' },
+                        ].map((person) => (
+                          <div
+                            key={person.initials}
+                            style={{ display: 'flex', alignItems: 'center', gap: 12 }}
+                          >
+                            <div
+                              style={{
+                                width: 32,
+                                height: 32,
+                                borderRadius: '50%',
+                                background: 'var(--cds-interactive)',
+                                color: 'var(--cds-text-on-color)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: 12,
+                                fontWeight: 600,
+                                flexShrink: 0,
+                              }}
+                            >
+                              {person.initials}
+                            </div>
+                            <div>
+                              <span style={{ display: 'block' }}>{person.name}</span>
+                              <span style={{ color: 'var(--cds-text-secondary)', fontSize: 12 }}>
+                                {person.role}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </Tile>
+                  </div>
+                </div>
               </div>
-            </div>}
+            )}
           </div>
         )}
       </div>
     </div>
   );
-}
-
+};

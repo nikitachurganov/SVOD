@@ -1,24 +1,12 @@
 import { useEffect, useState } from 'react';
-import {
-  App as AntApp,
-  Badge,
-  Button,
-  Drawer,
-  Empty,
-  List,
-  Space,
-  Spin,
-  Typography,
-} from 'antd';
-import { CheckOutlined, CloseOutlined } from '@ant-design/icons';
+import { Modal, Button, Loading, Tag } from '@carbon/react';
+import { Checkmark, Close } from '@carbon/react/icons';
 import {
   acceptInvitation,
   declineInvitation,
   getMyInvitations,
 } from '../../shared/api/organizations.api';
 import type { MyInvitationResponse } from '../../types/organization';
-
-const { Text } = Typography;
 
 interface Props {
   open: boolean;
@@ -27,7 +15,6 @@ interface Props {
 }
 
 export const InvitationsDrawer = ({ open, onClose, onAccepted }: Props) => {
-  const { notification } = AntApp.useApp();
   const [invitations, setInvitations] = useState<MyInvitationResponse[]>([]);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -38,7 +25,7 @@ export const InvitationsDrawer = ({ open, onClose, onAccepted }: Props) => {
       const data = await getMyInvitations();
       setInvitations(data);
     } catch {
-      notification.error({ message: 'Не удалось загрузить приглашения' });
+      // silently handled
     } finally {
       setLoading(false);
     }
@@ -52,12 +39,10 @@ export const InvitationsDrawer = ({ open, onClose, onAccepted }: Props) => {
     setActionLoading(id);
     try {
       await acceptInvitation(id);
-      notification.success({ message: 'Вы вступили в организацию' });
       setInvitations((prev) => prev.filter((i) => i.id !== id));
       onAccepted();
-    } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      notification.error({ message: detail ?? 'Не удалось принять приглашение' });
+    } catch {
+      // silently handled
     } finally {
       setActionLoading(null);
     }
@@ -67,77 +52,80 @@ export const InvitationsDrawer = ({ open, onClose, onAccepted }: Props) => {
     setActionLoading(id);
     try {
       await declineInvitation(id);
-      notification.success({ message: 'Приглашение отклонено' });
       setInvitations((prev) => prev.filter((i) => i.id !== id));
     } catch {
-      notification.error({ message: 'Не удалось отклонить приглашение' });
+      // silently handled
     } finally {
       setActionLoading(null);
     }
   };
 
-  const title = (
-    <Space>
-      Приглашения
-      {invitations.length > 0 && <Badge count={invitations.length} />}
-    </Space>
-  );
-
   return (
-    <Drawer title={title} open={open} onClose={onClose} width={400}>
+    <Modal
+      open={open}
+      modalHeading={`Приглашения${invitations.length > 0 ? ` (${invitations.length})` : ''}`}
+      passiveModal
+      onRequestClose={onClose}
+      size="sm"
+    >
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 32 }}>
-          <Spin />
+          <Loading withOverlay={false} small />
         </div>
       ) : invitations.length === 0 ? (
-        <Empty description="Нет входящих приглашений" />
+        <p style={{ color: 'var(--cds-text-secondary)', textAlign: 'center', padding: 24 }}>
+          Нет входящих приглашений
+        </p>
       ) : (
-        <List
-          dataSource={invitations}
-          renderItem={(inv) => {
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {invitations.map((inv) => {
             const inviterName = inv.invited_by
               ? `${inv.invited_by.first_name} ${inv.invited_by.last_name}`
               : 'Неизвестно';
             const busy = actionLoading === inv.id;
 
             return (
-              <List.Item
-                actions={[
+              <div
+                key={inv.id}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '12px 0',
+                  borderBottom: '1px solid var(--cds-border-subtle)',
+                }}
+              >
+                <div>
+                  <div style={{ fontWeight: 600 }}>{inv.organization_name}</div>
+                  <div style={{ fontSize: 12, color: 'var(--cds-text-secondary)' }}>
+                    Пригласил: {inviterName}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
                   <Button
-                    key="accept"
-                    type="primary"
-                    size="small"
-                    icon={<CheckOutlined />}
-                    loading={busy}
+                    kind="primary"
+                    size="sm"
+                    renderIcon={Checkmark}
+                    disabled={busy}
                     onClick={() => void handleAccept(inv.id)}
                   >
                     Принять
-                  </Button>,
+                  </Button>
                   <Button
-                    key="decline"
-                    size="small"
-                    danger
-                    icon={<CloseOutlined />}
-                    loading={busy}
+                    kind="danger"
+                    size="sm"
+                    renderIcon={Close}
+                    disabled={busy}
                     onClick={() => void handleDecline(inv.id)}
                   >
                     Отклонить
-                  </Button>,
-                ]}
-              >
-                <List.Item.Meta
-                  title={inv.organization_name}
-                  description={
-                    <Text type="secondary" style={{ fontSize: 12 }}>
-                      Пригласил: {inviterName}
-                    </Text>
-                  }
-                />
-              </List.Item>
+                  </Button>
+                </div>
+              </div>
             );
-          }}
-        />
+          })}
+        </div>
       )}
-    </Drawer>
+    </Modal>
   );
 };

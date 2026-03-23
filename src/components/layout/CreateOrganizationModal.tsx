@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { App as AntApp, Button, Form, Input, Modal } from 'antd';
+import { Modal, TextInput, TextArea } from '@carbon/react';
 import { useOrganization } from '../../shared/context/organization.context';
 
 interface Props {
@@ -8,25 +8,38 @@ interface Props {
 }
 
 export const CreateOrganizationModal = ({ open, onClose }: Props) => {
-  const [form] = Form.useForm<{ name: string; description?: string }>();
-  const { notification } = AntApp.useApp();
   const { createOrganization } = useOrganization();
   const [loading, setLoading] = useState(false);
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [nameError, setNameError] = useState('');
 
-  const handleOk = async () => {
+  const reset = () => {
+    setName('');
+    setDescription('');
+    setNameError('');
+  };
+
+  const handleSubmit = async () => {
+    if (!name.trim()) {
+      setNameError('Введите название организации');
+      return;
+    }
+    if (name.trim().length > 255) {
+      setNameError('Не более 255 символов');
+      return;
+    }
+
+    setLoading(true);
     try {
-      const values = await form.validateFields();
-      setLoading(true);
       await createOrganization({
-        name: values.name.trim(),
-        description: values.description?.trim() || null,
+        name: name.trim(),
+        description: description.trim() || null,
       });
-      notification.success({ message: 'Организация создана', description: 'Вы можете начать работу.' });
-      form.resetFields();
+      reset();
       onClose();
-    } catch (err: unknown) {
-      if (err && typeof err === 'object' && 'errorFields' in err) return;
-      notification.error({ message: 'Не удалось создать организацию' });
+    } catch {
+      // error handled silently
     } finally {
       setLoading(false);
     }
@@ -34,34 +47,38 @@ export const CreateOrganizationModal = ({ open, onClose }: Props) => {
 
   return (
     <Modal
-      title="Создать организацию"
       open={open}
-      onOk={handleOk}
-      onCancel={() => { form.resetFields(); onClose(); }}
-      okText="Создать"
-      cancelText="Отмена"
-      confirmLoading={loading}
-      destroyOnClose
+      modalHeading="Создать организацию"
+      primaryButtonText={loading ? 'Создание…' : 'Создать'}
+      secondaryButtonText="Отмена"
+      primaryButtonDisabled={loading}
+      onRequestClose={() => { reset(); onClose(); }}
+      onRequestSubmit={() => void handleSubmit()}
     >
-      <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
-        <Form.Item
-          name="name"
-          label="Название"
-          rules={[
-            { required: true, message: 'Введите название организации' },
-            { max: 255, message: 'Не более 255 символов' },
-          ]}
-        >
-          <Input placeholder="Название организации" maxLength={255} />
-        </Form.Item>
-        <Form.Item name="description" label="Описание">
-          <Input.TextArea
-            placeholder="Описание (необязательно)"
-            rows={3}
-            maxLength={1000}
-          />
-        </Form.Item>
-      </Form>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 8 }}>
+        <TextInput
+          id="org-name"
+          labelText="Название"
+          placeholder="Название организации"
+          value={name}
+          maxLength={255}
+          invalid={!!nameError}
+          invalidText={nameError}
+          onChange={(e) => {
+            setName(e.target.value);
+            if (nameError) setNameError('');
+          }}
+        />
+        <TextArea
+          id="org-description"
+          labelText="Описание"
+          placeholder="Описание (необязательно)"
+          value={description}
+          maxCount={1000}
+          rows={3}
+          onChange={(e) => setDescription(e.target.value)}
+        />
+      </div>
     </Modal>
   );
 };

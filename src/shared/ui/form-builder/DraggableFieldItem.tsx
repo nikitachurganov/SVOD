@@ -1,18 +1,13 @@
 import { useState } from 'react';
-import { Typography, theme } from 'antd';
 import { useDraggable } from '@dnd-kit/core';
 import { Icon } from '@iconify/react';
 import type { PanelDragData } from '../../types/form-builder.types';
-
-const { Text } = Typography;
 
 export interface DraggableFieldItemProps {
   fieldKey: string;
   label: string;
   iconName: string;
-  /** Icon foreground color resolved from a category token. Falls back to token.colorPrimary. */
   iconColor?: string;
-  /** Icon container background color resolved from a category token. Falls back to token.colorPrimaryBg. */
   iconBackground?: string;
 }
 
@@ -24,7 +19,6 @@ export const DraggableFieldItem = ({
   iconBackground,
 }: DraggableFieldItemProps) => {
   const [hovered, setHovered] = useState(false);
-  const { token } = theme.useToken();
 
   const dragData: PanelDragData = { source: 'panel', fieldKey, label };
 
@@ -44,13 +38,13 @@ export const DraggableFieldItem = ({
         gap: 8,
         padding: '6px 4px',
         cursor: isDragging ? 'grabbing' : 'grab',
-        borderRadius: token.borderRadiusSM,
+        borderRadius: 4,
         background: isDragging
-          ? token.colorPrimaryBg
+          ? 'var(--cds-highlight)'
           : hovered
-            ? token.colorFillSecondary
+            ? 'var(--cds-layer-hover)'
             : 'transparent',
-        transition: `background ${token.motionDurationFast}`,
+        transition: 'background 150ms',
         userSelect: 'none',
         opacity: isDragging ? 0.35 : 1,
         touchAction: 'none',
@@ -65,15 +59,15 @@ export const DraggableFieldItem = ({
           justifyContent: 'center',
           width: 24,
           height: 24,
-          background: iconBackground ?? token.colorPrimaryBg,
-          borderRadius: token.borderRadiusSM,
-          color: iconColor ?? token.colorPrimary,
+          background: iconBackground ?? 'var(--cds-highlight)',
+          borderRadius: 4,
+          color: iconColor ?? 'var(--cds-link-primary)',
           flexShrink: 0,
         }}
       >
         <Icon icon={iconName} width={16} height={16} />
       </span>
-      <Text style={{ flex: 1, fontSize: 13 }}>{label}</Text>
+      <span style={{ flex: 1, fontSize: 13 }}>{label}</span>
     </div>
   );
 };

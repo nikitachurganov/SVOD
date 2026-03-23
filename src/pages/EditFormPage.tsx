@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, App, Spin, theme } from 'antd';
+import { InlineNotification, Loading } from '@carbon/react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   getFormById,
@@ -14,8 +14,6 @@ import type { FormPageInstance } from '../shared/types/form-builder.types';
 export const EditFormPage = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const { token } = theme.useToken();
-  const { notification } = App.useApp();
 
   const [formData, setFormData] = useState<FormResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -25,18 +23,11 @@ export const EditFormPage = () => {
     if (!id) return;
     setLoading(true);
     getFormById(id)
-      .then((data) => {
-        setFormData(data);
-        setError(null);
-      })
-      .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : 'Не удалось загрузить форму');
-      })
+      .then((data) => { setFormData(data); setError(null); })
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Не удалось загрузить форму'))
       .finally(() => setLoading(false));
   }, [id]);
 
-  // Convert stored payload pages → FormPageInstance once per load.
-  // FormEditor is only mounted after loading finishes, so these are stable.
   const initialPages = useMemo<FormPageInstance[]>(
     () => (formData?.pages ? pagesPayloadToInstances(formData.pages) : []),
     [formData],
@@ -44,46 +35,22 @@ export const EditFormPage = () => {
 
   const handleSave = async (title: string, pages: FormPageInstance[]) => {
     if (!id) return;
-
-    await updateForm(id, {
-      name: title,
-      pages: mapPagesToPayload(pages),
-    });
-
-    notification.success({
-      title: 'Форма обновлена',
-      description: `Форма «${title}» успешно обновлена.`,
-      placement: 'topRight',
-    });
-
+    await updateForm(id, { name: title, pages: mapPagesToPayload(pages) });
     navigate(`/forms/${id}`);
   };
 
   if (loading) {
     return (
-      <div
-        style={{
-          display: 'flex',
-          flex: 1,
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: token.colorBgLayout,
-        }}
-      >
-        <Spin size="large" />
+      <div style={{ display: 'flex', flex: 1, alignItems: 'center', justifyContent: 'center', background: 'var(--cds-background)' }}>
+        <Loading withOverlay={false} />
       </div>
     );
   }
 
   if (error || !formData) {
     return (
-      <div style={{ padding: 24, background: token.colorBgLayout, flex: 1 }}>
-        <Alert
-          type="error"
-          showIcon
-          message="Ошибка загрузки"
-          description={error ?? 'Форма не найдена'}
-        />
+      <div style={{ padding: 24, background: 'var(--cds-background)', flex: 1 }}>
+        <InlineNotification kind="error" title="Ошибка загрузки" subtitle={error ?? 'Форма не найдена'} lowContrast />
       </div>
     );
   }

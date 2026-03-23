@@ -1,9 +1,8 @@
-import { Button, Divider, Input, Popconfirm, Switch, Typography, theme } from 'antd';
+import { useState } from 'react';
+import { Button, Toggle, Modal } from '@carbon/react';
 import { DragHandle } from './DragHandle';
 import { FieldPreview } from './FieldPreview';
 import type { FieldOption, FormFieldInstance } from '../../types/form-builder.types';
-
-const { Text } = Typography;
 
 interface FieldBlockProps {
   field: FormFieldInstance;
@@ -20,7 +19,7 @@ export const FieldBlock = ({
   dragHandleProps,
   isDraggingOverlay = false,
 }: FieldBlockProps) => {
-  const { token } = theme.useToken();
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const handleOptionsChange = (options: FieldOption[]) => {
     onChange({ options });
@@ -29,55 +28,59 @@ export const FieldBlock = ({
   return (
     <div
       style={{
-        background: token.colorBgContainer,
-        border: `1px solid ${isDraggingOverlay ? token.colorPrimary : token.colorBorderSecondary}`,
-        borderRadius: token.borderRadius,
-        boxShadow: isDraggingOverlay ? token.boxShadowSecondary : 'none',
+        background: 'var(--cds-layer)',
+        border: `1px solid ${isDraggingOverlay ? 'var(--cds-interactive)' : 'var(--cds-border-subtle)'}`,
+        borderRadius: 4,
+        boxShadow: isDraggingOverlay ? '0 4px 8px rgba(0,0,0,0.1)' : 'none',
         overflow: 'hidden',
       }}
     >
-      {/* ── Drag handle — top center ── */}
       <DragHandle dragProps={dragHandleProps} />
 
-      {/* ── Block content ── */}
       <div style={{ padding: '0px 16px 12px' }}>
-
-        {/* Editable label (title) */}
-        <Input
-          variant="borderless"
+        <input
           placeholder="Напишите название"
           value={field.label}
           onChange={(e) => onChange({ label: e.target.value })}
           style={{
             padding: '0 4px',
-            fontSize: token.fontSizeLG,
-            fontWeight: token.fontWeightStrong,
-            color: token.colorText,
+            fontSize: '1rem',
+            fontWeight: 600,
+            color: 'var(--cds-text-primary)',
             width: '100%',
             marginBottom: 2,
+            border: 'none',
+            outline: 'none',
+            background: 'transparent',
           }}
         />
 
-        {/* Editable description */}
-        <Input
-          variant="borderless"
+        <input
           placeholder="Напишите описание"
           value={field.description}
           onChange={(e) => onChange({ description: e.target.value })}
           style={{
             padding: '0 4px',
-            fontSize: token.fontSizeSM,
-            color: token.colorTextSecondary,
+            fontSize: '0.75rem',
+            color: 'var(--cds-text-secondary)',
             width: '100%',
             marginBottom: 12,
+            border: 'none',
+            outline: 'none',
+            background: 'transparent',
           }}
         />
 
-        {/* ── Field preview / options editor ── */}
         <FieldPreview field={field} onOptionsChange={handleOptionsChange} />
 
-        {/* ── Required switch ── */}
-        <Divider style={{ margin: '14px 0 10px' }} />
+        <hr
+          style={{
+            border: 'none',
+            borderTop: '1px solid var(--cds-border-subtle)',
+            margin: '14px 0 10px',
+          }}
+        />
+
         <div
           style={{
             display: 'flex',
@@ -85,43 +88,44 @@ export const FieldBlock = ({
             alignItems: 'center',
           }}
         >
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-            }}
-          >
-            <Switch
-              size="small"
-              checked={field.required}
-              onChange={(checked) => onChange({ required: checked })}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Toggle
+              id={`required-${field.id}`}
+              size="sm"
+              labelText="Обязательно для заполнения"
+              hideLabel
+              toggled={field.required}
+              onToggle={(checked: boolean) => onChange({ required: checked })}
             />
-            <Text style={{ fontSize: token.fontSize, color: token.colorTextSecondary }}>
+            <span style={{ fontSize: '0.875rem', color: 'var(--cds-text-secondary)' }}>
               Обязательно для заполнения
-            </Text>
+            </span>
           </div>
 
-          {/* ── Delete button ── */}
-          <Popconfirm
-            title="Удалить поле?"
-            okText="Удалить"
-            cancelText="Отмена"
-            okButtonProps={{ danger: true }}
-            onConfirm={onDelete}
-            placement="bottom"
+          <Button
+            kind="danger--ghost"
+            size="sm"
+            onClick={() => setConfirmDelete(true)}
+            style={{ paddingInline: 0 }}
           >
-            <Button
-              size="small"
-              type="link"
-              danger
-              style={{ paddingInline: 0 }}
-            >
-              Удалить поле
-            </Button>
-          </Popconfirm>
+            Удалить поле
+          </Button>
         </div>
       </div>
+
+      <Modal
+        open={confirmDelete}
+        onRequestClose={() => setConfirmDelete(false)}
+        onRequestSubmit={() => {
+          onDelete();
+          setConfirmDelete(false);
+        }}
+        modalHeading="Удалить поле?"
+        primaryButtonText="Удалить"
+        secondaryButtonText="Отмена"
+        danger
+        size="xs"
+      />
     </div>
   );
 };

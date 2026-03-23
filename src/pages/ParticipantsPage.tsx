@@ -1,18 +1,27 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
-  App,
-  Button,
-  Grid,
-  Popconfirm,
+  DataTable,
   Table,
-  Tabs,
+  TableHead,
+  TableRow,
+  TableHeader,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableToolbar,
+  TableToolbarContent,
+  Button,
+  InlineNotification,
   Tag,
-  Typography,
-  theme,
-} from 'antd';
-import type { TableProps } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+  Modal,
+  Tabs,
+  TabList,
+  Tab,
+  TabPanels,
+  TabPanel,
+  DataTableSkeleton,
+} from '@carbon/react';
+import { Add } from '@carbon/react/icons';
 import { useOrganization } from '../shared/context/organization.context';
 import { useAuth } from '../shared/context/auth.context';
 import { buildDisplayName } from '../shared/utils/userName';
@@ -25,32 +34,28 @@ import {
 import type { InvitationResponse, MemberResponse } from '../types/organization';
 import { InviteMemberModal } from '../components/organization/InviteMemberModal';
 
-const { Title } = Typography;
-
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
+  return new Date(iso).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
-export const ParticipantsPage = () => {
-  const { token } = theme.useToken();
-  const { notification } = App.useApp();
-  const screens = Grid.useBreakpoint();
-  const isMobile = !screens.md;
-  const contentPadding = isMobile
-    ? token.paddingSM
-    : screens.lg
-      ? token.paddingLG
-      : token.paddingMD;
+const MEMBER_HEADERS = [
+  { key: 'participant', header: 'Участник' },
+  { key: 'role', header: 'Роль' },
+  { key: 'joined_at', header: 'Дата вступления' },
+  { key: 'actions', header: 'Действия' },
+];
 
+const INVITE_HEADERS = [
+  { key: 'email', header: 'Email' },
+  { key: 'status', header: 'Статус' },
+  { key: 'created_at', header: 'Дата отправки' },
+  { key: 'actions', header: 'Действия' },
+];
+
+export const ParticipantsPage = () => {
   const { activeOrganization } = useOrganization();
   const { user } = useAuth();
-
-  const isOwner =
-    !!activeOrganization && activeOrganization.owner_user_id === user?.id;
+  const isOwner = !!activeOrganization && activeOrganization.owner_user_id === user?.id;
 
   const [members, setMembers] = useState<MemberResponse[]>([]);
   const [invitations, setInvitations] = useState<InvitationResponse[]>([]);
@@ -59,290 +64,158 @@ export const ParticipantsPage = () => {
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<string>('members');
+  const [confirmAction, setConfirmAction] = useState<{ type: 'remove' | 'revoke'; id: string; name: string } | null>(null);
 
   const load = useCallback(async () => {
     if (!activeOrganization) return;
-    setLoading(true);
-    setError(null);
+    setLoading(true); setError(null);
     try {
-      const [membersData, invitationsData] = await Promise.all([
+      const [m, inv] = await Promise.all([
         getMembers(activeOrganization.id),
         isOwner ? listOrgInvitations(activeOrganization.id) : Promise.resolve([]),
       ]);
-      setMembers(membersData);
-      setInvitations(invitationsData.filter((i) => i.status === 'pending'));
+      setMembers(m);
+      setInvitations(inv.filter((i) => i.status === 'pending'));
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Не удалось загрузить данные');
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }, [activeOrganization?.id, isOwner]);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  useEffect(() => { void load(); }, [load]);
 
-  const handleRemoveMember = useCallback(
-    async (userId: string) => {
-      if (!activeOrganization) return;
-      setRemovingId(userId);
-      try {
-        await removeMember(activeOrganization.id, userId);
-        setMembers((prev) => prev.filter((m) => m.user.id !== userId));
-        notification.success({ message: 'Участник исключён' });
-      } catch {
-        notification.error({ message: 'Не удалось исключить участника' });
-      } finally {
-        setRemovingId(null);
-      }
-    },
-    [activeOrganization?.id, notification],
-  );
+  const handleRemoveMember = useCallback(async (userId: string) => {
+    if (!activeOrganization) return;
+    setRemovingId(userId);
+    try {
+      await removeMember(activeOrganization.id, userId);
+      setMembers((prev) => prev.filter((m) => m.user.id !== userId));
+    } catch { /* handled */ } finally { setRemovingId(null); setConfirmAction(null); }
+  }, [activeOrganization?.id]);
 
-  const handleRevokeInvitation = useCallback(
-    async (invitationId: string) => {
-      setRevokingId(invitationId);
-      try {
-        await revokeInvitation(invitationId);
-        setInvitations((prev) => prev.filter((i) => i.id !== invitationId));
-        notification.success({ message: 'Приглашение отозвано' });
-      } catch {
-        notification.error({ message: 'Не удалось отозвать приглашение' });
-      } finally {
-        setRevokingId(null);
-      }
-    },
-    [notification],
-  );
+  const handleRevokeInvitation = useCallback(async (invId: string) => {
+    setRevokingId(invId);
+    try {
+      await revokeInvitation(invId);
+      setInvitations((prev) => prev.filter((i) => i.id !== invId));
+    } catch { /* handled */ } finally { setRevokingId(null); setConfirmAction(null); }
+  }, []);
 
-  const memberColumns = useMemo<TableProps<MemberResponse>['columns']>(
-    () => [
-      {
-        title: 'Участник',
-        key: 'participant',
-        minWidth: 220,
-        render: (_, record) => (
-          <div>
-            <div>{buildDisplayName(record.user) || '—'}</div>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              {record.user.email}
-            </Typography.Text>
-          </div>
-        ),
-      },
-      {
-        title: 'Роль',
-        key: 'role',
-        width: 120,
-        render: (_, record) => (
-          <Tag color={record.role_tag === 'owner' ? 'gold' : 'blue'}>
-            {record.role_tag === 'owner' ? 'Владелец' : 'Участник'}
-          </Tag>
-        ),
-      },
-      {
-        title: 'Дата вступления',
-        key: 'joined_at',
-        width: 130,
-        responsive: ['md'] as ('md')[],
-        render: (_, record) => formatDate(record.joined_at),
-      },
-      ...(isOwner
-        ? [
-            {
-              title: 'Действия',
-              key: 'actions',
-              width: 100,
-              render: (_: unknown, record: MemberResponse) => {
-                if (record.user.id === user?.id || record.role_tag === 'owner') return null;
-                return (
-                  <Popconfirm
-                    title={`Исключить ${buildDisplayName(record.user)} из организации?`}
-                    okText="Исключить"
-                    cancelText="Отмена"
-                    okButtonProps={{ danger: true }}
-                    onConfirm={() => void handleRemoveMember(record.user.id)}
-                  >
-                    <Button
-                      type="link"
-                      size="small"
-                      danger
-                      loading={removingId === record.user.id}
-                    >
-                      Исключить
-                    </Button>
-                  </Popconfirm>
-                );
-              },
-            },
-          ]
-        : []),
-    ],
-    [isOwner, handleRemoveMember, removingId, user?.id],
-  );
+  const memberRows = useMemo(() => members.map((m) => ({
+    id: m.user.id,
+    participant: buildDisplayName(m.user) || '—',
+    email: m.user.email,
+    role: m.role_tag,
+    joined_at: m.joined_at,
+    actions: m.user.id,
+  })), [members]);
 
-  const invitationColumns = useMemo<TableProps<InvitationResponse>['columns']>(
-    () => [
-      {
-        title: 'Email',
-        dataIndex: 'email',
-        key: 'email',
-        minWidth: 220,
-      },
-      {
-        title: 'Статус',
-        key: 'status',
-        width: 120,
-        render: () => <Tag color="orange">Ожидает</Tag>,
-      },
-      {
-        title: 'Дата отправки',
-        key: 'created_at',
-        width: 130,
-        responsive: ['md'] as ('md')[],
-        render: (_, record) => formatDate(record.created_at),
-      },
-      {
-        title: 'Действия',
-        key: 'actions',
-        width: 100,
-        render: (_, record) => (
-          <Popconfirm
-            title="Отозвать приглашение?"
-            description="Приглашение будет аннулировано."
-            okText="Отозвать"
-            cancelText="Отмена"
-            okButtonProps={{ danger: true }}
-            onConfirm={() => void handleRevokeInvitation(record.id)}
-          >
-            <Button
-              type="link"
-              size="small"
-              danger
-              loading={revokingId === record.id}
-            >
-              Отозвать
-            </Button>
-          </Popconfirm>
-        ),
-      },
-    ],
-    [handleRevokeInvitation, revokingId],
-  );
+  const inviteRows = useMemo(() => invitations.map((i) => ({
+    id: i.id,
+    email: i.email,
+    status: 'pending',
+    created_at: i.created_at,
+    actions: i.id,
+  })), [invitations]);
 
   if (!activeOrganization) return null;
 
+  const renderMemberCell = (key: string, value: unknown, rowId: string) => {
+    const member = members.find((m) => m.user.id === rowId);
+    switch (key) {
+      case 'participant': {
+        return (
+          <div>
+            <div>{value as string}</div>
+            <div style={{ fontSize: 12, color: 'var(--cds-text-secondary)' }}>{member?.user.email}</div>
+          </div>
+        );
+      }
+      case 'role':
+        return <Tag type={(value as string) === 'owner' ? 'warm-gray' : 'blue'} size="sm">{(value as string) === 'owner' ? 'Владелец' : 'Участник'}</Tag>;
+      case 'joined_at':
+        return formatDate(value as string);
+      case 'actions': {
+        if (!isOwner || (value as string) === user?.id || member?.role_tag === 'owner') return null;
+        return <Button kind="danger--ghost" size="sm" disabled={removingId === (value as string)} onClick={() => setConfirmAction({ type: 'remove', id: value as string, name: buildDisplayName(member!.user) })}>Исключить</Button>;
+      }
+      default: return value as string;
+    }
+  };
+
+  const renderInviteCell = (key: string, value: unknown) => {
+    switch (key) {
+      case 'status': return <Tag type="warm-gray" size="sm">Ожидает</Tag>;
+      case 'created_at': return formatDate(value as string);
+      case 'actions':
+        return <Button kind="danger--ghost" size="sm" disabled={revokingId === (value as string)} onClick={() => setConfirmAction({ type: 'revoke', id: value as string, name: (value as string) })}>Отозвать</Button>;
+      default: return value as string;
+    }
+  };
+
   return (
-    <div
-      style={{
-        display: 'flex',
-        flex: 1,
-        flexDirection: 'column',
-        height: '100%',
-        minHeight: 0,
-      }}
-    >
-      {/* ── Header with integrated tabs ── */}
-      <div
-        style={{
-          background: token.colorBgContainer,
-          borderBottom: `1px solid ${token.colorBorderSecondary}`,
-          flexShrink: 0,
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: token.marginSM,
-            padding: `${token.paddingSM}px ${contentPadding}px ${token.padding}px`,
-          }}
-        >
-          <Title level={4} style={{ margin: 0 }}>
-            Участники
-          </Title>
-
-          {isOwner && (
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => setInviteOpen(true)}
-              block={isMobile}
-            >
-              Пригласить участника
-            </Button>
-          )}
+    <div style={{ display: 'flex', flex: 1, flexDirection: 'column', height: '100%', minHeight: 0 }}>
+      {error ? (
+        <div style={{ padding: 16 }}>
+          <InlineNotification kind="error" title="Ошибка загрузки" subtitle={error} lowContrast actions={<Button kind="ghost" size="sm" onClick={() => void load()}>Повторить</Button>} />
         </div>
+      ) : (
+        <Tabs>
+          <div style={{ background: 'var(--cds-layer-01)', borderBottom: '1px solid var(--cds-border-subtle)', padding: '12px 16px 0' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <h4 style={{ margin: 0 }}>Участники</h4>
+              {isOwner && <Button size="sm" renderIcon={Add} onClick={() => setInviteOpen(true)}>Пригласить</Button>}
+            </div>
+            <TabList aria-label="Участники">
+              <Tab>В организации</Tab>
+              {isOwner && <Tab>Приглашения</Tab>}
+            </TabList>
+          </div>
+          <TabPanels>
+            <TabPanel style={{ padding: 0 }}>
+              {loading ? (
+                <div style={{ padding: 16 }}><DataTableSkeleton headers={MEMBER_HEADERS} rowCount={5} /></div>
+              ) : (
+                <DataTable rows={memberRows} headers={MEMBER_HEADERS}>
+                  {({ rows: cRows, headers, getTableProps, getHeaderProps, getRowProps }: { rows: { id: string; cells: { id: string; info: { header: string }; value: unknown }[] }[]; headers: { key: string; header: string }[]; getTableProps: () => Record<string, unknown>; getHeaderProps: (o: { header: { key: string; header: string } }) => Record<string, unknown>; getRowProps: (o: { row: { id: string } }) => Record<string, unknown>; }) => (
+                    <Table {...getTableProps()} size="lg">
+                      <TableHead><TableRow>{headers.map((h) => { const { key: _k, ...hp } = getHeaderProps({ header: h }); return <TableHeader key={h.key} {...hp}>{h.header}</TableHeader>; })}</TableRow></TableHead>
+                      <TableBody>
+                        {cRows.length === 0 ? <TableRow><TableCell colSpan={headers.length} style={{ textAlign: 'center' }}>Нет участников</TableCell></TableRow>
+                        : cRows.map((row) => { const { key: _k, ...rp } = getRowProps({ row }); return <TableRow key={row.id} {...rp}>{row.cells.map((c) => <TableCell key={c.id}>{renderMemberCell(c.info.header, c.value, row.id)}</TableCell>)}</TableRow>; })}
+                      </TableBody>
+                    </Table>
+                  )}
+                </DataTable>
+              )}
+            </TabPanel>
+            {isOwner && (
+              <TabPanel style={{ padding: 0 }}>
+                {loading ? (
+                  <div style={{ padding: 16 }}><DataTableSkeleton headers={INVITE_HEADERS} rowCount={3} /></div>
+                ) : (
+                  <DataTable rows={inviteRows} headers={INVITE_HEADERS}>
+                    {({ rows: cRows, headers, getTableProps, getHeaderProps, getRowProps }: { rows: { id: string; cells: { id: string; info: { header: string }; value: unknown }[] }[]; headers: { key: string; header: string }[]; getTableProps: () => Record<string, unknown>; getHeaderProps: (o: { header: { key: string; header: string } }) => Record<string, unknown>; getRowProps: (o: { row: { id: string } }) => Record<string, unknown>; }) => (
+                      <Table {...getTableProps()} size="lg">
+                        <TableHead><TableRow>{headers.map((h) => { const { key: _k, ...hp } = getHeaderProps({ header: h }); return <TableHeader key={h.key} {...hp}>{h.header}</TableHeader>; })}</TableRow></TableHead>
+                        <TableBody>
+                          {cRows.length === 0 ? <TableRow><TableCell colSpan={headers.length} style={{ textAlign: 'center' }}>Нет ожидающих приглашений</TableCell></TableRow>
+                          : cRows.map((row) => { const { key: _k, ...rp } = getRowProps({ row }); return <TableRow key={row.id} {...rp}>{row.cells.map((c) => <TableCell key={c.id}>{renderInviteCell(c.info.header, c.value)}</TableCell>)}</TableRow>; })}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </DataTable>
+                )}
+              </TabPanel>
+            )}
+          </TabPanels>
+        </Tabs>
+      )}
 
-        <Tabs
-          activeKey={activeTab}
-          onChange={setActiveTab}
-          size="large"
-          style={{ marginBottom: 0 }}
-          tabBarStyle={{ paddingInline: contentPadding, marginBottom: 0 }}
-          items={[
-            { key: 'members', label: 'В организации' },
-            ...(isOwner
-              ? [{ key: 'invitations', label: 'Приглашения' }]
-              : []),
-          ]}
-        />
-      </div>
+      <InviteMemberModal open={inviteOpen} onClose={() => { setInviteOpen(false); void load(); }} organizationId={activeOrganization.id} />
 
-      {/* ── Content ── */}
-      <div
-        style={{
-          flex: 1,
-          minHeight: 0,
-          overflow: 'auto',
-          padding: contentPadding,
-          background: token.colorBgLayout,
-        }}
-      >
-        {error ? (
-          <Alert
-            type="error"
-            showIcon
-            message="Ошибка загрузки"
-            description={error}
-            action={
-              <Button size="small" onClick={() => void load()}>
-                Повторить
-              </Button>
-            }
-          />
-        ) : activeTab === 'members' ? (
-          <Table<MemberResponse>
-            rowKey="id"
-            loading={loading}
-            dataSource={members}
-            columns={memberColumns}
-            pagination={false}
-            locale={{ emptyText: 'Нет участников' }}
-          />
-        ) : (
-          <Table<InvitationResponse>
-            rowKey="id"
-            loading={loading}
-            dataSource={invitations}
-            columns={invitationColumns}
-            pagination={false}
-            locale={{ emptyText: 'Нет ожидающих приглашений' }}
-          />
-        )}
-      </div>
-
-      <InviteMemberModal
-        open={inviteOpen}
-        onClose={() => {
-          setInviteOpen(false);
-          void load();
-        }}
-        organizationId={activeOrganization.id}
-      />
+      {confirmAction && (
+        <Modal open danger modalHeading={confirmAction.type === 'remove' ? `Исключить ${confirmAction.name}?` : 'Отозвать приглашение?'} primaryButtonText={confirmAction.type === 'remove' ? 'Исключить' : 'Отозвать'} secondaryButtonText="Отмена" onRequestClose={() => setConfirmAction(null)} onRequestSubmit={() => void (confirmAction.type === 'remove' ? handleRemoveMember(confirmAction.id) : handleRevokeInvitation(confirmAction.id))} size="xs" />
+      )}
     </div>
   );
 };

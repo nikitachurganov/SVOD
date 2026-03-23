@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { App as AntApp, Form, Input, Modal } from 'antd';
+import { Modal, TextInput } from '@carbon/react';
 import { inviteUser } from '../../shared/api/organizations.api';
 
 interface Props {
@@ -16,57 +16,63 @@ const API_ERROR_MESSAGES: Record<string, string> = {
 };
 
 export const InviteMemberModal = ({ open, onClose, organizationId }: Props) => {
-  const [form] = Form.useForm<{ email: string }>();
-  const { notification } = AntApp.useApp();
   const [loading, setLoading] = useState(false);
+  const [email, setEmail] = useState('');
+  const [emailError, setEmailError] = useState('');
 
-  const handleOk = async () => {
+  const reset = () => {
+    setEmail('');
+    setEmailError('');
+  };
+
+  const handleSubmit = async () => {
+    const trimmed = email.trim().toLowerCase();
+    if (!trimmed) {
+      setEmailError('Введите email');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      setEmailError('Некорректный формат email');
+      return;
+    }
+
+    setLoading(true);
     try {
-      const values = await form.validateFields();
-      setLoading(true);
-      await inviteUser(organizationId, values.email.trim().toLowerCase());
-      notification.success({ message: 'Приглашение отправлено' });
-      form.resetFields();
+      await inviteUser(organizationId, trimmed);
+      reset();
       onClose();
     } catch (err: unknown) {
-      if (err && typeof err === 'object' && 'errorFields' in err) return;
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      notification.error({
-        message: API_ERROR_MESSAGES[detail ?? ''] ?? 'Не удалось отправить приглашение',
-      });
+      setEmailError(API_ERROR_MESSAGES[detail ?? ''] ?? 'Не удалось отправить приглашение');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCancel = () => {
-    form.resetFields();
-    onClose();
-  };
-
   return (
     <Modal
-      title="Пригласить пользователя"
       open={open}
-      onOk={handleOk}
-      onCancel={handleCancel}
-      okText="Пригласить"
-      cancelText="Отмена"
-      confirmLoading={loading}
-      destroyOnClose
+      modalHeading="Пригласить пользователя"
+      primaryButtonText={loading ? 'Отправка…' : 'Пригласить'}
+      secondaryButtonText="Отмена"
+      primaryButtonDisabled={loading}
+      onRequestClose={() => { reset(); onClose(); }}
+      onRequestSubmit={() => void handleSubmit()}
     >
-      <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
-        <Form.Item
-          name="email"
-          label="Email пользователя"
-          rules={[
-            { required: true, message: 'Введите email' },
-            { type: 'email', message: 'Некорректный формат email' },
-          ]}
-        >
-          <Input placeholder="user@example.com" autoComplete="off" />
-        </Form.Item>
-      </Form>
+      <div style={{ paddingTop: 8 }}>
+        <TextInput
+          id="invite-email"
+          labelText="Email пользователя"
+          placeholder="user@example.com"
+          value={email}
+          invalid={!!emailError}
+          invalidText={emailError}
+          onChange={(e) => {
+            setEmail(e.target.value);
+            if (emailError) setEmailError('');
+          }}
+        />
+      </div>
     </Modal>
   );
 };

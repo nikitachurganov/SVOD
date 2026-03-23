@@ -1,7 +1,8 @@
-import { Card } from 'antd';
+import { Tile } from '@carbon/react';
 
 export const EmployeesPage = () => (
-  <Card title="Сотрудники">
-    Раздел сотрудников находится в разработке.
-  </Card>
+  <Tile style={{ margin: 16 }}>
+    <h4>Сотрудники</h4>
+    <p>Раздел сотрудников находится в разработке.</p>
+  </Tile>
 );

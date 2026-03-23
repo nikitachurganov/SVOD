@@ -1,5 +1,5 @@
-import { Button, Checkbox, Input, Radio, theme } from 'antd';
-import { CloseOutlined, PlusOutlined } from '@ant-design/icons';
+import { Button } from '@carbon/react';
+import { Add, Close } from '@carbon/react/icons';
 import type { FieldOption } from '../../types/form-builder.types';
 
 interface FieldOptionsEditorProps {
@@ -13,15 +13,24 @@ const OptionIndicator = ({
 }: {
   fieldType: FieldOptionsEditorProps['fieldType'];
 }) => {
-  const { token } = theme.useToken();
-
   if (fieldType === 'radio') {
-    return <Radio style={{ marginInlineEnd: 0 }} />;
+    return (
+      <input
+        type="radio"
+        disabled
+        style={{ pointerEvents: 'none', margin: 0, accentColor: 'var(--cds-interactive)' }}
+      />
+    );
   }
   if (fieldType === 'checkbox') {
-    return <Checkbox style={{ marginInlineEnd: 0 }} />;
+    return (
+      <input
+        type="checkbox"
+        disabled
+        style={{ pointerEvents: 'none', margin: 0, accentColor: 'var(--cds-interactive)' }}
+      />
+    );
   }
-  // dropdown — neutral dot
   return (
     <span
       style={{
@@ -38,7 +47,7 @@ const OptionIndicator = ({
           width: 6,
           height: 6,
           borderRadius: '50%',
-          background: token.colorTextTertiary,
+          background: 'var(--cds-text-helper)',
           display: 'block',
         }}
       />
@@ -47,8 +56,6 @@ const OptionIndicator = ({
 };
 
 export const FieldOptionsEditor = ({ fieldType, options, onChange }: FieldOptionsEditorProps) => {
-  const { token } = theme.useToken();
-
   const handleLabelChange = (id: string, label: string) => {
     onChange(options.map((opt) => (opt.id === id ? { ...opt, label } : opt)));
   };
@@ -77,7 +84,6 @@ export const FieldOptionsEditor = ({ fieldType, options, onChange }: FieldOption
             padding: '3px 0',
           }}
         >
-          {/* Non-interactive field-type indicator */}
           <span
             style={{
               pointerEvents: 'none',
@@ -89,47 +95,53 @@ export const FieldOptionsEditor = ({ fieldType, options, onChange }: FieldOption
             <OptionIndicator fieldType={fieldType} />
           </span>
 
-          <Input
-            variant="borderless"
+          <input
             value={opt.label}
             placeholder="Вариант"
             onChange={(e) => handleLabelChange(opt.id, e.target.value)}
             style={{
               flex: 1,
               padding: '1px 4px',
-              fontSize: token.fontSize,
+              fontSize: 'inherit',
+              border: 'none',
+              outline: 'none',
+              background: 'transparent',
+              color: 'var(--cds-text-primary)',
             }}
           />
 
-          <Button
-            type="text"
-            size="small"
-            icon={<CloseOutlined style={{ fontSize: 10 }} />}
+          <button
             onClick={() => handleRemove(opt.id)}
             disabled={options.length <= 1}
             style={{
-              color: token.colorTextQuaternary,
-              flexShrink: 0,
-              minWidth: 22,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
               width: 22,
               height: 22,
               padding: 0,
+              border: 'none',
+              background: 'transparent',
+              cursor: options.length <= 1 ? 'not-allowed' : 'pointer',
+              color: 'var(--cds-text-placeholder)',
+              flexShrink: 0,
+              opacity: options.length <= 1 ? 0.4 : 1,
             }}
             aria-label={`Удалить вариант ${opt.label}`}
-          />
+          >
+            <Close size={12} />
+          </button>
         </div>
       ))}
 
       <Button
-        type="text"
-        icon={<PlusOutlined />}
+        kind="ghost"
+        size="sm"
+        renderIcon={Add}
         onClick={handleAdd}
-        size="small"
         style={{
           alignSelf: 'flex-start',
-          color: token.colorPrimary,
-          padding: '4px 0',
-          height: 'auto',
+          paddingInline: 0,
           marginTop: 2,
         }}
       >

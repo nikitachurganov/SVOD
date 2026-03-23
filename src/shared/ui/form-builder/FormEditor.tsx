@@ -1,19 +1,11 @@
 import { useCallback, useRef, useState, type ReactNode } from 'react';
 import {
-  App,
-  Breadcrumb,
   Button,
-  Card,
-  Form,
-  Input,
-  Popconfirm,
-  Space,
-  Tabs,
-  Tooltip,
-  Typography,
-  theme,
-} from 'antd';
-import { ArrowLeftOutlined, EyeOutlined } from '@ant-design/icons';
+  Breadcrumb,
+  BreadcrumbItem,
+  Modal,
+} from '@carbon/react';
+import { ArrowLeft, View } from '@carbon/react/icons';
 import {
   DndContext,
   DragOverlay,
@@ -30,6 +22,10 @@ import { FormCanvas } from './FormCanvas';
 import { CanvasFieldOverlay } from './DroppedFieldCard';
 import { PreviewField } from './FormPreviewModal';
 import {
+  useFormStore,
+  FormProvider,
+} from '../../hooks/useFormStore';
+import {
   FIELD_TYPES_WITH_OPTIONS,
   PANEL_KEY_TO_FIELD_TYPE,
   isGroupCanvas,
@@ -41,33 +37,16 @@ import {
   type FormPageInstance,
 } from '../../types/form-builder.types';
 
-const { Title } = Typography;
-
 // ─── Public props ─────────────────────────────────────────────────────────────
 
 export interface FormEditorProps {
-  /** Second breadcrumb item text, e.g. "Создание новой формы" */
   breadcrumbLabel: string;
-  /** Page-header title, e.g. "Новая форма" */
   pageTitle: string;
-  /** Save button label (default: "Сохранить") */
   saveButtonLabel?: string;
-  /** Pre-filled form name (edit mode) */
   initialTitle?: string;
-  /** Pre-filled pages (edit mode). If omitted, a single empty page is created. */
   initialPages?: FormPageInstance[];
-  /**
-   * Backward-compatibility: pre-filled flat field list (legacy shape).
-   * If provided and initialPages is empty, wrapped into a default page.
-   */
   initialFields?: FormFieldInstance[];
-  /**
-   * Called when the user clicks Save.
-   * Should perform the API call and navigate away on success.
-   * If it throws, FormEditor shows an error notification.
-   */
   onSave: (title: string, pages: FormPageInstance[]) => Promise<void>;
-  /** Called when the user clicks the back arrow */
   onBack: () => void;
 }
 
@@ -79,22 +58,21 @@ interface FormTitleInputProps {
 }
 
 const FormTitleInput = ({ value, onChange }: FormTitleInputProps) => {
-  const { token } = theme.useToken();
-
   return (
-    <Input
-      variant="borderless"
+    <input
       placeholder="Название формы"
       value={value}
       onChange={(e) => onChange(e.target.value)}
       style={{
         padding: 0,
-        fontSize: token.fontSizeHeading4,
+        fontSize: '1.25rem',
         fontWeight: 600,
-        lineHeight: token.lineHeightHeading4,
-        color: token.colorText,
+        lineHeight: 1.4,
+        color: 'var(--cds-text-primary)',
         background: 'transparent',
         width: '100%',
+        border: 'none',
+        outline: 'none',
       }}
     />
   );
@@ -103,19 +81,17 @@ const FormTitleInput = ({ value, onChange }: FormTitleInputProps) => {
 // ─── Panel drag overlay chip ──────────────────────────────────────────────────
 
 const PanelDragChip = ({ label }: { label: string }) => {
-  const { token } = theme.useToken();
-
   return (
     <div
       style={{
         display: 'inline-flex',
         alignItems: 'center',
         padding: '6px 14px',
-        background: token.colorBgContainer,
-        border: `1px solid ${token.colorPrimary}`,
-        borderRadius: token.borderRadiusLG,
-        boxShadow: token.boxShadowSecondary,
-        color: token.colorPrimary,
+        background: 'var(--cds-layer)',
+        border: '1px solid var(--cds-interactive)',
+        borderRadius: 8,
+        boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
+        color: 'var(--cds-interactive)',
         fontSize: 13,
         fontWeight: 500,
         whiteSpace: 'nowrap',
@@ -137,10 +113,6 @@ type ActiveDragInfo =
 
 // ─── Tool-panel drop zone ─────────────────────────────────────────────────────
 
-/**
- * Stable ID for the tool-panel droppable zone.
- * Exported so handleDragEnd can compare against it without string literals.
- */
 export const TOOL_PANEL_DROP_ID = 'tool-panel';
 
 interface ToolPanelDropZoneProps {
@@ -150,19 +122,12 @@ interface ToolPanelDropZoneProps {
   children: ReactNode;
 }
 
-/**
- * Must be rendered as a CHILD of <DndContext> so that useDroppable can find
- * the dnd-kit context. Calling useDroppable in the same component that renders
- * DndContext would look for a provider *above* it in the tree — which doesn't
- * exist — and the droppable would never be registered.
- */
 const ToolPanelDropZone = ({
   isCanvasDragging,
   width,
   onResizeStart,
   children,
 }: ToolPanelDropZoneProps) => {
-  const { token } = theme.useToken();
   const { setNodeRef, isOver } = useDroppable({ id: TOOL_PANEL_DROP_ID });
 
   const deleteMode = isCanvasDragging && isOver;
@@ -180,31 +145,19 @@ const ToolPanelDropZone = ({
         flexDirection: 'column',
       }}
     >
-      <Card
+      <div
         style={{
           flex: 1,
           height: '100%',
           display: 'flex',
           flexDirection: 'column',
           minHeight: 0,
-          borderRadius: 0,
-          boxShadow: 'none',
-          borderTop: 'none',
-          borderBottom: 'none',
-          borderLeft: 'none',
-          borderRight: `1px solid ${token.colorBorderSecondary}`,
-          background: deleteMode ? token.colorErrorBg : token.colorBgContainer,
-          transition: 'background 0.15s ease, border-color 0.15s ease',
-        }}
-        styles={{
-          body: {
-            flex: 1,
-            display: 'flex',
-            flexDirection: 'column',
-            minHeight: 0,
-            overflow: deleteMode ? 'hidden' : 'auto',
-            padding: 0,
-          },
+          borderRight: '1px solid var(--cds-border-subtle)',
+          background: deleteMode
+            ? 'color-mix(in srgb, var(--cds-support-error) 10%, var(--cds-layer))'
+            : 'var(--cds-layer)',
+          transition: 'background 150ms ease, border-color 150ms ease',
+          overflow: deleteMode ? 'hidden' : 'auto',
         }}
       >
         {deleteMode ? (
@@ -220,18 +173,14 @@ const ToolPanelDropZone = ({
               textAlign: 'center',
             }}
           >
-            <Typography.Text
-              style={{
-                color: token.colorError,
-              }}
-            >
+            <span style={{ color: 'var(--cds-text-error)' }}>
               Перенесите в область, чтобы удалить поле
-            </Typography.Text>
+            </span>
           </div>
         ) : (
           children
         )}
-      </Card>
+      </div>
       <div
         onMouseDown={onResizeStart}
         style={{
@@ -288,9 +237,7 @@ interface InlinePreviewProps {
 }
 
 const InlinePreview = ({ formTitle, pages }: InlinePreviewProps) => {
-  const { token } = theme.useToken();
-  const { notification } = App.useApp();
-  const [form] = Form.useForm();
+  const store = useFormStore();
   const [pageIndex, setPageIndex] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -310,7 +257,7 @@ const InlinePreview = ({ formTitle, pages }: InlinePreviewProps) => {
     if (!currentPage) return;
     const ids = collectFieldIds(currentPage.fields);
     try {
-      await form.validateFields(ids);
+      await store.validateFields(ids);
       setPageIndex((idx) => Math.min(idx + 1, pages.length - 1));
       scrollToTop();
     } catch {
@@ -325,15 +272,10 @@ const InlinePreview = ({ formTitle, pages }: InlinePreviewProps) => {
 
   const handleSubmit = async () => {
     try {
-      await form.validateFields();
+      await store.validateFields();
       setIsSubmitting(true);
       await new Promise<void>((resolve) => setTimeout(resolve, 500));
-      notification.success({
-        title: 'Форма отправлена',
-        description: 'Это предпросмотр — данные не сохраняются.',
-        placement: 'topRight',
-      });
-      form.resetFields();
+      store.resetFields();
       setPageIndex(0);
       scrollToTop();
     } catch {
@@ -350,19 +292,17 @@ const InlinePreview = ({ formTitle, pages }: InlinePreviewProps) => {
         flex: 1,
         minHeight: 0,
         overflowY: 'auto',
-        background: token.colorBgLayout,
+        background: 'var(--cds-background)',
         padding: 24,
       }}
     >
       <div style={{ maxWidth: 680, margin: '0 auto' }}>
         {formTitle && (
-          <Title level={4} style={{ marginBottom: 24 }}>
-            {formTitle}
-          </Title>
+          <h4 style={{ marginBottom: 24 }}>{formTitle}</h4>
         )}
 
         {hasPages && currentPage && currentPage.fields.length > 0 ? (
-          <Form form={form} layout="vertical" requiredMark={false}>
+          <FormProvider store={store}>
             {currentPage.fields.map((field) => (
               <PreviewField key={field.id} field={field} />
             ))}
@@ -376,29 +316,31 @@ const InlinePreview = ({ formTitle, pages }: InlinePreviewProps) => {
               }}
             >
               {!isFirst && (
-                <Button onClick={handleBack}>Назад</Button>
+                <Button kind="secondary" onClick={handleBack}>
+                  Назад
+                </Button>
               )}
               {!isLast && (
-                <Button type="primary" onClick={handleNext}>
+                <Button kind="primary" onClick={handleNext}>
                   Далее
                 </Button>
               )}
               {isLast && (
                 <Button
-                  type="primary"
+                  kind="primary"
                   onClick={handleSubmit}
-                  loading={isSubmitting}
+                  disabled={isSubmitting}
                 >
-                  Отправить
+                  {isSubmitting ? 'Отправка...' : 'Отправить'}
                 </Button>
               )}
             </div>
-          </Form>
+          </FormProvider>
         ) : (
           <div style={{ textAlign: 'center', padding: '48px 0' }}>
-            <Typography.Text type="secondary">
+            <span style={{ color: 'var(--cds-text-secondary)' }}>
               В форму не добавлено ни одного поля.
-            </Typography.Text>
+            </span>
           </div>
         )}
       </div>
@@ -418,9 +360,6 @@ export const FormEditor = ({
   onSave,
   onBack,
 }: FormEditorProps) => {
-  const { token } = theme.useToken();
-  const { notification } = App.useApp();
-
   const [formTitle, setFormTitle] = useState<string>(initialTitle);
   const resolvedInitialPages: FormPageInstance[] =
     initialPages && initialPages.length
@@ -442,6 +381,7 @@ export const FormEditor = ({
   const [activeDrag, setActiveDrag] = useState<ActiveDragInfo>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
+  const [deletePageId, setDeletePageId] = useState<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -682,11 +622,7 @@ export const FormEditor = ({
   // ── Save ─────────────────────────────────────────────────────────────────────
   const handleSave = useCallback(async () => {
     if (!formTitle.trim()) {
-      notification.warning({
-        title: 'Необходимо указать название',
-        description: 'Введите название формы перед сохранением.',
-        placement: 'topRight',
-      });
+      alert('Необходимо указать название формы перед сохранением.');
       return;
     }
 
@@ -694,12 +630,7 @@ export const FormEditor = ({
     try {
       await onSave(formTitle.trim(), pages);
     } catch (err) {
-      notification.error({
-        title: 'Ошибка при сохранении',
-        description:
-          err instanceof Error ? err.message : 'Не удалось сохранить форму.',
-        placement: 'topRight',
-      });
+      alert(err instanceof Error ? err.message : 'Не удалось сохранить форму.');
     } finally {
       setIsSaving(false);
     }
@@ -755,19 +686,26 @@ export const FormEditor = ({
         {/* ── Page header ── */}
         <div
           style={{
-            background: token.colorBgContainer,
-            borderBottom: `1px solid ${token.colorBorderSecondary}`,
+            background: 'var(--cds-layer)',
+            borderBottom: '1px solid var(--cds-border-subtle)',
             padding: '12px 24px 16px',
             flexShrink: 0,
           }}
         >
-          <Breadcrumb
-            style={{ marginBottom: 8 }}
-            items={[
-              { title: <a onClick={onBack}>Формы</a> },
-              { title: breadcrumbLabel },
-            ]}
-          />
+          <Breadcrumb style={{ marginBottom: 8 }}>
+            <BreadcrumbItem>
+              <a
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  onBack();
+                }}
+              >
+                Формы
+              </a>
+            </BreadcrumbItem>
+            <BreadcrumbItem isCurrentPage>{breadcrumbLabel}</BreadcrumbItem>
+          </Breadcrumb>
 
           <div
             style={{
@@ -776,38 +714,36 @@ export const FormEditor = ({
               alignItems: 'center',
             }}
           >
-            <Space align="center" size={12}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <Button
-                type="text"
-                icon={<ArrowLeftOutlined />}
+                kind="ghost"
+                hasIconOnly
+                renderIcon={ArrowLeft}
+                iconDescription="Вернуться к списку форм"
                 onClick={onBack}
-                style={{ padding: '0 4px' }}
-                aria-label="Вернуться к списку форм"
+                size="md"
               />
-              <Title level={4} style={{ margin: 0 }}>
-                {pageTitle}
-              </Title>
-            </Space>
+              <h4 style={{ margin: 0 }}>{pageTitle}</h4>
+            </div>
 
-            <Space>
-              <Tooltip title={isPreviewMode ? 'К редактированию' : 'Предпросмотр'}>
-                <Button
-                  type={isPreviewMode ? 'primary' : 'default'}
-                  ghost={isPreviewMode}
-                  icon={<EyeOutlined />}
-                  onClick={() => setIsPreviewMode((prev) => !prev)}
-                  disabled={isSaving}
-                />
-              </Tooltip>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <Button
-                type="primary"
+                kind={isPreviewMode ? 'primary' : 'ghost'}
+                hasIconOnly
+                renderIcon={View}
+                iconDescription={isPreviewMode ? 'К редактированию' : 'Предпросмотр'}
+                onClick={() => setIsPreviewMode((prev) => !prev)}
+                disabled={isSaving}
+                size="md"
+              />
+              <Button
+                kind="primary"
                 onClick={handleSave}
-                loading={isSaving}
                 disabled={isSaving}
               >
-                {saveButtonLabel}
+                {isSaving ? 'Сохранение...' : saveButtonLabel}
               </Button>
-            </Space>
+            </div>
           </div>
         </div>
 
@@ -817,7 +753,7 @@ export const FormEditor = ({
             <InlinePreview formTitle={formTitle} pages={pages} />
           ) : (
             <>
-              {/* Left — Tool Panel (also a drop zone: drag canvas → here to delete) */}
+              {/* Left — Tool Panel (also a drop zone) */}
               <ToolPanelDropZone
                 isCanvasDragging={isCanvasDragging}
                 width={toolboxWidth}
@@ -840,75 +776,89 @@ export const FormEditor = ({
                 }}
               >
                 <FormTitleInput value={formTitle} onChange={setFormTitle} />
-                <div style={{ marginBottom: token.margin }} />
-                <Tabs
-                  type="line"
-                  activeKey={activePageId}
-                  onChange={(key) => setActivePageId(key)}
-                  onEdit={(e, action) => {
-                    const key = typeof e === 'string' ? e : '';
-                    if (key) {
-                      handleTabEdit(key, action as 'add' | 'remove');
-                    }
+                <div style={{ marginBottom: 16 }} />
+
+                {/* ── Custom page tabs ── */}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    borderBottom: '2px solid var(--cds-border-subtle)',
+                    gap: 0,
+                    flexWrap: 'wrap',
                   }}
-                  hideAdd
-                  tabBarGutter={12}
-                  tabBarStyle={{ marginBottom: 0 }}
-                  items={pages.map((page, index) => ({
-                    key: page.id,
-                    label: (
+                >
+                  {pages.map((page, index) => {
+                    const isActive = activePageId === page.id;
+                    return (
                       <div
+                        key={page.id}
+                        onClick={() => setActivePageId(page.id)}
                         style={{
                           display: 'flex',
                           alignItems: 'center',
                           gap: 8,
+                          padding: '8px 16px',
+                          cursor: 'pointer',
+                          borderBottom: isActive
+                            ? '2px solid var(--cds-interactive)'
+                            : '2px solid transparent',
+                          marginBottom: -2,
+                          color: isActive
+                            ? 'var(--cds-text-primary)'
+                            : 'var(--cds-text-secondary)',
+                          fontWeight: isActive ? 600 : 400,
+                          fontSize: '0.875rem',
+                          userSelect: 'none',
+                          transition: 'border-color 150ms, color 150ms',
                         }}
                       >
                         <span>Страница {index + 1}</span>
                         {pages.length > 1 && (
-                          <Popconfirm
-                            title="Удалить страницу"
-                            description="Вы уверены, что хотите удалить страницу? Это действие нельзя отменить."
-                            okText="Удалить"
-                            cancelText="Отменить"
-                            onConfirm={() => handleTabEdit(page.id, 'remove')}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeletePageId(page.id);
+                            }}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              width: 20,
+                              height: 20,
+                              padding: 0,
+                              border: 'none',
+                              borderRadius: '50%',
+                              background: 'transparent',
+                              cursor: 'pointer',
+                              color: 'inherit',
+                              fontSize: 14,
+                              lineHeight: 1,
+                            }}
+                            aria-label={`Удалить страницу ${index + 1}`}
                           >
-                            <Button
-                              type="text"
-                              size="small"
-                              shape="circle"
-                              onClick={(e) => e.stopPropagation()}
-                              style={{
-                                padding: 0,
-                                width: 20,
-                                height: 20,
-                                lineHeight: '20px',
-                                minWidth: 0,
-                              }}
-                            >
-                              ×
-                            </Button>
-                          </Popconfirm>
+                            ×
+                          </button>
                         )}
                       </div>
-                    ),
-                  }))}
-                  tabBarExtraContent={
-                    <span
-                      style={{
-                        color: token.colorPrimary,
-                        cursor: 'pointer',
-                        marginLeft: 8,
-                        userSelect: 'none',
-                        fontSize: 12,
-                      }}
-                      onClick={handleAddPage}
-                    >
-                      Добавить страницу
-                    </span>
-                  }
-                />
-                <div style={{ marginBottom: token.margin }} />
+                    );
+                  })}
+                  <span
+                    onClick={handleAddPage}
+                    style={{
+                      color: 'var(--cds-link-primary)',
+                      cursor: 'pointer',
+                      marginLeft: 8,
+                      userSelect: 'none',
+                      fontSize: 12,
+                      padding: '8px 4px',
+                    }}
+                  >
+                    Добавить страницу
+                  </span>
+                </div>
+
+                <div style={{ marginBottom: 16 }} />
                 <FormCanvas
                   fields={activeFields}
                   onFieldChange={handleFieldChange}
@@ -923,6 +873,25 @@ export const FormEditor = ({
       </div>
 
       <DragOverlay dropAnimation={null}>{renderOverlay()}</DragOverlay>
+
+      {/* ── Delete page confirmation modal ── */}
+      <Modal
+        open={!!deletePageId}
+        onRequestClose={() => setDeletePageId(null)}
+        onRequestSubmit={() => {
+          if (deletePageId) handleTabEdit(deletePageId, 'remove');
+          setDeletePageId(null);
+        }}
+        modalHeading="Удалить страницу"
+        primaryButtonText="Удалить"
+        secondaryButtonText="Отменить"
+        danger
+        size="xs"
+      >
+        <p style={{ marginBottom: 16 }}>
+          Вы уверены, что хотите удалить страницу? Это действие нельзя отменить.
+        </p>
+      </Modal>
     </DndContext>
   );
 };

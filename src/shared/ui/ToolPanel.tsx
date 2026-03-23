@@ -1,64 +1,53 @@
 import { useMemo, useState } from 'react';
-import { Input, Typography, theme } from 'antd';
+import { Search } from '@carbon/react';
 import { DraggableFieldItem } from './form-builder/DraggableFieldItem';
 
-const { Text } = Typography;
-
-// ─── Token-based color config for tool-panel field groups ─────────────────────
-
-/** Constrains config keys to valid Ant Design GlobalToken property names */
-type TokenKey = keyof ReturnType<typeof theme.useToken>['token'];
+// ─── Color config for tool-panel field groups ─────────────────────────────────
 
 interface FieldGroupMeta {
   type: string;
   label: string;
   icon: string;
-  iconColorToken: TokenKey;
-  iconBgToken: TokenKey;
+  iconColor: string;
+  iconBg: string;
 }
 
-/**
- * Maps each tool-panel category to its icon color tokens.
- * Semantic tokens automatically adapt to light/dark mode —
- * no HEX values, no manual theme branching.
- */
 const FIELD_GROUP_META: Record<string, FieldGroupMeta> = {
   'Структура': {
     type: 'structure',
     label: 'Структура',
     icon: 'material-symbols:folder-open',
-    iconColorToken: 'colorTextSecondary',
-    iconBgToken: 'colorFillSecondary',
+    iconColor: 'var(--cds-text-secondary)',
+    iconBg: 'var(--cds-layer-hover)',
   },
   'Основные поля': {
     type: 'basic',
     label: 'Основные поля',
     icon: 'material-symbols:text-fields',
-    iconColorToken: 'colorPrimary',
-    iconBgToken: 'colorPrimaryBg',
+    iconColor: 'var(--cds-link-primary)',
+    iconBg: 'var(--cds-highlight)',
   },
   'Контактная информация': {
     type: 'contact',
     label: 'Контактная информация',
     icon: 'material-symbols:person',
-    iconColorToken: 'colorSuccess',
-    iconBgToken: 'colorSuccessBg',
+    iconColor: 'var(--cds-support-success)',
+    iconBg: 'color-mix(in srgb, var(--cds-support-success) 15%, transparent)',
   },
   'Дата и время': {
     type: 'datetime',
     label: 'Дата и время',
     icon: 'material-symbols:calendar-today',
-    iconColorToken: 'colorWarning',
-    iconBgToken: 'colorWarningBg',
+    iconColor: 'var(--cds-support-warning)',
+    iconBg: 'color-mix(in srgb, var(--cds-support-warning) 15%, transparent)',
   },
   'Поля загрузки файлов': {
     type: 'file',
     label: 'Поля загрузки файлов',
     icon: 'material-symbols:upload-file',
-    iconColorToken: 'colorInfo',
-    iconBgToken: 'colorInfoBg',
+    iconColor: 'var(--cds-support-info)',
+    iconBg: 'color-mix(in srgb, var(--cds-support-info) 15%, transparent)',
   },
-
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -71,127 +60,34 @@ interface FieldTypeItem {
 }
 
 const ALL_FIELDS: FieldTypeItem[] = [
-  {
-    key: 'group',
-    label: 'Группа полей',
-    iconName: 'material-symbols:folder-open',
-    category: 'Структура',
-  },
-  {
-    key: 'input',
-    label: 'Короткий текст',
-    iconName: 'material-symbols:text-fields',
-    category: 'Основные поля',
-  },
-  {
-    key: 'textarea',
-    label: 'Длинный текст',
-    iconName: 'material-symbols:notes',
-    category: 'Основные поля',
-  },
-  {
-    key: 'select',
-    label: 'Выпадающий список',
-    iconName: 'material-symbols-light:arrow-drop-down-rounded',
-    category: 'Основные поля',
-  },
-  {
-    key: 'checkbox',
-    label: 'Несколько вариантов',
-    iconName: 'material-symbols-light:library-add-check-rounded',
-    category: 'Основные поля',
-  },
-  {
-    key: 'radio',
-    label: 'Один вариант',
-    iconName: 'material-symbols:radio-button-checked',
-    category: 'Основные поля',
-  },
-  {
-    key: 'yesNo',
-    label: 'Да / Нет',
-    iconName: 'material-symbols:toggle-on',
-    category: 'Основные поля',
-  },
-  {
-    key: 'number',
-    label: 'Число',
-    iconName: 'material-symbols:pin',
-    category: 'Основные поля',
-  },
-  {
-    key: 'fullName',
-    label: 'Полное имя',
-    iconName: 'material-symbols:person',
-    category: 'Контактная информация',
-  },
-  {
-    key: 'phone',
-    label: 'Номер телефона',
-    iconName: 'material-symbols-light:phone-enabled',
-    category: 'Контактная информация',
-  },
-  {
-    key: 'email',
-    label: 'Электронная почта',
-    iconName: 'material-symbols-light:mail-rounded',
-    category: 'Контактная информация',
-  },
-  {
-    key: 'date',
-    label: 'Дата',
-    iconName: 'material-symbols:calendar-today',
-    category: 'Дата и время',
-  },
-  {
-    key: 'dateTime',
-    label: 'Дата и время',
-    iconName: 'material-symbols:event',
-    category: 'Дата и время',
-  },
-  {
-    key: 'time',
-    label: 'Время',
-    iconName: 'material-symbols:schedule',
-    category: 'Дата и время',
-  },
-  {
-    key: 'fileVector',
-    label: 'Векторные файлы',
-    iconName: 'material-symbols-light:polyline-rounded',
-    category: 'Поля загрузки файлов',
-  },
-  {
-    key: 'fileImage',
-    label: 'Изображения',
-    iconName: 'material-symbols-light:image-rounded',
-    category: 'Поля загрузки файлов',
-  },
-  {
-    key: 'fileDocument',
-    label: 'Документы',
-    iconName: 'material-symbols-light:docs-rounded',
-    category: 'Поля загрузки файлов',
-  },
-  {
-    key: 'address',
-    label: 'Адрес',
-    iconName: 'material-symbols:location-on',
-    category: 'Контактная информация',
-  },
+  { key: 'group', label: 'Группа полей', iconName: 'material-symbols:folder-open', category: 'Структура' },
+  { key: 'input', label: 'Короткий текст', iconName: 'material-symbols:text-fields', category: 'Основные поля' },
+  { key: 'textarea', label: 'Длинный текст', iconName: 'material-symbols:notes', category: 'Основные поля' },
+  { key: 'select', label: 'Выпадающий список', iconName: 'material-symbols-light:arrow-drop-down-rounded', category: 'Основные поля' },
+  { key: 'checkbox', label: 'Несколько вариантов', iconName: 'material-symbols-light:library-add-check-rounded', category: 'Основные поля' },
+  { key: 'radio', label: 'Один вариант', iconName: 'material-symbols:radio-button-checked', category: 'Основные поля' },
+  { key: 'yesNo', label: 'Да / Нет', iconName: 'material-symbols:toggle-on', category: 'Основные поля' },
+  { key: 'number', label: 'Число', iconName: 'material-symbols:pin', category: 'Основные поля' },
+  { key: 'fullName', label: 'Полное имя', iconName: 'material-symbols:person', category: 'Контактная информация' },
+  { key: 'phone', label: 'Номер телефона', iconName: 'material-symbols-light:phone-enabled', category: 'Контактная информация' },
+  { key: 'email', label: 'Электронная почта', iconName: 'material-symbols-light:mail-rounded', category: 'Контактная информация' },
+  { key: 'date', label: 'Дата', iconName: 'material-symbols:calendar-today', category: 'Дата и время' },
+  { key: 'dateTime', label: 'Дата и время', iconName: 'material-symbols:event', category: 'Дата и время' },
+  { key: 'time', label: 'Время', iconName: 'material-symbols:schedule', category: 'Дата и время' },
+  { key: 'fileVector', label: 'Векторные файлы', iconName: 'material-symbols-light:polyline-rounded', category: 'Поля загрузки файлов' },
+  { key: 'fileImage', label: 'Изображения', iconName: 'material-symbols-light:image-rounded', category: 'Поля загрузки файлов' },
+  { key: 'fileDocument', label: 'Документы', iconName: 'material-symbols-light:docs-rounded', category: 'Поля загрузки файлов' },
+  { key: 'address', label: 'Адрес', iconName: 'material-symbols:location-on', category: 'Контактная информация' },
 ];
 
-// Unique categories in declaration order
 const CATEGORIES = [...new Set(ALL_FIELDS.map((f) => f.category))];
 
 interface ToolPanelProps {
-  /** When true, layout switches to a single column (for narrow sidebar). */
   isCompact?: boolean;
 }
 
 export const ToolPanel = ({ isCompact = false }: ToolPanelProps) => {
   const [search, setSearch] = useState('');
-  const { token } = theme.useToken();
 
   const groupedByCategory = useMemo(() => {
     const query = search.toLowerCase().trim();
@@ -215,14 +111,13 @@ export const ToolPanel = ({ isCompact = false }: ToolPanelProps) => {
     <div
       style={{
         display: 'flex',
-        padding: '20px',
+        padding: 20,
         flexDirection: 'column',
         alignItems: 'flex-start',
         gap: 16,
         alignSelf: 'stretch',
       }}
     >
-      {/* Title + Search */}
       <div
         style={{
           display: 'flex',
@@ -231,19 +126,17 @@ export const ToolPanel = ({ isCompact = false }: ToolPanelProps) => {
           alignSelf: 'stretch',
         }}
       >
-        <Text strong style={{ fontSize: 14 }}>
-          Поля формы
-        </Text>
-        <Input.Search
+        <span style={{ fontWeight: 600, fontSize: 14 }}>Поля формы</span>
+        <Search
+          size="md"
           placeholder="Поиск поля"
-          allowClear
+          labelText="Поиск по полям формы"
+          closeButtonLabelText="Очистить"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          aria-label="Поиск по полям формы"
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
         />
       </div>
 
-      {/* Grouped field list */}
       <div
         style={{
           display: 'flex',
@@ -255,20 +148,19 @@ export const ToolPanel = ({ isCompact = false }: ToolPanelProps) => {
         {hasResults ? (
           Object.entries(groupedByCategory).map(([category, fields]) => (
             <div key={category}>
-              <Text
-                type="secondary"
+              <span
                 style={{
                   display: 'block',
                   fontSize: 11,
                   fontWeight: 600,
-                  textTransform: 'uppercase',
+                  textTransform: 'uppercase' as const,
                   letterSpacing: '0.06em',
                   marginBottom: 8,
-                  color: token.colorTextQuaternary,
+                  color: 'var(--cds-text-placeholder)',
                 }}
               >
                 {category}
-              </Text>
+              </span>
               <div
                 style={{
                   display: 'grid',
@@ -287,8 +179,8 @@ export const ToolPanel = ({ isCompact = false }: ToolPanelProps) => {
                       fieldKey={item.key}
                       label={item.label}
                       iconName={item.iconName}
-                      iconColor={meta ? String(token[meta.iconColorToken]) : undefined}
-                      iconBackground={meta ? String(token[meta.iconBgToken]) : undefined}
+                      iconColor={meta?.iconColor}
+                      iconBackground={meta?.iconBg}
                     />
                   );
                 })}
@@ -297,7 +189,7 @@ export const ToolPanel = ({ isCompact = false }: ToolPanelProps) => {
           ))
         ) : (
           <div style={{ padding: '24px 16px', textAlign: 'center' }}>
-            <Text type="secondary">Поля не найдены</Text>
+            <span style={{ color: 'var(--cds-text-secondary)' }}>Поля не найдены</span>
           </div>
         )}
       </div>

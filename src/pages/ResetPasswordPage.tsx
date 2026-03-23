@@ -1,104 +1,59 @@
-import { useState } from 'react';
-import { Alert, App, Button, Card, Flex, Form, Input, Typography } from 'antd';
+import { useState, type FormEvent } from 'react';
+import { Button, InlineNotification, PasswordInput } from '@carbon/react';
 import { Link, useNavigate } from 'react-router-dom';
 import { signOut, updatePassword } from '../shared/api/auth.api';
-
-interface ResetPasswordFormValues {
-  password: string;
-  confirmPassword: string;
-}
-
-const mapResetError = (error: unknown): string => {
-  if (!(error instanceof Error)) {
-    return 'Неожиданная ошибка. Попробуйте ещё раз.';
-  }
-  return error.message;
-};
 
 export const ResetPasswordPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
-  const { message } = App.useApp();
-
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const navigate = useNavigate();
 
-  const handleSubmit = async (values: ResetPasswordFormValues) => {
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    const errors: Record<string, string> = {};
+    if (!password || password.length < 8) errors.password = 'Пароль должен содержать не менее 8 символов';
+    if (password !== confirmPassword) errors.confirmPassword = 'Пароли не совпадают';
+    if (Object.keys(errors).length) { setFieldErrors(errors); return; }
+
     setIsSubmitting(true);
     setErrorText(null);
-
     try {
-      await updatePassword(values.password);
+      await updatePassword(password);
       await signOut();
-      message.success('Пароль обновлён. Войдите, используя новый пароль.');
       navigate('/auth', { replace: true });
     } catch (error) {
-      setErrorText(mapResetError(error));
+      setErrorText(error instanceof Error ? error.message : 'Неожиданная ошибка. Попробуйте ещё раз.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const clearError = (key: string) => setFieldErrors((prev) => { const n = { ...prev }; delete n[key]; return n; });
+
   return (
-    <Flex
-      align="center"
-      justify="center"
-      style={{ minHeight: '100vh', padding: 16 }}
-      vertical
-      gap={16}
-    >
-      <Typography.Title level={3} style={{ margin: 0 }}>
-        Сервис Деск
-      </Typography.Title>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: 16, background: 'var(--cds-background)' }}>
+      <h2 style={{ marginBottom: 16 }}>Сервис Деск</h2>
+      <div style={{ width: '100%', maxWidth: 420, background: 'var(--cds-layer-01)', padding: 24, border: '1px solid var(--cds-border-subtle)' }}>
+        <h3 style={{ marginTop: 0 }}>Сбросить пароль</h3>
 
-      <Card style={{ width: '100%', maxWidth: 420 }}>
-        <Typography.Title level={4} style={{ marginTop: 0 }}>
-          Сбросить пароль
-        </Typography.Title>
+        {errorText && (
+          <InlineNotification kind="error" title={errorText} lowContrast style={{ marginBottom: 16 }} />
+        )}
 
-        {errorText ? (
-          <Alert type="error" showIcon message={errorText} style={{ marginBottom: 16 }} />
-        ) : null}
-
-        <Form<ResetPasswordFormValues> layout="vertical" onFinish={handleSubmit} disabled={isSubmitting}>
-          <Form.Item
-            name="password"
-            label="Новый пароль"
-            rules={[
-              { required: true, message: 'Пароль обязателен' },
-              { min: 8, message: 'Пароль должен содержать не менее 8 символов' },
-            ]}
-          >
-            <Input.Password autoComplete="new-password" placeholder="Введите новый пароль" />
-          </Form.Item>
-
-          <Form.Item
-            name="confirmPassword"
-            label="Подтвердите пароль"
-            dependencies={['password']}
-            rules={[
-              { required: true, message: 'Подтвердите пароль' },
-              ({ getFieldValue }) => ({
-                validator(_, value) {
-                  if (!value || getFieldValue('password') === value) {
-                    return Promise.resolve();
-                  }
-                  return Promise.reject(new Error('Пароли не совпадают'));
-                },
-              }),
-            ]}
-          >
-            <Input.Password autoComplete="new-password" placeholder="Повторите новый пароль" />
-          </Form.Item>
-
-          <Button type="primary" htmlType="submit" block loading={isSubmitting}>
-            Обновить пароль
+        <form onSubmit={(e) => void handleSubmit(e)} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <PasswordInput id="reset-password" labelText="Новый пароль" placeholder="Введите новый пароль" autoComplete="new-password" value={password} invalid={!!fieldErrors.password} invalidText={fieldErrors.password} onChange={(e) => { setPassword(e.target.value); clearError('password'); }} />
+          <PasswordInput id="reset-confirmPassword" labelText="Подтвердите пароль" placeholder="Повторите новый пароль" autoComplete="new-password" value={confirmPassword} invalid={!!fieldErrors.confirmPassword} invalidText={fieldErrors.confirmPassword} onChange={(e) => { setConfirmPassword(e.target.value); clearError('confirmPassword'); }} />
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? 'Обновление…' : 'Обновить пароль'}
           </Button>
-        </Form>
-      </Card>
-
-      <Typography.Text type="secondary">
+        </form>
+      </div>
+      <p style={{ marginTop: 16, color: 'var(--cds-text-secondary)', fontSize: 13 }}>
         <Link to="/auth">Вернуться ко входу</Link>
-      </Typography.Text>
-    </Flex>
+      </p>
+    </div>
   );
 };

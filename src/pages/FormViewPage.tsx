@@ -1,18 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
-  App,
   Breadcrumb,
+  BreadcrumbItem,
   Button,
-  Form,
-  Popconfirm,
-  Space,
-  Spin,
+  InlineNotification,
+  Loading,
+  Modal,
   Tag,
-  Typography,
-  theme,
-} from 'antd';
-import { ArrowLeftOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
+} from '@carbon/react';
+import { ArrowLeft, Edit, TrashCan } from '@carbon/react/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   deleteForm,
@@ -23,8 +19,7 @@ import {
 import { buildDisplayName } from '../shared/utils/userName';
 import { PreviewField } from '../shared/ui/form-builder/FormPreviewModal';
 import type { FormFieldInstance, FormPageInstance } from '../shared/types/form-builder.types';
-
-const { Title, Text } = Typography;
+import { useFormStore, FormProvider } from '../shared/hooks/useFormStore';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -45,8 +40,6 @@ const collectFieldIds = (fields: FormFieldInstance[]): string[] => {
 export const FormViewPage = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const { token } = theme.useToken();
-  const { notification } = App.useApp();
 
   const [formData, setFormData] = useState<FormResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -54,8 +47,11 @@ export const FormViewPage = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [pageIndex, setPageIndex] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [form] = Form.useForm();
+  const formStore = useFormStore();
   const contentRef = useRef<HTMLDivElement | null>(null);
+
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -71,7 +67,6 @@ export const FormViewPage = () => {
       .finally(() => setLoading(false));
   }, [id]);
 
-  // Convert API payload pages to FormPageInstance once per load
   const pageInstances = useMemo<FormPageInstance[]>(
     () => (formData?.pages ? pagesPayloadToInstances(formData.pages) : []),
     [formData],
@@ -85,10 +80,9 @@ export const FormViewPage = () => {
   const isLast = hasPages && pageIndex === pageInstances.length - 1;
 
   useEffect(() => {
-    // Reset to first page when a new form is loaded
     setPageIndex(0);
-    form.resetFields();
-  }, [formData, form]);
+    formStore.resetFields();
+  }, [formData]);
 
   const scrollToTop = () => {
     if (contentRef.current) {
@@ -100,7 +94,7 @@ export const FormViewPage = () => {
     if (!currentPage) return;
     const ids = collectFieldIds(currentPage.fields);
     try {
-      await form.validateFields(ids);
+      await formStore.validateFields(ids);
       setPageIndex((idx) => Math.min(idx + 1, pageInstances.length - 1));
       scrollToTop();
     } catch {
@@ -115,14 +109,10 @@ export const FormViewPage = () => {
 
   const handleSubmitForm = async () => {
     try {
-      await form.validateFields(); // validate all pages
+      await formStore.validateFields();
       setIsSubmitting(true);
       await new Promise<void>((resolve) => setTimeout(resolve, 500));
-      notification.success({
-        title: 'Форма заполнена',
-        description: 'Это публичный просмотр — данные не отправляются.',
-        placement: 'topRight',
-      });
+      setSubmitSuccess(true);
     } catch {
       // Validation errors are shown inline
     } finally {
@@ -135,15 +125,11 @@ export const FormViewPage = () => {
     setIsDeleting(true);
     try {
       await deleteForm(id);
-      notification.success({ title: 'Форма удалена' });
       navigate('/forms');
-    } catch (err) {
-      notification.error({
-        title: 'Ошибка удаления',
-        description: err instanceof Error ? err.message : 'Попробуйте ещё раз.',
-      });
+    } catch {
       setIsDeleting(false);
     }
+    setDeleteConfirmOpen(false);
   }, [id, navigate]);
 
   const pageTitle = loading ? 'Загрузка…' : (formData?.name ?? 'Форма');
@@ -162,19 +148,20 @@ export const FormViewPage = () => {
       {/* ── Header ── */}
       <div
         style={{
-          background: token.colorBgContainer,
-          borderBottom: `1px solid ${token.colorBorderSecondary}`,
+          background: 'var(--cds-layer)',
+          borderBottom: '1px solid var(--cds-border-subtle)',
           padding: '12px 24px 16px',
           flexShrink: 0,
         }}
       >
-        <Breadcrumb
-          style={{ marginBottom: 8 }}
-          items={[
-            { title: <a onClick={() => navigate('/forms')}>Формы</a> },
-            { title: breadcrumbCurrent },
-          ]}
-        />
+        <Breadcrumb noTrailingSlash style={{ marginBottom: 8 }}>
+          <BreadcrumbItem>
+            <a onClick={() => navigate('/forms')} style={{ cursor: 'pointer' }}>
+              Формы
+            </a>
+          </BreadcrumbItem>
+          <BreadcrumbItem isCurrentPage>{breadcrumbCurrent}</BreadcrumbItem>
+        </Breadcrumb>
 
         <div
           style={{
@@ -183,49 +170,63 @@ export const FormViewPage = () => {
             alignItems: 'center',
           }}
         >
-          <Space align="center" size={12}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <Button
-              type="text"
-              icon={<ArrowLeftOutlined />}
+              kind="ghost"
+              size="sm"
+              hasIconOnly
+              renderIcon={ArrowLeft}
+              iconDescription="Вернуться к реестру форм"
               onClick={() => navigate('/forms')}
-              style={{ padding: '0 4px' }}
-              aria-label="Вернуться к реестру форм"
             />
-            <Title level={4} style={{ margin: 0 }}>
+            <h4 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 600 }}>
               {pageTitle}
-            </Title>
+            </h4>
             {!loading && formData && (
-              <Tag color="processing" style={{ fontWeight: 400 }}>
+              <Tag type="blue" size="sm">
                 Просмотр
               </Tag>
             )}
-          </Space>
+          </div>
 
           {formData && (
-            <Space>
+            <div style={{ display: 'flex', gap: 8 }}>
               <Button
-                icon={<EditOutlined />}
+                kind="tertiary"
+                size="sm"
+                renderIcon={Edit}
                 onClick={() => navigate(`/forms/${id}/edit`)}
               >
                 Изменить
               </Button>
 
-              <Popconfirm
-                title="Удалить форму?"
-                description="Это действие нельзя отменить."
-                okText="Удалить"
-                cancelText="Отмена"
-                okButtonProps={{ danger: true }}
-                onConfirm={handleDelete}
+              <Button
+                kind="danger"
+                size="sm"
+                renderIcon={TrashCan}
+                disabled={isDeleting}
+                onClick={() => setDeleteConfirmOpen(true)}
               >
-                <Button danger loading={isDeleting} icon={<DeleteOutlined />}>
-                  Удалить
-                </Button>
-              </Popconfirm>
-            </Space>
+                {isDeleting ? 'Удаление…' : 'Удалить'}
+              </Button>
+            </div>
           )}
         </div>
       </div>
+
+      {/* ── Delete Confirmation Modal ── */}
+      <Modal
+        open={deleteConfirmOpen}
+        danger
+        modalHeading="Удалить форму?"
+        primaryButtonText="Удалить"
+        secondaryButtonText="Отмена"
+        onRequestSubmit={handleDelete}
+        onRequestClose={() => setDeleteConfirmOpen(false)}
+        size="xs"
+      >
+        <p>Это действие нельзя отменить.</p>
+      </Modal>
 
       {/* ── Content ── */}
       <div
@@ -233,7 +234,7 @@ export const FormViewPage = () => {
           flex: 1,
           minHeight: 0,
           overflowY: 'auto',
-          background: token.colorBgLayout,
+          background: 'var(--cds-background)',
         }}
         ref={contentRef}
       >
@@ -246,28 +247,55 @@ export const FormViewPage = () => {
               minHeight: '60vh',
             }}
           >
-            <Spin size="large" />
+            <Loading withOverlay={false} />
           </div>
         ) : error ? (
           <div style={{ padding: 24 }}>
-            <Alert type="error" showIcon message="Ошибка загрузки" description={error} />
+            <InlineNotification
+              kind="error"
+              title="Ошибка загрузки"
+              subtitle={error}
+              lowContrast
+              hideCloseButton
+            />
           </div>
         ) : (
           <div style={{ maxWidth: 680, margin: '0 auto', padding: 24 }}>
+            {submitSuccess && (
+              <div style={{ marginBottom: 16 }}>
+                <InlineNotification
+                  kind="success"
+                  title="Форма заполнена"
+                  subtitle="Это публичный просмотр — данные не отправляются."
+                  lowContrast
+                  onCloseButtonClick={() => setSubmitSuccess(false)}
+                />
+              </div>
+            )}
             {formData?.description && (
-              <Text
-                type="secondary"
-                style={{ display: 'block', marginBottom: 24, fontSize: token.fontSizeLG }}
+              <span
+                style={{
+                  display: 'block',
+                  marginBottom: 24,
+                  fontSize: '1rem',
+                  color: 'var(--cds-text-secondary)',
+                }}
               >
                 {formData.description}
-              </Text>
+              </span>
             )}
-            <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
+            <span
+              style={{
+                display: 'block',
+                marginBottom: 16,
+                color: 'var(--cds-text-secondary)',
+              }}
+            >
               Автор: {formData?.author ? buildDisplayName(formData.author) : 'Неизвестный автор'}
-            </Text>
+            </span>
 
             {hasPages && currentPage && currentPage.fields.length > 0 ? (
-              <Form form={form} layout="vertical" requiredMark={false}>
+              <FormProvider store={formStore}>
                 {currentPage.fields.map((field) => (
                   <PreviewField key={field.id} field={field} />
                 ))}
@@ -281,27 +309,30 @@ export const FormViewPage = () => {
                   }}
                 >
                   {!isFirst && (
-                    <Button onClick={handlePrevPage}>Назад</Button>
+                    <Button kind="secondary" size="md" onClick={handlePrevPage}>
+                      Назад
+                    </Button>
                   )}
                   {!isLast && (
-                    <Button type="primary" onClick={handleNextPage}>
+                    <Button kind="primary" size="md" onClick={handleNextPage}>
                       Далее
                     </Button>
                   )}
                   {isLast && (
                     <Button
-                      type="primary"
+                      kind="primary"
+                      size="md"
                       onClick={handleSubmitForm}
-                      loading={isSubmitting}
+                      disabled={isSubmitting}
                     >
-                      Отправить
+                      {isSubmitting ? 'Отправка…' : 'Отправить'}
                     </Button>
                   )}
                 </div>
-              </Form>
+              </FormProvider>
             ) : (
               <div style={{ textAlign: 'center', padding: '48px 0' }}>
-                <Text type="secondary">В форме нет полей.</Text>
+                <span style={{ color: 'var(--cds-text-secondary)' }}>В форме нет полей.</span>
               </div>
             )}
           </div>

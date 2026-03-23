@@ -1,4 +1,3 @@
-import { App } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { createForm, mapPagesToPayload } from '../shared/api/forms.api';
 import { FormEditor } from '../shared/ui/form-builder/FormEditor';
@@ -7,7 +6,6 @@ import { useOrganization } from '../shared/context/organization.context';
 
 export const CreateFormPage = () => {
   const navigate = useNavigate();
-  const { notification } = App.useApp();
   const { activeOrganization } = useOrganization();
 
   const handleSave = async (title: string, pages: FormPageInstance[]) => {
@@ -16,13 +14,6 @@ export const CreateFormPage = () => {
       pages: mapPagesToPayload(pages),
       organization_id: activeOrganization?.id ?? null,
     });
-
-    notification.success({
-      title: 'Форма сохранена',
-      description: `Форма «${title}» успешно создана.`,
-      placement: 'topRight',
-    });
-
     navigate('/forms');
   };
 

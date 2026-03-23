@@ -1,4 +1,3 @@
-import { Typography, theme } from 'antd';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { FieldBlock } from './FieldBlock';
@@ -10,17 +9,13 @@ import {
   type FormFieldInstance,
 } from '../../types/form-builder.types';
 
-const { Text } = Typography;
-
 // ─── Sortable field card ─────────────────────────────────────────────────────
 
 interface DroppedFieldCardProps {
   field: FormFieldInstance;
   onChange: (changes: Partial<FormFieldInstance>) => void;
   onDelete: () => void;
-  /** Required when field.type === 'group' */
   onChildChange?: (childId: string, changes: Partial<FormFieldInstance>) => void;
-  /** Required when field.type === 'group' */
   onChildDelete?: (childId: string) => void;
 }
 
@@ -81,15 +76,13 @@ interface CanvasFieldOverlayProps {
 }
 
 export const CanvasFieldOverlay = ({ field }: CanvasFieldOverlayProps) => {
-  const { token } = theme.useToken();
-
   return (
     <div
       style={{
-        background: token.colorBgContainer,
-        border: `1px solid ${token.colorPrimary}`,
-        borderRadius: token.borderRadius,
-        boxShadow: token.boxShadowSecondary,
+        background: 'var(--cds-layer)',
+        border: '1px solid var(--cds-interactive)',
+        borderRadius: 4,
+        boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
         padding: '12px 16px',
         display: 'flex',
         flexDirection: 'column',
@@ -98,13 +91,12 @@ export const CanvasFieldOverlay = ({ field }: CanvasFieldOverlayProps) => {
       }}
     >
       <div>
-        <Text strong style={{ fontSize: token.fontSizeLG }}>
+        <span style={{ fontWeight: 600, fontSize: '1rem', display: 'block' }}>
           {field.label || 'Поле'}
-        </Text>
-        <br />
-        <Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
+        </span>
+        <span style={{ color: 'var(--cds-text-secondary)', fontSize: '0.75rem' }}>
           {FIELD_TYPE_LABELS[field.type]}
-        </Text>
+        </span>
       </div>
       <FieldRenderer field={field} />
     </div>

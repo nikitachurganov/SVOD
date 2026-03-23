@@ -1,283 +1,160 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
-  App,
-  Button,
-  Card,
-  Empty,
-  Grid,
-  Popconfirm,
-  Space,
+  DataTable,
   Table,
-  Typography,
-  theme,
-} from 'antd';
-import type { TableProps } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+  TableHead,
+  TableRow,
+  TableHeader,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableToolbar,
+  TableToolbarContent,
+  Pagination,
+  Button,
+  InlineNotification,
+  DataTableSkeleton,
+  Modal,
+} from '@carbon/react';
+import { Add, Edit, TrashCan } from '@carbon/react/icons';
 import { Link, useNavigate } from 'react-router-dom';
 import { deleteForm, getForms, type FormResponse } from '../shared/api/forms.api';
 import { buildDisplayName } from '../shared/utils/userName';
 import { useOrganization } from '../shared/context/organization.context';
 
-const { Title } = Typography;
-
-// ─── Date formatter ───────────────────────────────────────────────────────────
-
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleString('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
   });
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+const PAGE_SIZES = [20, 50, 100];
+
+const HEADERS = [
+  { key: 'name', header: 'Название' },
+  { key: 'author', header: 'Автор' },
+  { key: 'created_at', header: 'Дата создания' },
+  { key: 'actions', header: 'Действия' },
+];
 
 export const FormsPage = () => {
   const navigate = useNavigate();
-  const { token } = theme.useToken();
-  const { notification } = App.useApp();
-  const screens = Grid.useBreakpoint();
-  const isMobile = !screens.md;
-  const contentPadding = isMobile ? token.paddingSM : screens.lg ? token.paddingLG : token.paddingMD;
   const { activeOrganization } = useOrganization();
 
   const [forms, setForms] = useState<FormResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZES[0]);
 
   const loadForms = useCallback(() => {
     setLoading(true);
     getForms(activeOrganization?.id)
-      .then((data) => {
-        setForms(data);
-        setError(null);
-      })
-      .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : 'Не удалось загрузить формы');
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+      .then((data) => { setForms(data); setError(null); })
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Не удалось загрузить формы'))
+      .finally(() => setLoading(false));
   }, [activeOrganization?.id]);
 
-  useEffect(() => {
-    loadForms();
-  }, [loadForms]);
+  useEffect(() => { loadForms(); }, [loadForms]);
 
-  const handleDelete = useCallback(
-    async (id: string) => {
-      setDeletingId(id);
-      try {
-        await deleteForm(id);
-        setForms((prev) => prev.filter((f) => f.id !== id));
-        notification.success({ title: 'Форма удалена' });
-      } catch (err) {
-        notification.error({
-          title: 'Ошибка удаления',
-          description: err instanceof Error ? err.message : 'Попробуйте ещё раз.',
-        });
-      } finally {
-        setDeletingId(null);
-      }
-    },
-    [notification],
-  );
+  const handleDelete = useCallback(async (id: string) => {
+    setDeletingId(id);
+    try {
+      await deleteForm(id);
+      setForms((prev) => prev.filter((f) => f.id !== id));
+    } catch { /* silently handled */ } finally {
+      setDeletingId(null);
+      setConfirmDeleteId(null);
+    }
+  }, []);
 
-  const columns = useMemo<TableProps<FormResponse>['columns']>(
-    () => [
-      {
-        title: 'Название',
-        dataIndex: 'name',
-        key: 'name',
-        minWidth: 260,
-        render: (_: unknown, record: FormResponse) => (
-          <Link to={`/forms/${record.id}`} style={{ fontWeight: 500 }}>
-            {record.name}
-          </Link>
-        ),
-      },
-      {
-        title: 'Автор',
-        key: 'author',
-        width: 220,
-        responsive: ['md'],
-        render: (_: unknown, record: FormResponse) =>
-          record.author ? buildDisplayName(record.author) : 'Неизвестный автор',
-      },
-      {
-        title: 'Дата создания',
-        dataIndex: 'created_at',
-        key: 'created_at',
-        width: 180,
-        responsive: ['lg'],
-        render: (value: string) => formatDate(value),
-      },
-      {
-        title: 'Действия',
-        key: 'actions',
-        width: 160,
-        render: (_: unknown, record: FormResponse) => (
-          <Space size="small">
-            <Button
-              type="link"
-              size="small"
-              onClick={() => navigate(`/forms/${record.id}/edit`)}
-            >
-              Изменить
-            </Button>
-            <Popconfirm
-              title="Удалить форму?"
-              description="Это действие нельзя отменить."
-              okText="Удалить"
-              cancelText="Отмена"
-              okButtonProps={{ danger: true }}
-              onConfirm={() => handleDelete(record.id)}
-            >
-              <Button
-                type="link"
-                size="small"
-                danger
-                loading={deletingId === record.id}
-              >
-                Удалить
-              </Button>
-            </Popconfirm>
-          </Space>
-        ),
-      },
-    ],
-    [navigate, handleDelete, deletingId],
-  );
+  const rows = useMemo(() => forms.map((f) => ({
+    id: f.id,
+    name: f.name,
+    author: f.author ? buildDisplayName(f.author) : 'Неизвестный автор',
+    created_at: f.created_at,
+    actions: f.id,
+  })), [forms]);
+
+  const paginatedRows = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return rows.slice(start, start + pageSize);
+  }, [rows, page, pageSize]);
+
+  const renderCell = (key: string, value: unknown, rowId: string) => {
+    switch (key) {
+      case 'name':
+        return <Link to={`/forms/${rowId}`} style={{ fontWeight: 500 }}>{value as string}</Link>;
+      case 'created_at':
+        return formatDate(value as string);
+      case 'actions':
+        return (
+          <div style={{ display: 'flex', gap: 4 }}>
+            <Button kind="ghost" size="sm" renderIcon={Edit} iconDescription="Изменить" hasIconOnly onClick={() => navigate(`/forms/${value}/edit`)} />
+            <Button kind="danger--ghost" size="sm" renderIcon={TrashCan} iconDescription="Удалить" hasIconOnly disabled={deletingId === (value as string)} onClick={() => setConfirmDeleteId(value as string)} />
+          </div>
+        );
+      default:
+        return value as string;
+    }
+  };
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        flex: 1,
-        flexDirection: 'column',
-        height: '100%',
-        minHeight: 0,
-      }}
-    >
-      {/* ── Header ── */}
-      <div
-        style={{
-          background: token.colorBgContainer,
-          borderBottom: `1px solid ${token.colorBorderSecondary}`,
-          padding: `${token.paddingSM}px ${contentPadding}px ${token.padding}px`,
-          flexShrink: 0,
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: token.marginSM,
-          }}
-        >
-          <Title level={4} style={{ margin: 0 }}>
-            Реестр форм
-          </Title>
-
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => navigate('/forms/create')}
-            block={isMobile}
-          >
-            Создать форму
-          </Button>
+    <div style={{ display: 'flex', flex: 1, flexDirection: 'column', height: '100%', minHeight: 0 }}>
+      {error ? (
+        <div style={{ padding: 16 }}>
+          <InlineNotification kind="error" title="Ошибка загрузки" subtitle={error} lowContrast actions={<Button kind="ghost" size="sm" onClick={loadForms}>Повторить</Button>} />
         </div>
-      </div>
+      ) : loading ? (
+        <div style={{ padding: 16 }}>
+          <DataTableSkeleton headers={HEADERS} rowCount={8} columnCount={HEADERS.length} />
+        </div>
+      ) : (
+        <DataTable rows={paginatedRows} headers={HEADERS} isSortable>
+          {({ rows: carbonRows, headers, getTableProps, getHeaderProps, getRowProps }: {
+            rows: { id: string; cells: { id: string; info: { header: string }; value: unknown }[] }[];
+            headers: { key: string; header: string }[];
+            getTableProps: () => Record<string, unknown>;
+            getHeaderProps: (opts: { header: { key: string; header: string } }) => Record<string, unknown>;
+            getRowProps: (opts: { row: { id: string } }) => Record<string, unknown>;
+          }) => (
+            <TableContainer title="Реестр форм" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+              <TableToolbar>
+                <TableToolbarContent>
+                  <Button renderIcon={Add} onClick={() => navigate('/forms/create')}>Создать форму</Button>
+                </TableToolbarContent>
+              </TableToolbar>
+              <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
+                <Table {...getTableProps()} size="lg" useZebraStyles>
+                  <TableHead>
+                    <TableRow>
+                      {headers.map((h) => { const { key: _k, ...hp } = getHeaderProps({ header: h }); return <TableHeader key={h.key} {...hp}>{h.header}</TableHeader>; })}
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {carbonRows.length === 0 ? (
+                      <TableRow><TableCell colSpan={headers.length} style={{ textAlign: 'center' }}>Форм пока нет. Создайте первую!</TableCell></TableRow>
+                    ) : carbonRows.map((row) => {
+                      const { key: _k, ...rp } = getRowProps({ row });
+                      return <TableRow key={row.id} {...rp}>{row.cells.map((cell) => <TableCell key={cell.id}>{renderCell(cell.info.header, cell.value, row.id)}</TableCell>)}</TableRow>;
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+              <Pagination totalItems={rows.length} pageSize={pageSize} pageSizes={PAGE_SIZES} page={page} onChange={({ page: p, pageSize: s }: { page: number; pageSize: number }) => { setPage(p); setPageSize(s); }} itemsPerPageText="Записей на странице:" />
+            </TableContainer>
+          )}
+        </DataTable>
+      )}
 
-      {/* ── Content ── */}
-      <div
-        style={{
-          flex: 1,
-          minHeight: 0,
-          overflow: 'auto',
-          padding: contentPadding,
-          background: token.colorBgLayout,
-        }}
-      >
-        {error ? (
-          <Alert
-            type="error"
-            showIcon
-            message="Ошибка загрузки"
-            description={error}
-            action={
-              <Button size="small" onClick={loadForms}>
-                Повторить
-              </Button>
-            }
-          />
-        ) : (
-          <>
-            {isMobile ? (
-              loading ? (
-                <Table<FormResponse> rowKey="id" loading dataSource={[]} columns={columns} pagination={false} />
-              ) : forms.length === 0 ? (
-                <Empty description="Форм пока нет. Создайте первую!" />
-              ) : (
-                <Space direction="vertical" size={token.marginSM} style={{ width: '100%' }}>
-                  {forms.map((record) => (
-                    <Card key={record.id} size="small" title={record.name}>
-                      <Space direction="vertical" size={4} style={{ width: '100%' }}>
-                        <Typography.Text type="secondary">
-                          Автор:{' '}
-                          {record.author
-                            ? buildDisplayName(record.author)
-                            : 'Неизвестный автор'}
-                        </Typography.Text>
-                        <Typography.Text type="secondary">
-                          Создано: {formatDate(record.created_at)}
-                        </Typography.Text>
-                        <Space>
-                          <Button size="small" onClick={() => navigate(`/forms/${record.id}`)}>
-                            Открыть
-                          </Button>
-                          <Button size="small" onClick={() => navigate(`/forms/${record.id}/edit`)}>
-                            Изменить
-                          </Button>
-                          <Popconfirm
-                            title="Удалить форму?"
-                            description="Это действие нельзя отменить."
-                            okText="Удалить"
-                            cancelText="Отмена"
-                            okButtonProps={{ danger: true }}
-                            onConfirm={() => handleDelete(record.id)}
-                          >
-                            <Button size="small" danger loading={deletingId === record.id}>
-                              Удалить
-                            </Button>
-                          </Popconfirm>
-                        </Space>
-                      </Space>
-                    </Card>
-                  ))}
-                </Space>
-              )
-            ) : (
-              <Table<FormResponse>
-                rowKey="id"
-                loading={loading}
-                dataSource={forms}
-                columns={columns}
-                pagination={{ pageSize: 20, showSizeChanger: true }}
-                style={{ width: '100%' }}
-                locale={{ emptyText: 'Форм пока нет. Создайте первую!' }}
-              />
-            )}
-          </>
-        )}
-      </div>
+      {confirmDeleteId && (
+        <Modal open danger modalHeading="Удалить форму?" primaryButtonText="Удалить" secondaryButtonText="Отмена" onRequestClose={() => setConfirmDeleteId(null)} onRequestSubmit={() => void handleDelete(confirmDeleteId)} size="xs">
+          <p>Это действие нельзя отменить.</p>
+        </Modal>
+      )}
     </div>
   );
 };

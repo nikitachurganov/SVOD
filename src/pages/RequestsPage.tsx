@@ -1,21 +1,24 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
-  App,
-  Button,
-  Card,
-  Empty,
-  Grid,
-  Popconfirm,
-  Space,
+  DataTable,
   Table,
+  TableHead,
+  TableRow,
+  TableHeader,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableToolbar,
+  TableToolbarContent,
+  Pagination,
   Tag,
   Tooltip,
-  Typography,
-  theme,
-} from 'antd';
-import type { TableProps } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+  Button,
+  InlineNotification,
+  Loading,
+  DataTableSkeleton,
+} from '@carbon/react';
+import { Add, TrashCan, View } from '@carbon/react/icons';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   deleteRequest,
@@ -25,11 +28,9 @@ import {
 import { buildDisplayName } from '../shared/utils/userName';
 import { useOrganization } from '../shared/context/organization.context';
 
-const { Title } = Typography;
-
-const statusView: Record<RequestResponse['status'], { color: string; label: string }> = {
-  open: { color: 'processing', label: 'Открыта' },
-  closed: { color: 'error', label: 'Закрыта' },
+const statusMap: Record<RequestResponse['status'], { kind: string; label: string }> = {
+  open: { kind: 'blue', label: 'Открыта' },
+  closed: { kind: 'red', label: 'Закрыта' },
 };
 
 function formatDate(iso: string): string {
@@ -42,19 +43,30 @@ function formatDate(iso: string): string {
   });
 }
 
+const PAGE_SIZES = [20, 50, 100];
+
+const HEADERS = [
+  { key: 'title', header: 'Название заявки' },
+  { key: 'ai_summary', header: 'Описание' },
+  { key: 'id', header: 'Номер заявки' },
+  { key: 'created_at', header: 'Дата создания' },
+  { key: 'author', header: 'Автор' },
+  { key: 'updated_at', header: 'Дата изменения' },
+  { key: 'status', header: 'Статус' },
+  { key: 'actions', header: 'Действия' },
+];
+
 export const RequestsPage = () => {
   const navigate = useNavigate();
-  const { token } = theme.useToken();
-  const { notification } = App.useApp();
-  const screens = Grid.useBreakpoint();
-  const isMobile = !screens.md;
-  const contentPadding = isMobile ? token.paddingSM : screens.lg ? token.paddingLG : token.paddingMD;
   const { activeOrganization } = useOrganization();
 
   const [requests, setRequests] = useState<RequestResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZES[0]);
 
   const loadRequests = useCallback(() => {
     setLoading(true);
@@ -75,146 +87,110 @@ export const RequestsPage = () => {
     loadRequests();
   }, [loadRequests]);
 
-  const handleDelete = useCallback(
-    async (id: string) => {
-      setDeletingId(id);
-      try {
-        await deleteRequest(id);
-        setRequests((prev) => prev.filter((r) => r.id !== id));
-        notification.success({ title: 'Заявка удалена' });
-      } catch (err) {
-        notification.error({
-          title: 'Ошибка удаления',
-          description: err instanceof Error ? err.message : 'Попробуйте ещё раз.',
-        });
-      } finally {
-        setDeletingId(null);
-      }
-    },
-    [notification],
+  const handleDelete = useCallback(async (id: string) => {
+    setDeletingId(id);
+    try {
+      await deleteRequest(id);
+      setRequests((prev) => prev.filter((r) => r.id !== id));
+    } catch {
+      // silently handled — user sees the row stay
+    } finally {
+      setDeletingId(null);
+    }
+  }, []);
+
+  const rows = useMemo(
+    () =>
+      requests.map((r) => ({
+        id: r.id,
+        title: r.title,
+        ai_summary: r.ai_summary?.summary ?? null,
+        created_at: r.created_at,
+        author: r.author ? buildDisplayName(r.author) : 'Неизвестный автор',
+        updated_at: r.updated_at,
+        status: r.status,
+        actions: r.id,
+      })),
+    [requests],
   );
 
-  const columns = useMemo<TableProps<RequestResponse>['columns']>(
-    () => [
-      {
-        title: 'Название заявки',
-        dataIndex: 'title',
-        key: 'title',
-        minWidth: 260,
-        render: (_: unknown, record: RequestResponse) => (
-          <Link to={`/requests/${record.id}`} style={{ fontWeight: 500 }}>
-            {record.title}
+  const paginatedRows = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return rows.slice(start, start + pageSize);
+  }, [rows, page, pageSize]);
+
+  const renderCell = (cellKey: string, cellValue: unknown, rowId: string) => {
+    switch (cellKey) {
+      case 'title':
+        return (
+          <Link to={`/requests/${rowId}`} style={{ fontWeight: 500 }}>
+            {cellValue as string}
           </Link>
-        ),
-      },
-      {
-        title: 'Описание',
-        dataIndex: 'ai_summary',
-        key: 'ai_summary',
-        width: 350,
-        responsive: ['md'],
-        render: (value: RequestResponse['ai_summary']) => {
-          const text = value?.summary;
-          return text ? (
-            <Tooltip title={text}>
-              <span
-                style={{
-                  display: '-webkit-box',
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: 'vertical',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                }}
-              >
-                {text}
-              </span>
-            </Tooltip>
-          ) : (
-            <Typography.Text type="secondary">Нет описания</Typography.Text>
-          );
-        },
-      },
-      {
-        title: 'Номер заявки',
-        dataIndex: 'id',
-        key: 'id',
-        width: 160,
-        responsive: ['md'],
-      },
-      {
-        title: 'Дата создания',
-        dataIndex: 'created_at',
-        key: 'created_at',
-        width: 200,
-        responsive: ['lg'],
-        sorter: (a, b) =>
-          new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
-        render: (value: string) => formatDate(value),
-      },
-      {
-        title: 'Автор',
-        key: 'author',
-        width: 220,
-        responsive: ['md'],
-        render: (_: unknown, record: RequestResponse) =>
-          record.author ? buildDisplayName(record.author) : 'Неизвестный автор',
-      },
-      {
-        title: 'Дата изменения',
-        dataIndex: 'updated_at',
-        key: 'updated_at',
-        width: 200,
-        responsive: ['xl'],
-        sorter: (a, b) =>
-          new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime(),
-        render: (value: string) => formatDate(value),
-      },
-      {
-        title: 'Статус',
-        dataIndex: 'status',
-        key: 'status',
-        width: 140,
-        render: (status: RequestResponse['status']) => {
-          const view = statusView[status];
-          return <Tag color={view.color}>{view.label}</Tag>;
-        },
-      },
-      {
-        title: 'Действия',
-        key: 'actions',
-        width: 200,
-        render: (_: unknown, record: RequestResponse) => (
-          <Space size="small">
+        );
+
+      case 'ai_summary': {
+        const text = cellValue as string | null;
+        if (!text) {
+          return <span style={{ color: 'var(--cds-text-placeholder, #a8a8a8)' }}>Нет описания</span>;
+        }
+        return (
+          <Tooltip label={text}>
+            <span
+              style={{
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                maxWidth: 350,
+              }}
+            >
+              {text}
+            </span>
+          </Tooltip>
+        );
+      }
+
+      case 'created_at':
+      case 'updated_at':
+        return formatDate(cellValue as string);
+
+      case 'status': {
+        const view = statusMap[cellValue as RequestResponse['status']];
+        return (
+          <Tag type={view.kind as 'blue' | 'red'} size="sm">
+            {view.label}
+          </Tag>
+        );
+      }
+
+      case 'actions':
+        return (
+          <div style={{ display: 'flex', gap: 4 }}>
             <Button
-              type="link"
-              size="small"
-              onClick={() => navigate(`/requests/${record.id}`)}
-            >
-              Открыть
-            </Button>
-            <Popconfirm
-              title="Удалить заявку?"
-              description="Это действие нельзя отменить."
-              okText="Удалить"
-              cancelText="Отмена"
-              okButtonProps={{ danger: true }}
-              onConfirm={() => handleDelete(record.id)}
-            >
-              <Button
-                type="link"
-                size="small"
-                danger
-                loading={deletingId === record.id}
-              >
-                Удалить
-              </Button>
-            </Popconfirm>
-          </Space>
-        ),
-      },
-    ],
-    [navigate, handleDelete, deletingId],
-  );
+              kind="ghost"
+              size="sm"
+              renderIcon={View}
+              iconDescription="Открыть"
+              hasIconOnly
+              onClick={() => navigate(`/requests/${cellValue}`)}
+            />
+            <Button
+              kind="danger--ghost"
+              size="sm"
+              renderIcon={TrashCan}
+              iconDescription="Удалить"
+              hasIconOnly
+              disabled={deletingId === (cellValue as string)}
+              onClick={() => handleDelete(cellValue as string)}
+            />
+          </div>
+        );
+
+      default:
+        return cellValue as string;
+    }
+  };
 
   return (
     <div
@@ -226,129 +202,119 @@ export const RequestsPage = () => {
         minHeight: 0,
       }}
     >
-      {/* ── Header ── */}
-      <div
-        style={{
-          background: token.colorBgContainer,
-          borderBottom: `1px solid ${token.colorBorderSecondary}`,
-          padding: `${token.paddingSM}px ${contentPadding}px ${token.padding}px`,
-          flexShrink: 0,
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: token.marginSM,
-          }}
-        >
-          <Title level={4} style={{ margin: 0 }}>
-            Реестр заявок
-          </Title>
-
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => navigate('/requests/create')}
-            block={isMobile}
-          >
-            Создать заявку
-          </Button>
-        </div>
-      </div>
-
-      {/* ── Content ── */}
-      <div
-        style={{
-          flex: 1,
-          minHeight: 0,
-          overflow: 'auto',
-          padding: contentPadding,
-          background: token.colorBgLayout,
-        }}
-      >
-        {error ? (
-          <Alert
-            type="error"
-            showIcon
-            message="Ошибка загрузки"
-            description={error}
-            action={
-              <Button size="small" onClick={loadRequests}>
+      {error ? (
+        <div style={{ padding: 16 }}>
+          <InlineNotification
+            kind="error"
+            title="Ошибка загрузки"
+            subtitle={error}
+            lowContrast
+            actions={
+              <Button kind="ghost" size="sm" onClick={loadRequests}>
                 Повторить
               </Button>
             }
           />
-        ) : (
-          <>
-            {isMobile ? (
-              loading ? (
-                <Table<RequestResponse> rowKey="id" loading dataSource={[]} columns={columns} pagination={false} />
-              ) : requests.length === 0 ? (
-                <Empty description="Заявок пока нет. Создайте первую!" />
-              ) : (
-                <Space direction="vertical" size={token.marginSM} style={{ width: '100%' }}>
-                  {requests.map((record) => (
-                    <Card key={record.id} size="small" title={record.title}>
-                      <Space direction="vertical" size={4} style={{ width: '100%' }}>
-                        <Typography.Text type="secondary">№ {record.id}</Typography.Text>
-                        <Typography.Paragraph
-                          type="secondary"
-                          ellipsis={{ rows: 2 }}
-                          style={{ margin: 0 }}
-                        >
-                          {record.ai_summary?.summary || 'Нет описания'}
-                        </Typography.Paragraph>
-                        <Typography.Text>
-                          Автор:{' '}
-                          {record.author
-                            ? buildDisplayName(record.author)
-                            : 'Неизвестный автор'}
-                        </Typography.Text>
-                        <Typography.Text type="secondary">
-                          Создано: {formatDate(record.created_at)}
-                        </Typography.Text>
-                        <Tag color={statusView[record.status].color}>
-                          {statusView[record.status].label}
-                        </Tag>
-                        <Space>
-                          <Button size="small" onClick={() => navigate(`/requests/${record.id}`)}>
-                            Открыть
-                          </Button>
-                          <Popconfirm
-                            title="Удалить заявку?"
-                            description="Это действие нельзя отменить."
-                            okText="Удалить"
-                            cancelText="Отмена"
-                            okButtonProps={{ danger: true }}
-                            onConfirm={() => handleDelete(record.id)}
-                          >
-                            <Button size="small" danger loading={deletingId === record.id}>
-                              Удалить
-                            </Button>
-                          </Popconfirm>
-                        </Space>
-                      </Space>
-                    </Card>
-                  ))}
-                </Space>
-              )
-            ) : (
-              <Table<RequestResponse>
-                rowKey="id"
-                loading={loading}
-                dataSource={requests}
-                columns={columns}
-                pagination={{ pageSize: 20, showSizeChanger: true }}
-                style={{ width: '100%' }}
-                locale={{ emptyText: 'Заявок пока нет. Создайте первую!' }}
+        </div>
+      ) : loading ? (
+        <div style={{ padding: 16 }}>
+          <DataTableSkeleton headers={HEADERS} rowCount={8} columnCount={HEADERS.length} />
+        </div>
+      ) : (
+        <DataTable rows={paginatedRows} headers={HEADERS} isSortable>
+          {({
+            rows: carbonRows,
+            headers,
+            getTableProps,
+            getHeaderProps,
+            getRowProps,
+          }: {
+            rows: { id: string; cells: { id: string; info: { header: string }; value: unknown }[] }[];
+            headers: { key: string; header: string }[];
+            getTableProps: () => Record<string, unknown>;
+            getHeaderProps: (opts: { header: { key: string; header: string } }) => Record<string, unknown>;
+            getRowProps: (opts: { row: { id: string } }) => Record<string, unknown>;
+          }) => (
+            <TableContainer
+              title="Реестр заявок"
+              style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}
+            >
+              <TableToolbar>
+                <TableToolbarContent>
+                  <Button
+                    renderIcon={Add}
+                    iconDescription="Создать заявку"
+                    onClick={() => navigate('/requests/create')}
+                  >
+                    Создать заявку
+                  </Button>
+                </TableToolbarContent>
+              </TableToolbar>
+
+              <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
+                <Table {...getTableProps()} size="lg" useZebraStyles>
+                  <TableHead>
+                    <TableRow>
+                      {headers.map((header) => {
+                        const { key: _key, ...headerProps } = getHeaderProps({ header });
+                        return (
+                          <TableHeader key={header.key} {...headerProps}>
+                            {header.header}
+                          </TableHeader>
+                        );
+                      })}
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {carbonRows.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={headers.length} style={{ textAlign: 'center' }}>
+                          Заявок пока нет. Создайте первую!
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      carbonRows.map((row) => {
+                        const { key: _key, ...rowProps } = getRowProps({ row });
+                        return (
+                          <TableRow key={row.id} {...rowProps}>
+                            {row.cells.map((cell) => (
+                              <TableCell key={cell.id}>
+                                {renderCell(cell.info.header, cell.value, row.id)}
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+
+              <Pagination
+                totalItems={rows.length}
+                pageSize={pageSize}
+                pageSizes={PAGE_SIZES}
+                page={page}
+                onChange={({
+                  page: newPage,
+                  pageSize: newSize,
+                }: {
+                  page: number;
+                  pageSize: number;
+                }) => {
+                  setPage(newPage);
+                  setPageSize(newSize);
+                }}
+                itemsPerPageText="Записей на странице:"
+                pageRangeText={(_current: number, total: number) => `из ${total}`}
+                itemRangeText={(min: number, max: number, total: number) =>
+                  `${min}–${max} из ${total}`
+                }
               />
-            )}
-          </>
-        )}
-      </div>
+            </TableContainer>
+          )}
+        </DataTable>
+      )}
     </div>
   );
 };

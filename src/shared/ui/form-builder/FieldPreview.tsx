@@ -1,5 +1,14 @@
-import { DatePicker, Input, Radio, Select, TimePicker, Upload } from 'antd';
-import { InboxOutlined } from '@ant-design/icons';
+import {
+  TextInput,
+  TextArea,
+  Dropdown,
+  DatePicker,
+  DatePickerInput,
+  TimePicker,
+  RadioButton,
+  RadioButtonGroup,
+  FileUploaderDropContainer,
+} from '@carbon/react';
 import { FieldOptionsEditor } from './FieldOptionsEditor';
 import {
   FIELD_TYPE_LABELS,
@@ -15,20 +24,35 @@ interface FieldPreviewProps {
 /**
  * Renders the interactive preview / editor for a field block on the canvas.
  * Options-based types (radio, checkbox, dropdown) render an editable options list.
- * All other types render a disabled, non-interactive Ant Design component.
+ * All other types render a disabled, non-interactive component.
  * Groups are rendered by GroupBlock and return null here.
  */
 export const FieldPreview = ({ field, onOptionsChange }: FieldPreviewProps) => {
+  const prefix = `preview-${field.id}`;
+
   switch (field.type) {
     case 'shortText':
-      return <Input disabled placeholder="Короткий текст" />;
+      return (
+        <TextInput
+          id={`${prefix}-short`}
+          labelText=""
+          hideLabel
+          disabled
+          placeholder="Короткий текст"
+          value=""
+        />
+      );
 
     case 'longText':
       return (
-        <Input.TextArea
+        <TextArea
+          id={`${prefix}-long`}
+          labelText=""
+          hideLabel
           disabled
           placeholder="Длинный текст"
-          autoSize={{ minRows: 2, maxRows: 4 }}
+          rows={2}
+          value=""
         />
       );
 
@@ -45,11 +69,14 @@ export const FieldPreview = ({ field, onOptionsChange }: FieldPreviewProps) => {
     case 'dropdown':
       return (
         <>
-          <Select
+          <Dropdown
+            id={`${prefix}-dropdown`}
+            titleText=""
+            label="Выпадающий список"
+            items={field.options?.map((opt) => ({ id: opt.id, text: opt.label })) ?? []}
+            itemToString={(item: { id: string; text: string } | null) => item?.text ?? ''}
             disabled
-            placeholder="Выпадающий список"
-            style={{ width: '100%', marginBottom: 12 }}
-            options={field.options?.map((opt) => ({ label: opt.label, value: opt.id }))}
+            style={{ marginBottom: 12 }}
           />
           {field.options && (
             <FieldOptionsEditor
@@ -63,69 +90,129 @@ export const FieldPreview = ({ field, onOptionsChange }: FieldPreviewProps) => {
 
     case 'yesNo':
       return (
-        <Radio.Group disabled style={{ display: 'flex', gap: 16 }}>
-          <Radio value="yes">Да</Radio>
-          <Radio value="no">Нет</Radio>
-        </Radio.Group>
+        <RadioButtonGroup
+          name={`${prefix}-yesno`}
+          legendText=""
+          disabled
+          valueSelected=""
+        >
+          <RadioButton id={`${prefix}-yes`} value="yes" labelText="Да" />
+          <RadioButton id={`${prefix}-no`} value="no" labelText="Нет" />
+        </RadioButtonGroup>
       );
 
     case 'number':
-      return <Input disabled type="number" placeholder="Число" />;
-
-    case 'fullName':
-      return <Input disabled placeholder="Полное имя" />;
-
-    case 'phone':
-      return <Input disabled type="tel" placeholder="+7 (___) ___-__-__" />;
-
-    case 'email':
-      return <Input disabled type="email" placeholder="example@mail.com" />;
-
-    case 'dateTime':
       return (
-        <DatePicker
+        <TextInput
+          id={`${prefix}-number`}
+          labelText=""
+          hideLabel
           disabled
-          showTime
-          style={{ width: '100%' }}
-          placeholder="Дата и время"
+          type="number"
+          placeholder="Число"
+          value=""
         />
       );
 
+    case 'fullName':
+      return (
+        <TextInput
+          id={`${prefix}-fullname`}
+          labelText=""
+          hideLabel
+          disabled
+          placeholder="Полное имя"
+          value=""
+        />
+      );
+
+    case 'phone':
+      return (
+        <TextInput
+          id={`${prefix}-phone`}
+          labelText=""
+          hideLabel
+          disabled
+          type="tel"
+          placeholder="+7 (___) ___-__-__"
+          value=""
+        />
+      );
+
+    case 'email':
+      return (
+        <TextInput
+          id={`${prefix}-email`}
+          labelText=""
+          hideLabel
+          disabled
+          type="email"
+          placeholder="example@mail.com"
+          value=""
+        />
+      );
+
+    case 'dateTime':
+      return (
+        <DatePicker datePickerType="single">
+          <DatePickerInput
+            id={`${prefix}-datetime`}
+            placeholder="Дата и время"
+            labelText=""
+            hideLabel
+            disabled
+          />
+        </DatePicker>
+      );
+
     case 'date':
-      return <DatePicker disabled style={{ width: '100%' }} placeholder="Дата" />;
+      return (
+        <DatePicker datePickerType="single">
+          <DatePickerInput
+            id={`${prefix}-date`}
+            placeholder="Дата"
+            labelText=""
+            hideLabel
+            disabled
+          />
+        </DatePicker>
+      );
 
     case 'time':
-      return <TimePicker disabled style={{ width: '100%' }} placeholder="Время" />;
+      return (
+        <TimePicker
+          id={`${prefix}-time`}
+          labelText=""
+          hideLabel
+          disabled
+          placeholder="Время"
+          value=""
+        />
+      );
 
     case 'group':
-      // Rendered by GroupBlock — FieldPreview is not used for groups
       return null;
 
     case 'file_vector':
     case 'file_image':
     case 'file_document':
       return (
-        <Upload.Dragger
+        <FileUploaderDropContainer
+          labelText={FIELD_TYPE_LABELS[field.type]}
           disabled
-          beforeUpload={() => false}
-          showUploadList={false}
-          style={{ pointerEvents: 'none' }}
-        >
-          <p style={{ margin: 0 }}>
-            <InboxOutlined style={{ fontSize: 24 }} />
-          </p>
-          <p style={{ margin: '8px 0 0', fontSize: 13 }}>
-            {FIELD_TYPE_LABELS[field.type]}
-          </p>
-        </Upload.Dragger>
+          style={{ pointerEvents: 'none' as const }}
+        />
       );
 
     case 'address':
       return (
-        <Input
+        <TextInput
+          id={`${prefix}-address`}
+          labelText=""
+          hideLabel
           disabled
           placeholder="Начните вводить адрес..."
-          style={{ width: '100%' }}
+          value=""
         />
       );
   }
