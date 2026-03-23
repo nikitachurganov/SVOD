@@ -6,7 +6,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/myapp"
     SECRET_KEY: str = "change-me"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
-    CORS_ORIGINS: list[str] = ["http://localhost:5173"]
+    CORS_ORIGINS: list[str] = ["https://servicedev.space"]
     FILE_STORAGE_BACKEND: str = "local"
     FILE_STORAGE_BASE_URL: str = "http://localhost:8000/uploads"
 
