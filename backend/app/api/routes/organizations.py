@@ -13,7 +13,8 @@ from app.schemas.organization import (
     UpdateOrganizationRequest,
     UpdateRoleRequest,
 )
-from app.services import organization_service
+from app.schemas.public_link import PublicLinkResponse
+from app.services import organization_service, public_link_service
 
 router = APIRouter()
 
@@ -182,3 +183,32 @@ async def list_invitations(
     user: CurrentUser,
 ) -> list[InvitationResponse]:
     return await organization_service.list_invitations(session, organization_id, user)
+
+
+# ---------------------------------------------------------------------------
+# Public request link
+# ---------------------------------------------------------------------------
+
+@router.post(
+    "/{organization_id}/public-request-link",
+    response_model=PublicLinkResponse,
+    status_code=201,
+)
+async def create_public_request_link(
+    organization_id: uuid.UUID,
+    session: DbSession,
+    user: CurrentUser,
+) -> PublicLinkResponse:
+    return await public_link_service.get_or_create_link(session, organization_id, user)
+
+
+@router.get(
+    "/{organization_id}/public-request-link",
+    response_model=PublicLinkResponse | None,
+)
+async def get_public_request_link(
+    organization_id: uuid.UUID,
+    session: DbSession,
+    user: CurrentUser,
+) -> PublicLinkResponse | None:
+    return await public_link_service.get_or_create_link(session, organization_id, user)

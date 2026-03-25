@@ -79,6 +79,7 @@ export async function getRequestWithForm(id: string): Promise<RequestWithForm> {
       updated_at: requestRow.updated_at,
       form_snapshot: snapshot,
       ai_summary: requestRow.ai_summary ?? null,
+      people: requestRow.people ?? [],
     };
 
     return { request, form, parsedData: parsedData };

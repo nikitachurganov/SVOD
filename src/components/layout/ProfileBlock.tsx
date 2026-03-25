@@ -3,7 +3,11 @@ import { Modal, Toggle } from '@carbon/react';
 import { useAuth } from '../../shared/context/auth.context';
 import { useThemeMode } from '../../shared/context/theme.context';
 import { useOrganization } from '../../shared/context/organization.context';
-import { deleteOrganization, leaveOrganization } from '../../shared/api/organizations.api';
+import {
+  deleteOrganization,
+  leaveOrganization,
+  getOrCreatePublicLink,
+} from '../../shared/api/organizations.api';
 import { InviteMemberModal } from '../organization/InviteMemberModal';
 import { InvitationsDrawer } from '../organization/InvitationsDrawer';
 import { MembersModal } from '../organization/MembersModal';
@@ -77,6 +81,21 @@ export const HeaderProfilePanel = ({
     });
   };
 
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  const handleCopyPublicLink = async () => {
+    if (!activeOrganization) return;
+    try {
+      const link = await getOrCreatePublicLink(activeOrganization.id);
+      const url = `${window.location.origin}/public/request/${link.token}`;
+      await navigator.clipboard.writeText(url);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch {
+      // silently fail
+    }
+  };
+
   const menuAction = (fn: () => void) => () => {
     onClose();
     fn();
@@ -106,6 +125,11 @@ export const HeaderProfilePanel = ({
               {isOwner && (
                 <ProfileMenuItem onClick={menuAction(() => setMembersModalOpen(true))}>
                   Участники
+                </ProfileMenuItem>
+              )}
+              {!!activeOrganization && (
+                <ProfileMenuItem onClick={handleCopyPublicLink}>
+                  {linkCopied ? 'Ссылка скопирована!' : 'Скопировать ссылку для заявок'}
                 </ProfileMenuItem>
               )}
 

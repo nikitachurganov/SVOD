@@ -41,6 +41,7 @@ import { RequestViewPage } from './pages/RequestViewPage';
 import { AuthPage } from './pages/AuthPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
+import { PublicRequestPage } from './pages/PublicRequestPage';
 import { CreateOrganizationModal } from './components/layout/CreateOrganizationModal';
 
 const useMediaQuery = (query: string): boolean => {
@@ -291,6 +292,7 @@ const router = createBrowserRouter([
   { path: '/auth/forgot-password', element: <ForgotPasswordPage /> },
   { path: '/auth/reset-password', element: <ResetPasswordPage /> },
   { path: '/auth', element: <PublicOnlyAuthPage /> },
+  { path: '/public/request/:token', element: <PublicRequestPage /> },
   {
     path: '/',
     element: <ProtectedLayout />,

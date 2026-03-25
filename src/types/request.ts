@@ -7,6 +7,14 @@ export interface AISummary {
   tags: string[];
 }
 
+export interface RequestPerson {
+  role: string;
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  source: string;
+}
+
 export interface RequestEntity {
   id: string;
   title: string;
@@ -20,4 +28,5 @@ export interface RequestEntity {
   updated_at: string;
   form_snapshot?: FormEntity | null;
   ai_summary?: AISummary | null;
+  people?: RequestPerson[];
 }

@@ -7,6 +7,7 @@ from app.models.organization import (
     OrganizationInvitation,
     OrganizationMember,
 )
+from app.models.public_link import PublicRequestLink
 
 __all__ = [
     "User",
@@ -16,4 +17,5 @@ __all__ = [
     "Organization",
     "OrganizationMember",
     "OrganizationInvitation",
+    "PublicRequestLink",
 ]

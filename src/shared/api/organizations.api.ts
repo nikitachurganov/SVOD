@@ -100,3 +100,24 @@ export const listOrgInvitations = async (orgId: string): Promise<InvitationRespo
   const { data } = await api.get<InvitationResponse[]>(`/organizations/${orgId}/invitations`);
   return data;
 };
+
+// ---------------------------------------------------------------------------
+// Public request link
+// ---------------------------------------------------------------------------
+
+export interface PublicLinkResponse {
+  id: string;
+  organization_id: string;
+  token: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export const getOrCreatePublicLink = async (
+  orgId: string,
+): Promise<PublicLinkResponse> => {
+  const { data } = await api.post<PublicLinkResponse>(
+    `/organizations/${orgId}/public-request-link`,
+  );
+  return data;
+};

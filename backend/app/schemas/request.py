@@ -31,6 +31,15 @@ class AISummaryResponse(BaseModel):
     tags: list[str]
 
 
+class RequestPersonResponse(BaseModel):
+    """A person related to a request (author, assignee, etc.)."""
+    role: str
+    name: str
+    email: str | None = None
+    phone: str | None = None
+    source: str
+
+
 class RequestResponse(BaseModel):
     id: str
     title: str
@@ -45,3 +54,8 @@ class RequestResponse(BaseModel):
     updated_at: str
     form_snapshot: Any | None = None
     ai_summary: AISummaryResponse | None = None
+    source: str | None = None
+    applicant_name: str | None = None
+    applicant_email: str | None = None
+    applicant_phone: str | None = None
+    people: list[RequestPersonResponse] = []

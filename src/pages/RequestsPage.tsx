@@ -98,6 +98,14 @@ export const RequestsPage = () => {
     }
   }, []);
 
+  const resolveAuthorName = useCallback((r: RequestResponse): string => {
+    if (r.author) return buildDisplayName(r.author);
+    const authorPerson = r.people?.find((p) => p.role === 'author');
+    if (authorPerson) return authorPerson.name;
+    if (r.applicant_name) return r.applicant_name;
+    return 'Неизвестный автор';
+  }, []);
+
   const rows = useMemo(
     () =>
       requests.map((r) => {
@@ -108,13 +116,13 @@ export const RequestsPage = () => {
           title: r.title,
           ai_summary: summary,
           created_at: r.created_at,
-          author: r.author ? buildDisplayName(r.author) : 'Неизвестный автор',
+          author: resolveAuthorName(r),
           updated_at: r.updated_at,
           status: r.status,
           actions: r.id,
         };
       }),
-    [requests],
+    [requests, resolveAuthorName],
   );
 
   const paginatedRows = useMemo(() => {

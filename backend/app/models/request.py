@@ -29,6 +29,10 @@ class Request(Base):
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="open")
     form_snapshot: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     ai_summary: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    source: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    applicant_name: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    applicant_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    applicant_phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
     closed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

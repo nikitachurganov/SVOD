@@ -12,6 +12,7 @@ from app.services import request_summary_service
 from app.schemas.request import (
     AISummaryResponse,
     CreateRequestPayload,
+    RequestPersonResponse,
     RequestResponse,
     UpdateRequestPayload,
 )
@@ -42,6 +43,30 @@ def _to_ai_summary(data: dict | None) -> AISummaryResponse | None:
     )
 
 
+def _build_people(req: Request) -> list[RequestPersonResponse]:
+    people: list[RequestPersonResponse] = []
+
+    if req.author is not None:
+        name_parts = [req.author.last_name, req.author.first_name, req.author.middle_name]
+        name = " ".join(p for p in name_parts if p) or "Пользователь"
+        people.append(RequestPersonResponse(
+            role="author",
+            name=name,
+            email=req.author.email,
+            source="internal",
+        ))
+    elif req.applicant_name:
+        people.append(RequestPersonResponse(
+            role="author",
+            name=req.applicant_name,
+            email=req.applicant_email,
+            phone=req.applicant_phone,
+            source="public_link",
+        ))
+
+    return people
+
+
 def _to_response(req: Request) -> RequestResponse:
     return RequestResponse(
         id=str(req.id),
@@ -57,6 +82,11 @@ def _to_response(req: Request) -> RequestResponse:
         updated_at=req.updated_at.isoformat(),
         form_snapshot=req.form_snapshot,
         ai_summary=_to_ai_summary(req.ai_summary),
+        source=req.source,
+        applicant_name=req.applicant_name,
+        applicant_email=req.applicant_email,
+        applicant_phone=req.applicant_phone,
+        people=_build_people(req),
     )
 
 

@@ -393,17 +393,36 @@ export const RequestViewPage = () => {
             </div>
             <div>
               <span style={{ color: 'var(--cds-text-secondary)', marginRight: 8 }}>Автор</span>
-              {data.request.author ? (
-                <span>
-                  <span style={{ fontSize: 13 }}>{buildDisplayName(data.request.author)}</span>
-                  <br />
-                  <span style={{ fontSize: 12, color: 'var(--cds-text-secondary)' }}>
-                    {data.request.author.email}
-                  </span>
-                </span>
-              ) : (
-                <span style={{ fontSize: 13 }}>Неизвестный автор</span>
-              )}
+              {(() => {
+                const authorPerson = data.request.people?.find((p) => p.role === 'author');
+                if (data.request.author) {
+                  return (
+                    <span>
+                      <span style={{ fontSize: 13 }}>{buildDisplayName(data.request.author)}</span>
+                      <br />
+                      <span style={{ fontSize: 12, color: 'var(--cds-text-secondary)' }}>
+                        {data.request.author.email}
+                      </span>
+                    </span>
+                  );
+                }
+                if (authorPerson) {
+                  return (
+                    <span>
+                      <span style={{ fontSize: 13 }}>{authorPerson.name}</span>
+                      {authorPerson.email && (
+                        <>
+                          <br />
+                          <span style={{ fontSize: 12, color: 'var(--cds-text-secondary)' }}>
+                            {authorPerson.email}
+                          </span>
+                        </>
+                      )}
+                    </span>
+                  );
+                }
+                return <span style={{ fontSize: 13 }}>Неизвестный автор</span>;
+              })()}
             </div>
             <div>
               <span style={{ color: 'var(--cds-text-secondary)', marginRight: 8 }}>Дата создания</span>
@@ -529,7 +548,7 @@ export const RequestViewPage = () => {
                 <TabList aria-label="Разделы заявки">
                   <Tab>Информация</Tab>
                   <Tab>История</Tab>
-                  <Tab disabled>Люди</Tab>
+                  <Tab>Люди</Tab>
                 </TabList>
                 <TabPanels>
                   {/* Info tab */}
@@ -837,11 +856,58 @@ export const RequestViewPage = () => {
                     </div>
                   </TabPanel>
 
-                  {/* People tab (disabled placeholder) */}
+                  {/* People tab */}
                   <TabPanel>
-                    <span style={{ color: 'var(--cds-text-secondary)' }}>
-                      Раздел находится в разработке.
-                    </span>
+                    <div style={{ paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      {data.request.people && data.request.people.length > 0 ? (
+                        data.request.people.map((person, idx) => (
+                          <Tile key={`${person.role}-${idx}`} style={{ padding: 16 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                              <div
+                                style={{
+                                  width: 40,
+                                  height: 40,
+                                  borderRadius: '50%',
+                                  background: 'var(--cds-interactive)',
+                                  color: 'var(--cds-text-on-color)',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: 14,
+                                  fontWeight: 600,
+                                  flexShrink: 0,
+                                }}
+                              >
+                                {person.name
+                                  .split(' ')
+                                  .filter(Boolean)
+                                  .slice(0, 2)
+                                  .map((w) => w[0]?.toUpperCase() ?? '')
+                                  .join('')}
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                  <span style={{ fontWeight: 500, fontSize: 14 }}>{person.name}</span>
+                                  <Tag type="blue" size="sm">
+                                    {person.role === 'author' ? 'Автор' : person.role}
+                                  </Tag>
+                                  {person.source === 'public_link' && (
+                                    <Tag type="warm-gray" size="sm">Публичная заявка</Tag>
+                                  )}
+                                </div>
+                                <div style={{ fontSize: 13, color: 'var(--cds-text-secondary)', marginTop: 2 }}>
+                                  {[person.email, person.phone].filter(Boolean).join(' · ') || '—'}
+                                </div>
+                              </div>
+                            </div>
+                          </Tile>
+                        ))
+                      ) : (
+                        <span style={{ color: 'var(--cds-text-secondary)' }}>
+                          Нет связанных людей.
+                        </span>
+                      )}
+                    </div>
                   </TabPanel>
                 </TabPanels>
               </Tabs>
