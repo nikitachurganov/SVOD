@@ -245,7 +245,7 @@ export const PublicRequestPage = () => {
           minHeight: '100vh',
           display: 'grid',
           placeItems: 'center',
-          background: 'var(--cds-background, #f4f4f4)',
+          background: 'var(--cds-background)',
         }}
       >
         <Loading withOverlay={false} />
@@ -278,7 +278,7 @@ export const PublicRequestPage = () => {
           justifyContent: 'center',
           gap: 16,
           padding: 32,
-          background: 'var(--cds-background, #f4f4f4)',
+          background: 'var(--cds-background)',
         }}
       >
         <InlineNotification
@@ -297,7 +297,7 @@ export const PublicRequestPage = () => {
     <div
       style={{
         minHeight: '100vh',
-        background: 'var(--cds-background, #f4f4f4)',
+        background: 'var(--cds-background)',
         display: 'flex',
         flexDirection: 'column',
       }}
@@ -308,7 +308,7 @@ export const PublicRequestPage = () => {
           display: 'flex',
           alignItems: 'center',
           paddingInline: '1rem',
-          background: 'var(--cds-layer-01, #fff)',
+          background: 'var(--cds-layer-01)',
           borderBottom: '1px solid var(--cds-border-subtle)',
           flexShrink: 0,
         }}

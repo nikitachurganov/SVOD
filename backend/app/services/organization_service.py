@@ -19,6 +19,7 @@ from app.schemas.organization import (
     InvitationWithOrgResponse,
     MemberResponse,
     OrganizationResponse,
+    TransferOwnershipRequest,
     UpdateOrganizationRequest,
     UpdateRoleRequest,
 )
@@ -199,6 +200,52 @@ async def delete_organization(
     _ensure_owner(org, current_user)
     await organization_repository.delete_org(session, org_id)
     await session.commit()
+
+
+async def transfer_organization_ownership(
+    session: AsyncSession,
+    org_id: uuid.UUID,
+    payload: TransferOwnershipRequest,
+    current_user: User,
+) -> OrganizationResponse:
+    """Set organization.owner_user_id and sync member role_tag (owner/member)."""
+    org = await _get_org_or_404(session, org_id)
+    _ensure_owner(org, current_user)
+
+    try:
+        new_owner_id = uuid.UUID(payload.new_owner_user_id)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid new_owner_user_id",
+        ) from exc
+
+    if new_owner_id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You are already the owner",
+        )
+
+    new_member = await organization_repository.get_member(session, org_id, new_owner_id)
+    if new_member is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New owner must be an existing member of the organization",
+        )
+
+    old_owner_member = await organization_repository.get_member(
+        session, org_id, current_user.id
+    )
+    org.owner_user_id = new_owner_id
+    new_member.role_tag = "owner"
+    if old_owner_member is not None:
+        old_owner_member.role_tag = "member"
+
+    await session.flush()
+    await session.commit()
+    await session.refresh(org, attribute_names=["owner"])
+    members_count = await organization_repository.count_members(session, org_id)
+    return _to_org_response(org, members_count)
 
 
 # ---------------------------------------------------------------------------

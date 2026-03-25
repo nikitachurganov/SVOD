@@ -10,6 +10,7 @@ from app.schemas.organization import (
     InvitationWithOrgResponse,
     MemberResponse,
     OrganizationResponse,
+    TransferOwnershipRequest,
     UpdateOrganizationRequest,
     UpdateRoleRequest,
 )
@@ -67,6 +68,21 @@ async def delete_organization(
     user: CurrentUser,
 ) -> None:
     await organization_service.delete_organization(session, organization_id, user)
+
+
+@router.post(
+    "/{organization_id}/transfer-ownership",
+    response_model=OrganizationResponse,
+)
+async def transfer_organization_ownership(
+    organization_id: uuid.UUID,
+    payload: TransferOwnershipRequest,
+    session: DbSession,
+    user: CurrentUser,
+) -> OrganizationResponse:
+    return await organization_service.transfer_organization_ownership(
+        session, organization_id, payload, user
+    )
 
 
 # ---------------------------------------------------------------------------

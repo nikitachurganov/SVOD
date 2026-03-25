@@ -79,7 +79,7 @@ export const CanvasFieldOverlay = ({ field }: CanvasFieldOverlayProps) => {
   return (
     <div
       style={{
-        background: 'var(--cds-layer)',
+        background: 'var(--cds-layer-01)',
         border: '1px solid var(--cds-interactive)',
         borderRadius: 4,
         boxShadow: '0 4px 8px rgba(0,0,0,0.1)',

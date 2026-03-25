@@ -125,7 +125,7 @@ export const AuthPage = () => {
         background: 'var(--cds-background)',
       }}
     >
-      <h2 style={{ marginBottom: 16 }}>Сервис Деск</h2>
+      <h2 style={{ marginBottom: 16 }}>СВОД</h2>
       <div
         style={{
           width: '100%',

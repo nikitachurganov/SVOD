@@ -44,6 +44,10 @@ class UpdateRoleRequest(BaseModel):
     role_tag: str = Field(..., min_length=1, max_length=50)
 
 
+class TransferOwnershipRequest(BaseModel):
+    new_owner_user_id: str = Field(..., min_length=1, max_length=64)
+
+
 # ---------------------------------------------------------------------------
 # Invitations
 # ---------------------------------------------------------------------------

@@ -12,12 +12,30 @@
   box-sizing: border-box;
 }
 
+/*
+ * Carbon layer hierarchy for this app:
+ *
+ * ┌─ Page canvas (html/body/#root)         → --cds-background
+ * ├─ Global header (.cds--header)           → --cds-background  (Carbon default, don't override)
+ * ├─ Left sidebar                           → --cds-layer-01    (first elevated surface)
+ * ├─ Page content area                      → --cds-background  (flat canvas)
+ * ├─ Cards / page headers / data tables     → --cds-layer-01    (elevated groups on canvas)
+ * ├─ AI side panel                          → --cds-layer-01
+ * ├─ Popovers / dropdowns                   → --cds-layer-01  + shadow  (elevated above canvas)
+ * └─ Modals / overlays                      → Carbon-managed (layer-01 + scrim)
+ */
 html,
 body,
 #root {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  background: var(--cds-background);
+}
+
+html[data-carbon-theme],
+html[data-carbon-theme] body {
+  background: var(--cds-background);
 }
 
 /* Remove default Carbon table top padding */
@@ -28,7 +46,7 @@ body,
 /* ── App shell: header + left sidebar ───────────────────────────────── */
 
 .app-shell-body {
-  margin-top: 3rem; /* Carbon header height */
+  margin-top: 3rem;
   min-height: calc(100vh - 3rem);
   background: var(--cds-background);
   position: relative;
@@ -42,7 +60,7 @@ body,
 }
 
 .app-layout-left-sidebar {
-  width: 18.75rem; /* 300px */
+  width: 18.75rem;
   flex: 0 0 18.75rem;
   min-height: 0;
   flex-shrink: 0;
@@ -73,7 +91,13 @@ body,
 .app-side-nav-org {
   margin-top: auto;
   border-top: 1px solid var(--cds-border-subtle);
-  padding-block: var(--cds-spacing-03, 0.5rem);
+}
+
+.app-side-nav-org-inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cds-spacing-03, 0.5rem);
+  padding: var(--cds-spacing-04, 0.75rem) var(--cds-spacing-05, 1rem);
 }
 
 .app-layout-main {
@@ -83,6 +107,47 @@ body,
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
+  background: var(--cds-background);
+}
+
+/* Toast when copying public request link (sidebar) */
+.app-sidebar-copy-toast-anchor {
+  position: fixed;
+  z-index: 10001;
+  inset-block-end: var(--cds-spacing-06, 1.5rem);
+  inset-inline-end: var(--cds-spacing-06, 1.5rem);
+  max-width: min(22rem, calc(100vw - 2rem));
+  pointer-events: none;
+}
+
+.app-sidebar-copy-toast-anchor .cds--toast-notification {
+  pointer-events: auto;
+}
+
+/* Header notifications (bell + badge) */
+.app-header-notifications-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: bottom;
+}
+
+.app-header-notifications-badge {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  min-width: 1rem;
+  height: 1rem;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--cds-support-error, #da1e28);
+  color: var(--cds-text-on-color, #fff);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1rem;
+  text-align: center;
+  pointer-events: none;
+  box-sizing: border-box;
 }
 
 /* Rich profile trigger in header */
@@ -150,7 +215,7 @@ body,
   margin: 0;
   padding: 0;
   border: none;
-  background: rgba(22, 22, 22, 0.5);
+  background-color: var(--cds-overlay, rgba(0, 0, 0, 0.6));
   cursor: pointer;
 }
 
@@ -162,7 +227,7 @@ body,
     bottom: 0;
     transform: translateX(-100%);
     transition: transform 0.16s ease-in-out;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 4px 16px var(--cds-shadow, rgba(0, 0, 0, 0.3));
   }
 
   .app-layout-left-sidebar--open {
@@ -174,65 +239,107 @@ body,
   }
 }
 
-/* ── Right profile panel ─────────────────────────────────────────────
-   Positioned independently from layout flow:
-   - starts at exactly the bottom edge of the Carbon header (3rem)
-   - z-index below the header (8000) so the header stays on top
-   - hidden via translateX(100%), revealed via translateX(0)          */
-
-.app-header-profile-panel {
-  position: fixed;
-  top: 3rem;
-  right: 0;
-  height: calc(100vh - 3rem);
-  width: 420px;
-  max-width: 100vw;
-  z-index: 7000;
+/*
+ * ── Header popovers (notifications + profile) ─────────────────────────
+ *
+ * These sit visually above the header (--cds-background) so they use
+ * --cds-layer-01, which is one step elevated.  Carbon Popover with
+ * `dropShadow` provides the box-shadow via .cds--popover--drop-shadow,
+ * so we only add it as a fallback and set background + border.
+ */
+.app-header-notifications-popover-content.cds--popover-content,
+.app-header-profile-popover-content.cds--popover-content {
   background: var(--cds-layer-01);
-  border-inline-start: 1px solid var(--cds-border-subtle);
+  border: 1px solid var(--cds-border-subtle);
+  box-shadow: 0 4px 16px var(--cds-shadow, rgba(0, 0, 0, 0.2));
+  border-radius: 4px;
   box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
+}
+
+.app-header-notifications-popover-content.cds--popover-content {
+  min-width: min(100vw - 2rem, 320px);
+  max-width: min(100vw - 2rem, 400px);
+  max-height: min(75vh, 560px);
+  overflow-x: hidden;
   overflow-y: auto;
-  transform: translateX(100%);
-  transition: transform 0.25s ease;
-}
-
-.app-header-profile-panel--open {
-  transform: translateX(0);
-}
-
-.app-header-profile-panel__inner {
-  width: 100%;
-  box-sizing: border-box;
   padding: var(--cds-spacing-05, 1rem);
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
 }
 
-.app-header-profile-panel__body {
-  flex: 1;
+.app-header-profile-popover-content.cds--popover-content {
+  min-width: min(100vw - 2rem, 280px);
+  max-width: min(100vw - 2rem, 360px);
+  padding: var(--cds-spacing-05, 1rem);
+}
+
+/* ── Notification panel content ────────────────────────────────────── */
+
+.app-notifications-panel__title {
+  margin: 0 0 var(--cds-spacing-04, 0.75rem);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--cds-text-primary);
+}
+
+.app-notifications-panel__empty {
+  margin: 0;
+  padding: var(--cds-spacing-05, 1rem) 0;
+  color: var(--cds-text-secondary);
+  text-align: center;
+  font-size: 0.875rem;
+}
+
+.app-notifications-panel__loading {
+  display: flex;
+  justify-content: center;
+  padding: var(--cds-spacing-06, 1.5rem);
+}
+
+.app-notifications-panel__list {
   display: flex;
   flex-direction: column;
-  min-height: 0;
+  gap: var(--cds-spacing-05, 1rem);
 }
+
+.app-notifications-panel__item:not(:last-child) {
+  padding-bottom: var(--cds-spacing-05, 1rem);
+  border-bottom: 1px solid var(--cds-border-subtle);
+}
+
+.app-notifications-panel__org {
+  font-weight: 600;
+  color: var(--cds-text-primary);
+}
+
+.app-notifications-panel__inviter {
+  font-size: 0.875rem;
+  color: var(--cds-text-primary);
+}
+
+.app-notifications-panel__date {
+  font-size: 0.75rem;
+  color: var(--cds-text-secondary);
+}
+
+.app-notifications-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cds-spacing-03, 0.5rem);
+}
+
+/* ── Profile menu popover content ──────────────────────────────────── */
 
 .app-header-profile-panel__nav {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding-bottom: var(--cds-spacing-04, 0.75rem);
+  max-height: min(45vh, 280px);
+  overflow-y: auto;
+  padding-bottom: var(--cds-spacing-02, 0.25rem);
 }
 
 .app-header-profile-panel__bottom {
   flex-shrink: 0;
-  margin-top: auto;
-  padding-top: var(--cds-spacing-05, 1rem);
+  padding-top: var(--cds-spacing-04, 0.75rem);
   border-top: 1px solid var(--cds-border-subtle);
   display: flex;
   flex-direction: column;

@@ -35,7 +35,7 @@ export const ResetPasswordPage = () => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: 16, background: 'var(--cds-background)' }}>
-      <h2 style={{ marginBottom: 16 }}>Сервис Деск</h2>
+      <h2 style={{ marginBottom: 16 }}>СВОД</h2>
       <div style={{ width: '100%', maxWidth: 420, background: 'var(--cds-layer-01)', padding: 24, border: '1px solid var(--cds-border-subtle)' }}>
         <h3 style={{ marginTop: 0 }}>Сбросить пароль</h3>
 

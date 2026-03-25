@@ -15,9 +15,8 @@ import {
   Tile,
   Tooltip,
 } from '@carbon/react';
-import { ArrowLeft, ChevronLeft, ChevronRight, Document, Download } from '@carbon/react/icons';
+import { ArrowLeft, Document, Download } from '@carbon/react/icons';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { useRegisterAuxiliaryPanelCloser } from '../shared/context/appShellPanels.context';
 import { getRequestWithForm, type RequestWithForm } from '../services/requestService';
 import { closeRequest, deleteRequest } from '../shared/api/requests.api';
 import { formatFieldValue } from '../shared/utils/formatFieldValue';
@@ -72,12 +71,6 @@ export const RequestViewPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const showAiPanel = useMediaQuery('(min-width: 1200px)');
-  const [rightAuxiliaryPanelOpen, setRightAuxiliaryPanelOpen] = useState(true);
-
-  useRegisterAuxiliaryPanelCloser(
-    () => setRightAuxiliaryPanelOpen(false),
-    showAiPanel,
-  );
 
   const [{ data, loading, error }, setState] = useState<RequestDetailsState>({
     data: null,
@@ -272,12 +265,13 @@ export const RequestViewPage = () => {
         flexDirection: 'column',
         height: '100vh',
         overflow: 'hidden',
+        background: 'var(--cds-background)',
       }}
     >
       {/* Header */}
       <div
         style={{
-          background: 'var(--cds-layer)',
+          background: 'var(--cds-layer-01)',
           borderBottom: '1px solid var(--cds-border-subtle)',
           padding: '12px 24px 16px',
           flexShrink: 0,
@@ -322,29 +316,6 @@ export const RequestViewPage = () => {
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {showAiPanel && (
-              <Tooltip
-                label={
-                  rightAuxiliaryPanelOpen
-                    ? 'Скрыть правую панель'
-                    : 'Показать правую панель'
-                }
-                align="bottom"
-              >
-                <Button
-                  kind="ghost"
-                  size="sm"
-                  hasIconOnly
-                  renderIcon={rightAuxiliaryPanelOpen ? ChevronRight : ChevronLeft}
-                  iconDescription={
-                    rightAuxiliaryPanelOpen
-                      ? 'Скрыть правую панель'
-                      : 'Показать правую панель'
-                  }
-                  onClick={() => setRightAuxiliaryPanelOpen((o) => !o)}
-                />
-              </Tooltip>
-            )}
             {data?.request && (
               <Button
                 kind="secondary"
@@ -397,29 +368,13 @@ export const RequestViewPage = () => {
                 const authorPerson = data.request.people?.find((p) => p.role === 'author');
                 if (data.request.author) {
                   return (
-                    <span>
-                      <span style={{ fontSize: 13 }}>{buildDisplayName(data.request.author)}</span>
-                      <br />
-                      <span style={{ fontSize: 12, color: 'var(--cds-text-secondary)' }}>
-                        {data.request.author.email}
-                      </span>
+                    <span style={{ fontSize: 13 }}>
+                      {buildDisplayName(data.request.author)}
                     </span>
                   );
                 }
                 if (authorPerson) {
-                  return (
-                    <span>
-                      <span style={{ fontSize: 13 }}>{authorPerson.name}</span>
-                      {authorPerson.email && (
-                        <>
-                          <br />
-                          <span style={{ fontSize: 12, color: 'var(--cds-text-secondary)' }}>
-                            {authorPerson.email}
-                          </span>
-                        </>
-                      )}
-                    </span>
-                  );
+                  return <span style={{ fontSize: 13 }}>{authorPerson.name}</span>;
                 }
                 return <span style={{ fontSize: 13 }}>Неизвестный автор</span>;
               })()}
@@ -654,7 +609,7 @@ export const RequestViewPage = () => {
                                                   borderRadius: 4,
                                                   overflow: 'hidden',
                                                   maxWidth: 300,
-                                                  background: 'var(--cds-layer)',
+                                                  background: 'var(--cds-layer-01)',
                                                 }}
                                               >
                                                 {meta.file_url ? (
@@ -714,7 +669,7 @@ export const RequestViewPage = () => {
                                                   padding: '8px 12px',
                                                   border: '1px solid var(--cds-border-subtle)',
                                                   borderRadius: 4,
-                                                  background: 'var(--cds-layer)',
+                                                  background: 'var(--cds-layer-01)',
                                                 }}
                                               >
                                                 <Document
@@ -817,7 +772,7 @@ export const RequestViewPage = () => {
                                 height: 12,
                                 borderRadius: '50%',
                                 background: 'var(--cds-icon-primary)',
-                                border: '2px solid var(--cds-layer)',
+                                border: '2px solid var(--cds-layer-01)',
                               }}
                             />
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -840,7 +795,7 @@ export const RequestViewPage = () => {
                                   height: 12,
                                   borderRadius: '50%',
                                   background: 'var(--cds-icon-primary)',
-                                  border: '2px solid var(--cds-layer)',
+                                  border: '2px solid var(--cds-layer-01)',
                                 }}
                               />
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -914,7 +869,7 @@ export const RequestViewPage = () => {
             </div>
 
             {/* Right: AI suggestions panel (hidden on smaller screens) */}
-            {showAiPanel && rightAuxiliaryPanelOpen && (
+            {showAiPanel && (
               <div
                 style={{
                   width: 360,
@@ -924,7 +879,7 @@ export const RequestViewPage = () => {
               >
                 <div
                   style={{
-                    background: 'var(--cds-layer)',
+                    background: 'var(--cds-layer-01)',
                     height: '100%',
                     borderLeft: '1px solid var(--cds-border-subtle)',
                     padding: 16,

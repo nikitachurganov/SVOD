@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Modal, Button, Loading } from '@carbon/react';
-import { Checkmark, Close } from '@carbon/react/icons';
+import { Button, Loading } from '@carbon/react';
 import {
   acceptInvitation,
   declineInvitation,
@@ -8,13 +7,28 @@ import {
 } from '../../shared/api/organizations.api';
 import type { MyInvitationResponse } from '../../types/organization';
 
-interface Props {
-  open: boolean;
-  onClose: () => void;
-  onAccepted: () => void;
+function formatInvitationDate(iso: string): string {
+  try {
+    return new Intl.DateTimeFormat('ru-RU', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(new Date(iso));
+  } catch {
+    return iso;
+  }
 }
 
-export const InvitationsDrawer = ({ open, onClose, onAccepted }: Props) => {
+interface Props {
+  open: boolean;
+  onAccepted: () => void;
+  onInvitationsChanged: () => void;
+}
+
+export const NotificationsPanelContent = ({
+  open,
+  onAccepted,
+  onInvitationsChanged,
+}: Props) => {
   const [invitations, setInvitations] = useState<MyInvitationResponse[]>([]);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -41,6 +55,7 @@ export const InvitationsDrawer = ({ open, onClose, onAccepted }: Props) => {
       await acceptInvitation(id);
       setInvitations((prev) => prev.filter((i) => i.id !== id));
       onAccepted();
+      onInvitationsChanged();
     } catch {
       // silently handled
     } finally {
@@ -53,6 +68,7 @@ export const InvitationsDrawer = ({ open, onClose, onAccepted }: Props) => {
     try {
       await declineInvitation(id);
       setInvitations((prev) => prev.filter((i) => i.id !== id));
+      onInvitationsChanged();
     } catch {
       // silently handled
     } finally {
@@ -60,61 +76,46 @@ export const InvitationsDrawer = ({ open, onClose, onAccepted }: Props) => {
     }
   };
 
+  if (!open) return null;
+
   return (
-    <Modal
-      open={open}
-      modalHeading={`Приглашения${invitations.length > 0 ? ` (${invitations.length})` : ''}`}
-      passiveModal
-      onRequestClose={onClose}
-      size="sm"
-    >
+    <div className="app-notifications-panel">
+      <h2 className="app-notifications-panel__title">
+        Уведомления
+        {invitations.length > 0 ? ` (${invitations.length})` : ''}
+      </h2>
       {loading ? (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: 32 }}>
+        <div className="app-notifications-panel__loading">
           <Loading withOverlay={false} small />
         </div>
       ) : invitations.length === 0 ? (
-        <p style={{ color: 'var(--cds-text-secondary)', textAlign: 'center', padding: 24 }}>
-          Нет входящих приглашений
-        </p>
+        <p className="app-notifications-panel__empty">Нет уведомлений</p>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div className="app-notifications-panel__list">
           {invitations.map((inv) => {
             const inviterName = inv.invited_by
-              ? `${inv.invited_by.first_name} ${inv.invited_by.last_name}`
+              ? `${inv.invited_by.first_name} ${inv.invited_by.last_name}`.trim()
               : 'Неизвестно';
             const busy = actionLoading === inv.id;
+            const dateLabel = formatInvitationDate(inv.created_at);
 
             return (
-              <div
-                key={inv.id}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '12px 0',
-                  borderBottom: '1px solid var(--cds-border-subtle)',
-                }}
-              >
-                <div>
-                  <div style={{ fontWeight: 600 }}>{inv.organization_name}</div>
-                  <div style={{ fontSize: 12, color: 'var(--cds-text-secondary)' }}>
-                    Пригласил: {inviterName}
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: 8 }}>
+              <div key={inv.id} className="app-notifications-panel__item">
+                <div className="app-notifications-panel__org">{inv.organization_name}</div>
+                <div className="app-notifications-panel__inviter">Пригласил: {inviterName}</div>
+                <div className="app-notifications-panel__date">{dateLabel}</div>
+                <div className="app-notifications-panel__actions">
                   <Button
                     kind="primary"
                     size="sm"
-                    renderIcon={Checkmark}
                     disabled={busy}
                     onClick={() => void handleAccept(inv.id)}
                   >
                     Принять
                   </Button>
                   <Button
-                    kind="danger"
+                    kind="danger--tertiary"
                     size="sm"
-                    renderIcon={Close}
                     disabled={busy}
                     onClick={() => void handleDecline(inv.id)}
                   >
@@ -126,6 +127,6 @@ export const InvitationsDrawer = ({ open, onClose, onAccepted }: Props) => {
           })}
         </div>
       )}
-    </Modal>
+    </div>
   );
 };

@@ -22,17 +22,17 @@ import {
   useNavigate,
 } from 'react-router-dom';
 import { useAuth } from './shared/context/auth.context';
-import {
-  AppShellPanelsProvider,
-  useAppShellPanels,
-} from './shared/context/appShellPanels.context';
+import { AppShellPanelsProvider } from './shared/context/appShellPanels.context';
 import { useOrganization } from './shared/context/organization.context';
-import { HeaderProfilePanel } from './components/layout/ProfileBlock';
+import { HeaderProfileMenu } from './components/layout/HeaderProfileMenu';
+import { HeaderNotifications } from './components/layout/HeaderNotifications';
 import { OrganizationSwitcher } from './components/layout/OrganizationSwitcher';
+import { SidebarOrgActions } from './components/layout/SidebarOrgActions';
 import { buildDisplayName } from './shared/utils/userName';
 import { CreateFormPage } from './pages/CreateFormPage';
 import { EditFormPage } from './pages/EditFormPage';
 import { ParticipantsPage } from './pages/ParticipantsPage';
+import { OrganizationSettingsPage } from './pages/OrganizationSettingsPage';
 import { FormViewPage } from './pages/FormViewPage';
 import { FormsPage } from './pages/FormsPage';
 import { RequestsPage } from './pages/RequestsPage';
@@ -59,6 +59,11 @@ const NAV_ITEMS = [
   { key: 'requests', label: 'Заявки', path: '/requests' },
   { key: 'forms', label: 'Формы', path: '/forms' },
   { key: 'participants', label: 'Участники', path: '/participants' },
+  {
+    key: 'organization-settings',
+    label: 'Настройки организации',
+    path: '/settings/organization',
+  },
 ];
 
 export const getSelectedMenuKey = (pathname: string): string => {
@@ -93,18 +98,20 @@ const AppLayoutContent = () => {
   const isDesktop = useMediaQuery('(min-width: 1056px)');
   const selectedKey = getSelectedMenuKey(location.pathname);
   const { user, profile } = useAuth();
-  const { closeAuxiliaryPanels } = useAppShellPanels();
 
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [headerNotificationsOpen, setHeaderNotificationsOpen] = useState(false);
   const [createOrgOpen, setCreateOrgOpen] = useState(false);
 
   const { organizations, isLoading: isOrgLoading } = useOrganization();
   const hasOrganizations = organizations.length > 0;
+  const showOrgSidebarBlock = hasOrganizations && !isOrgLoading;
 
   useEffect(() => {
     setMobileSidebarOpen(false);
     setIsProfileOpen(false);
+    setHeaderNotificationsOpen(false);
   }, [location.pathname]);
 
   const displayName =
@@ -128,16 +135,11 @@ const AppLayoutContent = () => {
     setIsProfileOpen(false);
   };
 
-  const handleProfileTriggerClick = () => {
-    closeAuxiliaryPanels();
-    setIsProfileOpen((v) => !v);
-  };
-
   return (
     <>
       <GlobalScrollbarStyles />
 
-      <Header aria-label="Сервис Деск">
+      <Header aria-label="СВОД">
         <SkipToContent href="#main-content" />
         {!isDesktop && (
           <HeaderMenuButton
@@ -155,35 +157,27 @@ const AppLayoutContent = () => {
             navigate('/');
           }}
         >
-          Сервис Деск
+          СВОД
         </HeaderName>
 
         <HeaderGlobalBar>
-          <button
-            type="button"
-            className="app-profile-trigger"
-            aria-label={
-              isProfileOpen ? 'Закрыть меню профиля' : 'Открыть меню профиля'
-            }
-            aria-expanded={isProfileOpen}
-            aria-haspopup="true"
-            onClick={handleProfileTriggerClick}
-          >
-            <span className="app-profile-avatar">{initials}</span>
-            <span className="app-profile-text">
-              <span className="app-profile-name">{resolvedName}</span>
-              <span className="app-profile-email">{resolvedEmail}</span>
-            </span>
-          </button>
+          <HeaderNotifications
+            open={headerNotificationsOpen}
+            onOpenChange={setHeaderNotificationsOpen}
+            closeProfile={() => setIsProfileOpen(false)}
+          />
+          <HeaderProfileMenu
+            open={isProfileOpen}
+            onOpenChange={setIsProfileOpen}
+            closeNotifications={() => setHeaderNotificationsOpen(false)}
+            initials={initials}
+            resolvedName={resolvedName}
+            resolvedEmail={resolvedEmail}
+            onCreateOrg={openCreateOrg}
+          />
         </HeaderGlobalBar>
 
       </Header>
-
-      <HeaderProfilePanel
-        open={isProfileOpen}
-        onClose={() => setIsProfileOpen(false)}
-        onCreateOrg={openCreateOrg}
-      />
 
       <div className="app-shell-body">
         {!isDesktop && mobileSidebarOpen && (
@@ -223,9 +217,14 @@ const AppLayoutContent = () => {
                 ))}
               </SideNavItems>
 
-              <div className="app-side-nav-org">
-                <OrganizationSwitcher onCreateClick={openCreateOrg} />
-              </div>
+              {showOrgSidebarBlock && (
+                <div className="app-side-nav-org">
+                  <div className="app-side-nav-org-inner">
+                    <OrganizationSwitcher />
+                    <SidebarOrgActions />
+                  </div>
+                </div>
+              )}
             </SideNav>
           </aside>
 
@@ -306,6 +305,7 @@ const router = createBrowserRouter([
       { path: 'forms/:id', element: <FormViewPage /> },
       { path: 'forms/:id/edit', element: <EditFormPage /> },
       { path: 'participants', element: <ParticipantsPage /> },
+      { path: 'settings/organization', element: <OrganizationSettingsPage /> },
     ],
   },
 ]);

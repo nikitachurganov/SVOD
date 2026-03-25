@@ -39,6 +39,17 @@ export const deleteOrganization = async (orgId: string): Promise<void> => {
   await api.delete(`/organizations/${orgId}`);
 };
 
+export const transferOrganizationOwnership = async (
+  orgId: string,
+  newOwnerUserId: string,
+): Promise<OrganizationResponse> => {
+  const { data } = await api.post<OrganizationResponse>(
+    `/organizations/${orgId}/transfer-ownership`,
+    { new_owner_user_id: newOwnerUserId },
+  );
+  return data;
+};
+
 // ---------------------------------------------------------------------------
 // Members
 // ---------------------------------------------------------------------------

@@ -142,7 +142,7 @@ export const RequestsPage = () => {
       case 'ai_summary': {
         const text = cellValue as string | null;
         if (!text) {
-          return <span style={{ color: 'var(--cds-text-placeholder, #a8a8a8)' }}>Нет описания</span>;
+          return <span style={{ color: 'var(--cds-text-placeholder)' }}>Нет описания</span>;
         }
         return (
           <Tooltip label={text}>

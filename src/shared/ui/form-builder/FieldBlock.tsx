@@ -28,7 +28,7 @@ export const FieldBlock = ({
   return (
     <div
       style={{
-        background: 'var(--cds-layer)',
+        background: 'var(--cds-layer-01)',
         border: `1px solid ${isDraggingOverlay ? 'var(--cds-interactive)' : 'var(--cds-border-subtle)'}`,
         borderRadius: 4,
         boxShadow: isDraggingOverlay ? '0 4px 8px rgba(0,0,0,0.1)' : 'none',

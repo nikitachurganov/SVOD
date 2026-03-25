@@ -87,7 +87,7 @@ const PanelDragChip = ({ label }: { label: string }) => {
         display: 'inline-flex',
         alignItems: 'center',
         padding: '6px 14px',
-        background: 'var(--cds-layer)',
+        background: 'var(--cds-layer-01)',
         border: '1px solid var(--cds-interactive)',
         borderRadius: 8,
         boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
@@ -154,8 +154,8 @@ const ToolPanelDropZone = ({
           minHeight: 0,
           borderRight: '1px solid var(--cds-border-subtle)',
           background: deleteMode
-            ? 'color-mix(in srgb, var(--cds-support-error) 10%, var(--cds-layer))'
-            : 'var(--cds-layer)',
+            ? 'color-mix(in srgb, var(--cds-support-error) 10%, var(--cds-layer-01))'
+            : 'var(--cds-layer-01)',
           transition: 'background 150ms ease, border-color 150ms ease',
           overflow: deleteMode ? 'hidden' : 'auto',
         }}
@@ -686,7 +686,7 @@ export const FormEditor = ({
         {/* ── Page header ── */}
         <div
           style={{
-            background: 'var(--cds-layer)',
+            background: 'var(--cds-layer-01)',
             borderBottom: '1px solid var(--cds-border-subtle)',
             padding: '12px 24px 16px',
             flexShrink: 0,

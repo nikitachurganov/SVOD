@@ -36,7 +36,7 @@ export const GroupBlock = ({
   return (
     <div
       style={{
-        background: 'var(--cds-layer)',
+        background: 'var(--cds-layer-01)',
         border: '1px solid var(--cds-border-subtle)',
         borderRadius: 4,
         boxShadow: 'none',

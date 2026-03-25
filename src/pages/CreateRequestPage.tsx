@@ -302,7 +302,7 @@ export const CreateRequestPage = () => {
       {/* ── Header ── */}
       <div
         style={{
-          background: 'var(--cds-layer)',
+          background: 'var(--cds-layer-01)',
           borderBottom: '1px solid var(--cds-border-subtle)',
           padding: '12px 24px 16px',
           flexShrink: 0,

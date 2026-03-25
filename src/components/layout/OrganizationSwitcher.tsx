@@ -1,12 +1,7 @@
-import { Dropdown, Button } from '@carbon/react';
-import { Add } from '@carbon/react/icons';
+import { Dropdown } from '@carbon/react';
 import { useOrganization } from '../../shared/context/organization.context';
 
-interface Props {
-  onCreateClick: () => void;
-}
-
-export const OrganizationSwitcher = ({ onCreateClick }: Props) => {
+export const OrganizationSwitcher = () => {
   const { organizations, activeOrganization, isLoading, setActiveOrganizationId } =
     useOrganization();
 
@@ -16,7 +11,7 @@ export const OrganizationSwitcher = ({ onCreateClick }: Props) => {
   const selectedItem = items.find((i) => i.id === activeOrganization?.id) ?? null;
 
   return (
-    <div style={{ padding: '8px 12px' }}>
+    <>
       <span
         style={{
           color: 'var(--cds-text-secondary)',
@@ -42,15 +37,6 @@ export const OrganizationSwitcher = ({ onCreateClick }: Props) => {
         label="Выберите организацию"
         hideLabel
       />
-      <Button
-        kind="ghost"
-        size="sm"
-        renderIcon={Add}
-        onClick={onCreateClick}
-        style={{ width: '100%', marginTop: 4 }}
-      >
-        Создать
-      </Button>
-    </div>
+    </>
   );
 };

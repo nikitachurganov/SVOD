@@ -54,7 +54,6 @@ export const ThemeProvider = ({ children }: ThemeProviderProps) => {
 
   useEffect(() => {
     document.documentElement.dataset.carbonTheme = carbonThemeMap[themeMode];
-    document.body.style.background = themeMode === 'dark' ? '#161616' : '#f4f4f4';
   }, [themeMode]);
 
   const value = useMemo<ThemeContextValue>(
