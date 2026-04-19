@@ -1,18 +1,43 @@
+import logging
 import uuid
 
 from fastapi import APIRouter, HTTPException, Query, status
 
 from app.api.deps import CurrentUser, DbSession
+from app.repositories import request_stage_repository
+from app.schemas.performer_selection import (
+    AssignRequestPayload,
+    PerformerRecommendationResponse,
+)
 from app.schemas.request import (
+    AIRequestAnalysisResponse,
     AISummaryResponse,
     CreateRequestPayload,
     PatchStatusPayload,
     RequestResponse,
     UpdateRequestPayload,
 )
-from app.services import request_service, request_summary_service
+from app.schemas.request_execution import (
+    AddRequestStagePayload,
+    BlockStagePayload,
+    CompleteStagePayload,
+    PatchRequestStagePayload,
+    RequestExecutionEventResponse,
+    RequestStageResponse,
+    UnblockStagePayload,
+)
+from app.schemas.request_tz import PatchRequestTZPayload, RequestTZResponse
+from app.services import (
+    performer_selection_service,
+    request_analysis_service,
+    request_execution_service,
+    request_service,
+    request_summary_service,
+    request_tz_service,
+)
 
 router = APIRouter()
+_route_log = logging.getLogger(__name__)
 
 
 @router.get("", response_model=list[RequestResponse])
@@ -60,6 +85,25 @@ async def patch_status(
     return await request_service.patch_status(session, request_id, payload.status)
 
 
+@router.post("/{request_id}/analysis", response_model=AIRequestAnalysisResponse)
+async def generate_request_analysis(
+    request_id: int,
+    session: DbSession,
+    _user: CurrentUser,
+) -> AIRequestAnalysisResponse:
+    try:
+        result = await request_analysis_service.generate_analysis(session, request_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except request_analysis_service.AnalysisGenerationFailed as exc:
+        _route_log.warning("Request analysis failed for %s: %s", request_id, exc.message)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=exc.message,
+        )
+    return AIRequestAnalysisResponse.model_validate(result)
+
+
 @router.post("/{request_id}/summary", response_model=AISummaryResponse)
 async def generate_summary(
     request_id: int,
@@ -93,3 +137,166 @@ async def delete_request(
     request_id: int, session: DbSession, _user: CurrentUser
 ) -> None:
     await request_service.delete_request(session, request_id)
+
+
+@router.post("/{request_id}/tz", response_model=RequestTZResponse)
+async def generate_request_tz(
+    request_id: int,
+    session: DbSession,
+    user: CurrentUser,
+) -> RequestTZResponse:
+    try:
+        return await request_tz_service.generate_tz(session, request_id, user)
+    except request_tz_service.TZGenerationFailed as exc:
+        _route_log.warning("TZ generation failed for %s: %s", request_id, exc.message)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=exc.message,
+        )
+
+
+@router.patch("/{request_id}/tz", response_model=RequestTZResponse)
+async def patch_request_tz(
+    request_id: int,
+    payload: PatchRequestTZPayload,
+    session: DbSession,
+    user: CurrentUser,
+) -> RequestTZResponse:
+    return await request_tz_service.patch_tz(session, request_id, user, payload)
+
+
+@router.get("/{request_id}/performers", response_model=PerformerRecommendationResponse)
+async def get_request_performers(
+    request_id: int,
+    session: DbSession,
+    user: CurrentUser,
+) -> PerformerRecommendationResponse:
+    result = await performer_selection_service.get_recommended_performers(
+        session, request_id, user
+    )
+    return PerformerRecommendationResponse.model_validate(result)
+
+
+@router.post("/{request_id}/assign", response_model=RequestResponse)
+async def assign_request_performer(
+    request_id: int,
+    payload: AssignRequestPayload,
+    session: DbSession,
+    user: CurrentUser,
+) -> RequestResponse:
+    req = await performer_selection_service.assign_performer(
+        session, request_id, payload, user
+    )
+    events = await request_stage_repository.list_execution_events(session, request_id, limit=50)
+    return request_service.map_request_to_response(
+        req, include_stages=True, execution_events_rows=events
+    )
+
+
+@router.get("/{request_id}/stages", response_model=list[RequestStageResponse])
+async def list_request_stages(
+    request_id: int,
+    session: DbSession,
+    user: CurrentUser,
+) -> list[RequestStageResponse]:
+    return await request_execution_service.list_stages(session, request_id, user)
+
+
+@router.get("/{request_id}/execution-events", response_model=list[RequestExecutionEventResponse])
+async def list_request_execution_events(
+    request_id: int,
+    session: DbSession,
+    user: CurrentUser,
+) -> list[RequestExecutionEventResponse]:
+    return await request_execution_service.list_events(session, request_id, user)
+
+
+@router.post("/{request_id}/stages", response_model=RequestResponse)
+async def add_request_stage(
+    request_id: int,
+    payload: AddRequestStagePayload,
+    session: DbSession,
+    user: CurrentUser,
+) -> RequestResponse:
+    req = await request_execution_service.add_stage(session, request_id, payload, user)
+    events = await request_stage_repository.list_execution_events(session, request_id, limit=50)
+    return request_service.map_request_to_response(
+        req, include_stages=True, execution_events_rows=events
+    )
+
+
+@router.patch("/{request_id}/stages/{stage_id}", response_model=RequestResponse)
+async def patch_request_stage(
+    request_id: int,
+    stage_id: uuid.UUID,
+    payload: PatchRequestStagePayload,
+    session: DbSession,
+    user: CurrentUser,
+) -> RequestResponse:
+    req = await request_execution_service.patch_stage(session, request_id, stage_id, payload, user)
+    events = await request_stage_repository.list_execution_events(session, request_id, limit=50)
+    return request_service.map_request_to_response(
+        req, include_stages=True, execution_events_rows=events
+    )
+
+
+@router.post("/{request_id}/stages/{stage_id}/assign", response_model=RequestResponse)
+async def assign_request_stage(
+    request_id: int,
+    stage_id: uuid.UUID,
+    payload: AssignRequestPayload,
+    session: DbSession,
+    user: CurrentUser,
+) -> RequestResponse:
+    req = await request_execution_service.assign_stage(session, request_id, stage_id, payload, user)
+    events = await request_stage_repository.list_execution_events(session, request_id, limit=50)
+    return request_service.map_request_to_response(
+        req, include_stages=True, execution_events_rows=events
+    )
+
+
+@router.post("/{request_id}/stages/{stage_id}/complete", response_model=RequestResponse)
+async def complete_request_stage(
+    request_id: int,
+    stage_id: uuid.UUID,
+    session: DbSession,
+    user: CurrentUser,
+    payload: CompleteStagePayload | None = None,
+) -> RequestResponse:
+    req = await request_execution_service.complete_stage(
+        session, request_id, stage_id, payload, user
+    )
+    events = await request_stage_repository.list_execution_events(session, request_id, limit=50)
+    return request_service.map_request_to_response(
+        req, include_stages=True, execution_events_rows=events
+    )
+
+
+@router.post("/{request_id}/stages/{stage_id}/block", response_model=RequestResponse)
+async def block_request_stage(
+    request_id: int,
+    stage_id: uuid.UUID,
+    payload: BlockStagePayload,
+    session: DbSession,
+    user: CurrentUser,
+) -> RequestResponse:
+    req = await request_execution_service.block_stage(session, request_id, stage_id, payload, user)
+    events = await request_stage_repository.list_execution_events(session, request_id, limit=50)
+    return request_service.map_request_to_response(
+        req, include_stages=True, execution_events_rows=events
+    )
+
+
+@router.post("/{request_id}/stages/{stage_id}/unblock", response_model=RequestResponse)
+async def unblock_request_stage(
+    request_id: int,
+    stage_id: uuid.UUID,
+    session: DbSession,
+    user: CurrentUser,
+    payload: UnblockStagePayload | None = None,
+) -> RequestResponse:
+    req = await request_execution_service.unblock_stage(session, request_id, stage_id, payload, user)
+    events = await request_stage_repository.list_execution_events(session, request_id, limit=50)
+    return request_service.map_request_to_response(
+        req, include_stages=True, execution_events_rows=events
+    )

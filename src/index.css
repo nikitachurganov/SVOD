@@ -150,23 +150,40 @@ html[data-carbon-theme] body {
   box-sizing: border-box;
 }
 
-/* Rich profile trigger in header */
+/* Rich profile control in header (avatar + popover anchored to name/email only) */
+.app-profile-menu-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--cds-spacing-04, 0.75rem);
+  min-height: 3rem;
+  padding: 0 var(--cds-spacing-05, 1rem);
+  border-inline-start: 1px solid var(--cds-border-subtle);
+  box-sizing: border-box;
+}
+
+.app-profile-menu-wrap:hover {
+  background: var(--cds-background-hover);
+}
+
+.app-profile-popover-shell.cds--popover-container {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
 .app-profile-trigger {
   min-width: 0;
-  height: 3rem;
-  padding: 0 var(--cds-spacing-05, 1rem);
+  min-height: 3rem;
+  padding: 0;
   border: none;
-  border-inline-start: 1px solid var(--cds-border-subtle);
   background: transparent;
   color: var(--cds-text-primary);
   display: flex;
   align-items: center;
-  gap: var(--cds-spacing-04, 0.75rem);
   cursor: pointer;
-}
-
-.app-profile-trigger:hover {
-  background: var(--cds-background-hover);
+  flex: 1;
+  text-align: left;
 }
 
 .app-profile-avatar {
@@ -180,6 +197,11 @@ html[data-carbon-theme] body {
   font-weight: 600;
   font-size: 0.75rem;
   flex-shrink: 0;
+}
+
+.app-profile-avatar--leading {
+  cursor: pointer;
+  user-select: none;
 }
 
 .app-profile-text {

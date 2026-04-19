@@ -1,0 +1,100 @@
+"""Parse and normalize LLM JSON into RequestTZSections."""
+
+from __future__ import annotations
+
+import json
+import logging
+from typing import Any
+
+from app.schemas.request_tz import RequestTZSections
+from app.services.gigachat_client import strip_json_fence
+
+logger = logging.getLogger(__name__)
+
+_SECTION_KEYS = frozenset(RequestTZSections.model_fields.keys())
+
+
+def _coerce_str(v: Any) -> str:
+    if v is None:
+        return ""
+    if isinstance(v, str):
+        return v.strip()
+    return str(v).strip()
+
+
+def _coerce_str_list(v: Any) -> list[str]:
+    if v is None:
+        return []
+    if isinstance(v, list):
+        return [_coerce_str(x) for x in v if _coerce_str(x)]
+    if isinstance(v, str) and v.strip():
+        return [v.strip()]
+    return []
+
+
+def _coerce_deadline(v: Any) -> str | None:
+    if v is None:
+        return None
+    s = _coerce_str(v)
+    return s if s else None
+
+
+def _merge_analysis_gaps(ai: dict[str, Any] | None, sections: RequestTZSections) -> RequestTZSections:
+    """Ensure missing_or_unclear reflects analysis issues when model left gaps."""
+    extra: list[str] = []
+    if ai and isinstance(ai, dict):
+        if ai.get("status") == "not_ready":
+            extra.append("Анализ: заявка не готова к обработке без уточнений.")
+        if ai.get("status") == "needs_clarification":
+            extra.append("Анализ: требуются уточнения по заявке.")
+        for iss in ai.get("issues") or []:
+            if isinstance(iss, dict) and iss.get("message"):
+                extra.append(f"Анализ: {iss.get('message')}")
+    merged_missing = list(dict.fromkeys([*sections.missing_or_unclear, *extra]))
+    return sections.model_copy(update={"missing_or_unclear": merged_missing})
+
+
+def parse_tz_llm_json(raw: str, ai_analysis: dict | None) -> RequestTZSections:
+    cleaned = strip_json_fence(raw)
+    try:
+        data = json.loads(cleaned)
+    except (json.JSONDecodeError, ValueError):
+        logger.warning("TZ parse: invalid JSON, using minimal sections: %s", cleaned[:400])
+        return _merge_analysis_gaps(
+            ai_analysis,
+            RequestTZSections(
+                title="Не удалось разобрать ответ модели",
+                short_description=cleaned[:500] if cleaned else "Пустой ответ",
+                missing_or_unclear=["Ответ модели не является корректным JSON — повторите генерацию."],
+            ),
+        )
+
+    if not isinstance(data, dict):
+        return _merge_analysis_gaps(
+            ai_analysis,
+            RequestTZSections(title=str(data)[:200], missing_or_unclear=["Неверный формат ответа"]),
+        )
+
+    inner = data.get("sections") if isinstance(data.get("sections"), dict) else data
+
+    kwargs: dict[str, Any] = {}
+    for key in _SECTION_KEYS:
+        if key not in inner:
+            continue
+        val = inner[key]
+        if key == "deadline":
+            kwargs[key] = _coerce_deadline(val)
+        elif key in (
+            "tasks",
+            "inputs",
+            "constraints",
+            "acceptance_criteria",
+            "clarifications_and_risks",
+            "missing_or_unclear",
+        ):
+            kwargs[key] = _coerce_str_list(val)
+        else:
+            kwargs[key] = _coerce_str(val)
+
+    sections = RequestTZSections(**kwargs)
+    return _merge_analysis_gaps(ai_analysis, sections)

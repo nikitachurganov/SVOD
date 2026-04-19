@@ -5,11 +5,15 @@ from datetime import datetime, timezone
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.constants import request_execution as C
 from app.models.request import Request
 from app.models.user import User
-from app.repositories import request_repository
-from app.services import request_summary_service
+from app.repositories import request_repository, request_stage_repository
+from app.services import request_execution_service
+from app.services import request_analysis_service, request_summary_service
+from app.services.request_analysis_parser import normalize_legacy_stored_payload
 from app.schemas.request import (
+    AIRequestAnalysisResponse,
     AISummaryResponse,
     CreateRequestPayload,
     RequestPersonResponse,
@@ -43,6 +47,13 @@ def _to_ai_summary(data: dict | None) -> AISummaryResponse | None:
     )
 
 
+def _to_ai_analysis(data: dict | None) -> AIRequestAnalysisResponse | None:
+    if not data or not isinstance(data, dict):
+        return None
+    normalized = normalize_legacy_stored_payload(data)
+    return AIRequestAnalysisResponse.model_validate(normalized)
+
+
 def _build_people(req: Request) -> list[RequestPersonResponse]:
     people: list[RequestPersonResponse] = []
 
@@ -67,7 +78,31 @@ def _build_people(req: Request) -> list[RequestPersonResponse]:
     return people
 
 
-def _to_response(req: Request) -> RequestResponse:
+def _assigned_performer_id(req: Request) -> str | None:
+    if req.assigned_kind == "internal" and req.assigned_internal_user_id:
+        return f"internal:{req.assigned_internal_user_id}"
+    if req.assigned_kind == "external" and req.assigned_external_contractor_id:
+        return f"external:{req.assigned_external_contractor_id}"
+    return None
+
+
+def _to_response(
+    req: Request,
+    *,
+    include_stages: bool = False,
+    execution_events_rows: list | None = None,
+) -> RequestResponse:
+    stages_out: list = []
+    if include_stages and req.stages is not None:
+        ordered = sorted(req.stages, key=lambda s: s.sequence)
+        stages_out = [request_execution_service.stage_to_response(s) for s in ordered]
+
+    events_out: list = []
+    if execution_events_rows is not None:
+        events_out = [
+            request_execution_service.event_to_response(e) for e in execution_events_rows
+        ]
+
     return RequestResponse(
         id=str(req.id),
         title=req.title,
@@ -82,11 +117,31 @@ def _to_response(req: Request) -> RequestResponse:
         updated_at=req.updated_at.isoformat(),
         form_snapshot=req.form_snapshot,
         ai_summary=_to_ai_summary(req.ai_summary),
+        ai_analysis=_to_ai_analysis(req.ai_analysis),
         source=req.source,
         applicant_name=req.applicant_name,
         applicant_email=req.applicant_email,
         applicant_phone=req.applicant_phone,
         people=_build_people(req),
+        assigned_kind=req.assigned_kind,
+        assigned_performer_id=_assigned_performer_id(req),
+        execution_status=req.execution_status,
+        stages=stages_out,
+        execution_events=events_out,
+        ai_tz=req.ai_tz,
+    )
+
+
+def map_request_to_response(
+    req: Request,
+    *,
+    include_stages: bool = False,
+    execution_events_rows: list | None = None,
+) -> RequestResponse:
+    return _to_response(
+        req,
+        include_stages=include_stages,
+        execution_events_rows=execution_events_rows,
     )
 
 
@@ -97,14 +152,15 @@ async def list_requests(
         requests = await request_repository.get_all_by_org(session, organization_id)
     else:
         requests = await request_repository.get_all(session)
-    return [_to_response(r) for r in requests]
+    return [_to_response(r, include_stages=False) for r in requests]
 
 
 async def get_request(session: AsyncSession, request_id: int) -> RequestResponse:
     req = await request_repository.get_by_id(session, request_id)
     if not req:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")
-    return _to_response(req)
+    events = await request_stage_repository.list_execution_events(session, request_id, limit=50)
+    return _to_response(req, include_stages=True, execution_events_rows=events)
 
 
 async def create_request(
@@ -118,6 +174,7 @@ async def create_request(
         organization_id=org_id,
         data=payload.data,
         status=payload.status,
+        execution_status=C.EXEC_NEW,
         form_snapshot=payload.form_snapshot,
     )
     req = await request_repository.create(session, req)
@@ -129,9 +186,21 @@ async def create_request(
         logger.exception("AI summary generation failed for request %s", req.id)
         await session.rollback()
 
+    try:
+        await request_analysis_service.generate_analysis(session, req.id)
+    except request_analysis_service.AnalysisGenerationFailed:
+        logger.warning("AI analysis skipped (LLM unavailable) for request %s", req.id)
+        await session.rollback()
+    except Exception:
+        logger.exception("AI analysis generation failed for request %s", req.id)
+        await session.rollback()
+
     # Reload with selectinload(author) so the response includes ai_summary and author.
     req = await request_repository.get_by_id(session, req.id)  # type: ignore[assignment]
-    return _to_response(req)  # type: ignore[arg-type]
+    events = await request_stage_repository.list_execution_events(session, req.id, limit=50)
+    return _to_response(
+        req, include_stages=True, execution_events_rows=events  # type: ignore[arg-type]
+    )
 
 
 async def update_request(
@@ -153,7 +222,10 @@ async def update_request(
 
     req = await request_repository.update(session, req)
     await session.commit()
-    return _to_response(req)
+    req = await request_repository.get_by_id(session, request_id)
+    assert req is not None
+    events = await request_stage_repository.list_execution_events(session, request_id, limit=50)
+    return _to_response(req, include_stages=True, execution_events_rows=events)
 
 
 async def patch_status(
@@ -170,7 +242,10 @@ async def patch_status(
 
     req = await request_repository.update(session, req)
     await session.commit()
-    return _to_response(req)
+    req = await request_repository.get_by_id(session, request_id)
+    assert req is not None
+    events = await request_stage_repository.list_execution_events(session, request_id, limit=50)
+    return _to_response(req, include_stages=True, execution_events_rows=events)
 
 
 async def delete_request(session: AsyncSession, request_id: int) -> None:

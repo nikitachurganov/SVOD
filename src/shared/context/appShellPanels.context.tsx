@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- hooks are intentionally exported next to their provider */
 import {
   createContext,
   useCallback,
@@ -56,7 +57,10 @@ export function useAppShellPanels(): AppShellPanelsContextValue {
 export function useRegisterAuxiliaryPanelCloser(closeFn: () => void, enabled = true) {
   const { registerAuxiliaryPanelCloser } = useAppShellPanels();
   const closeRef = useRef(closeFn);
-  closeRef.current = closeFn;
+
+  useEffect(() => {
+    closeRef.current = closeFn;
+  }, [closeFn]);
 
   useEffect(() => {
     if (!enabled) return;

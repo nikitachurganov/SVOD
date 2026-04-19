@@ -9,6 +9,8 @@ export interface Field {
   id: string;
   label: string;
   type: string;
+  /** Present when request was created with a form snapshot that includes flags. */
+  required?: boolean;
   options?: FieldOption[];
 }
 

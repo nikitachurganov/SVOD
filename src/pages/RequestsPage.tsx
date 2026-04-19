@@ -27,10 +27,16 @@ import {
 import { buildDisplayName } from '../shared/utils/userName';
 import { useOrganization } from '../shared/context/organization.context';
 
-const statusMap: Record<RequestResponse['status'], { kind: string; label: string }> = {
+const statusMap: Record<string, { kind: string; label: string }> = {
   open: { kind: 'blue', label: 'Открыта' },
   closed: { kind: 'red', label: 'Закрыта' },
+  assigned: { kind: 'teal', label: 'У исполнителя' },
 };
+
+const defaultStatusView = (raw: string) => ({
+  kind: 'warm-gray',
+  label: raw || '—',
+});
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleString('ru-RU', {
@@ -167,9 +173,13 @@ export const RequestsPage = () => {
         return formatDate(cellValue as string);
 
       case 'status': {
-        const view = statusMap[cellValue as RequestResponse['status']];
+        const s = String(cellValue ?? '');
+        const view = statusMap[s] ?? defaultStatusView(s);
         return (
-          <Tag type={view.kind as 'blue' | 'red'} size="sm">
+          <Tag
+            type={view.kind as 'blue' | 'red' | 'teal' | 'warm-gray'}
+            size="sm"
+          >
             {view.label}
           </Tag>
         );

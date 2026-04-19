@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -17,10 +17,14 @@ import {
 } from '@carbon/react';
 import { ArrowLeft, Document, Download } from '@carbon/react/icons';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useMediaQuery } from '../shared/hooks/useMediaQuery';
+import { RequestAssistantSidebar } from '../components/request/assistant/RequestAssistantSidebar';
+import { RequestExecutionPanel } from '../components/request/RequestExecutionPanel';
 import { getRequestWithForm, type RequestWithForm } from '../services/requestService';
-import { closeRequest, deleteRequest } from '../shared/api/requests.api';
+import { closeRequest, deleteRequest, generateRequestAnalysis } from '../shared/api/requests.api';
 import { formatFieldValue } from '../shared/utils/formatFieldValue';
 import { buildDisplayName } from '../shared/utils/userName';
+import type { RequestStageDTO } from '../types/execution';
 import type { Field } from '../types/form';
 
 interface StoredFileMeta {
@@ -53,24 +57,26 @@ const formatDateTime = (iso: string | null | undefined): string => {
   return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 };
 
-const useMediaQuery = (query: string): boolean => {
-  const [matches, setMatches] = useState(() =>
-    typeof window !== 'undefined' ? window.matchMedia(query).matches : false,
-  );
-  useEffect(() => {
-    const mql = window.matchMedia(query);
-    const handler = (e: MediaQueryListEvent) => setMatches(e.matches);
-    mql.addEventListener('change', handler);
-    setMatches(mql.matches);
-    return () => mql.removeEventListener('change', handler);
-  }, [query]);
-  return matches;
+const STAGE_TERMINAL = new Set(['done', 'cancelled']);
+
+const EXEC_HEADER_LABELS: Record<string, string> = {
+  new: 'Процесс не начат',
+  in_progress: 'В работе',
+  waiting: 'Ожидание',
+  blocked: 'Блокировка',
+  completed: 'Процесс завершён',
 };
+
+function findActiveStageHeader(stages: RequestStageDTO[] | undefined): RequestStageDTO | null {
+  if (!stages?.length) return null;
+  const sorted = [...stages].sort((a, b) => a.sequence - b.sequence);
+  return sorted.find((s) => !STAGE_TERMINAL.has(s.status)) ?? null;
+}
 
 export const RequestViewPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const showAiPanel = useMediaQuery('(min-width: 1200px)');
+  const showAssistantPanel = useMediaQuery('(min-width: 1100px)');
 
   const [{ data, loading, error }, setState] = useState<RequestDetailsState>({
     data: null,
@@ -79,7 +85,7 @@ export const RequestViewPage = () => {
   });
   const [deleting, setDeleting] = useState(false);
   const [closing, setClosing] = useState(false);
-  const [activeTabIndex, setActiveTabIndex] = useState(0);
+  const [activeTabIndex, setActiveTabIndex] = useState(1);
 
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
@@ -88,30 +94,46 @@ export const RequestViewPage = () => {
     title: string;
     subtitle?: string;
   } | null>(null);
-  const [aiMessage, setAiMessage] = useState<string | null>(null);
+  const [analysisRunning, setAnalysisRunning] = useState(false);
 
-  useEffect(() => {
+  const loadInitial = useCallback(async () => {
     if (!id) return;
     setState((prev) => ({ ...prev, loading: true, error: null }));
-
-    const load = async () => {
-      try {
-        const result = await getRequestWithForm(id);
-        setState({ data: result, loading: false, error: null });
-      } catch (err) {
-        setState({
-          data: null,
-          loading: false,
-          error: err instanceof Error ? err.message : 'Не удалось загрузить заявку',
-        });
-      }
-    };
-
-    void load();
+    try {
+      const result = await getRequestWithForm(id);
+      setState({ data: result, loading: false, error: null });
+    } catch (err) {
+      setState({
+        data: null,
+        loading: false,
+        error: err instanceof Error ? err.message : 'Не удалось загрузить заявку',
+      });
+    }
   }, [id]);
+
+  useEffect(() => {
+    void loadInitial();
+  }, [loadInitial]);
+
+  const reloadRequest = useCallback(async () => {
+    if (!id) return;
+    try {
+      const result = await getRequestWithForm(id);
+      setState((prev) => ({ ...prev, data: result }));
+    } catch {
+      /* silent */
+    }
+  }, [id]);
+
+  const goToExecution = useCallback(() => {
+    setActiveTabIndex(1);
+  }, []);
 
   const pageTitle = data?.request ? data.request.title : 'Загрузка заявки…';
   const formTitle = data?.form?.title ?? '—';
+  const activeStageForHeader = data?.request
+    ? findActiveStageHeader(data.request.stages)
+    : null;
 
   if (!id) {
     return (
@@ -211,12 +233,11 @@ export const RequestViewPage = () => {
     }
   };
 
-  const handleCloseRequest = async () => {
-    if (!data?.request || data.request.status === 'closed') return;
-
-    setClosing(true);
+  const handleRunAnalysis = async () => {
+    if (!data?.request?.id) return;
+    setAnalysisRunning(true);
     try {
-      const updatedRequest = await closeRequest(data.request.id);
+      const result = await generateRequestAnalysis(data.request.id);
       setState((prev) =>
         prev.data
           ? {
@@ -225,14 +246,35 @@ export const RequestViewPage = () => {
                 ...prev.data,
                 request: {
                   ...prev.data.request,
-                  status: updatedRequest.status,
-                  closedAt: updatedRequest.closedAt,
-                  updated_at: updatedRequest.updated_at,
+                  ai_analysis: result,
+                  updated_at: new Date().toISOString(),
                 },
               },
             }
           : prev,
       );
+      setInlineNotification({
+        kind: 'success',
+        title: 'Анализ заявки обновлён',
+      });
+    } catch (err) {
+      setInlineNotification({
+        kind: 'error',
+        title: 'Не удалось выполнить анализ',
+        subtitle: err instanceof Error ? err.message : 'Попробуйте позже.',
+      });
+    } finally {
+      setAnalysisRunning(false);
+    }
+  };
+
+  const handleCloseRequest = async () => {
+    if (!data?.request || data.request.status === 'closed') return;
+
+    setClosing(true);
+    try {
+      await closeRequest(data.request.id);
+      await reloadRequest();
       setInlineNotification({ kind: 'success', title: 'Заявка закрыта' });
     } catch (err) {
       setInlineNotification({
@@ -249,12 +291,14 @@ export const RequestViewPage = () => {
   const statusTagType = (status: string) => {
     if (status === 'closed') return 'red';
     if (status === 'open') return 'blue';
+    if (status === 'assigned') return 'teal';
     return 'warm-gray';
   };
 
   const statusLabel = (status: string) => {
     if (status === 'closed') return 'Закрыта';
     if (status === 'open') return 'Открыта';
+    if (status === 'assigned') return 'У исполнителя';
     return 'В работе';
   };
 
@@ -338,6 +382,34 @@ export const RequestViewPage = () => {
             )}
           </div>
         </div>
+
+        {data?.request && (
+          <div style={{ marginTop: 12, fontSize: 13, lineHeight: 1.5 }}>
+            <span style={{ color: 'var(--cds-text-secondary)' }}>Процесс: </span>
+            <strong>
+              {data.request.execution_status
+                ? EXEC_HEADER_LABELS[data.request.execution_status] ??
+                  data.request.execution_status
+                : '—'}
+            </strong>
+            {activeStageForHeader ? (
+              <>
+                {' '}
+                — {activeStageForHeader.title}
+                {activeStageForHeader.assignee_preview?.full_name
+                  ? ` · ${activeStageForHeader.assignee_preview.full_name}`
+                  : ''}
+              </>
+            ) : data.request.status === 'closed' ? (
+              <span style={{ color: 'var(--cds-text-secondary)' }}> — заявка закрыта</span>
+            ) : (
+              <span style={{ color: 'var(--cds-text-secondary)' }}>
+                {' '}
+                — этапы появятся после назначения во вкладке «Исполнение»
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Metadata block (inside header) */}
         {data?.request && (
@@ -502,7 +574,7 @@ export const RequestViewPage = () => {
               >
                 <TabList aria-label="Разделы заявки">
                   <Tab>Информация</Tab>
-                  <Tab>История</Tab>
+                  <Tab>Исполнение</Tab>
                   <Tab>Люди</Tab>
                 </TabList>
                 <TabPanels>
@@ -516,6 +588,54 @@ export const RequestViewPage = () => {
                         paddingTop: 16,
                       }}
                     >
+                      {data?.request && (
+                        <Tile style={{ padding: 16, marginBottom: 16 }}>
+                          <span style={{ fontWeight: 600, display: 'block', marginBottom: 12 }}>
+                            Жизненный цикл
+                          </span>
+                          <div
+                            style={{
+                              display: 'flex',
+                              flexWrap: 'wrap',
+                              gap: 16,
+                              alignItems: 'center',
+                              fontSize: 13,
+                            }}
+                          >
+                            <div>
+                              <Tag size="sm">Создана</Tag>{' '}
+                              <span style={{ color: 'var(--cds-text-secondary)' }}>
+                                {formatDateTime(data.request.created_at)}
+                              </span>
+                            </div>
+                            {data.request.status === 'closed' && data.request.closedAt ? (
+                              <div>
+                                <Tag type="red" size="sm">Закрыта</Tag>{' '}
+                                <span style={{ color: 'var(--cds-text-secondary)' }}>
+                                  {formatDateTime(data.request.closedAt)}
+                                </span>
+                              </div>
+                            ) : (
+                              <div>
+                                <Tag type="blue" size="sm">
+                                  Активна
+                                </Tag>
+                              </div>
+                            )}
+                          </div>
+                          <p
+                            style={{
+                              margin: '12px 0 0',
+                              fontSize: 12,
+                              color: 'var(--cds-text-secondary)',
+                              lineHeight: 1.45,
+                            }}
+                          >
+                            Этапы и передачи задач — во вкладке «Исполнение». Проверка качества и ТЗ —
+                            на панели справа.
+                          </p>
+                        </Tile>
+                      )}
                       {fields.length > 0 ? (
                         <div
                           style={{
@@ -734,79 +854,29 @@ export const RequestViewPage = () => {
                           У связанной формы нет полей.
                         </span>
                       )}
+                      <InlineNotification
+                        kind="info"
+                        title="Исполнение и назначение"
+                        subtitle="Назначить исполнителя и управлять этапами можно только во вкладке «Исполнение». Справа — подсказки ИИ без дублирования действий."
+                        lowContrast
+                        hideCloseButton
+                        style={{ marginTop: 24 }}
+                      />
                     </div>
                   </TabPanel>
 
-                  {/* History tab */}
                   <TabPanel>
                     <div style={{ paddingTop: 16 }}>
                       {data?.request && (
-                        <div
-                          style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            position: 'relative',
-                            paddingLeft: 24,
-                          }}
-                        >
-                          {/* Timeline line */}
-                          <div
-                            style={{
-                              position: 'absolute',
-                              left: 7,
-                              top: 6,
-                              bottom: 6,
-                              width: 2,
-                              background: 'var(--cds-border-subtle)',
-                            }}
-                          />
-
-                          {/* Created event */}
-                          <div style={{ position: 'relative', paddingBottom: 24 }}>
-                            <div
-                              style={{
-                                position: 'absolute',
-                                left: -20,
-                                top: 4,
-                                width: 12,
-                                height: 12,
-                                borderRadius: '50%',
-                                background: 'var(--cds-icon-primary)',
-                                border: '2px solid var(--cds-layer-01)',
-                              }}
-                            />
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                              <span style={{ fontWeight: 500 }}>Заявка создана</span>
-                              <span style={{ fontSize: 12, color: 'var(--cds-text-secondary)' }}>
-                                {formatDateTime(data.request.created_at)}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Closed event */}
-                          {data.request.status === 'closed' && data.request.closedAt && (
-                            <div style={{ position: 'relative', paddingBottom: 24 }}>
-                              <div
-                                style={{
-                                  position: 'absolute',
-                                  left: -20,
-                                  top: 4,
-                                  width: 12,
-                                  height: 12,
-                                  borderRadius: '50%',
-                                  background: 'var(--cds-icon-primary)',
-                                  border: '2px solid var(--cds-layer-01)',
-                                }}
-                              />
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                <span style={{ fontWeight: 500 }}>Заявка закрыта</span>
-                                <span style={{ fontSize: 12, color: 'var(--cds-text-secondary)' }}>
-                                  {formatDateTime(data.request.closedAt)}
-                                </span>
-                              </div>
-                            </div>
-                          )}
-                        </div>
+                        <RequestExecutionPanel
+                          requestId={data.request.id}
+                          organizationId={data.request.organization_id ?? null}
+                          executionStatus={data.request.execution_status ?? null}
+                          stages={data.request.stages ?? []}
+                          executionEvents={data.request.execution_events ?? []}
+                          requestClosed={data.request.status === 'closed'}
+                          onReload={reloadRequest}
+                        />
                       )}
                     </div>
                   </TabPanel>
@@ -814,6 +884,13 @@ export const RequestViewPage = () => {
                   {/* People tab */}
                   <TabPanel>
                     <div style={{ paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      <InlineNotification
+                        kind="info"
+                        title="Роли и контакты"
+                        subtitle="Назначение исполнителя на этап выполняется во вкладке «Исполнение»."
+                        lowContrast
+                        hideCloseButton
+                      />
                       {data.request.people && data.request.people.length > 0 ? (
                         data.request.people.map((person, idx) => (
                           <Tile key={`${person.role}-${idx}`} style={{ padding: 16 }}>
@@ -868,8 +945,8 @@ export const RequestViewPage = () => {
               </Tabs>
             </div>
 
-            {/* Right: AI suggestions panel (hidden on smaller screens) */}
-            {showAiPanel && (
+            {/* Right: assistant panel (readiness, TZ, hints — no duplicate execution actions) */}
+            {showAssistantPanel && (
               <div
                 style={{
                   width: 360,
@@ -886,113 +963,29 @@ export const RequestViewPage = () => {
                     overflowY: 'auto',
                   }}
                 >
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16, width: '100%' }}>
-                    <Tile style={{ padding: 16 }}>
-                      <span style={{ display: 'block', fontWeight: 600, marginBottom: 8 }}>
-                        Чего не хватает
-                      </span>
-                      <span style={{ color: 'var(--cds-text-secondary)', display: 'block' }}>
-                        ИИ может проанализировать заявку и подсказать, какой информации может не
-                        хватать или что может быть непонятно исполнителям.
-                      </span>
-                      <hr
-                        style={{
-                          border: 'none',
-                          borderTop: '1px solid var(--cds-border-subtle)',
-                          margin: '12px 0',
-                        }}
-                      />
-                      <span style={{ color: 'var(--cds-text-secondary)', display: 'block' }}>
-                        Заглушка: здесь будут отображаться недостающие детали и подсказки для уточнения.
-                      </span>
-                    </Tile>
-
-                    <Tile style={{ padding: 16 }}>
-                      <span style={{ display: 'block', fontWeight: 600, marginBottom: 8 }}>
-                        Генерация ТЗ
-                      </span>
-                      <span style={{ color: 'var(--cds-text-secondary)', display: 'block' }}>
-                        Сформировать техническое задание для исполнителя на основе информации из
-                        заявки.
-                      </span>
-                      <hr
-                        style={{
-                          border: 'none',
-                          borderTop: '1px solid var(--cds-border-subtle)',
-                          margin: '12px 0',
-                        }}
-                      />
-                      <Button
-                        kind="primary"
-                        size="sm"
-                        onClick={() => setAiMessage('Генерация ТЗ будет доступна позже')}
-                      >
-                        Сгенерировать ТЗ
-                      </Button>
-                      {aiMessage && (
-                        <div style={{ marginTop: 8 }}>
-                          <InlineNotification
-                            kind="info"
-                            subtitle={aiMessage}
-                            lowContrast
-                            onCloseButtonClick={() => setAiMessage(null)}
-                          />
-                        </div>
-                      )}
-                    </Tile>
-
-                    <Tile style={{ padding: 16 }}>
-                      <span style={{ display: 'block', fontWeight: 600, marginBottom: 8 }}>
-                        Кому перенаправить
-                      </span>
-                      <span style={{ color: 'var(--cds-text-secondary)', display: 'block' }}>
-                        ИИ может предложить, кому лучше передать эту заявку на исполнение.
-                      </span>
-                      <hr
-                        style={{
-                          border: 'none',
-                          borderTop: '1px solid var(--cds-border-subtle)',
-                          margin: '12px 0',
-                        }}
-                      />
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                        {[
-                          { initials: 'АК', name: 'Алексей Ковалев', role: 'Backend‑разработчик' },
-                          { initials: 'МС', name: 'Мария Смирнова', role: 'QA / Автоматизация' },
-                          { initials: 'ИД', name: 'Иван Демидов', role: 'DevOps‑инженер' },
-                        ].map((person) => (
-                          <div
-                            key={person.initials}
-                            style={{ display: 'flex', alignItems: 'center', gap: 12 }}
-                          >
-                            <div
-                              style={{
-                                width: 32,
-                                height: 32,
-                                borderRadius: '50%',
-                                background: 'var(--cds-interactive)',
-                                color: 'var(--cds-text-on-color)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: 12,
-                                fontWeight: 600,
-                                flexShrink: 0,
-                              }}
-                            >
-                              {person.initials}
-                            </div>
-                            <div>
-                              <span style={{ display: 'block' }}>{person.name}</span>
-                              <span style={{ color: 'var(--cds-text-secondary)', fontSize: 12 }}>
-                                {person.role}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </Tile>
-                  </div>
+                  <p
+                    style={{
+                      margin: '0 0 14px',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: 'var(--cds-text-secondary)',
+                      letterSpacing: '0.02em',
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    Помощник
+                  </p>
+                  <RequestAssistantSidebar
+                    requestId={data.request.id}
+                    organizationId={data.request.organization_id ?? undefined}
+                    aiAnalysis={data.request.ai_analysis}
+                    fields={fields}
+                    analysisRunning={analysisRunning}
+                    onRunAnalysis={() => void handleRunAnalysis()}
+                    tz={data.request.ai_tz}
+                    onTzUpdated={reloadRequest}
+                    onGoToExecution={goToExecution}
+                  />
                 </div>
               </div>
             )}

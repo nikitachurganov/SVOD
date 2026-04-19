@@ -8,6 +8,10 @@ from app.models.organization import (
     OrganizationMember,
 )
 from app.models.public_link import PublicRequestLink
+from app.models.external_contractor import ExternalContractor
+from app.models.performer_analytics import PerformerSelectionAnalytics
+from app.models.request_stage import RequestStage
+from app.models.request_execution_event import RequestExecutionEvent
 
 __all__ = [
     "User",
@@ -18,4 +22,8 @@ __all__ = [
     "OrganizationMember",
     "OrganizationInvitation",
     "PublicRequestLink",
+    "ExternalContractor",
+    "PerformerSelectionAnalytics",
+    "RequestStage",
+    "RequestExecutionEvent",
 ]

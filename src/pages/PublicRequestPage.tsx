@@ -170,6 +170,7 @@ export const PublicRequestPage = () => {
       id: f.id,
       label: f.label,
       type: f.type,
+      required: f.required,
       options: f.options?.map<FieldOption>((opt) => ({
         id: opt.id,
         label: opt.label,

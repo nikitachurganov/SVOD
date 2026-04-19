@@ -49,6 +49,11 @@ class Organization(Base):
         lazy="selectin",
         cascade="all, delete-orphan",
     )
+    external_contractors: Mapped[list["ExternalContractor"]] = relationship(  # noqa: F821
+        back_populates="org",
+        lazy="noload",
+        cascade="all, delete-orphan",
+    )
 
 
 class OrganizationMember(Base):
@@ -78,6 +83,9 @@ class OrganizationMember(Base):
         nullable=False,
         default=lambda: datetime.now(timezone.utc),
     )
+    job_title: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    specialization: Mapped[str | None] = mapped_column(Text, nullable=True)
+    geography: Mapped[str | None] = mapped_column(String(300), nullable=True)
 
     organization: Mapped["Organization"] = relationship(
         back_populates="members", lazy="selectin"

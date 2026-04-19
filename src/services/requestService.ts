@@ -70,6 +70,7 @@ export async function getRequestWithForm(id: string): Promise<RequestWithForm> {
       id: requestRow.id,
       title: requestRow.title,
       form_id: requestRow.form_id,
+      organization_id: requestRow.organization_id ?? null,
       data: parsedData,
       status: requestRow.status,
       closedAt: requestRow.closedAt,
@@ -79,7 +80,14 @@ export async function getRequestWithForm(id: string): Promise<RequestWithForm> {
       updated_at: requestRow.updated_at,
       form_snapshot: snapshot,
       ai_summary: requestRow.ai_summary ?? null,
+      ai_analysis: requestRow.ai_analysis ?? null,
       people: requestRow.people ?? [],
+      assigned_kind: requestRow.assigned_kind ?? null,
+      assigned_performer_id: requestRow.assigned_performer_id ?? null,
+      execution_status: requestRow.execution_status ?? null,
+      stages: requestRow.stages ?? [],
+      execution_events: requestRow.execution_events ?? [],
+      ai_tz: requestRow.ai_tz ?? null,
     };
 
     return { request, form, parsedData: parsedData };

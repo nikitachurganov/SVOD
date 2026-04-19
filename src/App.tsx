@@ -1,4 +1,5 @@
 import { useEffect, useState, type MouseEvent } from 'react';
+import { useMediaQuery } from './shared/hooks/useMediaQuery';
 import {
   Header,
   HeaderMenuButton,
@@ -44,17 +45,6 @@ import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { PublicRequestPage } from './pages/PublicRequestPage';
 import { CreateOrganizationModal } from './components/layout/CreateOrganizationModal';
 
-const useMediaQuery = (query: string): boolean => {
-  const [matches, setMatches] = useState(() => window.matchMedia(query).matches);
-  useEffect(() => {
-    const mql = window.matchMedia(query);
-    const handler = (e: MediaQueryListEvent) => setMatches(e.matches);
-    mql.addEventListener('change', handler);
-    return () => mql.removeEventListener('change', handler);
-  }, [query]);
-  return matches;
-};
-
 const NAV_ITEMS = [
   { key: 'requests', label: 'Заявки', path: '/requests' },
   { key: 'forms', label: 'Формы', path: '/forms' },
@@ -66,7 +56,7 @@ const NAV_ITEMS = [
   },
 ];
 
-export const getSelectedMenuKey = (pathname: string): string => {
+const getSelectedMenuKey = (pathname: string): string => {
   const matched = NAV_ITEMS.find((item) => pathname.startsWith(item.path));
   return matched?.key ?? 'requests';
 };
@@ -109,9 +99,12 @@ const AppLayoutContent = () => {
   const showOrgSidebarBlock = hasOrganizations && !isOrgLoading;
 
   useEffect(() => {
-    setMobileSidebarOpen(false);
-    setIsProfileOpen(false);
-    setHeaderNotificationsOpen(false);
+    const id = requestAnimationFrame(() => {
+      setMobileSidebarOpen(false);
+      setIsProfileOpen(false);
+      setHeaderNotificationsOpen(false);
+    });
+    return () => cancelAnimationFrame(id);
   }, [location.pathname]);
 
   const displayName =

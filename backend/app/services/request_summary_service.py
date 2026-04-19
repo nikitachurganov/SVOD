@@ -1,4 +1,3 @@
-import json
 import logging
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,26 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.request import Request
 from app.repositories import request_repository
 from app.services.gigachat_client import summarize_text
+from app.services.request_ai_common import build_internal_author_name, build_label_map, format_value
 
 logger = logging.getLogger(__name__)
-
-
-def _format_value(value: object) -> str:
-    if isinstance(value, (dict, list)):
-        return json.dumps(value, ensure_ascii=False)
-    return str(value)
-
-
-def _build_label_map(form_snapshot: dict | None) -> dict[str, str]:
-    """Map field ids to human-readable labels from the snapshot attached to the request."""
-    if not form_snapshot:
-        return {}
-    fields = form_snapshot if isinstance(form_snapshot, list) else form_snapshot.get("fields", [])
-    return {
-        f["id"]: f.get("label", f.get("name", f["id"]))
-        for f in fields
-        if isinstance(f, dict) and "id" in f
-    }
 
 
 def _build_prompt(req: Request) -> str:
@@ -36,18 +18,15 @@ def _build_prompt(req: Request) -> str:
     ]
 
     if req.data and isinstance(req.data, dict):
-        labels = _build_label_map(req.form_snapshot)
+        labels = build_label_map(req.form_snapshot)
         for key, value in req.data.items():
             if not value:
                 continue
-            parts.append(f"{labels.get(key, key)}: {_format_value(value)}")
+            parts.append(f"{labels.get(key, key)}: {format_value(value)}")
 
-    if req.author:
-        name = " ".join(
-            filter(None, [req.author.last_name, req.author.first_name, req.author.middle_name])
-        )
-        if name:
-            parts.append(f"Author: {name}")
+    author_name = build_internal_author_name(req)
+    if author_name:
+        parts.append(f"Author: {author_name}")
 
     return "\n".join(parts)
 

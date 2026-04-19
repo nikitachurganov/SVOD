@@ -41,7 +41,10 @@ class User(Base):
         back_populates="author", lazy="selectin"
     )
     created_requests: Mapped[list["Request"]] = relationship(  # noqa: F821
-        back_populates="author", lazy="selectin"
+        back_populates="author",
+        lazy="selectin",
+        primaryjoin="User.id == Request.created_by_user_id",
+        foreign_keys="[Request.created_by_user_id]",
     )
     owned_organizations: Mapped[list["Organization"]] = relationship(  # noqa: F821
         back_populates="owner",

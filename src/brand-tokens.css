@@ -1,0 +1,92 @@
+/**
+ * Brand color scale (source of truth) + Carbon semantic overrides.
+ * Carbon base themes live in @carbon/styles; this file remaps interactive / primary / “blue” tag styling to the brand palette.
+ */
+
+:root {
+  --brand-50: #ffb375;
+  --brand-100: #ffa366;
+  --brand-200: #ff9358;
+  --brand-300: #ff844a;
+  --brand-400: #f8743c;
+  --brand-500: #eb642f;
+  --brand-600: #d75a21;
+  --brand-700: #c35113;
+  --brand-800: #b04702;
+  --brand-900: #9d3e00;
+}
+
+/*
+ * document.documentElement gets data-carbon-theme from ThemeProvider, but page chrome (html/body)
+ * sits outside the Theme wrapper’s .cds--* node, so sync a small set for shell + raw links.
+ */
+html[data-carbon-theme='white'] {
+  --cds-background: #ffffff;
+  --cds-text-primary: #161616;
+  --cds-link-primary: var(--brand-500);
+  --cds-link-primary-hover: var(--brand-600);
+}
+
+html[data-carbon-theme='g100'] {
+  --cds-background: #161616;
+  --cds-text-primary: #f4f4f4;
+  --cds-link-primary: var(--brand-300);
+  --cds-link-primary-hover: var(--brand-200);
+}
+
+/* ── Light (Carbon white) ─────────────────────────────────────────── */
+.cds--white {
+  --cds-background-brand: var(--brand-500);
+  --cds-border-interactive: var(--brand-500);
+  --cds-focus: var(--brand-500);
+  --cds-highlight: color-mix(in srgb, var(--brand-100) 38%, #ffffff);
+  --cds-icon-interactive: var(--brand-500);
+  --cds-interactive: var(--brand-500);
+  --cds-link-primary: var(--brand-500);
+  --cds-link-primary-hover: var(--brand-600);
+  --cds-link-secondary: var(--brand-700);
+  --cds-link-inverse: var(--brand-300);
+  --cds-link-inverse-hover: var(--brand-200);
+  --cds-button-primary: var(--brand-500);
+  --cds-button-primary-hover: var(--brand-600);
+  --cds-button-primary-active: var(--brand-700);
+  --cds-button-tertiary: var(--brand-500);
+  --cds-button-tertiary-hover: var(--brand-600);
+  --cds-button-tertiary-active: var(--brand-700);
+  --cds-chat-avatar-user: var(--brand-500);
+  --cds-chat-button: var(--brand-500);
+  --cds-chat-button-text-hover: var(--brand-700);
+  --cds-tag-background-blue: color-mix(in srgb, var(--brand-100) 45%, #ffffff);
+  --cds-tag-color-blue: var(--brand-900);
+  --cds-tag-hover-blue: color-mix(in srgb, var(--brand-100) 28%, #ffffff);
+  --cds-tag-border-blue: var(--brand-300);
+  --cds-notification-action-tertiary-inverse: var(--brand-500);
+  --cds-notification-action-tertiary-inverse-hover: var(--brand-600);
+  --cds-notification-action-tertiary-inverse-active: var(--brand-700);
+}
+
+/* ── Dark (Carbon g100) ───────────────────────────────────────────── */
+.cds--g100 {
+  --cds-background-brand: var(--brand-500);
+  --cds-border-interactive: var(--brand-300);
+  --cds-highlight: color-mix(in srgb, var(--brand-900) 42%, #161616);
+  --cds-interactive: var(--brand-300);
+  --cds-link-primary: var(--brand-300);
+  --cds-link-primary-hover: var(--brand-200);
+  --cds-link-secondary: var(--brand-200);
+  --cds-link-inverse: var(--brand-500);
+  --cds-link-inverse-hover: var(--brand-400);
+  --cds-button-primary: var(--brand-500);
+  --cds-button-primary-hover: var(--brand-600);
+  --cds-button-primary-active: var(--brand-700);
+  --cds-chat-avatar-user: var(--brand-300);
+  --cds-chat-button: var(--brand-300);
+  --cds-chat-button-text-hover: var(--brand-100);
+  --cds-tag-background-blue: var(--brand-700);
+  --cds-tag-color-blue: var(--brand-50);
+  --cds-tag-hover-blue: var(--brand-600);
+  --cds-tag-border-blue: var(--brand-300);
+  --cds-notification-action-tertiary-inverse: var(--brand-500);
+  --cds-notification-action-tertiary-inverse-hover: var(--brand-400);
+  --cds-notification-action-tertiary-inverse-active: var(--brand-600);
+}

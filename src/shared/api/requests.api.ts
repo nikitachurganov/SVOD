@@ -1,8 +1,11 @@
 import api from '../lib/api';
 import type { AuthorPreview } from '../../types/author';
-import type { AISummary, RequestPerson } from '../../types/request';
+import type { RequestExecutionEventDTO, RequestStageDTO } from '../../types/execution';
+import type { AssignPerformerPayload, PerformerRecommendationResponse } from '../../types/performerSelection';
+import type { PatchRequestTZPayload, RequestTechnicalSpecEnvelope } from '../../types/technicalSpec';
+import type { AIRequestAnalysis, AISummary, RequestPerson } from '../../types/request';
 
-export type RequestStatus = 'open' | 'closed';
+export type RequestStatus = 'open' | 'closed' | 'assigned' | string;
 
 export interface RequestResponse {
   id: string;
@@ -18,11 +21,18 @@ export interface RequestResponse {
   updated_at: string;
   form_snapshot?: unknown | null;
   ai_summary?: AISummary | null;
+  ai_analysis?: AIRequestAnalysis | null;
   source?: string | null;
   applicant_name?: string | null;
   applicant_email?: string | null;
   applicant_phone?: string | null;
   people?: RequestPerson[];
+  assigned_kind?: string | null;
+  assigned_performer_id?: string | null;
+  execution_status?: string | null;
+  stages?: RequestStageDTO[];
+  execution_events?: RequestExecutionEventDTO[];
+  ai_tz?: RequestTechnicalSpecEnvelope | null;
 }
 
 export interface CreateRequestPayload {
@@ -90,4 +100,125 @@ export const closeRequest = async (id: string): Promise<RequestResponse> => {
 
 export const deleteRequest = async (id: string): Promise<void> => {
   await api.delete(`/requests/${id}`);
+};
+
+export const generateRequestAnalysis = async (id: string): Promise<AIRequestAnalysis> => {
+  const { data } = await api.post<AIRequestAnalysis>(`/requests/${id}/analysis`);
+  return data;
+};
+
+export const getRequestPerformers = async (
+  requestId: string,
+): Promise<PerformerRecommendationResponse> => {
+  const { data } = await api.get<PerformerRecommendationResponse>(
+    `/requests/${requestId}/performers`,
+  );
+  return data;
+};
+
+export const assignRequestPerformer = async (
+  requestId: string,
+  payload: AssignPerformerPayload,
+  options?: { stageId?: string },
+): Promise<RequestResponse> => {
+  const path =
+    options?.stageId != null
+      ? `/requests/${requestId}/stages/${options.stageId}/assign`
+      : `/requests/${requestId}/assign`;
+  const { data } = await api.post<RequestResponse>(path, payload);
+  return data;
+};
+
+export interface AddStagePayload {
+  title: string;
+  description?: string | null;
+  source?: string | null;
+}
+
+export interface PatchStagePayload {
+  title?: string;
+  description?: string | null;
+}
+
+export interface CompleteStagePayload {
+  result_summary?: string | null;
+}
+
+export interface BlockStagePayload {
+  reason: string;
+}
+
+export const addRequestStage = async (
+  requestId: string,
+  payload: AddStagePayload,
+): Promise<RequestResponse> => {
+  const { data } = await api.post<RequestResponse>(`/requests/${requestId}/stages`, payload);
+  return data;
+};
+
+export const patchRequestStage = async (
+  requestId: string,
+  stageId: string,
+  payload: PatchStagePayload,
+): Promise<RequestResponse> => {
+  const { data } = await api.patch<RequestResponse>(
+    `/requests/${requestId}/stages/${stageId}`,
+    payload,
+  );
+  return data;
+};
+
+export const completeRequestStage = async (
+  requestId: string,
+  stageId: string,
+  payload?: CompleteStagePayload,
+): Promise<RequestResponse> => {
+  const { data } = await api.post<RequestResponse>(
+    `/requests/${requestId}/stages/${stageId}/complete`,
+    payload ?? {},
+  );
+  return data;
+};
+
+export const blockRequestStage = async (
+  requestId: string,
+  stageId: string,
+  payload: BlockStagePayload,
+): Promise<RequestResponse> => {
+  const { data } = await api.post<RequestResponse>(
+    `/requests/${requestId}/stages/${stageId}/block`,
+    payload,
+  );
+  return data;
+};
+
+export const unblockRequestStage = async (
+  requestId: string,
+  stageId: string,
+): Promise<RequestResponse> => {
+  const { data } = await api.post<RequestResponse>(
+    `/requests/${requestId}/stages/${stageId}/unblock`,
+    {},
+  );
+  return data;
+};
+
+export const generateRequestTZ = async (
+  requestId: string,
+): Promise<RequestTechnicalSpecEnvelope> => {
+  const { data } = await api.post<RequestTechnicalSpecEnvelope>(
+    `/requests/${requestId}/tz`,
+  );
+  return data;
+};
+
+export const patchRequestTZ = async (
+  requestId: string,
+  payload: PatchRequestTZPayload,
+): Promise<RequestTechnicalSpecEnvelope> => {
+  const { data } = await api.patch<RequestTechnicalSpecEnvelope>(
+    `/requests/${requestId}/tz`,
+    payload,
+  );
+  return data;
 };

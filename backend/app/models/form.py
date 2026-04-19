@@ -26,6 +26,7 @@ class Form(Base):
         index=True,
     )
     fields: Mapped[dict] = mapped_column(JSONB, nullable=False, default=list)
+    performer_hints: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )

@@ -20,37 +20,48 @@ export const HeaderProfileMenu = ({
   resolvedEmail,
   onCreateOrg,
 }: Props) => {
+  const toggle = () => {
+    closeNotifications();
+    onOpenChange(!open);
+  };
+
   return (
-    <Popover
-      open={open}
-      onRequestClose={() => onOpenChange(false)}
-      align="bottom-end"
-      autoAlign
-      caret={false}
-      dropShadow
-    >
-      <button
-        type="button"
-        className="app-profile-trigger"
-        aria-label={
-          open ? 'Закрыть меню профиля' : 'Открыть меню профиля'
-        }
-        aria-expanded={open}
-        aria-haspopup="true"
-        onClick={() => {
-          closeNotifications();
-          onOpenChange(!open);
-        }}
+    <div className="app-profile-menu-wrap">
+      <span
+        className="app-profile-avatar app-profile-avatar--leading"
+        aria-hidden="true"
+        onClick={toggle}
       >
-        <span className="app-profile-avatar">{initials}</span>
-        <span className="app-profile-text">
-          <span className="app-profile-name">{resolvedName}</span>
-          <span className="app-profile-email">{resolvedEmail}</span>
-        </span>
-      </button>
-      <PopoverContent className="app-header-profile-popover-content">
-        <HeaderProfileMenuContent onClose={() => onOpenChange(false)} onCreateOrg={onCreateOrg} />
-      </PopoverContent>
-    </Popover>
+        {initials}
+      </span>
+      <Popover
+        className="app-profile-popover-shell"
+        open={open}
+        onRequestClose={() => onOpenChange(false)}
+        align="bottom"
+        autoAlign
+        caret={false}
+        dropShadow
+      >
+        <button
+          type="button"
+          className="app-profile-trigger"
+          aria-label={
+            open ? 'Закрыть меню профиля' : 'Открыть меню профиля'
+          }
+          aria-expanded={open}
+          aria-haspopup="true"
+          onClick={toggle}
+        >
+          <span className="app-profile-text">
+            <span className="app-profile-name">{resolvedName}</span>
+            <span className="app-profile-email">{resolvedEmail}</span>
+          </span>
+        </button>
+        <PopoverContent className="app-header-profile-popover-content">
+          <HeaderProfileMenuContent onClose={() => onOpenChange(false)} onCreateOrg={onCreateOrg} />
+        </PopoverContent>
+      </Popover>
+    </div>
   );
 };

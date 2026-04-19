@@ -5,6 +5,7 @@ import uuid
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.constants import request_execution as C
 from app.models.public_link import PublicRequestLink
 from app.models.request import Request
 from app.models.user import User
@@ -21,7 +22,7 @@ from app.schemas.public_link import (
     PublicRequestCreatedResponse,
     PublicRequestSubmission,
 )
-from app.services import request_summary_service
+from app.services import request_analysis_service, request_summary_service
 
 logger = logging.getLogger(__name__)
 
@@ -125,6 +126,7 @@ async def submit_public_request(
         organization_id=link.organization_id,
         data=payload.data,
         status="open",
+        execution_status=C.EXEC_NEW,
         form_snapshot=payload.form_snapshot,
         source="public_link",
         applicant_name=payload.full_name,
@@ -138,6 +140,15 @@ async def submit_public_request(
         await request_summary_service.generate_summary(session, req.id)
     except Exception:
         logger.exception("AI summary generation failed for public request %s", req.id)
+
+    try:
+        await request_analysis_service.generate_analysis(session, req.id)
+    except request_analysis_service.AnalysisGenerationFailed:
+        logger.warning("AI analysis skipped (LLM unavailable) for public request %s", req.id)
+        await session.rollback()
+    except Exception:
+        logger.exception("AI analysis generation failed for public request %s", req.id)
+        await session.rollback()
 
     return PublicRequestCreatedResponse(
         id=str(req.id),

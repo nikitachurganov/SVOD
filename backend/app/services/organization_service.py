@@ -5,13 +5,18 @@ from datetime import datetime, timezone
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.external_contractor import ExternalContractor
 from app.models.organization import (
     Organization,
     OrganizationInvitation,
     OrganizationMember,
 )
 from app.models.user import User
-from app.repositories import organization_repository, user_repository
+from app.repositories import external_contractor_repository, organization_repository, user_repository
+from app.schemas.external_contractor import (
+    CreateExternalContractorPayload,
+    ExternalContractorResponse,
+)
 from app.schemas.organization import (
     CreateInvitationRequest,
     CreateOrganizationRequest,
@@ -518,3 +523,42 @@ async def revoke_invitation(
     await session.commit()
 
     return _to_invitation_response(inv)
+
+
+def _to_external_contractor_response(c: ExternalContractor) -> ExternalContractorResponse:
+    rating_f = float(c.rating) if c.rating is not None else None
+    return ExternalContractorResponse(
+        id=str(c.id),
+        full_name=c.full_name,
+        organization=c.organization,
+        specialization=c.specialization,
+        position=c.position,
+        geography=c.geography,
+        contact_kind=c.contact_kind,
+        contact_value=c.contact_value,
+        rating=rating_f,
+    )
+
+
+async def create_external_contractor(
+    session: AsyncSession,
+    organization_id: uuid.UUID,
+    payload: CreateExternalContractorPayload,
+    current_user: User,
+) -> ExternalContractorResponse:
+    await _ensure_membership(session, organization_id, current_user.id)
+
+    row = ExternalContractor(
+        organization_id=organization_id,
+        full_name=payload.full_name,
+        organization=payload.organization,
+        specialization=payload.specialization,
+        position=payload.position,
+        geography=payload.geography,
+        contact_kind=payload.contact_kind,
+        contact_value=payload.contact_value,
+        rating=payload.rating,
+    )
+    row = await external_contractor_repository.create(session, row)
+    await session.commit()
+    return _to_external_contractor_response(row)

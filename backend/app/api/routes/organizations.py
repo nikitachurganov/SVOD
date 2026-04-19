@@ -3,6 +3,10 @@ import uuid
 from fastapi import APIRouter
 
 from app.api.deps import CurrentUser, DbSession
+from app.schemas.external_contractor import (
+    CreateExternalContractorPayload,
+    ExternalContractorResponse,
+)
 from app.schemas.organization import (
     CreateInvitationRequest,
     CreateOrganizationRequest,
@@ -121,6 +125,22 @@ async def update_member_role(
 ) -> MemberResponse:
     return await organization_service.update_member_role(
         session, organization_id, user_id, payload, user
+    )
+
+
+@router.post(
+    "/{organization_id}/external-contractors",
+    response_model=ExternalContractorResponse,
+    status_code=201,
+)
+async def create_external_contractor(
+    organization_id: uuid.UUID,
+    payload: CreateExternalContractorPayload,
+    session: DbSession,
+    user: CurrentUser,
+) -> ExternalContractorResponse:
+    return await organization_service.create_external_contractor(
+        session, organization_id, payload, user
     )
 
 

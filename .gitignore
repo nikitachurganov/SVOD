@@ -1,4 +1,6 @@
+# =====================
 # Logs
+# =====================
 logs
 *.log
 npm-debug.log*
@@ -7,18 +9,64 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
+# =====================
+# Node / Frontend
+# =====================
+node_modules/
+dist/
+dist-ssr/
 *.local
 
-# Editor directories and files
+# =====================
+# Python / Backend
+# =====================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment variables
+.env
+.env.*
+backend/.env
+
+# =====================
+# Database
+# =====================
+*.db
+*.sqlite3
+
+# =====================
+# Alembic
+# =====================
+alembic/versions/*.pyc
+
+# =====================
+# OS / Editor
+# =====================
 .vscode/*
 !.vscode/extensions.json
-.idea
+.idea/
 .DS_Store
+Thumbs.db
+
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+
+# =====================
+# Docker
+# =====================
+docker-compose.override.yml
+
+# =====================
+# Misc
+# =====================
+coverage/

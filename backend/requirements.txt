@@ -1,3 +1,5 @@
+# Install with Python 3.11–3.13 (see backend/README.md).
+# Python 3.14 often lacks wheels for asyncpg / pydantic-core → source builds need MSVC + Rust on Windows.
 fastapi==0.115.12
 uvicorn[standard]==0.34.2
 sqlalchemy[asyncio]==2.0.40
