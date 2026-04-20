@@ -33,6 +33,8 @@ env/
 # Environment variables
 .env
 .env.*
+!.env.example
+!backend/.env.example
 backend/.env
 
 # =====================
@@ -45,6 +47,11 @@ backend/.env
 # Alembic
 # =====================
 alembic/versions/*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
 # =====================
 # OS / Editor
@@ -52,6 +59,7 @@ alembic/versions/*.pyc
 .vscode/*
 !.vscode/extensions.json
 .idea/
+.cursor/
 .DS_Store
 Thumbs.db
 
@@ -60,6 +68,8 @@ Thumbs.db
 *.njsproj
 *.sln
 *.sw?
+*.tmp
+*.bak
 
 # =====================
 # Docker
