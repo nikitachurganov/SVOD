@@ -150,13 +150,24 @@ def run_deterministic_checks(req: Request) -> list[dict[str, Any]]:
 
     # Contact channel for follow-up (internal author without email is rare but possible)
     if req.source == "public_link":
-        if not (req.applicant_email and str(req.applicant_email).strip()):
+        has_email = req.applicant_email and str(req.applicant_email).strip()
+        has_phone = req.applicant_phone and str(req.applicant_phone).strip()
+        if not has_email and not has_phone:
             add_issue(
                 _make_issue(
                     type="missing_info",
                     severity="high",
                     field="general",
-                    message="Не указан email заявителя — без него сложно запросить уточнения.",
+                    message="Не указаны контакты заявителя.",
+                )
+            )
+        elif not has_email:
+            add_issue(
+                _make_issue(
+                    type="missing_info",
+                    severity="medium",
+                    field="general",
+                    message="Не указан email заявителя — уточнения возможны только по телефону.",
                 )
             )
     elif req.author is not None and not (req.author.email and str(req.author.email).strip()):

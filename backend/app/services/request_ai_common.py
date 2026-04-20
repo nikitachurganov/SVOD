@@ -45,6 +45,9 @@ def build_applicant_block(req: Request) -> str | None:
     parts: list[str] = []
     if req.applicant_name:
         parts.append(f"Имя: {req.applicant_name}")
+    ac = getattr(req, "applicant_company", None)
+    if ac:
+        parts.append(f"Филиал / компания: {ac}")
     if req.applicant_email:
         parts.append(f"Email: {req.applicant_email}")
     if req.applicant_phone:
