@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from collections import defaultdict
 
-_WINDOW_SEC = 60.0
+_WINDOW_SEC = 180.0
 _MAX_CALLS_PER_WINDOW = 40
 
 _buckets: dict[str, list[float]] = defaultdict(list)

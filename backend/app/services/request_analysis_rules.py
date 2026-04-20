@@ -56,11 +56,17 @@ def _iter_snapshot_fields(form_snapshot: dict | list | None) -> list[dict[str, A
 
 def _make_issue(
     *,
-    itype: str,
+    itype: str | None = None,
+    type: str | None = None,
     severity: str,
     field: str,
     message: str,
 ) -> dict[str, Any]:
+    # Backward compatibility: callers may still pass `type=...`.
+    if itype is None:
+        itype = type
+    if itype is None:
+        itype = "missing_info"
     if itype not in _ISSUE_TYPES:
         itype = "missing_info"
     if severity not in ("low", "medium", "high"):
