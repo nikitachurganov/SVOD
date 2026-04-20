@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { InlineNotification, Loading } from '@carbon/react';
+import { Checkbox, InlineNotification, Loading } from '@carbon/react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   getFormById,
@@ -18,12 +18,17 @@ export const EditFormPage = () => {
   const [formData, setFormData] = useState<FormResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isUniversal, setIsUniversal] = useState(false);
 
   useEffect(() => {
     if (!id) return;
     setLoading(true);
     getFormById(id)
-      .then((data) => { setFormData(data); setError(null); })
+      .then((data) => {
+        setFormData(data);
+        setIsUniversal(Boolean(data.is_universal));
+        setError(null);
+      })
       .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Не удалось загрузить форму'))
       .finally(() => setLoading(false));
   }, [id]);
@@ -35,7 +40,11 @@ export const EditFormPage = () => {
 
   const handleSave = async (title: string, pages: FormPageInstance[]) => {
     if (!id) return;
-    await updateForm(id, { name: title, pages: mapPagesToPayload(pages) });
+    await updateForm(id, {
+      name: title,
+      pages: mapPagesToPayload(pages),
+      is_universal: isUniversal,
+    });
     navigate(`/forms/${id}`);
   };
 
@@ -56,6 +65,15 @@ export const EditFormPage = () => {
   }
 
   return (
+    <>
+      <div style={{ padding: '0 24px', maxWidth: 1200, margin: '0 auto' }}>
+        <Checkbox
+          id="form-is-universal"
+          labelText="Универсальная форма (публичная заявка, если тип не определён)"
+          checked={isUniversal}
+          onChange={(_, { checked }) => setIsUniversal(Boolean(checked))}
+        />
+      </div>
     <FormEditor
       breadcrumbLabel="Редактирование формы"
       pageTitle="Редактирование формы"
@@ -65,5 +83,6 @@ export const EditFormPage = () => {
       onSave={handleSave}
       onBack={() => navigate('/forms')}
     />
+    </>
   );
 };
