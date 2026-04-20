@@ -39,6 +39,77 @@ def _coerce_deadline(v: Any) -> str | None:
     return s if s else None
 
 
+def _dedupe_items(items: list[str]) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        cleaned = " ".join(item.split()).strip()
+        if not cleaned:
+            continue
+        norm_key = cleaned.casefold()
+        if norm_key in seen:
+            continue
+        seen.add(norm_key)
+        out.append(cleaned)
+    return out
+
+
+def _with_terminal_dot(text: str) -> str:
+    if not text:
+        return text
+    if text[-1] in ".!?":
+        return text
+    return f"{text}."
+
+
+def _normalize_sections(sections: RequestTZSections) -> RequestTZSections:
+    title = " ".join(sections.title.split())
+    short_description = " ".join(sections.short_description.split())
+    goal = " ".join(sections.goal.split())
+    expected_result = " ".join(sections.expected_result.split())
+
+    tasks = _dedupe_items(sections.tasks)
+    inputs = _dedupe_items(sections.inputs)
+    constraints = _dedupe_items(sections.constraints)
+    acceptance_criteria = _dedupe_items(sections.acceptance_criteria)
+    clarifications_and_risks = _dedupe_items(sections.clarifications_and_risks)
+    missing_or_unclear = _dedupe_items(sections.missing_or_unclear)
+
+    return sections.model_copy(
+        update={
+            "title": title,
+            "short_description": _with_terminal_dot(short_description),
+            "goal": _with_terminal_dot(goal),
+            "expected_result": _with_terminal_dot(expected_result),
+            "tasks": tasks,
+            "inputs": inputs,
+            "constraints": constraints,
+            "acceptance_criteria": acceptance_criteria,
+            "clarifications_and_risks": clarifications_and_risks,
+            "missing_or_unclear": missing_or_unclear,
+        }
+    )
+
+
+def _ensure_required_gaps(sections: RequestTZSections) -> RequestTZSections:
+    gaps = list(sections.missing_or_unclear)
+
+    if not sections.goal:
+        gaps.append("Не определена цель задачи.")
+    if not sections.tasks:
+        gaps.append("Не сформулирован список работ.")
+    if not sections.inputs:
+        gaps.append("Не определены исходные данные и материалы.")
+    if not sections.expected_result:
+        gaps.append("Не описаны требования к результату.")
+    if not sections.acceptance_criteria:
+        gaps.append("Не заданы критерии приёмки.")
+    if sections.deadline is None:
+        gaps.append("Срок выполнения не определён в заявке.")
+
+    return sections.model_copy(update={"missing_or_unclear": _dedupe_items(gaps)})
+
+
 def _merge_analysis_gaps(ai: dict[str, Any] | None, sections: RequestTZSections) -> RequestTZSections:
     """Ensure missing_or_unclear reflects analysis issues when model left gaps."""
     extra: list[str] = []
@@ -50,7 +121,7 @@ def _merge_analysis_gaps(ai: dict[str, Any] | None, sections: RequestTZSections)
         for iss in ai.get("issues") or []:
             if isinstance(iss, dict) and iss.get("message"):
                 extra.append(f"Анализ: {iss.get('message')}")
-    merged_missing = list(dict.fromkeys([*sections.missing_or_unclear, *extra]))
+    merged_missing = _dedupe_items([*sections.missing_or_unclear, *extra])
     return sections.model_copy(update={"missing_or_unclear": merged_missing})
 
 
@@ -97,4 +168,6 @@ def parse_tz_llm_json(raw: str, ai_analysis: dict | None) -> RequestTZSections:
             kwargs[key] = _coerce_str(val)
 
     sections = RequestTZSections(**kwargs)
-    return _merge_analysis_gaps(ai_analysis, sections)
+    normalized = _normalize_sections(sections)
+    with_analysis = _merge_analysis_gaps(ai_analysis, normalized)
+    return _ensure_required_gaps(with_analysis)

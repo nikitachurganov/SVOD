@@ -142,29 +142,31 @@ export function RequestTechnicalSpecPanel({
         </div>
       )}
 
-      <Section title="Название задачи">{s.title || '—'}</Section>
-      <Section title="Краткое описание">{s.short_description || '—'}</Section>
+      <Section title="Техническое задание">{s.title || '—'}</Section>
       <Section title="Цель">{s.goal || '—'}</Section>
       <Section title="Что нужно сделать">
         <ListBlock items={s.tasks} />
       </Section>
-      <Section title="Ожидаемый результат">{s.expected_result || '—'}</Section>
-      <Section title="Входные данные / материалы">
+      <Section title="Исходные данные">
         <ListBlock items={s.inputs} />
       </Section>
-      <Section title="Ограничения">
+      <Section title="Требования к результату">{s.expected_result || '—'}</Section>
+      <Section title="Ограничения и условия">
         <ListBlock items={s.constraints} />
       </Section>
-      <Section title="Сроки">{s.deadline || <span style={{ color: 'var(--cds-text-secondary)' }}>Не указано</span>}</Section>
-      <Section title="Критерии готовности">
+      <Section title="Срок">
+        {s.deadline || <span style={{ color: 'var(--cds-text-secondary)' }}>Не указано</span>}
+      </Section>
+      <Section title="Критерии приёмки">
         <ListBlock items={s.acceptance_criteria} />
       </Section>
-      <Section title="Уточнения и риски">
+      <Section title="Риски и уточнения">
         <ListBlock items={s.clarifications_and_risks} />
       </Section>
-      <Section title="Не определено / недостает данных">
+      <Section title="Не определено в данных">
         <ListBlock items={s.missing_or_unclear} />
       </Section>
+      <Section title="Резюме для исполнителя">{s.short_description || '—'}</Section>
     </Tile>
   );
 }

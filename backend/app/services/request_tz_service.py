@@ -52,22 +52,40 @@ def format_ai_tz_plain_text(req: Request) -> str | None:
     if st == "draft":
         chunks.append("[Черновик ТЗ — перед передачей исполнителю рекомендуется подтвердить в интерфейсе]")
         chunks.append("")
-    hdr = sec.get("title") or ""
-    if hdr:
-        chunks.append(f"# {hdr}")
+    chunks.append("# Техническое задание")
+    chunks.append("")
+
+    title = sec.get("title")
+    if isinstance(title, str) and title.strip():
+        chunks.append(f"Рабочее название: {title.strip()}")
         chunks.append("")
 
     for label, key, lst in (
-        ("Краткое описание", "short_description", False),
-        ("Цель", "goal", False),
-        ("Что нужно сделать", "tasks", True),
-        ("Ожидаемый результат", "expected_result", False),
-        ("Входные данные / материалы", "inputs", True),
-        ("Ограничения", "constraints", True),
-        ("Сроки", "deadline", False),
-        ("Критерии готовности", "acceptance_criteria", True),
-        ("Уточнения и риски", "clarifications_and_risks", True),
-        ("Не определено / недостает данных", "missing_or_unclear", True),
+        ("## Цель", "goal", False),
+        ("## Что нужно сделать", "tasks", True),
+        ("## Исходные данные", "inputs", True),
+        ("## Требования к результату", "expected_result", False),
+    ):
+        part = lines_for(label, key, as_list=lst)
+        if part:
+            chunks.extend(part)
+            chunks.append("")
+
+    constraints = lines_for("Ограничения", "constraints", as_list=True)
+    if constraints:
+        chunks.extend(constraints)
+        chunks.append("")
+
+    deadline = lines_for("Срок", "deadline", as_list=False)
+    if deadline:
+        chunks.extend(deadline)
+        chunks.append("")
+
+    for label, key, lst in (
+        ("## Критерии приёмки", "acceptance_criteria", True),
+        ("## Риски и уточнения", "clarifications_and_risks", True),
+        ("Не определено в данных", "missing_or_unclear", True),
+        ("## Резюме для исполнителя", "short_description", False),
     ):
         part = lines_for(label, key, as_list=lst)
         if part:
