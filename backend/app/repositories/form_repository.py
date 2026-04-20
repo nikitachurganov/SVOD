@@ -47,3 +47,14 @@ async def remove(session: AsyncSession, form_id: uuid.UUID) -> bool:
     stmt = delete(Form).where(Form.id == form_id)
     result = await session.execute(stmt)
     return result.rowcount > 0
+
+
+async def get_universal_for_org(session: AsyncSession, org_id: uuid.UUID) -> Form | None:
+    stmt = (
+        select(Form)
+        .where(Form.organization_id == org_id, Form.is_universal.is_(True))
+        .order_by(Form.created_at.asc())
+        .limit(1)
+    )
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none()

@@ -77,6 +77,7 @@ class RequestResponse(BaseModel):
     ai_analysis: AIRequestAnalysisResponse | None = None
     source: str | None = None
     applicant_name: str | None = None
+    applicant_company: str | None = None
     applicant_email: str | None = None
     applicant_phone: str | None = None
     people: list[RequestPersonResponse] = []

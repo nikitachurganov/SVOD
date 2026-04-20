@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, ForeignKey, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -26,6 +26,8 @@ class Form(Base):
         index=True,
     )
     fields: Mapped[dict] = mapped_column(JSONB, nullable=False, default=list)
+    usage_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    is_universal: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     performer_hints: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)

@@ -34,6 +34,8 @@ def _to_response(form: Form) -> FormResponse:
         author=_to_author(form.author),
         created_at=form.created_at.isoformat(),
         updated_at=form.updated_at.isoformat(),
+        usage_count=int(getattr(form, "usage_count", 0) or 0),
+        is_universal=bool(getattr(form, "is_universal", False)),
     )
 
 
@@ -64,6 +66,7 @@ async def create_form(
         created_by_user_id=current_user.id,
         organization_id=org_id,
         fields=payload.pages,
+        is_universal=payload.is_universal,
     )
     form = await form_repository.create(session, form)
     await session.commit()
@@ -80,6 +83,7 @@ async def update_form(
     form.name = payload.name
     form.description = payload.description
     form.fields = payload.pages
+    form.is_universal = payload.is_universal
     form.updated_at = datetime.now(timezone.utc)
 
     form = await form_repository.update(session, form)

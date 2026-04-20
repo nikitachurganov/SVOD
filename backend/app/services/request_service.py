@@ -120,6 +120,7 @@ def _to_response(
         ai_analysis=_to_ai_analysis(req.ai_analysis),
         source=req.source,
         applicant_name=req.applicant_name,
+        applicant_company=req.applicant_company,
         applicant_email=req.applicant_email,
         applicant_phone=req.applicant_phone,
         people=_build_people(req),

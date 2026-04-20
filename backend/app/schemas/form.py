@@ -10,12 +10,14 @@ class CreateFormRequest(BaseModel):
     description: str | None = None
     pages: list[Any] = Field(default_factory=list)
     organization_id: str | None = None
+    is_universal: bool = False
 
 
 class UpdateFormRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=500)
     description: str | None = None
     pages: list[Any] = Field(default_factory=list)
+    is_universal: bool = False
 
 
 class FormResponse(BaseModel):
@@ -28,3 +30,5 @@ class FormResponse(BaseModel):
     author: PublicAuthorResponse | None
     created_at: str
     updated_at: str
+    usage_count: int = 0
+    is_universal: bool = False
