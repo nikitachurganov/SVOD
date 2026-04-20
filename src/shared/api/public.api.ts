@@ -11,23 +11,33 @@ const publicApi = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
+export interface PublicPopularFormSummary {
+  id: string;
+  name: string;
+  short_description: string;
+}
+
 export interface PublicFormSummary {
   id: string;
   name: string;
   description: string;
   pages: unknown[];
+  is_universal?: boolean;
 }
 
 export interface PublicPageData {
   organization_name: string;
   organization_description: string | null;
   forms: PublicFormSummary[];
+  popular_forms: PublicPopularFormSummary[];
+  universal_form_id: string | null;
 }
 
 export interface PublicRequestPayload {
   full_name: string;
-  email: string;
-  phone: string;
+  applicant_company: string;
+  email?: string | null;
+  phone?: string | null;
   form_id: string;
   title: string;
   data: unknown;
@@ -41,8 +51,38 @@ export interface PublicRequestCreated {
   created_at: string;
 }
 
+export interface PublicSuggestedFormCard {
+  id: string;
+  name: string;
+  short_description: string;
+}
+
+export interface PublicSuggestFormsResponse {
+  forms: PublicSuggestedFormCard[];
+  hint?: string | null;
+  used_llm?: boolean;
+}
+
 export const getPublicPageData = async (token: string): Promise<PublicPageData> => {
   const { data } = await publicApi.get<PublicPageData>(`/public/request/${token}`);
+  return {
+    ...data,
+    forms: data.forms ?? [],
+    popular_forms: data.popular_forms ?? [],
+    universal_form_id: data.universal_form_id ?? null,
+  };
+};
+
+export const suggestPublicForms = async (
+  token: string,
+  text: string,
+  signal?: AbortSignal,
+): Promise<PublicSuggestFormsResponse> => {
+  const { data } = await publicApi.post<PublicSuggestFormsResponse>(
+    `/public/request/${token}/suggest-forms`,
+    { text },
+    { signal },
+  );
   return data;
 };
 

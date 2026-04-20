@@ -24,6 +24,7 @@ export interface RequestResponse {
   ai_analysis?: AIRequestAnalysis | null;
   source?: string | null;
   applicant_name?: string | null;
+  applicant_company?: string | null;
   applicant_email?: string | null;
   applicant_phone?: string | null;
   people?: RequestPerson[];

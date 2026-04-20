@@ -40,6 +40,7 @@ export interface CreateFormPayload {
   description?: string;
   pages: CreateFormPagePayload[];
   organization_id?: string | null;
+  is_universal?: boolean;
 }
 
 /** Body used when updating an existing form */
@@ -47,6 +48,7 @@ export interface UpdateFormPayload {
   name: string;
   description?: string;
   pages: CreateFormPagePayload[];
+  is_universal?: boolean;
 }
 
 /** Normalized form shape used across the app */
@@ -60,6 +62,8 @@ export interface FormResponse {
   author: AuthorPreview | null;
   created_at: string;
   updated_at: string;
+  usage_count?: number;
+  is_universal?: boolean;
 }
 
 // ─── Field converters ─────────────────────────────────────────────────────────
@@ -215,6 +219,7 @@ export const createForm = async (
     description: payload.description ?? null,
     pages: payload.pages,
     organization_id: payload.organization_id ?? null,
+    is_universal: payload.is_universal ?? false,
   });
   return data;
 };
@@ -227,6 +232,7 @@ export const updateForm = async (
     name: payload.name,
     description: payload.description ?? null,
     pages: payload.pages,
+    is_universal: payload.is_universal ?? false,
   });
   return data;
 };
