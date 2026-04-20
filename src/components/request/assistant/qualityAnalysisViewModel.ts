@@ -7,8 +7,6 @@ export type QualityAnalysisViewModel = {
   badgeText: string;
   badgeType: 'green' | 'red';
   description: string;
-  issues?: string[];
-  hiddenIssuesCount: number;
 };
 
 const ISSUE_PREVIEW_LIMIT = 3;
@@ -32,20 +30,19 @@ export const toQualityAnalysisViewModel = (analysis: AIRequestAnalysis): Quality
       badgeText: 'Можно брать в работу',
       badgeType: 'green',
       description: 'Нет замечаний.',
-      hiddenIssuesCount: 0,
     };
   }
 
   const previewIssues = issueMessages.slice(0, ISSUE_PREVIEW_LIMIT);
   const hiddenIssuesCount = Math.max(0, issueMessages.length - previewIssues.length);
   const status: QualityStatus = hasBlockingIssues(analysis) ? 'insufficient_data' : 'ready_for_work';
+  const issuesSummary = previewIssues.join('; ');
+  const suffix = hiddenIssuesCount > 0 ? `; и ещё ${hiddenIssuesCount}` : '';
 
   return {
     status,
     badgeText: status === 'insufficient_data' ? 'Недостаточно данных' : 'Можно брать в работу',
     badgeType: status === 'insufficient_data' ? 'red' : 'green',
-    description: previewIssues.join('; '),
-    issues: previewIssues,
-    hiddenIssuesCount,
+    description: `${issuesSummary}${suffix}.`,
   };
 };

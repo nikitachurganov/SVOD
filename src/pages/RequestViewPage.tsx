@@ -21,7 +21,7 @@ import { useMediaQuery } from '../shared/hooks/useMediaQuery';
 import { RequestAssistantSidebar } from '../components/request/assistant/RequestAssistantSidebar';
 import { RequestExecutionPanel } from '../components/request/RequestExecutionPanel';
 import { getRequestWithForm, type RequestWithForm } from '../services/requestService';
-import { closeRequest, deleteRequest, generateRequestAnalysis } from '../shared/api/requests.api';
+import { closeRequest, deleteRequest } from '../shared/api/requests.api';
 import { formatFieldValue } from '../shared/utils/formatFieldValue';
 import { buildDisplayName } from '../shared/utils/userName';
 import type { RequestStageDTO } from '../types/execution';
@@ -94,7 +94,6 @@ export const RequestViewPage = () => {
     title: string;
     subtitle?: string;
   } | null>(null);
-  const [analysisRunning, setAnalysisRunning] = useState(false);
 
   const loadInitial = useCallback(async () => {
     if (!id) return;
@@ -230,41 +229,6 @@ export const RequestViewPage = () => {
     } finally {
       setDeleting(false);
       setDeleteConfirmOpen(false);
-    }
-  };
-
-  const handleRunAnalysis = async () => {
-    if (!data?.request?.id) return;
-    setAnalysisRunning(true);
-    try {
-      const result = await generateRequestAnalysis(data.request.id);
-      setState((prev) =>
-        prev.data
-          ? {
-              ...prev,
-              data: {
-                ...prev.data,
-                request: {
-                  ...prev.data.request,
-                  ai_analysis: result,
-                  updated_at: new Date().toISOString(),
-                },
-              },
-            }
-          : prev,
-      );
-      setInlineNotification({
-        kind: 'success',
-        title: 'Анализ заявки обновлён',
-      });
-    } catch (err) {
-      setInlineNotification({
-        kind: 'error',
-        title: 'Не удалось выполнить анализ',
-        subtitle: err instanceof Error ? err.message : 'Попробуйте позже.',
-      });
-    } finally {
-      setAnalysisRunning(false);
     }
   };
 
@@ -979,9 +943,6 @@ export const RequestViewPage = () => {
                     requestId={data.request.id}
                     organizationId={data.request.organization_id ?? undefined}
                     aiAnalysis={data.request.ai_analysis}
-                    fields={fields}
-                    analysisRunning={analysisRunning}
-                    onRunAnalysis={() => void handleRunAnalysis()}
                     tz={data.request.ai_tz}
                     onTzUpdated={reloadRequest}
                     onGoToExecution={goToExecution}
