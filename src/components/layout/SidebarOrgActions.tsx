@@ -26,7 +26,7 @@ export const SidebarOrgActions = () => {
   const handleCopyPublicLink = async () => {
     try {
       const link = await getOrCreatePublicLink(activeOrganization.id);
-      const url = `${window.location.origin}/public/request/${link.token}`;
+      const url = `${window.location.origin}/form/${link.token}`;
       await navigator.clipboard.writeText(url);
       setCopyToast({ id: Date.now() });
     } catch {

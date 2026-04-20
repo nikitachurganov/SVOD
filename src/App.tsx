@@ -42,7 +42,9 @@ import { RequestViewPage } from './pages/RequestViewPage';
 import { AuthPage } from './pages/AuthPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
-import { PublicRequestPage } from './pages/PublicRequestPage';
+import { PublicFormFillPage } from './pages/PublicFormFillPage';
+import { PublicFormLandingPage } from './pages/PublicFormLandingPage';
+import { PublicRequestLegacyRedirect } from './pages/PublicRequestLegacyRedirect';
 import { CreateOrganizationModal } from './components/layout/CreateOrganizationModal';
 
 const NAV_ITEMS = [
@@ -284,7 +286,9 @@ const router = createBrowserRouter([
   { path: '/auth/forgot-password', element: <ForgotPasswordPage /> },
   { path: '/auth/reset-password', element: <ResetPasswordPage /> },
   { path: '/auth', element: <PublicOnlyAuthPage /> },
-  { path: '/public/request/:token', element: <PublicRequestPage /> },
+  { path: '/form/:token', element: <PublicFormLandingPage /> },
+  { path: '/form/:token/fill/:formId', element: <PublicFormFillPage /> },
+  { path: '/public/request/:token', element: <PublicRequestLegacyRedirect /> },
   {
     path: '/',
     element: <ProtectedLayout />,
