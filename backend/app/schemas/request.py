@@ -67,6 +67,7 @@ class RequestResponse(BaseModel):
     organization_id: str | None
     data: Any
     status: str
+    deleted: bool = False
     closedAt: str | None
     created_by_user_id: str | None
     author: PublicAuthorResponse | None

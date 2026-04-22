@@ -11,8 +11,10 @@ import {
   SideNav,
   SideNavItems,
   SideNavLink,
+  Tooltip,
 } from '@carbon/react';
-import { Add } from '@carbon/react/icons';
+import { Add, Catalog, Document, UserMultiple, Settings } from '@carbon/react/icons';
+import type { ComponentType } from 'react';
 import { GlobalScrollbarStyles } from './shared/ui/GlobalScrollbarStyles';
 import {
   Navigate,
@@ -24,11 +26,13 @@ import {
 } from 'react-router-dom';
 import { useAuth } from './shared/context/auth.context';
 import { AppShellPanelsProvider } from './shared/context/appShellPanels.context';
+import { NotificationsProvider } from './shared/context/notifications.context';
 import { useOrganization } from './shared/context/organization.context';
 import { HeaderProfileMenu } from './components/layout/HeaderProfileMenu';
 import { HeaderNotifications } from './components/layout/HeaderNotifications';
 import { OrganizationSwitcher } from './components/layout/OrganizationSwitcher';
 import { SidebarOrgActions } from './components/layout/SidebarOrgActions';
+import { SidebarCollapsedOrgPopover } from './components/layout/SidebarCollapsedOrgPopover';
 import { buildDisplayName } from './shared/utils/userName';
 import { CreateFormPage } from './pages/CreateFormPage';
 import { EditFormPage } from './pages/EditFormPage';
@@ -47,16 +51,26 @@ import { PublicFormLandingPage } from './pages/PublicFormLandingPage';
 import { PublicRequestLegacyRedirect } from './pages/PublicRequestLegacyRedirect';
 import { CreateOrganizationModal } from './components/layout/CreateOrganizationModal';
 
-const NAV_ITEMS = [
-  { key: 'requests', label: 'Заявки', path: '/requests' },
-  { key: 'forms', label: 'Формы', path: '/forms' },
-  { key: 'participants', label: 'Участники', path: '/participants' },
+interface NavItem {
+  key: string;
+  label: string;
+  path: string;
+  Icon: ComponentType<{ size?: number }>;
+}
+
+const NAV_ITEMS: NavItem[] = [
+  { key: 'requests', label: 'Заявки', path: '/requests', Icon: Catalog },
+  { key: 'forms', label: 'Формы', path: '/forms', Icon: Document },
+  { key: 'participants', label: 'Участники', path: '/participants', Icon: UserMultiple },
   {
     key: 'organization-settings',
     label: 'Настройки организации',
     path: '/settings/organization',
+    Icon: Settings,
   },
 ];
+
+const SIDEBAR_COLLAPSED_STORAGE_KEY = 'app.sidebar.collapsed';
 
 const getSelectedMenuKey = (pathname: string): string => {
   const matched = NAV_ITEMS.find((item) => pathname.startsWith(item.path));
@@ -92,6 +106,14 @@ const AppLayoutContent = () => {
   const { user, profile } = useAuth();
 
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [headerNotificationsOpen, setHeaderNotificationsOpen] = useState(false);
   const [createOrgOpen, setCreateOrgOpen] = useState(false);
@@ -99,6 +121,18 @@ const AppLayoutContent = () => {
   const { organizations, isLoading: isOrgLoading } = useOrganization();
   const hasOrganizations = organizations.length > 0;
   const showOrgSidebarBlock = hasOrganizations && !isOrgLoading;
+
+  useEffect(() => {
+    if (!isDesktop) return;
+    try {
+      localStorage.setItem(
+        SIDEBAR_COLLAPSED_STORAGE_KEY,
+        isSidebarCollapsed ? '1' : '0',
+      );
+    } catch {
+      // ignore localStorage errors
+    }
+  }, [isDesktop, isSidebarCollapsed]);
 
   useEffect(() => {
     const id = requestAnimationFrame(() => {
@@ -144,6 +178,16 @@ const AppLayoutContent = () => {
             isActive={mobileSidebarOpen}
           />
         )}
+        {isDesktop && (
+          <HeaderMenuButton
+            aria-label={
+              isSidebarCollapsed ? 'Развернуть боковую навигацию' : 'Свернуть боковую навигацию'
+            }
+            aria-expanded={!isSidebarCollapsed}
+            onClick={() => setIsSidebarCollapsed((prev) => !prev)}
+            isActive={!isSidebarCollapsed}
+          />
+        )}
         <HeaderName
           href="/"
           prefix=""
@@ -186,41 +230,63 @@ const AppLayoutContent = () => {
 
         <div className="app-layout-shell">
           <aside
-            className={`app-layout-left-sidebar ${!isDesktop && mobileSidebarOpen ? 'app-layout-left-sidebar--open' : ''}`}
+            className={`app-layout-left-sidebar ${!isDesktop && mobileSidebarOpen ? 'app-layout-left-sidebar--open' : ''} ${isDesktop && isSidebarCollapsed ? 'app-layout-left-sidebar--collapsed' : ''}`}
             aria-label="Боковая навигация"
           >
-            <SideNav
-              isFixedNav={false}
-              expanded
-              isChildOfHeader={false}
-              aria-label="Навигация"
-              className="app-side-nav"
-            >
-              <SideNavItems className="app-side-nav-items">
-                {NAV_ITEMS.map((item) => (
-                  <SideNavLink
-                    key={item.key}
-                    isActive={selectedKey === item.key}
-                    href={item.path}
-                    onClick={(e: MouseEvent<HTMLAnchorElement>) => {
-                      e.preventDefault();
-                      handleNav(item.path);
-                    }}
-                  >
-                    {item.label}
-                  </SideNavLink>
-                ))}
-              </SideNavItems>
-
-              {showOrgSidebarBlock && (
-                <div className="app-side-nav-org">
-                  <div className="app-side-nav-org-inner">
-                    <OrganizationSwitcher />
-                    <SidebarOrgActions />
-                  </div>
+            {isSidebarCollapsed && isDesktop ? (
+              <nav className="app-side-nav-rail" aria-label="Навигация (свёрнута)">
+                <div className="app-side-nav-rail__main">
+                  {NAV_ITEMS.map((item) => (
+                    <Tooltip key={item.key} label={item.label} align="right" enterDelayMs={0}>
+                      <button
+                        type="button"
+                        aria-label={item.label}
+                        aria-current={selectedKey === item.key ? 'page' : undefined}
+                        className={`app-side-nav-rail__item${selectedKey === item.key ? ' app-side-nav-rail__item--active' : ''}`}
+                        onClick={() => handleNav(item.path)}
+                      >
+                        <item.Icon size={20} />
+                      </button>
+                    </Tooltip>
+                  ))}
                 </div>
-              )}
-            </SideNav>
+                {showOrgSidebarBlock && <SidebarCollapsedOrgPopover />}
+              </nav>
+            ) : (
+              <SideNav
+                isFixedNav={false}
+                expanded
+                isChildOfHeader={false}
+                aria-label="Навигация"
+                className="app-side-nav"
+              >
+                <SideNavItems className="app-side-nav-items">
+                  {NAV_ITEMS.map((item) => (
+                    <SideNavLink
+                      key={item.key}
+                      renderIcon={item.Icon}
+                      isActive={selectedKey === item.key}
+                      href={item.path}
+                      onClick={(e: MouseEvent<HTMLAnchorElement>) => {
+                        e.preventDefault();
+                        handleNav(item.path);
+                      }}
+                    >
+                      {item.label}
+                    </SideNavLink>
+                  ))}
+                </SideNavItems>
+
+                {showOrgSidebarBlock && (
+                  <div className="app-side-nav-org">
+                    <div className="app-side-nav-org-inner">
+                      <OrganizationSwitcher />
+                      <SidebarOrgActions />
+                    </div>
+                  </div>
+                )}
+              </SideNav>
+            )}
           </aside>
 
           <main id="main-content" className="app-layout-main">
@@ -256,9 +322,11 @@ const AppLayoutContent = () => {
 };
 
 const AppLayout = () => (
-  <AppShellPanelsProvider>
-    <AppLayoutContent />
-  </AppShellPanelsProvider>
+  <NotificationsProvider>
+    <AppShellPanelsProvider>
+      <AppLayoutContent />
+    </AppShellPanelsProvider>
+  </NotificationsProvider>
 );
 
 const FullPageLoader = () => (

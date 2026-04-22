@@ -12,15 +12,24 @@ import {
   TableToolbarContent,
   Pagination,
   Button,
-  InlineNotification,
   DataTableSkeleton,
   Modal,
+  Tabs,
+  TabList,
+  Tab,
 } from '@carbon/react';
-import { Add, Edit, TrashCan } from '@carbon/react/icons';
+import { Add, Archive, Edit } from '@carbon/react/icons';
 import { Link, useNavigate } from 'react-router-dom';
-import { deleteForm, getForms, type FormResponse } from '../shared/api/forms.api';
+import {
+  deleteForm,
+  getForms,
+  getFormsCounts,
+  type FormResponse,
+  type FormsCounts,
+} from '../shared/api/forms.api';
 import { buildDisplayName } from '../shared/utils/userName';
 import { useOrganization } from '../shared/context/organization.context';
+import { useNotifications } from '../shared/context/notifications.context';
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleString('ru-RU', {
@@ -38,38 +47,93 @@ const HEADERS = [
   { key: 'actions', header: 'Действия' },
 ];
 
+type FormsTabKey = 'all' | 'mine' | 'unused' | 'archive';
+
+const TAB_ORDER: FormsTabKey[] = ['all', 'mine', 'unused', 'archive'];
+
+const EMPTY_MESSAGE: Record<FormsTabKey, string> = {
+  all: 'Активных форм пока нет.',
+  mine: 'У вас пока нет созданных форм.',
+  unused: 'Нет форм без заявок.',
+  archive: 'Архивных форм пока нет.',
+};
+
+const DEFAULT_COUNTS: FormsCounts = { all: 0, mine: 0, unused: 0, archived: 0 };
+
 export const FormsPage = () => {
   const navigate = useNavigate();
   const { activeOrganization } = useOrganization();
+  const { notifySuccess, notifyError } = useNotifications();
 
   const [forms, setForms] = useState<FormResponse[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PAGE_SIZES[0]);
+  const [activeTab, setActiveTab] = useState<FormsTabKey>('all');
+  const [counts, setCounts] = useState<FormsCounts>(DEFAULT_COUNTS);
 
-  const loadForms = useCallback(() => {
-    setLoading(true);
-    getForms(activeOrganization?.id)
-      .then((data) => { setForms(data); setError(null); })
-      .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Не удалось загрузить формы'))
-      .finally(() => setLoading(false));
+  const loadCounts = useCallback(() => {
+    getFormsCounts(activeOrganization?.id)
+      .then(setCounts)
+      .catch(() => {
+        // Счётчики не критичны, молча игнорируем ошибку.
+      });
   }, [activeOrganization?.id]);
 
-  useEffect(() => { loadForms(); }, [loadForms]);
+  const loadForms = useCallback(
+    (tab: FormsTabKey = activeTab) => {
+      setLoading(true);
+      return getForms(activeOrganization?.id, {
+        archived: tab === 'archive' ? true : false,
+        mine: tab === 'mine',
+        unused: tab === 'unused',
+      })
+        .then((data) => {
+          setForms(data);
+        })
+        .catch((err: unknown) =>
+          notifyError(
+            'Не удалось загрузить формы',
+            err instanceof Error ? err.message : undefined,
+          ),
+        )
+        .finally(() => setLoading(false));
+    },
+    [activeOrganization?.id, activeTab, notifyError],
+  );
 
-  const handleDelete = useCallback(async (id: string) => {
-    setDeletingId(id);
-    try {
-      await deleteForm(id);
-      setForms((prev) => prev.filter((f) => f.id !== id));
-    } catch { /* silently handled */ } finally {
-      setDeletingId(null);
-      setConfirmDeleteId(null);
-    }
-  }, []);
+  useEffect(() => {
+    loadForms();
+    loadCounts();
+  }, [loadForms, loadCounts]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [activeTab, pageSize]);
+
+  const handleDelete = useCallback(
+    async (id: string) => {
+      setDeletingId(id);
+      try {
+        await deleteForm(id);
+        notifySuccess('Форма перемещена в архив');
+        setActiveTab('archive');
+        await loadForms('archive');
+        loadCounts();
+      } catch (err) {
+        notifyError(
+          'Не удалось переместить форму в архив',
+          err instanceof Error ? err.message : undefined,
+        );
+      } finally {
+        setDeletingId(null);
+        setConfirmDeleteId(null);
+      }
+    },
+    [loadForms, loadCounts, notifySuccess, notifyError],
+  );
 
   const rows = useMemo(() => forms.map((f) => ({
     id: f.id,
@@ -84,6 +148,8 @@ export const FormsPage = () => {
     return rows.slice(start, start + pageSize);
   }, [rows, page, pageSize]);
 
+  const isArchive = activeTab === 'archive';
+
   const renderCell = (key: string, value: unknown, rowId: string) => {
     switch (key) {
       case 'name':
@@ -91,10 +157,21 @@ export const FormsPage = () => {
       case 'created_at':
         return formatDate(value as string);
       case 'actions':
+        if (isArchive) {
+          return <span style={{ color: 'var(--cds-text-secondary)' }}>—</span>;
+        }
         return (
           <div style={{ display: 'flex', gap: 4 }}>
             <Button kind="ghost" size="sm" renderIcon={Edit} iconDescription="Изменить" hasIconOnly onClick={() => navigate(`/forms/${value}/edit`)} />
-            <Button kind="danger--ghost" size="sm" renderIcon={TrashCan} iconDescription="Удалить" hasIconOnly disabled={deletingId === (value as string)} onClick={() => setConfirmDeleteId(value as string)} />
+            <Button
+              kind="ghost"
+              size="sm"
+              renderIcon={Archive}
+              iconDescription="Переместить в архив"
+              hasIconOnly
+              disabled={deletingId === (value as string)}
+              onClick={() => setConfirmDeleteId(value as string)}
+            />
           </div>
         );
       default:
@@ -102,24 +179,21 @@ export const FormsPage = () => {
     }
   };
 
+  const tabLabel = (key: FormsTabKey, label: string): string => {
+    const count =
+      key === 'all'
+        ? counts.all
+        : key === 'mine'
+          ? counts.mine
+          : key === 'unused'
+            ? counts.unused
+            : counts.archived;
+    return `${label} (${count})`;
+  };
+
   return (
     <div style={{ display: 'flex', flex: 1, flexDirection: 'column', height: '100%', minHeight: 0 }}>
-      {error ? (
-        <div
-          style={{
-            padding: 16,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 8,
-            alignItems: 'flex-start',
-          }}
-        >
-          <InlineNotification kind="error" title="Ошибка загрузки" subtitle={error} lowContrast />
-          <Button kind="ghost" size="sm" onClick={loadForms}>
-            Повторить
-          </Button>
-        </div>
-      ) : loading ? (
+      {loading ? (
         <div style={{ padding: 16 }}>
           <DataTableSkeleton headers={HEADERS} rowCount={8} columnCount={HEADERS.length} />
         </div>
@@ -127,6 +201,21 @@ export const FormsPage = () => {
         <DataTable rows={paginatedRows} headers={HEADERS} isSortable>
           {({ rows: carbonRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
             <TableContainer title="Реестр форм" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+              <div
+                style={{
+                  background: 'var(--cds-layer-01)',
+                  borderBottom: '1px solid var(--cds-border-subtle)',
+                }}
+              >
+                <Tabs selectedIndex={TAB_ORDER.indexOf(activeTab)}>
+                  <TabList aria-label="Фильтр форм">
+                    <Tab onClick={() => setActiveTab('all')}>{tabLabel('all', 'Все')}</Tab>
+                    <Tab onClick={() => setActiveTab('mine')}>{tabLabel('mine', 'Мои')}</Tab>
+                    <Tab onClick={() => setActiveTab('unused')}>{tabLabel('unused', 'Неиспользуемые')}</Tab>
+                    <Tab onClick={() => setActiveTab('archive')}>{tabLabel('archive', 'Архив')}</Tab>
+                  </TabList>
+                </Tabs>
+              </div>
               <TableToolbar>
                 <TableToolbarContent>
                   <Button renderIcon={Add} onClick={() => navigate('/forms/create')}>Создать форму</Button>
@@ -141,7 +230,11 @@ export const FormsPage = () => {
                   </TableHead>
                   <TableBody>
                     {carbonRows.length === 0 ? (
-                      <TableRow><TableCell colSpan={headers.length} style={{ textAlign: 'center' }}>Форм пока нет. Создайте первую!</TableCell></TableRow>
+                      <TableRow>
+                        <TableCell colSpan={headers.length} style={{ textAlign: 'center' }}>
+                          {EMPTY_MESSAGE[activeTab]}
+                        </TableCell>
+                      </TableRow>
                     ) : carbonRows.map((row) => {
                       const { key: _k, ...rp } = getRowProps({ row });
                       return <TableRow key={row.id} {...rp}>{row.cells.map((cell) => <TableCell key={cell.id}>{renderCell(cell.info.header, cell.value, row.id)}</TableCell>)}</TableRow>;
@@ -156,8 +249,8 @@ export const FormsPage = () => {
       )}
 
       {confirmDeleteId && (
-        <Modal open danger modalHeading="Удалить форму?" primaryButtonText="Удалить" secondaryButtonText="Отмена" onRequestClose={() => setConfirmDeleteId(null)} onRequestSubmit={() => void handleDelete(confirmDeleteId)} size="xs">
-          <p>Это действие нельзя отменить.</p>
+        <Modal open danger modalHeading="Переместить в архив?" primaryButtonText="В архив" secondaryButtonText="Отмена" onRequestClose={() => setConfirmDeleteId(null)} onRequestSubmit={() => void handleDelete(confirmDeleteId)} size="xs">
+          <p>Форма будет перемещена в архив. Её можно будет найти во вкладке «Архив».</p>
         </Modal>
       )}
     </div>

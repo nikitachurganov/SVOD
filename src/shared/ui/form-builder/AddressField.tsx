@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import type { FormFieldInstance } from '../../types/form-builder.types';
 import { useFormCtx, type Rule } from '../../hooks/useFormStore';
 import { useYandexMaps } from '../../hooks/useYandexMaps';
+import { REQUIRED_FIELD_MESSAGE } from '../../constants/formValidation';
 import { FieldLabel } from './FieldLabel';
 
 interface AddressFieldProps {
@@ -16,7 +17,7 @@ export const AddressField = ({ field }: AddressFieldProps) => {
 
   useEffect(() => {
     const rules: Rule[] = field.required
-      ? [{ required: true, message: 'Это поле обязательно для заполнения' }]
+      ? [{ required: true, message: REQUIRED_FIELD_MESSAGE }]
       : [];
     ctx.registerField(field.id, rules);
     return () => ctx.unregisterField(field.id);
@@ -78,8 +79,10 @@ export const AddressField = ({ field }: AddressFieldProps) => {
       <FieldLabel
         label={field.label || 'Адрес'}
         required={field.required}
+        htmlFor={`field-${field.id}`}
       />
       <input
+        id={`field-${field.id}`}
         ref={inputRef}
         placeholder="Начните вводить адрес..."
         value={value}

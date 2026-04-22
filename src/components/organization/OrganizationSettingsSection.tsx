@@ -148,17 +148,8 @@ export const OrganizationSettingsSection = ({ onAfterDelete }: Props) => {
 
   return (
     <>
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '1rem',
-          maxWidth: 720,
-        }}
-      >
-        <p style={{ margin: 0, color: 'var(--cds-text-secondary)' }}>
-          {activeOrganization.name}
-        </p>
+      <div className="org-settings">
+        <p className="org-settings__org-name">{activeOrganization.name}</p>
 
         {loadError && (
           <InlineNotification
@@ -182,35 +173,21 @@ export const OrganizationSettingsSection = ({ onAfterDelete }: Props) => {
 
         {isOwner && (
           <>
-            <Tile style={{ padding: '1rem' }}>
-              <h3 style={{ margin: '0 0 8px', fontSize: '1rem', fontWeight: 600 }}>
-                Смена владельца
-              </h3>
-              <p
-                style={{
-                  margin: '0 0 16px',
-                  fontSize: '0.875rem',
-                  color: 'var(--cds-text-secondary)',
-                }}
-              >
+            <Tile className="org-settings__tile">
+              <h3 className="org-settings__tile-title">Смена владельца</h3>
+              <p className="org-settings__tile-description">
                 Передайте права владельца другому участнику. Вы останетесь участником с ролью
                 «Участник». Сначала пригласите пользователей на странице{' '}
                 <Link to="/participants">Участники</Link>.
               </p>
 
               {transferCandidates.length === 0 ? (
-                <p
-                  style={{
-                    margin: 0,
-                    fontSize: '0.875rem',
-                    color: 'var(--cds-text-secondary)',
-                  }}
-                >
+                <p className="org-settings__empty-text">
                   Нет других участников для передачи владения.
                 </p>
               ) : (
                 <>
-                  <div style={{ maxWidth: 400, marginBottom: 16 }}>
+                  <div className="org-settings__field-wrap">
                     <Dropdown
                       id="org-transfer-owner"
                       titleText="Новый владелец"
@@ -233,7 +210,7 @@ export const OrganizationSettingsSection = ({ onAfterDelete }: Props) => {
               )}
 
               {transferError && (
-                <div style={{ marginTop: 16 }}>
+                <div className="org-settings__alert-wrap">
                   <InlineNotification
                     kind="error"
                     title="Ошибка"
@@ -245,17 +222,9 @@ export const OrganizationSettingsSection = ({ onAfterDelete }: Props) => {
               )}
             </Tile>
 
-            <Tile style={{ padding: '1rem', borderColor: 'var(--cds-support-error)' }}>
-              <h3 style={{ margin: '0 0 8px', fontSize: '1rem', fontWeight: 600 }}>
-                Удаление организации
-              </h3>
-              <p
-                style={{
-                  margin: '0 0 16px',
-                  fontSize: '0.875rem',
-                  color: 'var(--cds-text-secondary)',
-                }}
-              >
+            <Tile className="org-settings__tile org-settings__tile--danger">
+              <h3 className="org-settings__tile-title">Удаление организации</h3>
+              <p className="org-settings__tile-description">
                 Безвозвратно удалить организацию и связанные данные. Доступно только владельцу.
               </p>
               <Button
@@ -268,7 +237,7 @@ export const OrganizationSettingsSection = ({ onAfterDelete }: Props) => {
                 Удалить организацию…
               </Button>
               {deleteError && (
-                <div style={{ marginTop: 16 }}>
+                <div className="org-settings__alert-wrap">
                   <InlineNotification
                     kind="error"
                     title="Ошибка"

@@ -64,6 +64,20 @@ export interface FormResponse {
   updated_at: string;
   usage_count?: number;
   is_universal?: boolean;
+  archived?: boolean;
+}
+
+export interface GetFormsFilters {
+  archived?: boolean;
+  mine?: boolean;
+  unused?: boolean;
+}
+
+export interface FormsCounts {
+  all: number;
+  mine: number;
+  unused: number;
+  archived: number;
 }
 
 // ─── Field converters ─────────────────────────────────────────────────────────
@@ -194,13 +208,40 @@ export const pagesPayloadToInstances = (
 
 // ─── API ──────────────────────────────────────────────────────────────────────
 
-export const getForms = async (organizationId?: string | null): Promise<FormResponse[]> => {
-  const params = organizationId ? { organization_id: organizationId } : {};
+export const getForms = async (
+  organizationId?: string | null,
+  filters: GetFormsFilters = {},
+): Promise<FormResponse[]> => {
+  const params: Record<string, string | boolean> = {};
+  if (organizationId) {
+    params.organization_id = organizationId;
+  }
+  if (filters.archived !== undefined) {
+    params.archived = filters.archived;
+  }
+  if (filters.mine) {
+    params.mine = true;
+  }
+  if (filters.unused) {
+    params.unused = true;
+  }
+
   const { data } = await api.get<FormResponse[]>('/forms', { params });
   return data.map((row) => ({
     ...row,
     pages: row.pages ?? normalizePagesFromApi(row.pages),
   }));
+};
+
+export const getFormsCounts = async (
+  organizationId?: string | null,
+): Promise<FormsCounts> => {
+  const params: Record<string, string> = {};
+  if (organizationId) {
+    params.organization_id = organizationId;
+  }
+  const { data } = await api.get<FormsCounts>('/forms/counts', { params });
+  return data;
 };
 
 export const getFormById = async (id: string): Promise<FormResponse> => {

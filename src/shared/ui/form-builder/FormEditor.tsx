@@ -1,11 +1,13 @@
-import { useCallback, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   Button,
   Breadcrumb,
   BreadcrumbItem,
+  InlineNotification,
   Modal,
+  ToastNotification,
 } from '@carbon/react';
-import { ArrowLeft, View } from '@carbon/react/icons';
+import { ArrowLeft, TrashCan, View } from '@carbon/react/icons';
 import {
   DndContext,
   DragOverlay,
@@ -111,6 +113,15 @@ type ActiveDragInfo =
   | { source: 'canvas'; fieldId: string }
   | null;
 
+interface PendingDeletion {
+  field: FormFieldInstance;
+  pageId: string;
+  parentGroupId: string | null;
+  index: number;
+  expiresAt: number;
+  timeoutId: number;
+}
+
 // ─── Tool-panel drop zone ─────────────────────────────────────────────────────
 
 export const TOOL_PANEL_DROP_ID = 'tool-panel';
@@ -152,11 +163,13 @@ const ToolPanelDropZone = ({
           display: 'flex',
           flexDirection: 'column',
           minHeight: 0,
-          borderRight: '1px solid var(--cds-border-subtle)',
+          borderRight: deleteMode
+            ? '2px dashed var(--cds-support-error)'
+            : '1px solid var(--cds-border-subtle)',
           background: deleteMode
             ? 'color-mix(in srgb, var(--cds-support-error) 10%, var(--cds-layer-01))'
             : 'var(--cds-layer-01)',
-          transition: 'background 150ms ease, border-color 150ms ease',
+          transition: 'background 150ms ease, border-color 150ms ease, border-width 150ms ease',
           overflow: deleteMode ? 'hidden' : 'auto',
         }}
       >
@@ -165,17 +178,12 @@ const ToolPanelDropZone = ({
             style={{
               flex: 1,
               display: 'flex',
-              flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: 12,
               padding: '24px 32px',
-              textAlign: 'center',
             }}
           >
-            <span style={{ color: 'var(--cds-text-error)' }}>
-              Перенесите в область, чтобы удалить поле
-            </span>
+            <TrashCan size={32} style={{ color: 'var(--cds-support-error)' }} />
           </div>
         ) : (
           children
@@ -229,6 +237,41 @@ const collectFieldIds = (fields: FormFieldInstance[]): string[] => {
     }
   }
   return ids;
+};
+
+const cloneField = (field: FormFieldInstance): FormFieldInstance => {
+  if (typeof structuredClone === 'function') {
+    return structuredClone(field);
+  }
+  return JSON.parse(JSON.stringify(field)) as FormFieldInstance;
+};
+
+type FieldLocation =
+  | { parentGroupId: null; index: number; field: FormFieldInstance }
+  | { parentGroupId: string; index: number; field: FormFieldInstance };
+
+const findFieldLocation = (
+  fields: FormFieldInstance[],
+  fieldId: string,
+): FieldLocation | null => {
+  const topIndex = fields.findIndex((field) => field.id === fieldId);
+  if (topIndex !== -1) {
+    return { parentGroupId: null, index: topIndex, field: fields[topIndex] };
+  }
+
+  for (const field of fields) {
+    if (field.type !== 'group' || !field.children) continue;
+    const childIndex = field.children.findIndex((child) => child.id === fieldId);
+    if (childIndex !== -1) {
+      return {
+        parentGroupId: field.id,
+        index: childIndex,
+        field: field.children[childIndex],
+      };
+    }
+  }
+
+  return null;
 };
 
 interface InlinePreviewProps {
@@ -380,8 +423,11 @@ export const FormEditor = ({
   const resizeStateRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const [activeDrag, setActiveDrag] = useState<ActiveDragInfo>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [deletePageId, setDeletePageId] = useState<string | null>(null);
+  const [pendingDeletion, setPendingDeletion] = useState<PendingDeletion | null>(null);
+  const [undoNow, setUndoNow] = useState(() => Date.now());
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -420,6 +466,97 @@ export const FormEditor = ({
     pages.find((p) => p.id === activePageId) ?? pages[0];
   const activeFields: FormFieldInstance[] = activePage?.fields ?? [];
 
+  useEffect(() => {
+    if (!pendingDeletion) return;
+    const intervalId = window.setInterval(() => {
+      setUndoNow(Date.now());
+    }, 250);
+    return () => window.clearInterval(intervalId);
+  }, [pendingDeletion]);
+
+  useEffect(() => {
+    return () => {
+      if (pendingDeletion) {
+        window.clearTimeout(pendingDeletion.timeoutId);
+      }
+    };
+  }, [pendingDeletion]);
+
+  const clearPendingDeletion = useCallback(() => {
+    setPendingDeletion((prev) => {
+      if (prev) window.clearTimeout(prev.timeoutId);
+      return null;
+    });
+  }, []);
+
+  const queueDeletionUndo = useCallback(
+    ({
+      field,
+      parentGroupId,
+      index,
+    }: {
+      field: FormFieldInstance;
+      parentGroupId: string | null;
+      index: number;
+    }) => {
+      setPendingDeletion((prev) => {
+        if (prev) {
+          window.clearTimeout(prev.timeoutId);
+        }
+
+        const expiresAt = Date.now() + 5000;
+        const timeoutId = window.setTimeout(() => {
+          setPendingDeletion((current) =>
+            current && current.expiresAt === expiresAt ? null : current,
+          );
+        }, 5000);
+
+        return {
+          field: cloneField(field),
+          pageId: activePageId,
+          parentGroupId,
+          index,
+          expiresAt,
+          timeoutId,
+        };
+      });
+    },
+    [activePageId],
+  );
+
+  const handleUndoDelete = useCallback(() => {
+    setPendingDeletion((prev) => {
+      if (!prev) return null;
+      window.clearTimeout(prev.timeoutId);
+
+      setPages((pageList) =>
+        pageList.map((page) => {
+          if (page.id !== prev.pageId) return page;
+
+          if (prev.parentGroupId === null) {
+            const nextFields = [...page.fields];
+            const targetIndex = Math.min(Math.max(prev.index, 0), nextFields.length);
+            nextFields.splice(targetIndex, 0, cloneField(prev.field));
+            return { ...page, fields: nextFields };
+          }
+
+          return {
+            ...page,
+            fields: page.fields.map((field) => {
+              if (field.id !== prev.parentGroupId || !field.children) return field;
+              const nextChildren = [...field.children];
+              const targetIndex = Math.min(Math.max(prev.index, 0), nextChildren.length);
+              nextChildren.splice(targetIndex, 0, cloneField(prev.field));
+              return { ...field, children: nextChildren };
+            }),
+          };
+        }),
+      );
+
+      return null;
+    });
+  }, []);
+
   const setActivePageFields = useCallback(
     (updater: (fields: FormFieldInstance[]) => FormFieldInstance[]) => {
       setPages((prevPages) =>
@@ -442,8 +579,12 @@ export const FormEditor = ({
   );
 
   const handleFieldDelete = useCallback((id: string) => {
+    const location = findFieldLocation(activeFields, id);
+    if (location) {
+      queueDeletionUndo(location);
+    }
     setActivePageFields((prev) => prev.filter((f) => f.id !== id));
-  }, [setActivePageFields]);
+  }, [activeFields, queueDeletionUndo, setActivePageFields]);
 
   // ── Group child mutation ──────────────────────────────────────────────────────
   const handleGroupChildChange = useCallback(
@@ -466,6 +607,17 @@ export const FormEditor = ({
 
   const handleGroupChildDelete = useCallback(
     (groupId: string, childId: string) => {
+      const group = activeFields.find((field) => field.id === groupId);
+      const index = group?.children?.findIndex((child) => child.id === childId) ?? -1;
+      const field = index !== -1 && group?.children ? group.children[index] : null;
+      if (field && index !== -1) {
+        queueDeletionUndo({
+          field,
+          parentGroupId: groupId,
+          index,
+        });
+      }
+
       setActivePageFields((prev) =>
         prev.map((f) =>
           f.id === groupId && f.children
@@ -474,7 +626,7 @@ export const FormEditor = ({
         ),
       );
     },
-    [setActivePageFields],
+    [activeFields, queueDeletionUndo, setActivePageFields],
   );
 
   // ── Drag start ───────────────────────────────────────────────────────────────
@@ -552,6 +704,10 @@ export const FormEditor = ({
 
     // Canvas → tool panel (delete)
     if (data.source === 'canvas' && overId === TOOL_PANEL_DROP_ID) {
+      const location = findFieldLocation(activeFields, activeId);
+      if (location) {
+        queueDeletionUndo(location);
+      }
       setActivePageFields((prev) => {
         if (prev.some((f) => f.id === activeId)) {
           return prev.filter((f) => f.id !== activeId);
@@ -596,7 +752,7 @@ export const FormEditor = ({
         return prev;
       });
     }
-  }, [setActivePageFields]);
+  }, [activeFields, queueDeletionUndo, setActivePageFields]);
 
   // ── DragOverlay renderer ──────────────────────────────────────────────────────
   const renderOverlay = () => {
@@ -622,15 +778,28 @@ export const FormEditor = ({
   // ── Save ─────────────────────────────────────────────────────────────────────
   const handleSave = useCallback(async () => {
     if (!formTitle.trim()) {
-      alert('Необходимо указать название формы перед сохранением.');
+      setSaveError('Укажите название формы.');
       return;
     }
 
+    const totalFields = pages.reduce((count, page) => {
+      return count + page.fields.reduce((c, field) => {
+        if (field.type === 'group') return c + (field.children?.length ?? 0);
+        return c + 1;
+      }, 0);
+    }, 0);
+
+    if (totalFields === 0) {
+      setSaveError('Добавьте хотя бы один элемент формы.');
+      return;
+    }
+
+    setSaveError(null);
     setIsSaving(true);
     try {
       await onSave(formTitle.trim(), pages);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Не удалось сохранить форму.');
+      setSaveError(err instanceof Error ? err.message : 'Не удалось сохранить форму.');
     } finally {
       setIsSaving(false);
     }
@@ -736,6 +905,16 @@ export const FormEditor = ({
                 disabled={isSaving}
                 size="md"
               />
+              {pendingDeletion && (
+                <Button
+                  kind="ghost"
+                  size="md"
+                  onClick={handleUndoDelete}
+                  disabled={isSaving}
+                >
+                  Вернуть удаленный элемент
+                </Button>
+              )}
               <Button
                 kind="primary"
                 onClick={handleSave}
@@ -746,6 +925,16 @@ export const FormEditor = ({
             </div>
           </div>
         </div>
+
+        {saveError && (
+          <InlineNotification
+            kind="error"
+            title={saveError}
+            lowContrast
+            onCloseButtonClick={() => setSaveError(null)}
+            style={{ marginBottom: 0 }}
+          />
+        )}
 
         {/* ── Content area: builder or inline preview ── */}
         <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
@@ -873,6 +1062,39 @@ export const FormEditor = ({
       </div>
 
       <DragOverlay dropAnimation={null}>{renderOverlay()}</DragOverlay>
+
+      {pendingDeletion && (
+        <div
+          style={{
+            position: 'fixed',
+            right: 24,
+            bottom: 24,
+            zIndex: 10001,
+            maxWidth: 420,
+          }}
+        >
+          <ToastNotification
+            kind="warning"
+            lowContrast
+            title="Элемент удален"
+            subtitle={`Можно вернуть в течение ${Math.max(1, Math.ceil((pendingDeletion.expiresAt - undoNow) / 1000))} сек.`}
+            timeout={0}
+            onClose={clearPendingDeletion}
+            aria-label="Закрыть уведомление"
+          />
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              marginTop: 8,
+            }}
+          >
+            <Button kind="secondary" size="sm" onClick={handleUndoDelete}>
+              Вернуть
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* ── Delete page confirmation modal ── */}
       <Modal

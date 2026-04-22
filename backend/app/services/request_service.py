@@ -110,6 +110,7 @@ def _to_response(
         organization_id=str(req.organization_id) if req.organization_id else None,
         data=req.data,
         status=req.status,
+        deleted=bool(getattr(req, "deleted", False)),
         closedAt=req.closed_at.isoformat() if req.closed_at else None,
         created_by_user_id=str(req.created_by_user_id) if req.created_by_user_id else None,
         author=_to_author(req.author),
@@ -147,13 +148,44 @@ def map_request_to_response(
 
 
 async def list_requests(
-    session: AsyncSession, organization_id: uuid.UUID | None = None
+    session: AsyncSession,
+    organization_id: uuid.UUID | None = None,
+    archived: bool | None = None,
+    mine_user_id: uuid.UUID | None = None,
+    status: str | None = None,
 ) -> list[RequestResponse]:
-    if organization_id is not None:
-        requests = await request_repository.get_all_by_org(session, organization_id)
-    else:
-        requests = await request_repository.get_all(session)
+    requests = await request_repository.get_all_filtered(
+        session,
+        organization_id=organization_id,
+        archived=archived,
+        created_by_user_id=mine_user_id,
+        status=status,
+    )
     return [_to_response(r, include_stages=False) for r in requests]
+
+
+async def get_counts(
+    session: AsyncSession,
+    organization_id: uuid.UUID | None,
+) -> dict[str, int]:
+    open_count = await request_repository.count_filtered(
+        session, organization_id=organization_id, archived=False, status="open"
+    )
+    in_progress_count = await request_repository.count_filtered(
+        session, organization_id=organization_id, archived=False, status="assigned"
+    )
+    closed_count = await request_repository.count_filtered(
+        session, organization_id=organization_id, archived=False, status="closed"
+    )
+    archived_count = await request_repository.count_filtered(
+        session, organization_id=organization_id, archived=True
+    )
+    return {
+        "open": open_count,
+        "in_progress": in_progress_count,
+        "closed": closed_count,
+        "archived": archived_count,
+    }
 
 
 async def get_request(session: AsyncSession, request_id: int) -> RequestResponse:
@@ -175,6 +207,7 @@ async def create_request(
         organization_id=org_id,
         data=payload.data,
         status=payload.status,
+        deleted=False,
         execution_status=C.EXEC_NEW,
         form_snapshot=payload.form_snapshot,
     )

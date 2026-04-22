@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, Toggle, Modal } from '@carbon/react';
+import { Button, Modal, Toggle } from '@carbon/react';
 import { DragHandle } from './DragHandle';
 import { FieldPreview } from './FieldPreview';
 import type { FieldOption, FormFieldInstance } from '../../types/form-builder.types';
@@ -88,25 +88,23 @@ export const FieldBlock = ({
             alignItems: 'center',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
             <Toggle
               id={`required-${field.id}`}
               size="sm"
               labelText="Обязательно для заполнения"
               hideLabel
+              labelA=""
+              labelB=""
               toggled={field.required}
               onToggle={(checked: boolean) => onChange({ required: checked })}
             />
-            <span style={{ fontSize: '0.875rem', color: 'var(--cds-text-secondary)' }}>
-              Обязательно для заполнения
-            </span>
           </div>
 
           <Button
             kind="danger--ghost"
             size="sm"
             onClick={() => setConfirmDelete(true)}
-            style={{ paddingInline: 0 }}
           >
             Удалить поле
           </Button>

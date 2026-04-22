@@ -1,21 +1,33 @@
 interface FieldLabelProps {
   label: string;
   required?: boolean;
+  /** Если задан — рендерится как `<label htmlFor="...">`, иначе как `<div>` (например, для read-only). */
+  htmlFor?: string;
 }
 
 /**
- * Renders a field label for preview / view forms.
- * When required, appends a red asterisk after the label text.
- * Used as the `label` prop of Form.Item in place of the raw string so that
- * `requiredMark={false}` can be set on the Form while still showing the mark.
+ * Лейбол в стиле Carbon (класс `.cds--label`): размер, цвет, нижний отступ.
+ * Обязательность — красная звёздочка после текста.
  */
-export const FieldLabel = ({ label, required }: FieldLabelProps) => (
-  <span>
-    {label}
-    {required && (
-      <span style={{ marginLeft: 4 }} aria-hidden>
-        *
-      </span>
-    )}
-  </span>
-);
+export const FieldLabel = ({ label, required, htmlFor }: FieldLabelProps) => {
+  const inner = (
+    <>
+      <span>{label}</span>
+      {required && (
+        <span className="app-field-label__required" aria-hidden>
+          *
+        </span>
+      )}
+    </>
+  );
+
+  if (htmlFor) {
+    return (
+      <label className="cds--label app-field-label" htmlFor={htmlFor}>
+        {inner}
+      </label>
+    );
+  }
+
+  return <div className="cds--label app-field-label">{inner}</div>;
+};

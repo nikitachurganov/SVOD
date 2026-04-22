@@ -32,3 +32,4 @@ class FormResponse(BaseModel):
     updated_at: str
     usage_count: int = 0
     is_universal: bool = False
+    archived: bool = False

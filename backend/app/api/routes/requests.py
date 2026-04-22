@@ -43,10 +43,28 @@ _route_log = logging.getLogger(__name__)
 @router.get("", response_model=list[RequestResponse])
 async def list_requests(
     session: DbSession,
+    user: CurrentUser,
+    organization_id: uuid.UUID | None = Query(default=None),
+    archived: bool | None = Query(default=None),
+    mine: bool = Query(default=False),
+    status: str | None = Query(default=None),
+) -> list[RequestResponse]:
+    return await request_service.list_requests(
+        session,
+        organization_id=organization_id,
+        archived=archived,
+        mine_user_id=user.id if mine else None,
+        status=status,
+    )
+
+
+@router.get("/counts")
+async def requests_counts(
+    session: DbSession,
     _user: CurrentUser,
     organization_id: uuid.UUID | None = Query(default=None),
-) -> list[RequestResponse]:
-    return await request_service.list_requests(session, organization_id=organization_id)
+) -> dict[str, int]:
+    return await request_service.get_counts(session, organization_id)
 
 
 @router.get("/{request_id}", response_model=RequestResponse)

@@ -3,7 +3,7 @@ import { Modal, Toggle } from '@carbon/react';
 import { useAuth } from '../../shared/context/auth.context';
 import { useThemeMode } from '../../shared/context/theme.context';
 import { useOrganization } from '../../shared/context/organization.context';
-import { deleteOrganization, leaveOrganization } from '../../shared/api/organizations.api';
+import { leaveOrganization } from '../../shared/api/organizations.api';
 
 export interface HeaderProfileMenuContentProps {
   onClose: () => void;
@@ -54,21 +54,6 @@ export const HeaderProfileMenuContent = ({
     });
   };
 
-  const handleDeleteOrg = () => {
-    if (!activeOrganization) return;
-    const orgName = activeOrganization.name;
-    onClose();
-    setConfirmModal({
-      heading: 'Удалить организацию',
-      body: `Вы уверены, что хотите удалить «${orgName}»? Это действие необратимо.`,
-      danger: true,
-      onConfirm: async () => {
-        await deleteOrganization(activeOrganization.id);
-        await refreshOrganizations();
-      },
-    });
-  };
-
   const menuAction = (fn: () => void) => () => {
     onClose();
     fn();
@@ -104,17 +89,6 @@ export const HeaderProfileMenuContent = ({
             labelB=""
           />
         </div>
-
-        {isOwner && activeOrganization && (
-          <button
-            type="button"
-            className="app-header-profile-panel__bottom-action app-header-profile-panel__bottom-action--danger"
-            onClick={handleDeleteOrg}
-          >
-            Удалить организацию
-          </button>
-        )}
-
         <button
           type="button"
           className="app-header-profile-panel__bottom-action"

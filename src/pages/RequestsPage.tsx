@@ -14,18 +14,24 @@ import {
   Tag,
   Tooltip,
   Button,
-  InlineNotification,
   DataTableSkeleton,
+  Modal,
+  Tabs,
+  TabList,
+  Tab,
 } from '@carbon/react';
 import { Add, TrashCan, View } from '@carbon/react/icons';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   deleteRequest,
   getRequests,
+  getRequestsCounts,
   type RequestResponse,
+  type RequestsCounts,
 } from '../shared/api/requests.api';
 import { buildDisplayName } from '../shared/utils/userName';
 import { useOrganization } from '../shared/context/organization.context';
+import { useNotifications } from '../shared/context/notifications.context';
 
 const statusMap: Record<string, { kind: string; label: string }> = {
   open: { kind: 'blue', label: 'Открыта' },
@@ -61,48 +67,108 @@ const HEADERS = [
   { key: 'actions', header: 'Действия' },
 ];
 
+type RequestsTabKey = 'open' | 'in_progress' | 'closed' | 'archive';
+
+const TAB_ORDER: RequestsTabKey[] = ['open', 'in_progress', 'closed', 'archive'];
+
+const EMPTY_MESSAGE: Record<RequestsTabKey, string> = {
+  open: 'Нет открытых заявок.',
+  in_progress: 'Нет заявок в работе.',
+  closed: 'Нет закрытых заявок.',
+  archive: 'Архивных заявок пока нет.',
+};
+
+const DEFAULT_COUNTS: RequestsCounts = {
+  open: 0,
+  in_progress: 0,
+  closed: 0,
+  archived: 0,
+};
+
 export const RequestsPage = () => {
   const navigate = useNavigate();
   const { activeOrganization } = useOrganization();
+  const { notifySuccess, notifyError } = useNotifications();
 
   const [requests, setRequests] = useState<RequestResponse[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PAGE_SIZES[0]);
+  const [activeTab, setActiveTab] = useState<RequestsTabKey>('open');
+  const [counts, setCounts] = useState<RequestsCounts>(DEFAULT_COUNTS);
 
-  const loadRequests = useCallback(() => {
-    setLoading(true);
-    getRequests(activeOrganization?.id)
-      .then((data) => {
-        setRequests(data);
-        setError(null);
-      })
-      .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : 'Не удалось загрузить заявки');
-      })
-      .finally(() => {
-        setLoading(false);
+  const loadCounts = useCallback(() => {
+    getRequestsCounts(activeOrganization?.id)
+      .then(setCounts)
+      .catch(() => {
+        // Счётчики не критичны, молча игнорируем ошибку.
       });
   }, [activeOrganization?.id]);
 
+  const loadRequests = useCallback(
+    (tab: RequestsTabKey = activeTab) => {
+      setLoading(true);
+      const filters: Parameters<typeof getRequests>[1] = { archived: false };
+      switch (tab) {
+        case 'archive':
+          filters.archived = true;
+          break;
+        case 'open':
+          filters.status = 'open';
+          break;
+        case 'in_progress':
+          filters.status = 'assigned';
+          break;
+        case 'closed':
+          filters.status = 'closed';
+          break;
+      }
+      return getRequests(activeOrganization?.id, filters)
+        .then((data) => {
+          setRequests(data);
+        })
+        .catch((err: unknown) => {
+          notifyError(
+            'Не удалось загрузить заявки',
+            err instanceof Error ? err.message : undefined,
+          );
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    },
+    [activeOrganization?.id, activeTab, notifyError],
+  );
+
   useEffect(() => {
     loadRequests();
-  }, [loadRequests]);
+    loadCounts();
+  }, [loadRequests, loadCounts]);
 
-  const handleDelete = useCallback(async (id: string) => {
-    setDeletingId(id);
-    try {
-      await deleteRequest(id);
-      setRequests((prev) => prev.filter((r) => r.id !== id));
-    } catch {
-      // silently handled — user sees the row stay
-    } finally {
-      setDeletingId(null);
-    }
-  }, []);
+  const handleDelete = useCallback(
+    async (id: string) => {
+      setDeletingId(id);
+      try {
+        await deleteRequest(id);
+        notifySuccess('Заявка перемещена в архив');
+        setActiveTab('archive');
+        await loadRequests('archive');
+        loadCounts();
+      } catch (err) {
+        notifyError(
+          'Не удалось переместить заявку в архив',
+          err instanceof Error ? err.message : undefined,
+        );
+      } finally {
+        setDeletingId(null);
+        setConfirmDeleteId(null);
+      }
+    },
+    [loadRequests, loadCounts, notifySuccess, notifyError],
+  );
 
   const resolveAuthorName = useCallback((r: RequestResponse): string => {
     if (r.author) return buildDisplayName(r.author);
@@ -131,10 +197,16 @@ export const RequestsPage = () => {
     [requests, resolveAuthorName],
   );
 
+  useEffect(() => {
+    setPage(1);
+  }, [activeTab, pageSize]);
+
   const paginatedRows = useMemo(() => {
     const start = (page - 1) * pageSize;
     return rows.slice(start, start + pageSize);
   }, [rows, page, pageSize]);
+
+  const isArchive = activeTab === 'archive';
 
   const renderCell = (cellKey: string, cellValue: unknown, rowId: string) => {
     switch (cellKey) {
@@ -196,21 +268,35 @@ export const RequestsPage = () => {
               hasIconOnly
               onClick={() => navigate(`/requests/${cellValue}`)}
             />
-            <Button
-              kind="danger--ghost"
-              size="sm"
-              renderIcon={TrashCan}
-              iconDescription="Удалить"
-              hasIconOnly
-              disabled={deletingId === (cellValue as string)}
-              onClick={() => handleDelete(cellValue as string)}
-            />
+            {!isArchive && (
+              <Button
+                kind="danger--ghost"
+                size="sm"
+                renderIcon={TrashCan}
+                iconDescription="Удалить"
+                hasIconOnly
+                disabled={deletingId === (cellValue as string)}
+                onClick={() => setConfirmDeleteId(cellValue as string)}
+              />
+            )}
           </div>
         );
 
       default:
         return cellValue as string;
     }
+  };
+
+  const tabLabel = (key: RequestsTabKey, label: string): string => {
+    const count =
+      key === 'open'
+        ? counts.open
+        : key === 'in_progress'
+          ? counts.in_progress
+          : key === 'closed'
+            ? counts.closed
+            : counts.archived;
+    return `${label} (${count})`;
   };
 
   return (
@@ -223,22 +309,7 @@ export const RequestsPage = () => {
         minHeight: 0,
       }}
     >
-      {error ? (
-        <div
-          style={{
-            padding: 16,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 8,
-            alignItems: 'flex-start',
-          }}
-        >
-          <InlineNotification kind="error" title="Ошибка загрузки" subtitle={error} lowContrast />
-          <Button kind="ghost" size="sm" onClick={loadRequests}>
-            Повторить
-          </Button>
-        </div>
-      ) : loading ? (
+      {loading ? (
         <div style={{ padding: 16 }}>
           <DataTableSkeleton headers={HEADERS} rowCount={8} columnCount={HEADERS.length} />
         </div>
@@ -249,6 +320,26 @@ export const RequestsPage = () => {
               title="Реестр заявок"
               style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}
             >
+              <div
+                style={{
+                  background: 'var(--cds-layer-01)',
+                  borderBottom: '1px solid var(--cds-border-subtle)',
+                }}
+              >
+                <Tabs selectedIndex={TAB_ORDER.indexOf(activeTab)}>
+                  <TabList aria-label="Фильтр заявок">
+                    <Tab onClick={() => setActiveTab('open')}>{tabLabel('open', 'Открытые')}</Tab>
+                    <Tab onClick={() => setActiveTab('in_progress')}>
+                      {tabLabel('in_progress', 'В работе')}
+                    </Tab>
+                    <Tab onClick={() => setActiveTab('closed')}>
+                      {tabLabel('closed', 'Закрытые')}
+                    </Tab>
+                    <Tab onClick={() => setActiveTab('archive')}>{tabLabel('archive', 'Архив')}</Tab>
+                  </TabList>
+                </Tabs>
+              </div>
+
               <TableToolbar>
                 <TableToolbarContent>
                   <Button
@@ -279,7 +370,7 @@ export const RequestsPage = () => {
                     {carbonRows.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={headers.length} style={{ textAlign: 'center' }}>
-                          Заявок пока нет. Создайте первую!
+                          {EMPTY_MESSAGE[activeTab]}
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -324,6 +415,21 @@ export const RequestsPage = () => {
             </TableContainer>
           )}
         </DataTable>
+      )}
+
+      {confirmDeleteId && (
+        <Modal
+          open
+          danger
+          modalHeading="Переместить в архив?"
+          primaryButtonText="В архив"
+          secondaryButtonText="Отмена"
+          onRequestClose={() => setConfirmDeleteId(null)}
+          onRequestSubmit={() => void handleDelete(confirmDeleteId)}
+          size="xs"
+        >
+          <p>Заявка будет перемещена в архив. Её можно будет найти во вкладке «Архив».</p>
+        </Modal>
       )}
     </div>
   );

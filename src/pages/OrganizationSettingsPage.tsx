@@ -5,20 +5,10 @@ export const OrganizationSettingsPage = () => {
   const navigate = useNavigate();
 
   return (
-    <div
-      style={{
-        padding: 24,
-        flex: 1,
-        minHeight: 0,
-        overflow: 'auto',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 24,
-      }}
-    >
-      <div>
-        <h2 style={{ margin: '0 0 8px', fontWeight: 600 }}>Настройки организации</h2>
-        <p style={{ margin: 0, color: 'var(--cds-text-secondary)', fontSize: '0.875rem' }}>
+    <div className="org-settings-page">
+      <div className="org-settings-page__header">
+        <h2 className="org-settings-page__title">Настройки организации</h2>
+        <p className="org-settings-page__subtitle">
           Смена владельца и удаление организации
         </p>
       </div>

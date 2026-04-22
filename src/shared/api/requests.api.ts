@@ -14,6 +14,7 @@ export interface RequestResponse {
   organization_id: string | null;
   data: unknown;
   status: RequestStatus;
+  deleted?: boolean;
   closedAt: string | null;
   created_by_user_id: string | null;
   author: AuthorPreview | null;
@@ -36,6 +37,19 @@ export interface RequestResponse {
   ai_tz?: RequestTechnicalSpecEnvelope | null;
 }
 
+export interface GetRequestsFilters {
+  archived?: boolean;
+  mine?: boolean;
+  status?: RequestStatus;
+}
+
+export interface RequestsCounts {
+  open: number;
+  in_progress: number;
+  closed: number;
+  archived: number;
+}
+
 export interface CreateRequestPayload {
   title: string;
   form_id: string;
@@ -52,9 +66,36 @@ export interface UpdateRequestPayload {
   data?: unknown;
 }
 
-export const getRequests = async (organizationId?: string | null): Promise<RequestResponse[]> => {
-  const params = organizationId ? { organization_id: organizationId } : {};
+export const getRequests = async (
+  organizationId?: string | null,
+  filters: GetRequestsFilters = {},
+): Promise<RequestResponse[]> => {
+  const params: Record<string, string | boolean> = {};
+  if (organizationId) {
+    params.organization_id = organizationId;
+  }
+  if (filters.archived !== undefined) {
+    params.archived = filters.archived;
+  }
+  if (filters.mine) {
+    params.mine = true;
+  }
+  if (filters.status) {
+    params.status = filters.status;
+  }
+
   const { data } = await api.get<RequestResponse[]>('/requests', { params });
+  return data;
+};
+
+export const getRequestsCounts = async (
+  organizationId?: string | null,
+): Promise<RequestsCounts> => {
+  const params: Record<string, string> = {};
+  if (organizationId) {
+    params.organization_id = organizationId;
+  }
+  const { data } = await api.get<RequestsCounts>('/requests/counts', { params });
   return data;
 };
 

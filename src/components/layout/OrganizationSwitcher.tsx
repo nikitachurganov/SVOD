@@ -36,6 +36,7 @@ export const OrganizationSwitcher = () => {
         titleText="Выберите организацию"
         label="Выберите организацию"
         hideLabel
+        autoAlign
       />
     </>
   );

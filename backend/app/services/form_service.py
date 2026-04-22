@@ -36,17 +36,53 @@ def _to_response(form: Form) -> FormResponse:
         updated_at=form.updated_at.isoformat(),
         usage_count=int(getattr(form, "usage_count", 0) or 0),
         is_universal=bool(getattr(form, "is_universal", False)),
+        archived=bool(getattr(form, "archived", False)),
     )
 
 
 async def list_forms(
-    session: AsyncSession, organization_id: uuid.UUID | None = None
+    session: AsyncSession,
+    organization_id: uuid.UUID | None = None,
+    archived: bool | None = None,
+    mine_user_id: uuid.UUID | None = None,
+    unused: bool | None = None,
 ) -> list[FormResponse]:
-    if organization_id is not None:
-        forms = await form_repository.get_all_by_org(session, organization_id)
-    else:
-        forms = await form_repository.get_all(session)
+    forms = await form_repository.get_all_filtered(
+        session,
+        organization_id=organization_id,
+        archived=archived,
+        created_by_user_id=mine_user_id,
+        unused=unused,
+    )
     return [_to_response(f) for f in forms]
+
+
+async def get_counts(
+    session: AsyncSession,
+    organization_id: uuid.UUID | None,
+    current_user_id: uuid.UUID,
+) -> dict[str, int]:
+    all_count = await form_repository.count_filtered(
+        session, organization_id=organization_id, archived=False
+    )
+    mine_count = await form_repository.count_filtered(
+        session,
+        organization_id=organization_id,
+        archived=False,
+        created_by_user_id=current_user_id,
+    )
+    unused_count = await form_repository.count_filtered(
+        session, organization_id=organization_id, archived=False, unused=True
+    )
+    archived_count = await form_repository.count_filtered(
+        session, organization_id=organization_id, archived=True
+    )
+    return {
+        "all": all_count,
+        "mine": mine_count,
+        "unused": unused_count,
+        "archived": archived_count,
+    }
 
 
 async def get_form(session: AsyncSession, form_id: str) -> FormResponse:
@@ -67,6 +103,7 @@ async def create_form(
         organization_id=org_id,
         fields=payload.pages,
         is_universal=payload.is_universal,
+        archived=False,
     )
     form = await form_repository.create(session, form)
     await session.commit()

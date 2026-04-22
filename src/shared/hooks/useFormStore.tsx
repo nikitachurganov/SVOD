@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import { createContext, useContext, type ReactNode } from 'react';
+import { REQUIRED_FIELD_MESSAGE } from '../constants/formValidation';
 
 export interface Rule {
   required?: boolean;
@@ -72,7 +73,7 @@ export function useFormStore(): FormStoreInstance {
               value === '' ||
               (Array.isArray(value) && value.length === 0))
           ) {
-            newErrors[name] = rule.message ?? 'Это поле обязательно';
+            newErrors[name] = rule.message ?? REQUIRED_FIELD_MESSAGE;
             break;
           }
           if (rule.validator) {

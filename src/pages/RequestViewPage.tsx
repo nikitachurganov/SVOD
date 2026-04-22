@@ -23,6 +23,7 @@ import { RequestExecutionPanel } from '../components/request/RequestExecutionPan
 import { getRequestWithForm, type RequestWithForm } from '../services/requestService';
 import { closeRequest, deleteRequest } from '../shared/api/requests.api';
 import { formatFieldValue } from '../shared/utils/formatFieldValue';
+import { FieldLabel } from '../shared/ui/form-builder/FieldLabel';
 import { buildDisplayName } from '../shared/utils/userName';
 import type { RequestStageDTO } from '../types/execution';
 import type { Field } from '../types/form';
@@ -511,7 +512,7 @@ export const RequestViewPage = () => {
               style={{
                 flex: 1,
                 minWidth: 0,
-                padding: 20,
+                padding: 0,
                 display: 'flex',
                 flexDirection: 'column',
                 minHeight: 0,
@@ -519,7 +520,12 @@ export const RequestViewPage = () => {
               }}
             >
               {inlineNotification && (
-                <div style={{ marginBottom: 16 }}>
+                <div
+                  style={{
+                    flexShrink: 0,
+                    padding: '0 0 1rem 0',
+                  }}
+                >
                   <InlineNotification
                     kind={inlineNotification.kind}
                     title={inlineNotification.title}
@@ -530,18 +536,27 @@ export const RequestViewPage = () => {
                 </div>
               )}
 
-              <Tabs
-                selectedIndex={activeTabIndex}
-                onChange={({ selectedIndex }: { selectedIndex: number }) =>
-                  setActiveTabIndex(selectedIndex)
-                }
-              >
-                <TabList aria-label="Разделы заявки">
-                  <Tab>Информация</Tab>
-                  <Tab>Исполнение</Tab>
-                  <Tab>Люди</Tab>
-                </TabList>
-                <TabPanels>
+              <div className="app-request-view-tabs-wrap">
+                <Tabs
+                  selectedIndex={activeTabIndex}
+                  onChange={({ selectedIndex }: { selectedIndex: number }) =>
+                    setActiveTabIndex(selectedIndex)
+                  }
+                >
+                  <div
+                    className="app-request-view-tabs-bar"
+                    style={{
+                      flexShrink: 0,
+                      borderBottom: '1px solid var(--cds-border-subtle)',
+                    }}
+                  >
+                    <TabList aria-label="Разделы заявки">
+                      <Tab>Информация</Tab>
+                      <Tab>Исполнение</Tab>
+                      <Tab>Люди</Tab>
+                    </TabList>
+                  </div>
+                  <TabPanels>
                   {/* Info tab */}
                   <TabPanel>
                     <div
@@ -549,7 +564,8 @@ export const RequestViewPage = () => {
                         flex: 1,
                         minHeight: 0,
                         overflow: 'auto',
-                        paddingTop: 16,
+                        boxSizing: 'border-box',
+                        padding: '1rem 0 1.5rem',
                       }}
                     >
                       {data?.request && (
@@ -631,20 +647,9 @@ export const RequestViewPage = () => {
 
                             const formatted = formatFieldValue(field, rawValue);
                             return (
-                              <div key={field.id}>
-                                <span
-                                  style={{
-                                    fontSize: 12,
-                                    marginBottom: 4,
-                                    display: 'block',
-                                    color: 'var(--cds-text-secondary)',
-                                  }}
-                                >
-                                  {field.label || 'Без названия'}
-                                </span>
-                                <span style={{ fontSize: 14, fontWeight: 500 }}>
-                                  {formatted}
-                                </span>
+                              <div key={field.id} className="app-request-form-value-row">
+                                <FieldLabel label={field.label || 'Без названия'} />
+                                <span className="app-request-form-value">{formatted}</span>
                               </div>
                             );
                           })}
@@ -671,17 +676,8 @@ export const RequestViewPage = () => {
                                     const fileMetas = normalizeFileValues(activeDataSource[field.id]);
 
                                     return (
-                                      <div key={field.id}>
-                                        <span
-                                          style={{
-                                            fontSize: 12,
-                                            marginBottom: 8,
-                                            display: 'block',
-                                            color: 'var(--cds-text-secondary)',
-                                          }}
-                                        >
-                                          {field.label || 'Без названия'}
-                                        </span>
+                                      <div key={field.id} className="app-request-form-value-row">
+                                        <FieldLabel label={field.label || 'Без названия'} />
 
                                         {field.type === 'file_image' ? (
                                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
@@ -830,7 +826,15 @@ export const RequestViewPage = () => {
                   </TabPanel>
 
                   <TabPanel>
-                    <div style={{ paddingTop: 16 }}>
+                    <div
+                      style={{
+                        boxSizing: 'border-box',
+                        height: '100%',
+                        minHeight: 0,
+                        overflow: 'auto',
+                        padding: '1rem 0 1.5rem',
+                      }}
+                    >
                       {data?.request && (
                         <RequestExecutionPanel
                           requestId={data.request.id}
@@ -847,7 +851,17 @@ export const RequestViewPage = () => {
 
                   {/* People tab */}
                   <TabPanel>
-                    <div style={{ paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 12,
+                        boxSizing: 'border-box',
+                        minHeight: 0,
+                        overflow: 'auto',
+                        padding: '1rem 0 1.5rem',
+                      }}
+                    >
                       <InlineNotification
                         kind="info"
                         title="Роли и контакты"
@@ -906,7 +920,8 @@ export const RequestViewPage = () => {
                     </div>
                   </TabPanel>
                 </TabPanels>
-              </Tabs>
+                </Tabs>
+              </div>
             </div>
 
             {/* Right: assistant panel (readiness, TZ, hints — no duplicate execution actions) */}

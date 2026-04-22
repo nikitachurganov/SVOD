@@ -139,7 +139,6 @@ export const GroupBlock = ({
             kind="danger--ghost"
             size="sm"
             onClick={() => setConfirmDelete(true)}
-            style={{ paddingInline: 0 }}
           >
             Удалить группу
           </Button>

@@ -20,6 +20,7 @@ import {
   FormProvider,
   type Rule,
 } from '../../hooks/useFormStore';
+import { REQUIRED_FIELD_MESSAGE } from '../../constants/formValidation';
 import { AddressField } from './AddressField';
 import { FieldLabel } from './FieldLabel';
 
@@ -289,28 +290,34 @@ export const PreviewField = ({ field }: PreviewFieldProps) => {
   // ── Group: titled section with nested fields ────────────────────────────
   if (field.type === 'group') {
     const children = field.children ?? [];
+    const headingId = field.label ? `form-group-${field.id}` : undefined;
     return (
-      <div style={{ marginBottom: 16 }}>
+      <section
+        className="app-form-field-group"
+        aria-labelledby={headingId}
+      >
         {field.label && (
-          <span style={{ fontWeight: 600, fontSize: '1rem', display: 'block', marginBottom: 4 }}>
-            {field.label}
-          </span>
+          <div className="app-form-field-group__header">
+            <h3 id={headingId} className="app-form-field-group__title">
+              {field.label}
+            </h3>
+          </div>
         )}
         {field.description && (
-          <span
-            style={{ color: 'var(--cds-text-secondary)', display: 'block', marginBottom: 12 }}
-          >
-            {field.description}
-          </span>
+          <p className="app-form-field-group__description">{field.description}</p>
         )}
         {children.length > 0 ? (
-          children.map((child) => <PreviewField key={child.id} field={child} />)
+          <div className="app-form-field-group__body">
+            {children.map((child) => (
+              <PreviewField key={child.id} field={child} />
+            ))}
+          </div>
         ) : (
-          <span style={{ color: 'var(--cds-text-secondary)', fontStyle: 'italic', fontSize: '0.75rem' }}>
-            В группе нет полей
-          </span>
+          <div className="app-form-field-group__body">
+            <p className="app-form-field-group__empty">В группе нет полей</p>
+          </div>
         )}
-      </div>
+      </section>
     );
   }
 
@@ -347,7 +354,7 @@ export const PreviewField = ({ field }: PreviewFieldProps) => {
         : [];
     } else {
       rules = field.required
-        ? [{ required: true, message: 'Это поле обязательно для заполнения' }]
+        ? [{ required: true, message: REQUIRED_FIELD_MESSAGE }]
         : [];
     }
     ctx.registerField(field.id, rules);
@@ -592,9 +599,18 @@ export const PreviewField = ({ field }: PreviewFieldProps) => {
     'time',
   ].includes(field.type);
 
+  const controlId = `field-${field.id}`;
+  const labelAssociatesControl = hasInlineError;
+
   return (
     <div style={{ marginBottom: 24 }}>
-      {field.label && <FieldLabel label={field.label} required={field.required} />}
+      {field.label && (
+        <FieldLabel
+          label={field.label}
+          required={field.required}
+          htmlFor={labelAssociatesControl ? controlId : undefined}
+        />
+      )}
       {renderControl()}
       {field.description && (
         <div style={{ color: 'var(--cds-text-helper)', fontSize: '0.75rem', marginTop: 4 }}>
