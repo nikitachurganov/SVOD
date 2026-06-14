@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import { Modal, TextInput, TextArea } from '@carbon/react';
-import { useOrganization } from '../../shared/context/organization.context';
+import { Modal, Input, Form } from 'antd';
+import { useOrganization } from '../../shared/hooks/organization.hooks';
+
+const { TextArea } = Input;
 
 interface Props {
   open: boolean;
@@ -48,36 +50,41 @@ export const CreateOrganizationModal = ({ open, onClose }: Props) => {
   return (
     <Modal
       open={open}
-      modalHeading="Создать организацию"
-      primaryButtonText={loading ? 'Создание…' : 'Создать'}
-      secondaryButtonText="Отмена"
-      primaryButtonDisabled={loading}
-      onRequestClose={() => { reset(); onClose(); }}
-      onRequestSubmit={() => void handleSubmit()}
+      title="Создать организацию"
+      okText={loading ? 'Создание…' : 'Создать'}
+      cancelText="Отмена"
+      confirmLoading={loading}
+      onCancel={() => { reset(); onClose(); }}
+      onOk={() => void handleSubmit()}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 8 }}>
-        <TextInput
-          id="org-name"
-          labelText="Название"
-          placeholder="Название организации"
-          value={name}
-          maxLength={255}
-          invalid={!!nameError}
-          invalidText={nameError}
-          onChange={(e) => {
-            setName(e.target.value);
-            if (nameError) setNameError('');
-          }}
-        />
-        <TextArea
-          id="org-description"
-          labelText="Описание"
-          placeholder="Описание (необязательно)"
-          value={description}
-          maxCount={1000}
-          rows={3}
-          onChange={(e) => setDescription(e.target.value)}
-        />
+        <Form.Item
+          label="Название"
+          validateStatus={nameError ? 'error' : undefined}
+          help={nameError || undefined}
+        >
+          <Input
+            id="org-name"
+            placeholder="Название организации"
+            value={name}
+            maxLength={255}
+            onChange={(e) => {
+              setName(e.target.value);
+              if (nameError) setNameError('');
+            }}
+          />
+        </Form.Item>
+        <Form.Item label="Описание">
+          <TextArea
+            id="org-description"
+            placeholder="Описание (необязательно)"
+            value={description}
+            maxLength={1000}
+            showCount
+            rows={3}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+        </Form.Item>
       </div>
     </Modal>
   );

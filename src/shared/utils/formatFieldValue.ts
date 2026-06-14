@@ -1,4 +1,10 @@
-import type { Field, FieldOption } from '../../types/form';
+import type { Field } from '../../types/form';
+import { getChoiceDisplayLabel } from './choiceField.utils';
+import {
+  isAddressFieldValue,
+  isLocationFieldValue,
+  isRatingFieldValue,
+} from '../types/field-values.types';
 
 /**
  * Converts a raw stored value into a human-readable string based on the field's type.
@@ -17,32 +23,27 @@ export function formatFieldValue(
     return '—';
   }
 
+  if (field.type === 'location' && isLocationFieldValue(rawValue)) {
+    return rawValue.displayValue.trim() || '—';
+  }
+
+  if (field.type === 'rating' && isRatingFieldValue(rawValue)) {
+    const suffix = rawValue.npsCategory ? ` (${rawValue.npsCategory})` : '';
+    return `${rawValue.value}${suffix}`;
+  }
+
+  if (field.type === 'address' && isAddressFieldValue(rawValue)) {
+    return rawValue.displayValue.trim() || '—';
+  }
+
   // Multi-select (checkbox)
   if (field.type === 'checkbox') {
-    if (!Array.isArray(rawValue)) return '—';
-
-    const labels =
-      field.options?.length
-        ? rawValue
-            .map((id) => {
-              const opt = field.options!.find((o) => o.id === id);
-              return opt?.label ?? null;
-            })
-            .filter((v): v is string => Boolean(v))
-        : [];
-
-    if (!labels.length) return '—';
-    return labels.join(', ');
+    return getChoiceDisplayLabel(field.options, rawValue);
   }
 
   // Single select / radio / dropdown
   if (field.type === 'dropdown' || field.type === 'radio') {
-    const value = typeof rawValue === 'string' ? rawValue : String(rawValue);
-    if (!field.options || !field.options.length) {
-      return value || '—';
-    }
-    const opt = field.options.find((o: FieldOption) => o.id === value);
-    return opt?.label ?? '—';
+    return getChoiceDisplayLabel(field.options, rawValue);
   }
 
   // Yes/No helper
@@ -61,7 +62,9 @@ export function formatFieldValue(
     field.type === 'fullName' ||
     field.type === 'phone' ||
     field.type === 'email' ||
-    field.type === 'address'
+    field.type === 'address' ||
+    field.type === 'location' ||
+    field.type === 'rating'
   ) {
     const value =
       typeof rawValue === 'string' || typeof rawValue === 'number'
@@ -96,4 +99,3 @@ export function formatFieldValue(
 
   return '—';
 }
-

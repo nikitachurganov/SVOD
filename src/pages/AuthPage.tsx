@@ -1,17 +1,7 @@
 import { useState, type FormEvent } from 'react';
-import {
-  Button,
-  InlineNotification,
-  Tabs,
-  TabList,
-  Tab,
-  TabPanels,
-  TabPanel,
-  TextInput,
-  PasswordInput,
-} from '@carbon/react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../shared/context/auth.context';
+import { Alert, Button, Form, Input, Tabs } from 'antd';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../shared/hooks/auth.hooks';
 
 type AuthTabIndex = 0 | 1;
 
@@ -113,6 +103,69 @@ export const AuthPage = () => {
     });
   };
 
+  const signInForm = (
+    <form onSubmit={(e) => void onSignIn(e)} style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 16 }}>
+      <Form.Item
+        label="Электронная почта"
+        validateStatus={fieldErrors['si-email'] ? 'error' : undefined}
+        help={fieldErrors['si-email'] || undefined}
+      >
+        <Input
+          id="si-email"
+          placeholder="name@example.com"
+          autoComplete="email"
+          value={signInFields.email}
+          onChange={(e) => { setSignInFields((p) => ({ ...p, email: e.target.value })); clearError('si-email'); }}
+        />
+      </Form.Item>
+      <Form.Item
+        label="Пароль"
+        validateStatus={fieldErrors['si-password'] ? 'error' : undefined}
+        help={fieldErrors['si-password'] || undefined}
+      >
+        <Input.Password
+          id="si-password"
+          placeholder="Введите пароль"
+          autoComplete="current-password"
+          value={signInFields.password}
+          onChange={(e) => { setSignInFields((p) => ({ ...p, password: e.target.value })); clearError('si-password'); }}
+        />
+      </Form.Item>
+      <Button type="primary" htmlType="submit" loading={loading}>
+        {loading ? 'Вход…' : 'Войти'}
+      </Button>
+    </form>
+  );
+
+  const signUpForm = (
+    <form onSubmit={(e) => void onSignUp(e)} style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 16 }}>
+      <Form.Item label="Фамилия" validateStatus={fieldErrors['su-lastName'] ? 'error' : undefined} help={fieldErrors['su-lastName'] || undefined}>
+        <Input id="su-lastName" placeholder="Иванов" autoComplete="family-name" value={signUpFields.lastName} onChange={(e) => { setSignUpFields((p) => ({ ...p, lastName: e.target.value })); clearError('su-lastName'); }} />
+      </Form.Item>
+      <Form.Item label="Имя" validateStatus={fieldErrors['su-firstName'] ? 'error' : undefined} help={fieldErrors['su-firstName'] || undefined}>
+        <Input id="su-firstName" placeholder="Иван" autoComplete="given-name" value={signUpFields.firstName} onChange={(e) => { setSignUpFields((p) => ({ ...p, firstName: e.target.value })); clearError('su-firstName'); }} />
+      </Form.Item>
+      <Form.Item label="Отчество (необязательно)">
+        <Input id="su-middleName" placeholder="Иванович" autoComplete="additional-name" value={signUpFields.middleName} onChange={(e) => setSignUpFields((p) => ({ ...p, middleName: e.target.value }))} />
+      </Form.Item>
+      <Form.Item label="Электронная почта" validateStatus={fieldErrors['su-email'] ? 'error' : undefined} help={fieldErrors['su-email'] || undefined}>
+        <Input id="su-email" placeholder="name@example.com" autoComplete="email" value={signUpFields.email} onChange={(e) => { setSignUpFields((p) => ({ ...p, email: e.target.value })); clearError('su-email'); }} />
+      </Form.Item>
+      <Form.Item label="Номер телефона" validateStatus={fieldErrors['su-phone'] ? 'error' : undefined} help={fieldErrors['su-phone'] || undefined}>
+        <Input id="su-phone" placeholder="+79001234567" autoComplete="tel" value={signUpFields.phoneNumber} onChange={(e) => { setSignUpFields((p) => ({ ...p, phoneNumber: e.target.value })); clearError('su-phone'); }} />
+      </Form.Item>
+      <Form.Item label="Пароль" validateStatus={fieldErrors['su-password'] ? 'error' : undefined} help={fieldErrors['su-password'] || undefined}>
+        <Input.Password id="su-password" placeholder="Придумайте пароль" autoComplete="new-password" value={signUpFields.password} onChange={(e) => { setSignUpFields((p) => ({ ...p, password: e.target.value })); clearError('su-password'); }} />
+      </Form.Item>
+      <Form.Item label="Подтвердите пароль" validateStatus={fieldErrors['su-confirmPassword'] ? 'error' : undefined} help={fieldErrors['su-confirmPassword'] || undefined}>
+        <Input.Password id="su-confirmPassword" placeholder="Повторите пароль" autoComplete="new-password" value={signUpFields.confirmPassword} onChange={(e) => { setSignUpFields((p) => ({ ...p, confirmPassword: e.target.value })); clearError('su-confirmPassword'); }} />
+      </Form.Item>
+      <Button type="primary" htmlType="submit" loading={loading}>
+        {loading ? 'Регистрация…' : 'Зарегистрироваться'}
+      </Button>
+    </form>
+  );
+
   return (
     <div
       style={{
@@ -122,7 +175,7 @@ export const AuthPage = () => {
         justifyContent: 'center',
         minHeight: '100vh',
         padding: 16,
-        background: 'var(--cds-background)',
+        background: 'var(--app-bg)',
       }}
     >
       <h2 style={{ marginBottom: 16 }}>СВОД</h2>
@@ -130,83 +183,35 @@ export const AuthPage = () => {
         style={{
           width: '100%',
           maxWidth: 420,
-          background: 'var(--cds-layer-01)',
+          background: 'var(--app-surface)',
           padding: 24,
-          border: '1px solid var(--cds-border-subtle)',
+          border: '1px solid var(--app-border)',
         }}
       >
         {errorText && (
-          <InlineNotification
-            kind="error"
-            title={errorText}
-            lowContrast
-            hideCloseButton={false}
-            onCloseButtonClick={() => setErrorText(null)}
+          <Alert
+            type="error"
+            message={errorText}
+            closable
+            onClose={() => setErrorText(null)}
             style={{ marginBottom: 16 }}
           />
         )}
 
         <Tabs
-          selectedIndex={activeTab}
-          onChange={({ selectedIndex }: { selectedIndex: number }) => {
+          activeKey={String(activeTab)}
+          onChange={(key) => {
             setErrorText(null);
             setFieldErrors({});
-            setActiveTab(selectedIndex as AuthTabIndex);
+            setActiveTab(Number(key) as AuthTabIndex);
           }}
-        >
-          <TabList aria-label="Авторизация">
-            <Tab>Вход</Tab>
-            <Tab>Регистрация</Tab>
-          </TabList>
-          <TabPanels>
-            <TabPanel>
-              <form onSubmit={(e) => void onSignIn(e)} style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 16 }}>
-                <TextInput
-                  id="si-email"
-                  labelText="Электронная почта"
-                  placeholder="name@example.com"
-                  autoComplete="email"
-                  value={signInFields.email}
-                  invalid={!!fieldErrors['si-email']}
-                  invalidText={fieldErrors['si-email']}
-                  onChange={(e) => { setSignInFields((p) => ({ ...p, email: e.target.value })); clearError('si-email'); }}
-                />
-                <PasswordInput
-                  id="si-password"
-                  labelText="Пароль"
-                  placeholder="Введите пароль"
-                  autoComplete="current-password"
-                  value={signInFields.password}
-                  invalid={!!fieldErrors['si-password']}
-                  invalidText={fieldErrors['si-password']}
-                  onChange={(e) => { setSignInFields((p) => ({ ...p, password: e.target.value })); clearError('si-password'); }}
-                />
-                <div style={{ textAlign: 'right' }}>
-                  <Link to="/auth/forgot-password">Забыли пароль?</Link>
-                </div>
-                <Button type="submit" disabled={loading}>
-                  {loading ? 'Вход…' : 'Войти'}
-                </Button>
-              </form>
-            </TabPanel>
-            <TabPanel>
-              <form onSubmit={(e) => void onSignUp(e)} style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 16 }}>
-                <TextInput id="su-lastName" labelText="Фамилия" placeholder="Иванов" autoComplete="family-name" value={signUpFields.lastName} invalid={!!fieldErrors['su-lastName']} invalidText={fieldErrors['su-lastName']} onChange={(e) => { setSignUpFields((p) => ({ ...p, lastName: e.target.value })); clearError('su-lastName'); }} />
-                <TextInput id="su-firstName" labelText="Имя" placeholder="Иван" autoComplete="given-name" value={signUpFields.firstName} invalid={!!fieldErrors['su-firstName']} invalidText={fieldErrors['su-firstName']} onChange={(e) => { setSignUpFields((p) => ({ ...p, firstName: e.target.value })); clearError('su-firstName'); }} />
-                <TextInput id="su-middleName" labelText="Отчество (необязательно)" placeholder="Иванович" autoComplete="additional-name" value={signUpFields.middleName} onChange={(e) => setSignUpFields((p) => ({ ...p, middleName: e.target.value }))} />
-                <TextInput id="su-email" labelText="Электронная почта" placeholder="name@example.com" autoComplete="email" value={signUpFields.email} invalid={!!fieldErrors['su-email']} invalidText={fieldErrors['su-email']} onChange={(e) => { setSignUpFields((p) => ({ ...p, email: e.target.value })); clearError('su-email'); }} />
-                <TextInput id="su-phone" labelText="Номер телефона" placeholder="+79001234567" autoComplete="tel" value={signUpFields.phoneNumber} invalid={!!fieldErrors['su-phone']} invalidText={fieldErrors['su-phone']} onChange={(e) => { setSignUpFields((p) => ({ ...p, phoneNumber: e.target.value })); clearError('su-phone'); }} />
-                <PasswordInput id="su-password" labelText="Пароль" placeholder="Придумайте пароль" autoComplete="new-password" value={signUpFields.password} invalid={!!fieldErrors['su-password']} invalidText={fieldErrors['su-password']} onChange={(e) => { setSignUpFields((p) => ({ ...p, password: e.target.value })); clearError('su-password'); }} />
-                <PasswordInput id="su-confirmPassword" labelText="Подтвердите пароль" placeholder="Повторите пароль" autoComplete="new-password" value={signUpFields.confirmPassword} invalid={!!fieldErrors['su-confirmPassword']} invalidText={fieldErrors['su-confirmPassword']} onChange={(e) => { setSignUpFields((p) => ({ ...p, confirmPassword: e.target.value })); clearError('su-confirmPassword'); }} />
-                <Button type="submit" disabled={loading}>
-                  {loading ? 'Регистрация…' : 'Зарегистрироваться'}
-                </Button>
-              </form>
-            </TabPanel>
-          </TabPanels>
-        </Tabs>
+          items={[
+            { key: '0', label: 'Вход', children: signInForm },
+            { key: '1', label: 'Регистрация', children: signUpForm },
+          ]}
+        />
       </div>
-      <p style={{ marginTop: 16, color: 'var(--cds-text-secondary)', fontSize: 13 }}>
+      <p style={{ marginTop: 16, color: 'var(--app-text-secondary)', fontSize: 13 }}>
         Продолжая, вы соглашаетесь использовать учётные данные корпоративной учётной записи.
       </p>
     </div>

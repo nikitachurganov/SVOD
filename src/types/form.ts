@@ -3,6 +3,7 @@ import type { AuthorPreview } from './author';
 export interface FieldOption {
   id: string;
   label: string;
+  isOther?: boolean;
 }
 
 export interface Field {

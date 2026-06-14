@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- hook is intentionally exported next to provider */
 import {
   createContext,
   useCallback,
@@ -7,16 +8,12 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { Theme } from '@carbon/react';
+import { ConfigProvider, theme as antTheme } from 'antd';
 
 export type ThemeMode = 'light' | 'dark';
 
 const STORAGE_KEY = 'app-theme-mode';
-
-const carbonThemeMap: Record<ThemeMode, 'white' | 'g100'> = {
-  light: 'white',
-  dark: 'g100',
-};
+const BRAND_PRIMARY = '#f5570d';
 
 const getInitialTheme = (): ThemeMode => {
   const stored = localStorage.getItem(STORAGE_KEY);
@@ -53,7 +50,7 @@ export const ThemeProvider = ({ children }: ThemeProviderProps) => {
   }, []);
 
   useEffect(() => {
-    document.documentElement.dataset.carbonTheme = carbonThemeMap[themeMode];
+    document.documentElement.dataset.theme = themeMode;
   }, [themeMode]);
 
   const value = useMemo<ThemeContextValue>(
@@ -63,7 +60,18 @@ export const ThemeProvider = ({ children }: ThemeProviderProps) => {
 
   return (
     <ThemeContext.Provider value={value}>
-      <Theme theme={carbonThemeMap[themeMode]}>{children}</Theme>
+      <ConfigProvider
+        theme={{
+          algorithm:
+            themeMode === 'dark' ? antTheme.darkAlgorithm : antTheme.defaultAlgorithm,
+          token: {
+            colorPrimary: BRAND_PRIMARY,
+          },
+          cssVar: { prefix: 'ant' },
+        }}
+      >
+        {children}
+      </ConfigProvider>
     </ThemeContext.Provider>
   );
 };

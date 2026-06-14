@@ -1,9 +1,7 @@
 import { useState } from 'react';
-import { Modal, Toggle } from '@carbon/react';
-import { useAuth } from '../../shared/context/auth.context';
+import { Switch } from 'antd';
+import { useAuth } from '../../shared/hooks/auth.hooks';
 import { useThemeMode } from '../../shared/context/theme.context';
-import { useOrganization } from '../../shared/context/organization.context';
-import { leaveOrganization } from '../../shared/api/organizations.api';
 
 export interface HeaderProfileMenuContentProps {
   onClose: () => void;
@@ -14,21 +12,9 @@ export const HeaderProfileMenuContent = ({
   onClose,
   onCreateOrg,
 }: HeaderProfileMenuContentProps) => {
-  const { user, signOut } = useAuth();
+  const { signOut } = useAuth();
   const { themeMode, toggleTheme } = useThemeMode();
-  const { activeOrganization, refreshOrganizations } = useOrganization();
-
   const [isSigningOut, setIsSigningOut] = useState(false);
-  const [confirmModal, setConfirmModal] = useState<{
-    heading: string;
-    body: string;
-    danger: boolean;
-    onConfirm: () => Promise<void>;
-  } | null>(null);
-
-  const isOwner =
-    !!activeOrganization && activeOrganization.owner_user_id === user?.id;
-  const isMember = !!activeOrganization && !isOwner;
 
   const handleSignOut = async () => {
     setIsSigningOut(true);
@@ -39,109 +25,45 @@ export const HeaderProfileMenuContent = ({
     }
   };
 
-  const handleLeaveOrg = () => {
-    if (!activeOrganization) return;
-    const orgName = activeOrganization.name;
+  const handleCreateOrg = () => {
     onClose();
-    setConfirmModal({
-      heading: 'Выйти из организации',
-      body: `Вы уверены, что хотите покинуть «${orgName}»?`,
-      danger: true,
-      onConfirm: async () => {
-        await leaveOrganization(activeOrganization.id);
-        await refreshOrganizations();
-      },
-    });
+    onCreateOrg();
   };
 
-  const menuAction = (fn: () => void) => () => {
+  const handleLogout = () => {
     onClose();
-    fn();
+    void handleSignOut();
   };
 
   return (
-    <>
-      <nav className="app-header-profile-panel__nav" aria-label="Действия профиля">
-        <ProfileMenuItem onClick={menuAction(onCreateOrg)}>
-          Создать организацию
-        </ProfileMenuItem>
+    <div className="app-profile-dropdown">
+      <button
+        type="button"
+        className="app-profile-dropdown__item"
+        onClick={handleCreateOrg}
+      >
+        Создать организацию
+      </button>
 
-        {isMember && (
-          <>
-            <div className="app-header-profile-panel__divider" />
-            <ProfileMenuItem danger onClick={handleLeaveOrg}>
-              Выйти из организации
-            </ProfileMenuItem>
-          </>
-        )}
-      </nav>
-
-      <div className="app-header-profile-panel__bottom">
-        <div className="app-header-profile-panel__bottom-row">
-          <span className="app-header-profile-panel__bottom-label">Тёмная тема</span>
-          <Toggle
-            id="header-profile-theme-toggle"
-            size="sm"
-            toggled={themeMode === 'dark'}
-            onToggle={toggleTheme}
-            hideLabel
-            labelA=""
-            labelB=""
-          />
-        </div>
-        <button
-          type="button"
-          className="app-header-profile-panel__bottom-action"
-          onClick={() => {
-            onClose();
-            void handleSignOut();
-          }}
-          disabled={isSigningOut}
-        >
-          {isSigningOut ? 'Выход из системы…' : 'Выйти из системы'}
-        </button>
+      <div className="app-profile-dropdown__item app-profile-dropdown__item--switch">
+        <span className="app-profile-dropdown__label">Темная тема</span>
+        <Switch
+          size="small"
+          checked={themeMode === 'dark'}
+          onChange={toggleTheme}
+        />
       </div>
 
-      {confirmModal && (
-        <Modal
-          open
-          danger={confirmModal.danger}
-          modalHeading={confirmModal.heading}
-          primaryButtonText="Подтвердить"
-          secondaryButtonText="Отмена"
-          onRequestClose={() => setConfirmModal(null)}
-          onRequestSubmit={async () => {
-            await confirmModal.onConfirm();
-            setConfirmModal(null);
-          }}
-        >
-          <p>{confirmModal.body}</p>
-        </Modal>
-      )}
-    </>
+      <hr className="app-profile-dropdown__divider" />
+
+      <button
+        type="button"
+        className="app-profile-dropdown__item app-profile-dropdown__item--danger"
+        onClick={handleLogout}
+        disabled={isSigningOut}
+      >
+        {isSigningOut ? 'Выход из системы…' : 'Выйти из системы'}
+      </button>
+    </div>
   );
 };
-
-function ProfileMenuItem({
-  children,
-  danger,
-  onClick,
-}: {
-  children: React.ReactNode;
-  danger?: boolean;
-  onClick?: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={
-        danger
-          ? 'app-header-profile-panel__menu-item app-header-profile-panel__menu-item--danger'
-          : 'app-header-profile-panel__menu-item'
-      }
-    >
-      {children}
-    </button>
-  );
-}

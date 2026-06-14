@@ -1,13 +1,6 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
-import {
-  InlineNotification,
-  Modal,
-  RadioButton,
-  RadioButtonGroup,
-  Select,
-  SelectItem,
-} from '@carbon/react';
+import { Alert, Modal, Radio, Select } from 'antd';
 import { assignRequestPerformer } from '../../shared/api/requests.api';
 import type { RecommendedPerformerDTO } from '../../types/performerSelection';
 
@@ -94,16 +87,13 @@ export function AssignPerformerModal({
   return (
     <Modal
       open={open}
-      onRequestClose={() => !submitting && onClose()}
-      modalHeading="Передача задачи исполнителю"
-      primaryButtonText={submitting ? 'Отправка…' : 'Подтвердить'}
-      secondaryButtonText="Отмена"
-      primaryButtonDisabled={submitting || !performer}
-      onRequestSubmit={(e) => {
-        e.preventDefault();
-        void handleSubmit();
-      }}
-      size="sm"
+      onCancel={() => !submitting && onClose()}
+      title="Передача задачи исполнителю"
+      okText={submitting ? 'Отправка…' : 'Подтвердить'}
+      cancelText="Отмена"
+      okButtonProps={{ disabled: submitting || !performer, loading: submitting }}
+      onOk={() => void handleSubmit()}
+      width={480}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         {performer && (
@@ -114,48 +104,45 @@ export function AssignPerformerModal({
         )}
 
         {localError && (
-          <InlineNotification
-            kind="error"
-            title="Ошибка"
-            subtitle={localError}
-            lowContrast
-            hideCloseButton
-          />
+          <Alert type="error" message="Ошибка" description={localError} showIcon closable={false} />
         )}
 
-        <RadioButtonGroup
-          legendText="Действие"
-          name="assign-delivery"
-          valueSelected={delivery}
-          onChange={(v) =>
-            setDelivery(String(v) === 'send_spec' ? 'send_spec' : 'status_only')
-          }
-        >
-          <RadioButton labelText="Только сменить статус и закрепить исполнителя" value="status_only" id="assign-status" />
-          <RadioButton labelText="Отправить ТЗ исполнителю" value="send_spec" id="assign-tz" />
-        </RadioButtonGroup>
+        <div>
+          <span style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Действие</span>
+          <Radio.Group
+            value={delivery}
+            onChange={(e) =>
+              setDelivery(e.target.value === 'send_spec' ? 'send_spec' : 'status_only')
+            }
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <Radio value="status_only">Только сменить статус и закрепить исполнителя</Radio>
+              <Radio value="send_spec">Отправить ТЗ исполнителю</Radio>
+            </div>
+          </Radio.Group>
+        </div>
 
         {sendTz && (
           <>
             {!performer?.contact_available && (
-              <InlineNotification
-                kind="warning"
-                title="Нет контакта"
-                subtitle="Добавьте контакт у исполнителя или выберите другой способ передачи."
-                lowContrast
-                hideCloseButton
+              <Alert
+                type="warning"
+                message="Нет контакта"
+                description="Добавьте контакт у исполнителя или выберите другой способ передачи."
+                showIcon
+                closable={false}
               />
             )}
-            <Select
-              id="contact-method"
-              labelText="Способ связи"
-              value={contactMethod}
-              onChange={(e) => setContactMethod(e.target.value)}
-            >
-              {CONTACT_OPTIONS.map((o) => (
-                <SelectItem key={o.value} value={o.value} text={o.label} />
-              ))}
-            </Select>
+            <div>
+              <span style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Способ связи</span>
+              <Select
+                id="contact-method"
+                value={contactMethod}
+                onChange={setContactMethod}
+                options={CONTACT_OPTIONS}
+                style={{ width: '100%' }}
+              />
+            </div>
           </>
         )}
       </div>

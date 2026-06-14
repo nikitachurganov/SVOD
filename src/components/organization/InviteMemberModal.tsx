@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Modal, TextInput } from '@carbon/react';
+import { Form, Input, Modal } from 'antd';
 import { inviteUser } from '../../shared/api/organizations.api';
 
 interface Props {
@@ -52,26 +52,29 @@ export const InviteMemberModal = ({ open, onClose, organizationId }: Props) => {
   return (
     <Modal
       open={open}
-      modalHeading="Пригласить пользователя"
-      primaryButtonText={loading ? 'Отправка…' : 'Пригласить'}
-      secondaryButtonText="Отмена"
-      primaryButtonDisabled={loading}
-      onRequestClose={() => { reset(); onClose(); }}
-      onRequestSubmit={() => void handleSubmit()}
+      title="Пригласить пользователя"
+      okText={loading ? 'Отправка…' : 'Пригласить'}
+      cancelText="Отмена"
+      confirmLoading={loading}
+      onCancel={() => { reset(); onClose(); }}
+      onOk={() => void handleSubmit()}
     >
       <div style={{ paddingTop: 8 }}>
-        <TextInput
-          id="invite-email"
-          labelText="Email пользователя"
-          placeholder="user@example.com"
-          value={email}
-          invalid={!!emailError}
-          invalidText={emailError}
-          onChange={(e) => {
-            setEmail(e.target.value);
-            if (emailError) setEmailError('');
-          }}
-        />
+        <Form.Item
+          label="Email пользователя"
+          validateStatus={emailError ? 'error' : undefined}
+          help={emailError || undefined}
+        >
+          <Input
+            id="invite-email"
+            placeholder="user@example.com"
+            value={email}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              if (emailError) setEmailError('');
+            }}
+          />
+        </Form.Item>
       </div>
     </Modal>
   );

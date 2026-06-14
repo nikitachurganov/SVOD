@@ -1,16 +1,17 @@
 import {
-  TextInput,
-  TextArea,
-  Dropdown,
+  Input,
+  Select,
   DatePicker,
-  DatePickerInput,
   TimePicker,
-  RadioButton,
-  RadioButtonGroup,
+  Radio,
   Checkbox,
-  FileUploaderDropContainer,
-} from '@carbon/react';
+  Upload,
+  Rate,
+  Slider,
+} from 'antd';
 import { FIELD_TYPE_LABELS, type FormFieldInstance } from '../../types/form-builder.types';
+
+const { TextArea } = Input;
 
 interface FieldRendererProps {
   field: FormFieldInstance;
@@ -27,10 +28,8 @@ export const FieldRenderer = ({ field }: FieldRendererProps) => {
   switch (field.type) {
     case 'shortText':
       return (
-        <TextInput
+        <Input
           id={`${prefix}-short`}
-          labelText=""
-          hideLabel
           disabled
           placeholder={FIELD_TYPE_LABELS.shortText}
           value=""
@@ -41,8 +40,6 @@ export const FieldRenderer = ({ field }: FieldRendererProps) => {
       return (
         <TextArea
           id={`${prefix}-long`}
-          labelText=""
-          hideLabel
           disabled
           placeholder={FIELD_TYPE_LABELS.longText}
           rows={2}
@@ -52,69 +49,54 @@ export const FieldRenderer = ({ field }: FieldRendererProps) => {
 
     case 'radio':
       return (
-        <RadioButtonGroup
+        <Radio.Group
           name={`${prefix}-radio`}
-          legendText=""
           disabled
-          valueSelected=""
-          orientation="vertical"
+          value=""
+          style={{ display: 'flex', flexDirection: 'column', gap: 4 }}
         >
           {options.map((opt) => (
-            <RadioButton
-              key={opt.id}
-              id={`${prefix}-radio-${opt.id}`}
-              value={opt.id}
-              labelText={opt.label}
-            />
+            <Radio key={opt.id} value={opt.id}>
+              {opt.label}
+            </Radio>
           ))}
-        </RadioButtonGroup>
+        </Radio.Group>
       );
 
     case 'checkbox':
       return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           {options.map((opt) => (
-            <Checkbox
-              key={opt.id}
-              id={`${prefix}-check-${opt.id}`}
-              labelText={opt.label}
-              disabled
-            />
+            <Checkbox key={opt.id} disabled>
+              {opt.label}
+            </Checkbox>
           ))}
         </div>
       );
 
     case 'dropdown':
       return (
-        <Dropdown
+        <Select
           id={`${prefix}-dropdown`}
-          titleText=""
-          label={FIELD_TYPE_LABELS.dropdown}
-          items={options.map((opt) => ({ id: opt.id, text: opt.label }))}
-          itemToString={(item: { id: string; text: string } | null) => item?.text ?? ''}
           disabled
+          placeholder={FIELD_TYPE_LABELS.dropdown}
+          options={options.map((opt) => ({ value: opt.id, label: opt.label }))}
+          style={{ width: '100%' }}
         />
       );
 
     case 'yesNo':
       return (
-        <RadioButtonGroup
-          name={`${prefix}-yesno`}
-          legendText=""
-          disabled
-          valueSelected=""
-        >
-          <RadioButton id={`${prefix}-yes`} value="yes" labelText="Да" />
-          <RadioButton id={`${prefix}-no`} value="no" labelText="Нет" />
-        </RadioButtonGroup>
+        <Radio.Group name={`${prefix}-yesno`} disabled value="">
+          <Radio value="yes">Да</Radio>
+          <Radio value="no">Нет</Radio>
+        </Radio.Group>
       );
 
     case 'number':
       return (
-        <TextInput
+        <Input
           id={`${prefix}-number`}
-          labelText=""
-          hideLabel
           disabled
           type="number"
           placeholder={FIELD_TYPE_LABELS.number}
@@ -124,10 +106,8 @@ export const FieldRenderer = ({ field }: FieldRendererProps) => {
 
     case 'fullName':
       return (
-        <TextInput
+        <Input
           id={`${prefix}-fullname`}
-          labelText=""
-          hideLabel
           disabled
           placeholder={FIELD_TYPE_LABELS.fullName}
           value=""
@@ -136,10 +116,8 @@ export const FieldRenderer = ({ field }: FieldRendererProps) => {
 
     case 'phone':
       return (
-        <TextInput
+        <Input
           id={`${prefix}-phone`}
-          labelText=""
-          hideLabel
           disabled
           type="tel"
           placeholder="+7 (___) ___-__-__"
@@ -149,10 +127,8 @@ export const FieldRenderer = ({ field }: FieldRendererProps) => {
 
     case 'email':
       return (
-        <TextInput
+        <Input
           id={`${prefix}-email`}
-          labelText=""
-          hideLabel
           disabled
           type="email"
           placeholder="example@mail.com"
@@ -162,39 +138,32 @@ export const FieldRenderer = ({ field }: FieldRendererProps) => {
 
     case 'dateTime':
       return (
-        <DatePicker datePickerType="single">
-          <DatePickerInput
-            id={`${prefix}-datetime`}
-            placeholder={FIELD_TYPE_LABELS.dateTime}
-            labelText=""
-            hideLabel
-            disabled
-          />
-        </DatePicker>
+        <DatePicker
+          id={`${prefix}-datetime`}
+          showTime
+          disabled
+          placeholder={FIELD_TYPE_LABELS.dateTime}
+          style={{ width: '100%' }}
+        />
       );
 
     case 'date':
       return (
-        <DatePicker datePickerType="single">
-          <DatePickerInput
-            id={`${prefix}-date`}
-            placeholder={FIELD_TYPE_LABELS.date}
-            labelText=""
-            hideLabel
-            disabled
-          />
-        </DatePicker>
+        <DatePicker
+          id={`${prefix}-date`}
+          disabled
+          placeholder={FIELD_TYPE_LABELS.date}
+          style={{ width: '100%' }}
+        />
       );
 
     case 'time':
       return (
         <TimePicker
           id={`${prefix}-time`}
-          labelText=""
-          hideLabel
           disabled
           placeholder={FIELD_TYPE_LABELS.time}
-          value=""
+          style={{ width: '100%' }}
         />
       );
 
@@ -203,10 +172,10 @@ export const FieldRenderer = ({ field }: FieldRendererProps) => {
         <div
           style={{
             padding: 12,
-            background: 'var(--cds-layer-accent)',
-            border: '1px dashed var(--cds-border-subtle)',
+            background: 'var(--app-surface-accent)',
+            border: '1px dashed var(--app-border)',
             borderRadius: 4,
-            color: 'var(--cds-text-secondary)',
+            color: 'var(--app-text-secondary)',
             fontSize: '0.75rem',
           }}
         >
@@ -221,23 +190,37 @@ export const FieldRenderer = ({ field }: FieldRendererProps) => {
     case 'file_image':
     case 'file_document':
       return (
-        <FileUploaderDropContainer
-          labelText={FIELD_TYPE_LABELS[field.type]}
-          disabled
-          style={{ pointerEvents: 'none' as const }}
-        />
+        <Upload.Dragger disabled style={{ pointerEvents: 'none' as const }}>
+          <p style={{ margin: 0 }}>{FIELD_TYPE_LABELS[field.type]}</p>
+        </Upload.Dragger>
       );
 
     case 'address':
       return (
-        <TextInput
+        <Input
           id={`${prefix}-address`}
-          labelText=""
-          hideLabel
           disabled
           placeholder={FIELD_TYPE_LABELS.address}
           value=""
         />
+      );
+
+    case 'location':
+      return (
+        <Select
+          id={`${prefix}-location`}
+          disabled
+          placeholder={FIELD_TYPE_LABELS.location}
+          style={{ width: '100%' }}
+        />
+      );
+
+    case 'rating':
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <Rate disabled count={5} />
+          <Slider disabled min={1} max={5} />
+        </div>
       );
   }
 };

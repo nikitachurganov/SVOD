@@ -1,14 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  Button,
-  Dropdown,
-  InlineNotification,
-  Modal,
-  Tile,
-} from '@carbon/react';
+import { Alert, Button, Card, Modal, Select } from 'antd';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../../shared/context/auth.context';
-import { useOrganization } from '../../shared/context/organization.context';
+import { useAuth } from '../../shared/hooks/auth.hooks';
+import { useOrganization } from '../../shared/hooks/organization.hooks';
 import {
   deleteOrganization,
   getMembers,
@@ -72,23 +66,25 @@ export const OrganizationSettingsSection = ({ onAfterDelete }: Props) => {
   const isOwner =
     !!activeOrganization && activeOrganization.owner_user_id === user?.id;
 
+  const activeOrganizationId = activeOrganization?.id;
+
   const loadMembers = useCallback(async () => {
-    if (!activeOrganization) return;
+    if (!activeOrganizationId) return;
     setLoadingMembers(true);
     setLoadError(null);
     try {
-      const data = await getMembers(activeOrganization.id);
+      const data = await getMembers(activeOrganizationId);
       setMembers(data);
     } catch (e) {
       setLoadError(apiErrorMessage(e));
     } finally {
       setLoadingMembers(false);
     }
-  }, [activeOrganization?.id]);
+  }, [activeOrganizationId]);
 
   useEffect(() => {
-    if (activeOrganization) void loadMembers();
-  }, [activeOrganization?.id, loadMembers]);
+    if (activeOrganizationId) void loadMembers();
+  }, [activeOrganizationId, loadMembers]);
 
   const transferCandidates = useMemo(() => {
     if (!user) return [];
@@ -136,12 +132,12 @@ export const OrganizationSettingsSection = ({ onAfterDelete }: Props) => {
 
   if (!activeOrganization) {
     return (
-      <InlineNotification
-        kind="info"
-        title="Нет активной организации"
-        subtitle="Выберите организацию в боковой панели."
-        lowContrast
-        hideCloseButton
+      <Alert
+        type="info"
+        message="Нет активной организации"
+        description="Выберите организацию в боковой панели."
+        showIcon
+        closable={false}
       />
     );
   }
@@ -152,28 +148,29 @@ export const OrganizationSettingsSection = ({ onAfterDelete }: Props) => {
         <p className="org-settings__org-name">{activeOrganization.name}</p>
 
         {loadError && (
-          <InlineNotification
-            kind="error"
-            title="Не удалось загрузить участников"
-            subtitle={loadError}
-            lowContrast
-            onCloseButtonClick={() => setLoadError(null)}
+          <Alert
+            type="error"
+            message="Не удалось загрузить участников"
+            description={loadError}
+            showIcon
+            closable
+            onClose={() => setLoadError(null)}
           />
         )}
 
         {!isOwner && (
-          <InlineNotification
-            kind="info"
-            title="Доступ ограничен"
-            subtitle="Изменение владельца и удаление организации доступны только текущему владельцу."
-            lowContrast
-            hideCloseButton
+          <Alert
+            type="info"
+            message="Доступ ограничен"
+            description="Изменение владельца и удаление организации доступны только текущему владельцу."
+            showIcon
+            closable={false}
           />
         )}
 
         {isOwner && (
           <>
-            <Tile className="org-settings__tile">
+            <Card className="org-settings__tile" styles={{ body: { padding: 16 } }}>
               <h3 className="org-settings__tile-title">Смена владельца</h3>
               <p className="org-settings__tile-description">
                 Передайте права владельца другому участнику. Вы останетесь участником с ролью
@@ -188,19 +185,21 @@ export const OrganizationSettingsSection = ({ onAfterDelete }: Props) => {
               ) : (
                 <>
                   <div className="org-settings__field-wrap">
-                    <Dropdown
+                    <span style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Новый владелец</span>
+                    <Select
                       id="org-transfer-owner"
-                      titleText="Новый владелец"
-                      label="Выберите участника"
-                      items={transferCandidates}
-                      itemToString={(item) => item?.text ?? ''}
-                      selectedItem={selectedNewOwner}
-                      onChange={({ selectedItem }) => setSelectedNewOwner(selectedItem ?? null)}
+                      placeholder="Выберите участника"
+                      value={selectedNewOwner?.id}
+                      onChange={(id) => {
+                        const item = transferCandidates.find((c) => c.id === id);
+                        setSelectedNewOwner(item ?? null);
+                      }}
                       disabled={loadingMembers}
+                      options={transferCandidates.map((c) => ({ value: c.id, label: c.text }))}
+                      style={{ width: '100%', maxWidth: 400 }}
                     />
                   </div>
                   <Button
-                    kind="secondary"
                     disabled={!selectedNewOwner || loadingMembers}
                     onClick={() => setTransferConfirmOpen(true)}
                   >
@@ -211,24 +210,25 @@ export const OrganizationSettingsSection = ({ onAfterDelete }: Props) => {
 
               {transferError && (
                 <div className="org-settings__alert-wrap">
-                  <InlineNotification
-                    kind="error"
-                    title="Ошибка"
-                    subtitle={transferError}
-                    lowContrast
-                    onCloseButtonClick={() => setTransferError(null)}
+                  <Alert
+                    type="error"
+                    message="Ошибка"
+                    description={transferError}
+                    showIcon
+                    closable
+                    onClose={() => setTransferError(null)}
                   />
                 </div>
               )}
-            </Tile>
+            </Card>
 
-            <Tile className="org-settings__tile org-settings__tile--danger">
+            <Card className="org-settings__tile org-settings__tile--danger" styles={{ body: { padding: 16 } }}>
               <h3 className="org-settings__tile-title">Удаление организации</h3>
               <p className="org-settings__tile-description">
                 Безвозвратно удалить организацию и связанные данные. Доступно только владельцу.
               </p>
               <Button
-                kind="danger"
+                danger
                 onClick={() => {
                   setDeleteError(null);
                   setDeleteModalOpen(true);
@@ -238,28 +238,29 @@ export const OrganizationSettingsSection = ({ onAfterDelete }: Props) => {
               </Button>
               {deleteError && (
                 <div className="org-settings__alert-wrap">
-                  <InlineNotification
-                    kind="error"
-                    title="Ошибка"
-                    subtitle={deleteError}
-                    lowContrast
-                    onCloseButtonClick={() => setDeleteError(null)}
+                  <Alert
+                    type="error"
+                    message="Ошибка"
+                    description={deleteError}
+                    showIcon
+                    closable
+                    onClose={() => setDeleteError(null)}
                   />
                 </div>
               )}
-            </Tile>
+            </Card>
           </>
         )}
       </div>
 
       <Modal
         open={transferConfirmOpen}
-        modalHeading="Передать владение?"
-        primaryButtonText="Передать"
-        secondaryButtonText="Отмена"
-        primaryButtonDisabled={transferBusy || !selectedNewOwner}
-        onRequestClose={() => !transferBusy && setTransferConfirmOpen(false)}
-        onRequestSubmit={() => void handleTransfer()}
+        title="Передать владение?"
+        okText="Передать"
+        cancelText="Отмена"
+        okButtonProps={{ disabled: transferBusy || !selectedNewOwner, loading: transferBusy }}
+        onCancel={() => !transferBusy && setTransferConfirmOpen(false)}
+        onOk={() => void handleTransfer()}
       >
         <p style={{ margin: 0 }}>
           Владельцем организации «{activeOrganization.name}» станет{' '}
@@ -269,13 +270,12 @@ export const OrganizationSettingsSection = ({ onAfterDelete }: Props) => {
 
       <Modal
         open={deleteModalOpen}
-        danger
-        modalHeading="Удалить организацию?"
-        primaryButtonText="Удалить"
-        secondaryButtonText="Отмена"
-        primaryButtonDisabled={deleteBusy}
-        onRequestClose={() => !deleteBusy && setDeleteModalOpen(false)}
-        onRequestSubmit={() => void handleDelete()}
+        title="Удалить организацию?"
+        okText="Удалить"
+        cancelText="Отмена"
+        okButtonProps={{ danger: true, loading: deleteBusy }}
+        onCancel={() => !deleteBusy && setDeleteModalOpen(false)}
+        onOk={() => void handleDelete()}
       >
         <p style={{ margin: 0 }}>
           Организация «{activeOrganization.name}» будет удалена без возможности восстановления.

@@ -1,8 +1,11 @@
 import { useState } from 'react';
-import { Button, Modal, Toggle } from '@carbon/react';
+import { Button, Modal, Switch } from 'antd';
 import { DragHandle } from './DragHandle';
 import { FieldPreview } from './FieldPreview';
+import { FieldTypeSettings } from './FieldTypeSettings';
+import { FieldMoveControls } from './FieldMoveControls';
 import type { FieldOption, FormFieldInstance } from '../../types/form-builder.types';
+import type { FieldSiblingPosition } from '../../utils/fieldMove.utils';
 
 interface FieldBlockProps {
   field: FormFieldInstance;
@@ -10,6 +13,12 @@ interface FieldBlockProps {
   onDelete: () => void;
   dragHandleProps: React.HTMLAttributes<HTMLDivElement>;
   isDraggingOverlay?: boolean;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
+  siblingPositions?: FieldSiblingPosition[];
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  onMoveBefore?: (beforeFieldId: string | null) => void;
 }
 
 export const FieldBlock = ({
@@ -18,6 +27,12 @@ export const FieldBlock = ({
   onDelete,
   dragHandleProps,
   isDraggingOverlay = false,
+  canMoveUp = false,
+  canMoveDown = false,
+  siblingPositions = [],
+  onMoveUp,
+  onMoveDown,
+  onMoveBefore,
 }: FieldBlockProps) => {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -28,8 +43,8 @@ export const FieldBlock = ({
   return (
     <div
       style={{
-        background: 'var(--cds-layer-01)',
-        border: `1px solid ${isDraggingOverlay ? 'var(--cds-interactive)' : 'var(--cds-border-subtle)'}`,
+        background: 'var(--app-surface)',
+        border: `1px solid ${isDraggingOverlay ? 'var(--app-primary)' : 'var(--app-border)'}`,
         borderRadius: 4,
         boxShadow: isDraggingOverlay ? '0 4px 8px rgba(0,0,0,0.1)' : 'none',
         overflow: 'hidden',
@@ -46,7 +61,7 @@ export const FieldBlock = ({
             padding: '0 4px',
             fontSize: '1rem',
             fontWeight: 600,
-            color: 'var(--cds-text-primary)',
+            color: 'var(--app-text)',
             width: '100%',
             marginBottom: 2,
             border: 'none',
@@ -62,7 +77,7 @@ export const FieldBlock = ({
           style={{
             padding: '0 4px',
             fontSize: '0.75rem',
-            color: 'var(--cds-text-secondary)',
+            color: 'var(--app-text-secondary)',
             width: '100%',
             marginBottom: 12,
             border: 'none',
@@ -72,11 +87,12 @@ export const FieldBlock = ({
         />
 
         <FieldPreview field={field} onOptionsChange={handleOptionsChange} />
+        <FieldTypeSettings field={field} onChange={onChange} />
 
         <hr
           style={{
             border: 'none',
-            borderTop: '1px solid var(--cds-border-subtle)',
+            borderTop: '1px solid var(--app-border)',
             margin: '14px 0 10px',
           }}
         />
@@ -86,24 +102,33 @@ export const FieldBlock = ({
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
+            gap: 8,
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center' }}>
-            <Toggle
+            <Switch
               id={`required-${field.id}`}
-              size="sm"
-              labelText="Обязательно для заполнения"
-              hideLabel
-              labelA=""
-              labelB=""
-              toggled={field.required}
-              onToggle={(checked: boolean) => onChange({ required: checked })}
+              size="small"
+              checked={field.required}
+              onChange={(checked) => onChange({ required: checked })}
             />
           </div>
 
+          {onMoveUp && onMoveDown && onMoveBefore && (
+            <FieldMoveControls
+              canMoveUp={canMoveUp}
+              canMoveDown={canMoveDown}
+              siblingPositions={siblingPositions}
+              onMoveUp={onMoveUp}
+              onMoveDown={onMoveDown}
+              onMoveBefore={onMoveBefore}
+            />
+          )}
+
           <Button
-            kind="danger--ghost"
-            size="sm"
+            type="text"
+            danger
+            size="small"
             onClick={() => setConfirmDelete(true)}
           >
             Удалить поле
@@ -113,16 +138,15 @@ export const FieldBlock = ({
 
       <Modal
         open={confirmDelete}
-        onRequestClose={() => setConfirmDelete(false)}
-        onRequestSubmit={() => {
+        title="Удалить поле?"
+        okText="Удалить"
+        cancelText="Отмена"
+        okButtonProps={{ danger: true }}
+        onCancel={() => setConfirmDelete(false)}
+        onOk={() => {
           onDelete();
           setConfirmDelete(false);
         }}
-        modalHeading="Удалить поле?"
-        primaryButtonText="Удалить"
-        secondaryButtonText="Отмена"
-        danger
-        size="xs"
       />
     </div>
   );

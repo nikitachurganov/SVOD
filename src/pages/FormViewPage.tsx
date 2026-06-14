@@ -1,14 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  Button,
-  InlineNotification,
-  Loading,
-  Modal,
-  Tag,
-} from '@carbon/react';
-import { ArrowLeft, Edit, TrashCan } from '@carbon/react/icons';
+import { Alert, Breadcrumb, Button, Modal, Spin, Tag } from 'antd';
+import { ArrowLeftOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   deleteForm,
@@ -17,25 +9,13 @@ import {
   type FormResponse,
 } from '../shared/api/forms.api';
 import { buildDisplayName } from '../shared/utils/userName';
-import { PreviewField } from '../shared/ui/form-builder/FormPreviewModal';
-import type { FormFieldInstance, FormPageInstance } from '../shared/types/form-builder.types';
-import { useFormStore, FormProvider } from '../shared/hooks/useFormStore';
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const collectFieldIds = (fields: FormFieldInstance[]): string[] => {
-  const ids: string[] = [];
-  for (const field of fields) {
-    if (field.type === 'group' && field.children && field.children.length > 0) {
-      ids.push(...collectFieldIds(field.children));
-    } else {
-      ids.push(field.id);
-    }
-  }
-  return ids;
-};
-
-// ─── Page ─────────────────────────────────────────────────────────────────────
+import type { FormPageInstance } from '../shared/types/form-builder.types';
+import { useFormStore } from '../shared/hooks/useFormStore';
+import { collectFieldIds } from '../shared/formily/collectFieldIds';
+import {
+  FormFillRenderer,
+  type FormFillRendererHandle,
+} from '../shared/ui/form-fill/FormFillRenderer';
 
 export const FormViewPage = () => {
   const navigate = useNavigate();
@@ -48,6 +28,7 @@ export const FormViewPage = () => {
   const [pageIndex, setPageIndex] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const formStore = useFormStore();
+  const fillRef = useRef<FormFillRendererHandle>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
 
   const [submitSuccess, setSubmitSuccess] = useState(false);
@@ -81,7 +62,7 @@ export const FormViewPage = () => {
 
   useEffect(() => {
     setPageIndex(0);
-    formStore.resetFields();
+    fillRef.current?.resetFields();
   }, [formData]);
 
   const scrollToTop = () => {
@@ -94,7 +75,7 @@ export const FormViewPage = () => {
     if (!currentPage) return;
     const ids = collectFieldIds(currentPage.fields);
     try {
-      await formStore.validateFields(ids);
+      await fillRef.current?.validateFields(ids);
       setPageIndex((idx) => Math.min(idx + 1, pageInstances.length - 1));
       scrollToTop();
     } catch {
@@ -109,7 +90,7 @@ export const FormViewPage = () => {
 
   const handleSubmitForm = async () => {
     try {
-      await formStore.validateFields();
+      await fillRef.current?.validateFields();
       setIsSubmitting(true);
       await new Promise<void>((resolve) => setTimeout(resolve, 500));
       setSubmitSuccess(true);
@@ -148,20 +129,25 @@ export const FormViewPage = () => {
       {/* ── Header ── */}
       <div
         style={{
-          background: 'var(--cds-layer-01)',
-          borderBottom: '1px solid var(--cds-border-subtle)',
+          background: 'var(--app-surface)',
+          borderBottom: '1px solid var(--app-border)',
           padding: '12px 24px 16px',
           flexShrink: 0,
         }}
       >
-        <Breadcrumb noTrailingSlash style={{ marginBottom: 8 }}>
-          <BreadcrumbItem>
-            <a onClick={() => navigate('/forms')} style={{ cursor: 'pointer' }}>
-              Формы
-            </a>
-          </BreadcrumbItem>
-          <BreadcrumbItem isCurrentPage>{breadcrumbCurrent}</BreadcrumbItem>
-        </Breadcrumb>
+        <Breadcrumb
+          style={{ marginBottom: 8 }}
+          items={[
+            {
+              title: (
+                <a onClick={() => navigate('/forms')} style={{ cursor: 'pointer' }}>
+                  Формы
+                </a>
+              ),
+            },
+            { title: breadcrumbCurrent },
+          ]}
+        />
 
         <div
           style={{
@@ -172,39 +158,34 @@ export const FormViewPage = () => {
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <Button
-              kind="ghost"
-              size="sm"
-              hasIconOnly
-              renderIcon={ArrowLeft}
-              iconDescription="Вернуться к реестру форм"
+              type="text"
+              size="small"
+              icon={<ArrowLeftOutlined />}
+              aria-label="Вернуться к реестру форм"
               onClick={() => navigate('/forms')}
             />
             <h4 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 600 }}>
               {pageTitle}
             </h4>
             {!loading && formData && (
-              <Tag type="blue" size="sm">
-                Просмотр
-              </Tag>
+              <Tag color="blue">Просмотр</Tag>
             )}
           </div>
 
           {formData && (
             <div style={{ display: 'flex', gap: 8 }}>
               <Button
-                kind="tertiary"
-                size="sm"
-                renderIcon={Edit}
+                icon={<EditOutlined />}
                 onClick={() => navigate(`/forms/${id}/edit`)}
               >
                 Изменить
               </Button>
 
               <Button
-                kind="danger"
-                size="sm"
-                renderIcon={TrashCan}
+                danger
+                icon={<DeleteOutlined />}
                 disabled={isDeleting}
+                loading={isDeleting}
                 onClick={() => setDeleteConfirmOpen(true)}
               >
                 {isDeleting ? 'Удаление…' : 'Удалить'}
@@ -217,13 +198,13 @@ export const FormViewPage = () => {
       {/* ── Delete Confirmation Modal ── */}
       <Modal
         open={deleteConfirmOpen}
-        danger
-        modalHeading="Удалить форму?"
-        primaryButtonText="Удалить"
-        secondaryButtonText="Отмена"
-        onRequestSubmit={handleDelete}
-        onRequestClose={() => setDeleteConfirmOpen(false)}
-        size="xs"
+        title="Удалить форму?"
+        okText="Удалить"
+        cancelText="Отмена"
+        okButtonProps={{ danger: true }}
+        onOk={handleDelete}
+        onCancel={() => setDeleteConfirmOpen(false)}
+        width={400}
       >
         <p>Это действие нельзя отменить.</p>
       </Modal>
@@ -234,7 +215,7 @@ export const FormViewPage = () => {
           flex: 1,
           minHeight: 0,
           overflowY: 'auto',
-          background: 'var(--cds-background)',
+          background: 'var(--app-bg)',
         }}
         ref={contentRef}
       >
@@ -247,28 +228,29 @@ export const FormViewPage = () => {
               minHeight: '60vh',
             }}
           >
-            <Loading withOverlay={false} />
+            <Spin size="large" />
           </div>
         ) : error ? (
           <div style={{ padding: 24 }}>
-            <InlineNotification
-              kind="error"
-              title="Ошибка загрузки"
-              subtitle={error}
-              lowContrast
-              hideCloseButton
+            <Alert
+              type="error"
+              message="Ошибка загрузки"
+              description={error}
+              showIcon
+              closable={false}
             />
           </div>
         ) : (
           <div style={{ maxWidth: 680, margin: '0 auto', padding: 24 }}>
             {submitSuccess && (
               <div style={{ marginBottom: 16 }}>
-                <InlineNotification
-                  kind="success"
-                  title="Форма заполнена"
-                  subtitle="Это публичный просмотр — данные не отправляются."
-                  lowContrast
-                  onCloseButtonClick={() => setSubmitSuccess(false)}
+                <Alert
+                  type="success"
+                  message="Форма заполнена"
+                  description="Это публичный просмотр — данные не отправляются."
+                  showIcon
+                  closable
+                  onClose={() => setSubmitSuccess(false)}
                 />
               </div>
             )}
@@ -278,7 +260,7 @@ export const FormViewPage = () => {
                   display: 'block',
                   marginBottom: 24,
                   fontSize: '1rem',
-                  color: 'var(--cds-text-secondary)',
+                  color: 'var(--app-text-secondary)',
                 }}
               >
                 {formData.description}
@@ -288,17 +270,20 @@ export const FormViewPage = () => {
               style={{
                 display: 'block',
                 marginBottom: 16,
-                color: 'var(--cds-text-secondary)',
+                color: 'var(--app-text-secondary)',
               }}
             >
               Автор: {formData?.author ? buildDisplayName(formData.author) : 'Неизвестный автор'}
             </span>
 
             {hasPages && currentPage && currentPage.fields.length > 0 ? (
-              <FormProvider store={formStore}>
-                {currentPage.fields.map((field) => (
-                  <PreviewField key={field.id} field={field} />
-                ))}
+              <>
+                <FormFillRenderer
+                  ref={fillRef}
+                  pages={pageInstances}
+                  pageIndex={pageIndex}
+                  legacyStore={formStore}
+                />
 
                 <div
                   style={{
@@ -309,30 +294,30 @@ export const FormViewPage = () => {
                   }}
                 >
                   {!isFirst && (
-                    <Button kind="secondary" size="md" onClick={handlePrevPage}>
+                    <Button onClick={handlePrevPage}>
                       Назад
                     </Button>
                   )}
                   {!isLast && (
-                    <Button kind="primary" size="md" onClick={handleNextPage}>
+                    <Button type="primary" onClick={handleNextPage}>
                       Далее
                     </Button>
                   )}
                   {isLast && (
                     <Button
-                      kind="primary"
-                      size="md"
+                      type="primary"
                       onClick={handleSubmitForm}
                       disabled={isSubmitting}
+                      loading={isSubmitting}
                     >
                       {isSubmitting ? 'Отправка…' : 'Отправить'}
                     </Button>
                   )}
                 </div>
-              </FormProvider>
+              </>
             ) : (
               <div style={{ textAlign: 'center', padding: '48px 0' }}>
-                <span style={{ color: 'var(--cds-text-secondary)' }}>В форме нет полей.</span>
+                <span style={{ color: 'var(--app-text-secondary)' }}>В форме нет полей.</span>
               </div>
             )}
           </div>

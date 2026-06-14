@@ -1,13 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import {
-  Button,
-  InlineNotification,
-  InlineLoading,
-  Loading,
-  TextArea,
-  TextInput,
-  Tile,
-} from '@carbon/react';
+import { Alert, Button, Card, Form, Input, Spin } from 'antd';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   getPublicPageData,
@@ -21,6 +13,8 @@ import {
   savePublicApplicantDraft,
   type PublicApplicantDraft,
 } from '../shared/utils/publicApplicantDraft';
+
+const { TextArea } = Input;
 
 const DEBOUNCE_MS = 3000;
 const UNIVERSAL_CHARS = 50;
@@ -40,7 +34,7 @@ const FormChoiceCard = ({
   subtitle: string;
   onClick: () => void;
 }) => (
-  <Tile
+  <Card
     role="button"
     tabIndex={0}
     onClick={onClick}
@@ -50,20 +44,22 @@ const FormChoiceCard = ({
         onClick();
       }
     }}
-    style={{
-      cursor: 'pointer',
-      padding: '1rem',
-      marginBottom: 8,
-      border: '1px solid var(--cds-border-subtle)',
-      borderRadius: 4,
-      background: 'var(--cds-layer-01)',
+    styles={{
+      body: {
+        cursor: 'pointer',
+        padding: '1rem',
+        marginBottom: 8,
+        border: '1px solid var(--app-border)',
+        borderRadius: 4,
+        background: 'var(--app-surface)',
+      },
     }}
   >
     <div style={{ fontWeight: 600, fontSize: '0.875rem', marginBottom: 6 }}>{title}</div>
-    <div style={{ color: 'var(--cds-text-secondary)', fontSize: '0.8125rem', lineHeight: 1.35 }}>
+    <div style={{ color: 'var(--app-text-secondary)', fontSize: '0.8125rem', lineHeight: 1.35 }}>
       {subtitle}
     </div>
-  </Tile>
+  </Card>
 );
 
 export const PublicFormLandingPage = () => {
@@ -172,7 +168,7 @@ export const PublicFormLandingPage = () => {
     taskDescription.trim().length >= UNIVERSAL_CHARS &&
     Boolean(pageData?.universal_form_id);
 
-  const validateContact = (): boolean => {
+  const validateContact = useCallback((): boolean => {
     const newErrors: MetaErrors = {};
     if (!fullName.trim()) newErrors.fullName = 'Укажите ФИО';
     if (!company.trim()) newErrors.company = 'Укажите филиал или компанию';
@@ -185,7 +181,7 @@ export const PublicFormLandingPage = () => {
     }
     setMetaErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  };
+  }, [fullName, company, email, phone]);
 
   const goToFill = useCallback(
     (formId: string) => {
@@ -200,7 +196,7 @@ export const PublicFormLandingPage = () => {
       savePublicApplicantDraft(token, draft);
       navigate(`/form/${token}/fill/${formId}`);
     },
-    [token, fullName, company, email, phone, taskDescription, navigate],
+    [token, fullName, company, email, phone, taskDescription, navigate, validateContact],
   );
 
   const goToUniversal = useCallback(() => {
@@ -215,10 +211,10 @@ export const PublicFormLandingPage = () => {
           minHeight: '100vh',
           display: 'grid',
           placeItems: 'center',
-          background: 'var(--cds-background)',
+          background: 'var(--app-bg)',
         }}
       >
-        <Loading withOverlay={false} />
+        <Spin size="large" />
       </div>
     );
   }
@@ -226,12 +222,12 @@ export const PublicFormLandingPage = () => {
   if (error || !pageData) {
     return (
       <div style={{ padding: 32, maxWidth: 600, margin: '0 auto' }}>
-        <InlineNotification
-          kind="error"
-          title="Ссылка недействительна"
-          subtitle={error || 'Не удалось загрузить данные'}
-          lowContrast
-          hideCloseButton
+        <Alert
+          type="error"
+          message="Ссылка недействительна"
+          description={error || 'Не удалось загрузить данные'}
+          showIcon
+          closable={false}
         />
       </div>
     );
@@ -243,7 +239,7 @@ export const PublicFormLandingPage = () => {
     <div
       style={{
         minHeight: '100vh',
-        background: 'var(--cds-background)',
+        background: 'var(--app-bg)',
         display: 'flex',
         flexDirection: 'column',
       }}
@@ -254,8 +250,8 @@ export const PublicFormLandingPage = () => {
           display: 'flex',
           alignItems: 'center',
           paddingInline: '1rem',
-          background: 'var(--cds-layer-01)',
-          borderBottom: '1px solid var(--cds-border-subtle)',
+          background: 'var(--app-surface)',
+          borderBottom: '1px solid var(--app-border)',
           flexShrink: 0,
         }}
       >
@@ -275,7 +271,7 @@ export const PublicFormLandingPage = () => {
           {pageData.organization_description && (
             <p
               style={{
-                color: 'var(--cds-text-secondary)',
+                color: 'var(--app-text-secondary)',
                 marginBottom: 24,
                 fontSize: '0.875rem',
               }}
@@ -285,67 +281,80 @@ export const PublicFormLandingPage = () => {
           )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <TextInput
-              id="pub-fullName"
-              labelText="ФИО"
-              placeholder="Иванов Иван Иванович"
-              value={fullName}
-              invalid={!!metaErrors.fullName}
-              invalidText={metaErrors.fullName}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                setFullName(e.target.value);
-                setMetaErrors((p) => ({ ...p, fullName: undefined }));
-              }}
-            />
-            <TextInput
-              id="pub-company"
-              labelText="Филиал / компания"
-              placeholder="Название филиала или компании"
-              value={company}
-              invalid={!!metaErrors.company}
-              invalidText={metaErrors.company}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                setCompany(e.target.value);
-                setMetaErrors((p) => ({ ...p, company: undefined }));
-              }}
-            />
-            <TextInput
-              id="pub-email"
-              labelText="Email"
-              placeholder="example@mail.com"
-              value={email}
-              invalid={!!metaErrors.contact}
-              invalidText={metaErrors.contact}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                setEmail(e.target.value);
-                setMetaErrors((p) => ({ ...p, contact: undefined }));
-              }}
-            />
-            <TextInput
-              id="pub-phone"
-              labelText="Телефон"
-              placeholder="+7 (999) 123-45-67"
-              value={phone}
-              invalid={!!metaErrors.contact}
-              invalidText={metaErrors.contact}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                setPhone(e.target.value);
-                setMetaErrors((p) => ({ ...p, contact: undefined }));
-              }}
-            />
+            <Form.Item
+              label="ФИО"
+              validateStatus={metaErrors.fullName ? 'error' : undefined}
+              help={metaErrors.fullName}
+            >
+              <Input
+                id="pub-fullName"
+                placeholder="Иванов Иван Иванович"
+                value={fullName}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  setFullName(e.target.value);
+                  setMetaErrors((p) => ({ ...p, fullName: undefined }));
+                }}
+              />
+            </Form.Item>
+            <Form.Item
+              label="Филиал / компания"
+              validateStatus={metaErrors.company ? 'error' : undefined}
+              help={metaErrors.company}
+            >
+              <Input
+                id="pub-company"
+                placeholder="Название филиала или компании"
+                value={company}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  setCompany(e.target.value);
+                  setMetaErrors((p) => ({ ...p, company: undefined }));
+                }}
+              />
+            </Form.Item>
+            <Form.Item
+              label="Email"
+              validateStatus={metaErrors.contact ? 'error' : undefined}
+              help={metaErrors.contact}
+            >
+              <Input
+                id="pub-email"
+                placeholder="example@mail.com"
+                value={email}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  setEmail(e.target.value);
+                  setMetaErrors((p) => ({ ...p, contact: undefined }));
+                }}
+              />
+            </Form.Item>
+            <Form.Item
+              label="Телефон"
+              validateStatus={metaErrors.contact ? 'error' : undefined}
+              help={metaErrors.contact}
+            >
+              <Input
+                id="pub-phone"
+                placeholder="+7 (999) 123-45-67"
+                value={phone}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  setPhone(e.target.value);
+                  setMetaErrors((p) => ({ ...p, contact: undefined }));
+                }}
+              />
+            </Form.Item>
 
-            <TextArea
-              id="pub-task"
-              labelText="Кратко опишите задачу"
-              placeholder="Например: нужен баннер 2×3 м для новой точки в Екатеринбурге…"
-              value={taskDescription}
-              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-                setTaskDescription(e.target.value)
-              }
-              rows={4}
-              enableCounter
-              maxCount={4000}
-            />
+            <Form.Item label="Кратко опишите задачу">
+              <TextArea
+                id="pub-task"
+                placeholder="Например: нужен баннер 2×3 м для новой точки в Екатеринбурге…"
+                value={taskDescription}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                  setTaskDescription(e.target.value)
+                }
+                rows={4}
+                showCount
+                maxLength={4000}
+              />
+            </Form.Item>
 
             {showPopular && popularForms.length > 0 && (
               <div style={{ marginTop: 8 }}>
@@ -370,23 +379,17 @@ export const PublicFormLandingPage = () => {
                   alignItems: 'center',
                   gap: 12,
                   marginTop: 8,
-                  color: 'var(--cds-text-secondary)',
+                  color: 'var(--app-text-secondary)',
                   fontSize: '0.875rem',
                 }}
                 aria-busy="true"
               >
-                <InlineLoading description="Анализируем ваш запрос…" />
+                <Spin tip="Анализируем ваш запрос…" />
               </div>
             )}
 
             {aiHint && !showSpinner && (
-              <InlineNotification
-                kind="info"
-                title=""
-                subtitle={aiHint}
-                lowContrast
-                hideCloseButton
-              />
+              <Alert type="info" description={aiHint} showIcon closable={false} />
             )}
 
             {!showPopular && aiForms.length > 0 && !showSpinner && (
@@ -406,22 +409,21 @@ export const PublicFormLandingPage = () => {
             )}
 
             {showAiNoMatch && (
-              <InlineNotification
-                kind="warning"
-                title=""
-                subtitle="Не удалось определить тип задачи. Пожалуйста, добавьте больше деталей"
-                lowContrast
-                hideCloseButton
+              <Alert
+                type="warning"
+                description="Не удалось определить тип задачи. Пожалуйста, добавьте больше деталей"
+                showIcon
+                closable={false}
               />
             )}
 
             {showUniversalCta && (
               <div style={{ marginTop: 8 }}>
-                <p style={{ fontSize: '0.875rem', marginBottom: 8, color: 'var(--cds-text-secondary)' }}>
+                <p style={{ fontSize: '0.875rem', marginBottom: 8, color: 'var(--app-text-secondary)' }}>
                   Можно заполнить универсальную форму заявки — опишите задачу в свободной форме и
                   прикрепите файлы.
                 </p>
-                <Button kind="tertiary" onClick={goToUniversal}>
+                <Button type="text" onClick={goToUniversal}>
                   Заполнить универсальную форму
                 </Button>
               </div>

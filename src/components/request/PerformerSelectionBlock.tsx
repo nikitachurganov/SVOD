@@ -1,11 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import {
-  Button,
-  InlineLoading,
-  InlineNotification,
-  Tag,
-  Tile,
-} from '@carbon/react';
+import { Alert, Button, Card, Spin, Tag } from 'antd';
 import { getRequestPerformers } from '../../shared/api/requests.api';
 import type {
   PerformerRecommendationResponse,
@@ -69,7 +63,7 @@ export function PerformerSelectionBlock({
   };
 
   return (
-    <Tile style={{ padding: 16 }}>
+    <Card styles={{ body: { padding: 16 } }}>
       <div
         style={{
           display: 'flex',
@@ -85,51 +79,51 @@ export function PerformerSelectionBlock({
             Подбор исполнителя
           </h4>
           {reco && (
-            <p style={{ margin: 0, fontSize: 13, color: 'var(--cds-text-secondary)' }}>
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--app-text-secondary)' }}>
               Статус: {STATUS_HEADLINE[reco.status]} · Уверенность: {reco.confidence}%
             </p>
           )}
         </div>
-        <Button kind="primary" disabled={!selected || loading} onClick={openAssign}>
+        <Button type="primary" disabled={!selected || loading} onClick={openAssign}>
           Передать задачу
         </Button>
       </div>
 
       {assignedPerformerId && (
-        <InlineNotification
-          kind="info"
-          title="Исполнитель уже назначен"
-          subtitle={`Идентификатор: ${assignedPerformerId}`}
-          lowContrast
-          hideCloseButton
+        <Alert
+          type="info"
+          message="Исполнитель уже назначен"
+          description={`Идентификатор: ${assignedPerformerId}`}
+          showIcon
+          closable={false}
           style={{ marginBottom: 12 }}
         />
       )}
 
       {loading && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <InlineLoading description="Загрузка подбора…" />
+          <Spin tip="Загрузка подбора…" />
         </div>
       )}
 
       {error && (
-        <InlineNotification
-          kind="error"
-          title="Не удалось загрузить данные"
-          subtitle={error}
-          lowContrast
-          hideCloseButton
+        <Alert
+          type="error"
+          message="Не удалось загрузить данные"
+          description={error}
+          showIcon
+          closable={false}
         />
       )}
 
       {!loading && reco && reco.performers.length === 0 && (
         <div style={{ marginTop: 8 }}>
-          <InlineNotification
-            kind="warning"
-            title="Не удалось подобрать исполнителя"
-            subtitle={`Роль: ${reco.fallback.required_role}. Где искать: ${reco.fallback.recommended_sources.join(', ')}. География: ${reco.fallback.geography}.`}
-            lowContrast
-            hideCloseButton
+          <Alert
+            type="warning"
+            message="Не удалось подобрать исполнителя"
+            description={`Роль: ${reco.fallback.required_role}. Где искать: ${reco.fallback.recommended_sources.join(', ')}. География: ${reco.fallback.geography}.`}
+            showIcon
+            closable={false}
           />
         </div>
       )}
@@ -141,7 +135,7 @@ export function PerformerSelectionBlock({
           style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 8 }}
         >
           {reco.performers.map((p) => (
-            <Tile
+            <Card
               key={p.id}
               role="button"
               tabIndex={0}
@@ -152,29 +146,31 @@ export function PerformerSelectionBlock({
                   setSelectedId(p.id);
                 }
               }}
-              style={{
-                padding: 12,
-                cursor: 'pointer',
-                outline: 'none',
-                border:
-                  selectedId === p.id
-                    ? '2px solid var(--cds-focus)'
-                    : '1px solid var(--cds-border-subtle)',
+              styles={{
+                body: {
+                  padding: 12,
+                  cursor: 'pointer',
+                  outline: 'none',
+                  border:
+                    selectedId === p.id
+                      ? '2px solid var(--app-focus)'
+                      : '1px solid var(--app-border)',
+                },
               }}
             >
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
                   <strong style={{ fontSize: 14 }}>{p.full_name}</strong>
                   {reco.recommended_performer_id === p.id && (
-                    <Tag type="green">Рекомендуемый</Tag>
+                    <Tag color="success">Рекомендуемый</Tag>
                   )}
-                  {p.active_tasks > 8 && <Tag type="red">Перегружен</Tag>}
-                  {!p.contact_available && <Tag type="warm-gray">Нет контакта</Tag>}
+                  {p.active_tasks > 8 && <Tag color="error">Перегружен</Tag>}
+                  {!p.contact_available && <Tag color="default">Нет контакта</Tag>}
                 </div>
                 <div
                   style={{
                     fontSize: 13,
-                    color: 'var(--cds-text-secondary)',
+                    color: 'var(--app-text-secondary)',
                     marginTop: 4,
                   }}
                 >
@@ -197,7 +193,7 @@ export function PerformerSelectionBlock({
                       margin: '8px 0 0',
                       paddingLeft: 18,
                       fontSize: 13,
-                      color: 'var(--cds-text-error)',
+                      color: 'var(--app-text-error)',
                     }}
                   >
                     {p.warnings.map((w) => (
@@ -206,7 +202,7 @@ export function PerformerSelectionBlock({
                   </ul>
                 )}
               </div>
-            </Tile>
+            </Card>
           ))}
         </div>
       )}
@@ -219,6 +215,6 @@ export function PerformerSelectionBlock({
         recommendedPerformerId={reco?.recommended_performer_id ?? null}
         onSuccess={onReload}
       />
-    </Tile>
+    </Card>
   );
 }

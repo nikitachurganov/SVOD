@@ -1,14 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  Button,
-  InlineLoading,
-  InlineNotification,
-  Modal,
-  Tag,
-  TextArea,
-  TextInput,
-  Tile,
-} from '@carbon/react';
+import { Alert, Button, Card, Form, Input, Modal, Spin, Tag } from 'antd';
 import {
   addRequestStage,
   blockRequestStage,
@@ -19,6 +10,8 @@ import {
 import type { RequestExecutionEventDTO, RequestStageDTO } from '../../types/execution';
 import type { PerformerRecommendationResponse, RecommendedPerformerDTO } from '../../types/performerSelection';
 import { AssignPerformerModal } from './AssignPerformerModal';
+
+const { TextArea } = Input;
 
 const TERMINAL = new Set(['done', 'cancelled']);
 
@@ -180,12 +173,12 @@ export function RequestExecutionPanel({
 
   if (!organizationId) {
     return (
-      <InlineNotification
-        kind="info"
-        title="Исполнение недоступно"
-        subtitle="У заявки не указана организация."
-        lowContrast
-        hideCloseButton
+      <Alert
+        type="info"
+        message="Исполнение недоступно"
+        description="У заявки не указана организация."
+        showIcon
+        closable={false}
       />
     );
   }
@@ -194,41 +187,41 @@ export function RequestExecutionPanel({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <Tile style={{ padding: 16 }}>
+      <Card styles={{ body: { padding: 16 } }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12 }}>
           <div>
             <h4 style={{ margin: '0 0 8px', fontSize: '1rem', fontWeight: 600 }}>
               Ход исполнения
             </h4>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 13, color: 'var(--cds-text-secondary)' }}>Сводный статус</span>
-              <Tag type={executionStatus === 'completed' ? 'green' : 'blue'}>{execLabel}</Tag>
+              <span style={{ fontSize: 13, color: 'var(--app-text-secondary)' }}>Сводный статус</span>
+              <Tag color={executionStatus === 'completed' ? 'success' : 'blue'}>{execLabel}</Tag>
               {sortedStages.length > 0 && (
-                <span style={{ fontSize: 13, color: 'var(--cds-text-secondary)' }}>
+                <span style={{ fontSize: 13, color: 'var(--app-text-secondary)' }}>
                   Этапов: {sortedStages.length}
                   {cur ? ` · текущий: «${cur.title}»` : ''}
                 </span>
               )}
             </div>
           </div>
-          <Button kind="tertiary" size="sm" disabled={requestClosed || busy} onClick={() => setAddOpen(true)}>
+          <Button type="text" size="small" disabled={requestClosed || busy} onClick={() => setAddOpen(true)}>
             Добавить этап
           </Button>
         </div>
 
         {err && (
-          <InlineNotification
-            kind="error"
-            title="Ошибка"
-            subtitle={err}
-            lowContrast
-            hideCloseButton
+          <Alert
+            type="error"
+            message="Ошибка"
+            description={err}
+            showIcon
+            closable={false}
             style={{ marginTop: 12 }}
           />
         )}
 
         {sortedStages.length === 0 ? (
-          <p style={{ margin: '16px 0 0', fontSize: 14, color: 'var(--cds-text-secondary)' }}>
+          <p style={{ margin: '16px 0 0', fontSize: 14, color: 'var(--app-text-secondary)' }}>
             Этапы не добавлены. Добавьте этап или назначьте исполнителя из вкладки «Информация» — будет
             создан этап по умолчанию.
           </p>
@@ -244,9 +237,9 @@ export function RequestExecutionPanel({
                     padding: '12px 14px',
                     borderRadius: 4,
                     border: isCurrent
-                      ? '2px solid var(--cds-focus)'
-                      : '1px solid var(--cds-border-subtle)',
-                    background: 'var(--cds-layer-01)',
+                      ? '2px solid var(--app-focus)'
+                      : '1px solid var(--app-border)',
+                    background: 'var(--app-surface)',
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
@@ -255,14 +248,12 @@ export function RequestExecutionPanel({
                         {s.sequence}. {s.title}
                         {isCurrent ? (
                           <span style={{ marginLeft: 8, display: 'inline-block' }}>
-                            <Tag type="blue" size="sm">
-                              Текущий
-                            </Tag>
+                            <Tag color="blue">Текущий</Tag>
                           </span>
                         ) : null}
                       </div>
-                      <div style={{ fontSize: 13, color: 'var(--cds-text-secondary)', marginTop: 4 }}>
-                        <Tag size="sm">{label}</Tag>
+                      <div style={{ fontSize: 13, color: 'var(--app-text-secondary)', marginTop: 4 }}>
+                        <Tag>{label}</Tag>
                         {s.assignee_preview?.full_name ? (
                           <span style={{ marginLeft: 8 }}>{s.assignee_preview.full_name}</span>
                         ) : (
@@ -270,7 +261,7 @@ export function RequestExecutionPanel({
                         )}
                       </div>
                       {s.blocked_reason ? (
-                        <div style={{ fontSize: 13, marginTop: 6, color: 'var(--cds-text-error)' }}>
+                        <div style={{ fontSize: 13, marginTop: 6, color: 'var(--app-text-error)' }}>
                           {s.blocked_reason}
                         </div>
                       ) : null}
@@ -281,36 +272,35 @@ export function RequestExecutionPanel({
             })}
           </div>
         )}
-      </Tile>
+      </Card>
 
       {cur && !requestClosed ? (
-        <Tile style={{ padding: 16 }}>
+        <Card styles={{ body: { padding: 16 } }}>
           <span style={{ display: 'block', fontWeight: 600, marginBottom: 12 }}>
             Текущий этап
           </span>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             <Button
-              kind="primary"
-              size="sm"
+              type="primary"
+              size="small"
               disabled={busy || recoLoading || cur.status === 'blocked'}
               onClick={() => setAssignOpen(true)}
             >
               Назначить / передать
             </Button>
             <Button
-              kind="secondary"
-              size="sm"
+              size="small"
               disabled={busy || cur.status === 'blocked'}
               onClick={() => setCompleteOpen(true)}
             >
               Завершить этап
             </Button>
             {cur.status === 'blocked' ? (
-              <Button kind="tertiary" size="sm" disabled={busy} onClick={() => void handleUnblock()}>
+              <Button type="text" size="small" disabled={busy} onClick={() => void handleUnblock()}>
                 Снять блокировку
               </Button>
             ) : (
-              <Button kind="danger--tertiary" size="sm" disabled={busy} onClick={() => setBlockOpen(true)}>
+              <Button danger type="text" size="small" disabled={busy} onClick={() => setBlockOpen(true)}>
                 Заблокировать
               </Button>
             )}
@@ -318,33 +308,33 @@ export function RequestExecutionPanel({
 
           {recoLoading && (
             <div style={{ marginTop: 12 }}>
-              <InlineLoading description="Подбор исполнителей…" />
+              <Spin tip="Подбор исполнителей…" />
             </div>
           )}
           {recoError && (
-            <InlineNotification
-              kind="warning"
-              title="Подбор"
-              subtitle={recoError}
-              lowContrast
-              hideCloseButton
+            <Alert
+              type="warning"
+              message="Подбор"
+              description={recoError}
+              showIcon
+              closable={false}
               style={{ marginTop: 12 }}
             />
           )}
           {!recoLoading && reco && reco.performers.length > 0 && (
-            <div style={{ marginTop: 12, fontSize: 13, color: 'var(--cds-text-secondary)' }}>
+            <div style={{ marginTop: 12, fontSize: 13, color: 'var(--app-text-secondary)' }}>
               Выберите исполнителя для передачи и нажмите «Назначить / передать».
             </div>
           )}
-        </Tile>
+        </Card>
       ) : null}
 
-      <Tile style={{ padding: 16 }}>
+      <Card styles={{ body: { padding: 16 } }}>
         <span style={{ display: 'block', fontWeight: 600, marginBottom: 12 }}>
           Журнал передач
         </span>
         {executionEvents.length === 0 ? (
-          <span style={{ fontSize: 14, color: 'var(--cds-text-secondary)' }}>Событий пока нет.</span>
+          <span style={{ fontSize: 14, color: 'var(--app-text-secondary)' }}>Событий пока нет.</span>
         ) : (
           <ul
             style={{
@@ -359,14 +349,14 @@ export function RequestExecutionPanel({
             {executionEvents.slice(0, 20).map((ev) => (
               <li key={ev.id}>
                 <strong>{ev.event_type}</strong>
-                <span style={{ color: 'var(--cds-text-secondary)', marginLeft: 8 }}>
+                <span style={{ color: 'var(--app-text-secondary)', marginLeft: 8 }}>
                   {formatDateTime(ev.created_at)}
                 </span>
               </li>
             ))}
           </ul>
         )}
-      </Tile>
+      </Card>
 
       <AssignPerformerModal
         open={assignOpen}
@@ -380,61 +370,57 @@ export function RequestExecutionPanel({
 
       <Modal
         open={addOpen}
-        onRequestClose={() => !busy && setAddOpen(false)}
-        modalHeading="Новый этап"
-        primaryButtonText={busy ? 'Сохранение…' : 'Добавить'}
-        secondaryButtonText="Отмена"
-        primaryButtonDisabled={busy || !addTitle.trim()}
-        onRequestSubmit={(e) => {
-          e.preventDefault();
-          void handleAddStage();
-        }}
-        size="sm"
+        onCancel={() => !busy && setAddOpen(false)}
+        title="Новый этап"
+        okText={busy ? 'Сохранение…' : 'Добавить'}
+        cancelText="Отмена"
+        okButtonProps={{ disabled: busy || !addTitle.trim(), loading: busy }}
+        onOk={() => void handleAddStage()}
+        width={480}
       >
-        <TextInput
-          id="new-stage-title"
-          labelText="Название этапа"
-          value={addTitle}
-          onChange={(ev) => setAddTitle(ev.target.value)}
-        />
+        <Form.Item label="Название этапа">
+          <Input
+            id="new-stage-title"
+            value={addTitle}
+            onChange={(ev) => setAddTitle(ev.target.value)}
+          />
+        </Form.Item>
       </Modal>
 
       <Modal
         open={completeOpen}
-        onRequestClose={() => !busy && setCompleteOpen(false)}
-        modalHeading="Завершить этап"
-        primaryButtonText={busy ? 'Сохранение…' : 'Завершить'}
-        secondaryButtonText="Отмена"
-        primaryButtonDisabled={busy}
-        onRequestSubmit={(e) => {
-          e.preventDefault();
-          void handleComplete();
-        }}
+        onCancel={() => !busy && setCompleteOpen(false)}
+        title="Завершить этап"
+        okText={busy ? 'Сохранение…' : 'Завершить'}
+        cancelText="Отмена"
+        okButtonProps={{ loading: busy }}
+        onOk={() => void handleComplete()}
       >
-        <TextArea
-          labelText="Результат / примечание для передачи (необязательно)"
-          value={completeNote}
-          onChange={(ev) => setCompleteNote(ev.target.value)}
-        />
+        <Form.Item label="Результат / примечание для передачи (необязательно)">
+          <TextArea
+            value={completeNote}
+            onChange={(ev) => setCompleteNote(ev.target.value)}
+            rows={4}
+          />
+        </Form.Item>
       </Modal>
 
       <Modal
         open={blockOpen}
-        onRequestClose={() => !busy && setBlockOpen(false)}
-        modalHeading="Заблокировать этап"
-        primaryButtonText={busy ? 'Сохранение…' : 'Заблокировать'}
-        secondaryButtonText="Отмена"
-        primaryButtonDisabled={busy || !blockReason.trim()}
-        onRequestSubmit={(e) => {
-          e.preventDefault();
-          void handleBlock();
-        }}
+        onCancel={() => !busy && setBlockOpen(false)}
+        title="Заблокировать этап"
+        okText={busy ? 'Сохранение…' : 'Заблокировать'}
+        cancelText="Отмена"
+        okButtonProps={{ disabled: busy || !blockReason.trim(), loading: busy }}
+        onOk={() => void handleBlock()}
       >
-        <TextArea
-          labelText="Причина"
-          value={blockReason}
-          onChange={(ev) => setBlockReason(ev.target.value)}
-        />
+        <Form.Item label="Причина">
+          <TextArea
+            value={blockReason}
+            onChange={(ev) => setBlockReason(ev.target.value)}
+            rows={4}
+          />
+        </Form.Item>
       </Modal>
     </div>
   );

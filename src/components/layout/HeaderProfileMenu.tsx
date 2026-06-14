@@ -1,4 +1,4 @@
-import { Popover, PopoverContent } from '@carbon/react';
+import { Popover } from 'antd';
 import { HeaderProfileMenuContent } from './ProfileBlock';
 
 interface Props {
@@ -20,46 +20,52 @@ export const HeaderProfileMenu = ({
   resolvedEmail,
   onCreateOrg,
 }: Props) => {
+  const handleOpenChange = (next: boolean) => {
+    if (next) {
+      closeNotifications();
+    }
+    onOpenChange(next);
+  };
+
   const toggle = () => {
-    closeNotifications();
-    onOpenChange(!open);
+    handleOpenChange(!open);
   };
 
   return (
-    <Popover
-      className="app-profile-popover-shell"
-      open={open}
-      onRequestClose={() => onOpenChange(false)}
-      align="bottom-end"
-      autoAlign
-      caret={false}
-      dropShadow
-    >
-      <div className="app-profile-menu-wrap">
-        <span
-          className="app-profile-avatar app-profile-avatar--leading"
-          aria-hidden="true"
-          onClick={toggle}
-        >
-          {initials}
-        </span>
+    <div className="app-profile-menu-wrap">
+      <Popover
+        classNames={{ root: 'app-profile-dropdown-popover' }}
+        open={open}
+        onOpenChange={handleOpenChange}
+        trigger="click"
+        placement="bottomRight"
+        align={{ offset: [0, 0] }}
+        arrow={false}
+        destroyOnHidden
+        content={
+          <HeaderProfileMenuContent
+            onClose={() => onOpenChange(false)}
+            onCreateOrg={onCreateOrg}
+          />
+        }
+      >
         <button
           type="button"
-          className="app-profile-trigger"
+          className={`app-profile-trigger${open ? ' app-profile-trigger--open' : ''}`}
           aria-label={open ? 'Закрыть меню профиля' : 'Открыть меню профиля'}
           aria-expanded={open}
           aria-haspopup="true"
           onClick={toggle}
         >
+          <span className="app-profile-avatar" aria-hidden="true">
+            {initials}
+          </span>
           <span className="app-profile-text">
             <span className="app-profile-name">{resolvedName}</span>
             <span className="app-profile-email">{resolvedEmail}</span>
           </span>
         </button>
-      </div>
-      <PopoverContent className="app-header-profile-popover-content">
-        <HeaderProfileMenuContent onClose={() => onOpenChange(false)} onCreateOrg={onCreateOrg} />
-      </PopoverContent>
-    </Popover>
+      </Popover>
+    </div>
   );
 };

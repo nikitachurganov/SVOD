@@ -22,9 +22,11 @@ export interface CreateFormFieldPayload {
    * New shape: array of { id, label } objects to keep option IDs stable.
    * Legacy shape: array of plain label strings.
    */
-  options?: Array<string | { id: string; label: string }>;
+  options?: Array<string | { id: string; label: string; isOther?: boolean }>;
   /** Child fields — only present for group-type fields */
   children?: CreateFormFieldPayload[];
+  /** Type-specific settings persisted in form schema */
+  config?: Record<string, unknown>;
 }
 
 /** Single page (step) stored in JSON column */
@@ -95,7 +97,12 @@ export const mapFieldsToPayload = (
     label: inst.label,
     placeholder: inst.description || undefined,
     required: inst.required,
-    options: inst.options?.map((opt) => ({ id: opt.id, label: opt.label })),
+    options: inst.options?.map((opt) => ({
+      id: opt.id,
+      label: opt.label,
+      isOther: opt.isOther || undefined,
+    })),
+    config: inst.config,
     children:
       inst.type === 'group' && inst.children?.length
         ? mapFieldsToPayload(inst.children)
@@ -134,6 +141,7 @@ export function payloadToInstance(
               ? opt.id
               : crypto.randomUUID(),
           label: opt.label,
+          isOther: typeof opt === 'object' && 'isOther' in opt && opt.isOther ? true : undefined,
         };
       })
     : undefined;
@@ -145,6 +153,7 @@ export function payloadToInstance(
     description: payload.placeholder ?? '',
     required: payload.required,
     options,
+    config: payload.config,
     children: payload.children?.map(payloadToInstance),
   };
 }
@@ -166,16 +175,21 @@ export const mapPagesToPayload = (
  * Backward compatibility: if `fields` is a flat array of field payloads,
  * wraps them into a single default page.
  */
+const isApiPagePayload = (item: unknown): item is CreateFormPagePayload => {
+  if (typeof item !== 'object' || item === null) return false;
+  return 'fields' in item;
+};
+
 const normalizePagesFromApi = (rawFields: unknown): CreateFormPagePayload[] => {
   const arr = Array.isArray(rawFields) ? rawFields : [];
   if (arr.length === 0) {
     return [];
   }
 
-  const first = arr[0] as any;
+  const first = arr[0];
 
-  if (first && typeof first === 'object' && 'fields' in first) {
-    return (arr as any[]).map((page, index) => ({
+  if (isApiPagePayload(first)) {
+    return arr.filter(isApiPagePayload).map((page, index) => ({
       id: typeof page.id === 'string' ? page.id : crypto.randomUUID(),
       title:
         typeof page.title === 'string' && page.title.trim()

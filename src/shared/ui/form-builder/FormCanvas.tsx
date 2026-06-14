@@ -11,6 +11,9 @@ interface FormCanvasProps {
   onFieldDelete: (id: string) => void;
   onGroupChildChange: (groupId: string, childId: string, changes: Partial<FormFieldInstance>) => void;
   onGroupChildDelete: (groupId: string, childId: string) => void;
+  onFieldMoveUp: (fieldId: string) => void;
+  onFieldMoveDown: (fieldId: string) => void;
+  onFieldMoveBefore: (fieldId: string, beforeFieldId: string | null) => void;
 }
 
 export const FormCanvas = ({
@@ -19,6 +22,9 @@ export const FormCanvas = ({
   onFieldDelete,
   onGroupChildChange,
   onGroupChildDelete,
+  onFieldMoveUp,
+  onFieldMoveDown,
+  onFieldMoveBefore,
 }: FormCanvasProps) => {
   const { setNodeRef, isOver } = useDroppable({ id: CANVAS_DROPPABLE_ID });
 
@@ -31,8 +37,8 @@ export const FormCanvas = ({
         flex: 1,
         minHeight: 240,
         borderRadius: 4,
-        border: `2px dashed ${isOver ? 'var(--cds-interactive)' : isEmpty ? 'var(--cds-border-subtle)' : 'transparent'}`,
-        background: isOver ? 'var(--cds-highlight)' : 'transparent',
+        border: `2px dashed ${isOver ? 'var(--app-primary)' : isEmpty ? 'var(--app-border)' : 'transparent'}`,
+        background: isOver ? 'var(--app-highlight)' : 'transparent',
         transition: 'border-color 250ms, background 250ms',
         display: 'flex',
         flexDirection: 'column',
@@ -47,8 +53,8 @@ export const FormCanvas = ({
             justifyContent: 'center',
           }}
         >
-          <span style={{ color: 'var(--cds-text-secondary)', fontSize: 13 }}>
-            Перетащите поле из панели инструментов
+          <span style={{ color: 'var(--app-text-secondary)', fontSize: 13 }}>
+            Перетащите поле из панели или дважды кликните по элементу
           </span>
         </div>
       ) : (
@@ -61,12 +67,16 @@ export const FormCanvas = ({
               <DroppedFieldCard
                 key={field.id}
                 field={field}
+                allFields={fields}
                 onChange={(changes) => onFieldChange(field.id, changes)}
                 onDelete={() => onFieldDelete(field.id)}
                 onChildChange={(childId, changes) =>
                   onGroupChildChange(field.id, childId, changes)
                 }
                 onChildDelete={(childId) => onGroupChildDelete(field.id, childId)}
+                onMoveUp={onFieldMoveUp}
+                onMoveDown={onFieldMoveDown}
+                onMoveBefore={onFieldMoveBefore}
               />
             ))}
           </SortableContext>

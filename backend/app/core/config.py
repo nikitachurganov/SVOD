@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list[str] = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5174",
         "https://servicedev.space",
     ]
     FILE_STORAGE_BACKEND: str = "local"
@@ -18,6 +20,8 @@ class Settings(BaseSettings):
     GIGACHAT_AUTH_KEY: str
     GIGACHAT_SCOPE: str
     GIGACHAT_MODEL: str
+    DADATA_API_KEY: str = ""
+    YANDEX_MAPS_API_KEY: str = ""
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

@@ -1,20 +1,21 @@
 import {
-  TextInput,
-  TextArea,
-  Dropdown,
+  Input,
+  Select,
   DatePicker,
-  DatePickerInput,
   TimePicker,
-  RadioButton,
-  RadioButtonGroup,
-  FileUploaderDropContainer,
-} from '@carbon/react';
+  Radio,
+  Upload,
+  Rate,
+  Slider,
+} from 'antd';
 import { FieldOptionsEditor } from './FieldOptionsEditor';
 import {
   FIELD_TYPE_LABELS,
   type FieldOption,
   type FormFieldInstance,
 } from '../../types/form-builder.types';
+
+const { TextArea } = Input;
 
 interface FieldPreviewProps {
   field: FormFieldInstance;
@@ -33,10 +34,8 @@ export const FieldPreview = ({ field, onOptionsChange }: FieldPreviewProps) => {
   switch (field.type) {
     case 'shortText':
       return (
-        <TextInput
+        <Input
           id={`${prefix}-short`}
-          labelText=""
-          hideLabel
           disabled
           placeholder="Короткий текст"
           value=""
@@ -47,8 +46,6 @@ export const FieldPreview = ({ field, onOptionsChange }: FieldPreviewProps) => {
       return (
         <TextArea
           id={`${prefix}-long`}
-          labelText=""
-          hideLabel
           disabled
           placeholder="Длинный текст"
           rows={2}
@@ -69,14 +66,12 @@ export const FieldPreview = ({ field, onOptionsChange }: FieldPreviewProps) => {
     case 'dropdown':
       return (
         <>
-          <Dropdown
+          <Select
             id={`${prefix}-dropdown`}
-            titleText=""
-            label="Выпадающий список"
-            items={field.options?.map((opt) => ({ id: opt.id, text: opt.label })) ?? []}
-            itemToString={(item: { id: string; text: string } | null) => item?.text ?? ''}
             disabled
-            style={{ marginBottom: 12 }}
+            placeholder="Выпадающий список"
+            options={field.options?.map((opt) => ({ value: opt.id, label: opt.label })) ?? []}
+            style={{ width: '100%', marginBottom: 12 }}
           />
           {field.options && (
             <FieldOptionsEditor
@@ -90,23 +85,16 @@ export const FieldPreview = ({ field, onOptionsChange }: FieldPreviewProps) => {
 
     case 'yesNo':
       return (
-        <RadioButtonGroup
-          name={`${prefix}-yesno`}
-          legendText=""
-          disabled
-          valueSelected=""
-        >
-          <RadioButton id={`${prefix}-yes`} value="yes" labelText="Да" />
-          <RadioButton id={`${prefix}-no`} value="no" labelText="Нет" />
-        </RadioButtonGroup>
+        <Radio.Group name={`${prefix}-yesno`} disabled value="">
+          <Radio value="yes">Да</Radio>
+          <Radio value="no">Нет</Radio>
+        </Radio.Group>
       );
 
     case 'number':
       return (
-        <TextInput
+        <Input
           id={`${prefix}-number`}
-          labelText=""
-          hideLabel
           disabled
           type="number"
           placeholder="Число"
@@ -116,10 +104,8 @@ export const FieldPreview = ({ field, onOptionsChange }: FieldPreviewProps) => {
 
     case 'fullName':
       return (
-        <TextInput
+        <Input
           id={`${prefix}-fullname`}
-          labelText=""
-          hideLabel
           disabled
           placeholder="Полное имя"
           value=""
@@ -128,10 +114,8 @@ export const FieldPreview = ({ field, onOptionsChange }: FieldPreviewProps) => {
 
     case 'phone':
       return (
-        <TextInput
+        <Input
           id={`${prefix}-phone`}
-          labelText=""
-          hideLabel
           disabled
           type="tel"
           placeholder="+7 (___) ___-__-__"
@@ -141,10 +125,8 @@ export const FieldPreview = ({ field, onOptionsChange }: FieldPreviewProps) => {
 
     case 'email':
       return (
-        <TextInput
+        <Input
           id={`${prefix}-email`}
-          labelText=""
-          hideLabel
           disabled
           type="email"
           placeholder="example@mail.com"
@@ -154,39 +136,32 @@ export const FieldPreview = ({ field, onOptionsChange }: FieldPreviewProps) => {
 
     case 'dateTime':
       return (
-        <DatePicker datePickerType="single">
-          <DatePickerInput
-            id={`${prefix}-datetime`}
-            placeholder="Дата и время"
-            labelText=""
-            hideLabel
-            disabled
-          />
-        </DatePicker>
+        <DatePicker
+          id={`${prefix}-datetime`}
+          showTime
+          disabled
+          placeholder="Дата и время"
+          style={{ width: '100%' }}
+        />
       );
 
     case 'date':
       return (
-        <DatePicker datePickerType="single">
-          <DatePickerInput
-            id={`${prefix}-date`}
-            placeholder="Дата"
-            labelText=""
-            hideLabel
-            disabled
-          />
-        </DatePicker>
+        <DatePicker
+          id={`${prefix}-date`}
+          disabled
+          placeholder="Дата"
+          style={{ width: '100%' }}
+        />
       );
 
     case 'time':
       return (
         <TimePicker
           id={`${prefix}-time`}
-          labelText=""
-          hideLabel
           disabled
           placeholder="Время"
-          value=""
+          style={{ width: '100%' }}
         />
       );
 
@@ -197,23 +172,37 @@ export const FieldPreview = ({ field, onOptionsChange }: FieldPreviewProps) => {
     case 'file_image':
     case 'file_document':
       return (
-        <FileUploaderDropContainer
-          labelText={FIELD_TYPE_LABELS[field.type]}
-          disabled
-          style={{ pointerEvents: 'none' as const }}
-        />
+        <Upload.Dragger disabled style={{ pointerEvents: 'none' as const }}>
+          <p style={{ margin: 0 }}>{FIELD_TYPE_LABELS[field.type]}</p>
+        </Upload.Dragger>
       );
 
     case 'address':
       return (
-        <TextInput
+        <Input
           id={`${prefix}-address`}
-          labelText=""
-          hideLabel
           disabled
           placeholder="Начните вводить адрес..."
           value=""
         />
+      );
+
+    case 'location':
+      return (
+        <Select
+          id={`${prefix}-location`}
+          disabled
+          placeholder="Города и страны"
+          style={{ width: '100%' }}
+        />
+      );
+
+    case 'rating':
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <Rate disabled count={5} />
+          <Slider disabled min={1} max={5} />
+        </div>
       );
   }
 };

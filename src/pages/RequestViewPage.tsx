@@ -1,26 +1,21 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   Breadcrumb,
-  BreadcrumbItem,
   Button,
-  InlineNotification,
-  Loading,
+  Alert,
+  Spin,
   Modal,
-  Tab,
-  TabList,
-  TabPanel,
-  TabPanels,
   Tabs,
   Tag,
-  Tile,
+  Card,
   Tooltip,
-} from '@carbon/react';
-import { ArrowLeft, Document, Download } from '@carbon/react/icons';
+} from 'antd';
+import { ArrowLeftOutlined, FileTextOutlined, DownloadOutlined } from '@ant-design/icons';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMediaQuery } from '../shared/hooks/useMediaQuery';
 import { RequestAssistantSidebar } from '../components/request/assistant/RequestAssistantSidebar';
 import { RequestExecutionPanel } from '../components/request/RequestExecutionPanel';
-import { getRequestWithForm, type RequestWithForm } from '../services/requestService';
+import { getRequestWithForm, type RequestWithForm } from '../shared/api/requests.api';
 import { closeRequest, deleteRequest } from '../shared/api/requests.api';
 import { formatFieldValue } from '../shared/utils/formatFieldValue';
 import { FieldLabel } from '../shared/ui/form-builder/FieldLabel';
@@ -86,7 +81,7 @@ export const RequestViewPage = () => {
   });
   const [deleting, setDeleting] = useState(false);
   const [closing, setClosing] = useState(false);
-  const [activeTabIndex, setActiveTabIndex] = useState(1);
+  const [activeTabKey, setActiveTabKey] = useState('execution');
 
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
@@ -126,7 +121,7 @@ export const RequestViewPage = () => {
   }, [id]);
 
   const goToExecution = useCallback(() => {
-    setActiveTabIndex(1);
+    setActiveTabKey('execution');
   }, []);
 
   const pageTitle = data?.request ? data.request.title : 'Загрузка заявки…';
@@ -143,10 +138,10 @@ export const RequestViewPage = () => {
           flex: 1,
           alignItems: 'center',
           justifyContent: 'center',
-          background: 'var(--cds-background)',
+          background: 'var(--app-bg)',
         }}
       >
-        <Loading withOverlay={false} />
+        <Spin size="large" />
       </div>
     );
   }
@@ -253,11 +248,11 @@ export const RequestViewPage = () => {
     }
   };
 
-  const statusTagType = (status: string) => {
+  const statusTagColor = (status: string) => {
     if (status === 'closed') return 'red';
     if (status === 'open') return 'blue';
-    if (status === 'assigned') return 'teal';
-    return 'warm-gray';
+    if (status === 'assigned') return 'cyan';
+    return 'default';
   };
 
   const statusLabel = (status: string) => {
@@ -274,25 +269,26 @@ export const RequestViewPage = () => {
         flexDirection: 'column',
         height: '100vh',
         overflow: 'hidden',
-        background: 'var(--cds-background)',
+        background: 'var(--app-bg)',
       }}
     >
       {/* Header */}
       <div
         style={{
-          background: 'var(--cds-layer-01)',
-          borderBottom: '1px solid var(--cds-border-subtle)',
+          background: 'var(--app-surface)',
+          borderBottom: '1px solid var(--app-border)',
           padding: '12px 24px 16px',
           flexShrink: 0,
         }}
       >
         {data?.request && (
-          <Breadcrumb noTrailingSlash style={{ marginBottom: 8 }}>
-            <BreadcrumbItem>
-              <Link to="/requests">Заявки</Link>
-            </BreadcrumbItem>
-            <BreadcrumbItem isCurrentPage>{data.request.title}</BreadcrumbItem>
-          </Breadcrumb>
+          <Breadcrumb
+            style={{ marginBottom: 8 }}
+            items={[
+              { title: <Link to="/requests">Заявки</Link> },
+              { title: data.request.title },
+            ]}
+          />
         )}
 
         <div
@@ -304,11 +300,10 @@ export const RequestViewPage = () => {
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Button
-              kind="ghost"
-              size="sm"
-              hasIconOnly
-              renderIcon={ArrowLeft}
-              iconDescription="Вернуться к реестру заявок"
+              type="text"
+              size="small"
+              icon={<ArrowLeftOutlined />}
+              title="Вернуться к реестру заявок"
               onClick={() => navigate('/requests')}
             />
             <div>
@@ -317,7 +312,7 @@ export const RequestViewPage = () => {
                   {pageTitle}
                 </h4>
                 {data?.request && (
-                  <span style={{ fontSize: 13, color: 'var(--cds-text-secondary)' }}>
+                  <span style={{ fontSize: 13, color: 'var(--app-text-secondary)' }}>
                     № {data.request.id}
                   </span>
                 )}
@@ -327,8 +322,7 @@ export const RequestViewPage = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {data?.request && (
               <Button
-                kind="secondary"
-                size="sm"
+                size="small"
                 disabled={data.request.status === 'closed' || closing}
                 onClick={() => setCloseConfirmOpen(true)}
               >
@@ -337,8 +331,9 @@ export const RequestViewPage = () => {
             )}
             {data?.request && (
               <Button
-                kind="danger"
-                size="sm"
+                danger
+                type="primary"
+                size="small"
                 disabled={deleting}
                 onClick={() => setDeleteConfirmOpen(true)}
               >
@@ -350,7 +345,7 @@ export const RequestViewPage = () => {
 
         {data?.request && (
           <div style={{ marginTop: 12, fontSize: 13, lineHeight: 1.5 }}>
-            <span style={{ color: 'var(--cds-text-secondary)' }}>Процесс: </span>
+            <span style={{ color: 'var(--app-text-secondary)' }}>Процесс: </span>
             <strong>
               {data.request.execution_status
                 ? EXEC_HEADER_LABELS[data.request.execution_status] ??
@@ -366,9 +361,9 @@ export const RequestViewPage = () => {
                   : ''}
               </>
             ) : data.request.status === 'closed' ? (
-              <span style={{ color: 'var(--cds-text-secondary)' }}> — заявка закрыта</span>
+              <span style={{ color: 'var(--app-text-secondary)' }}> — заявка закрыта</span>
             ) : (
-              <span style={{ color: 'var(--cds-text-secondary)' }}>
+              <span style={{ color: 'var(--app-text-secondary)' }}>
                 {' '}
                 — этапы появятся после назначения во вкладке «Исполнение»
               </span>
@@ -388,19 +383,19 @@ export const RequestViewPage = () => {
             }}
           >
             <div>
-              <span style={{ color: 'var(--cds-text-secondary)', marginRight: 8 }}>Статус</span>
-              <Tag type={statusTagType(data.request.status)} size="sm">
+              <span style={{ color: 'var(--app-text-secondary)', marginRight: 8 }}>Статус</span>
+              <Tag color={statusTagColor(data.request.status)}>
                 {statusLabel(data.request.status)}
               </Tag>
             </div>
             <div>
-              <span style={{ color: 'var(--cds-text-secondary)', marginRight: 8 }}>Тип заявки</span>
+              <span style={{ color: 'var(--app-text-secondary)', marginRight: 8 }}>Тип заявки</span>
               <span style={{ fontSize: 13 }}>
                 {data.request.form_snapshot?.title?.trim() || formTitle || '—'}
               </span>
             </div>
             <div>
-              <span style={{ color: 'var(--cds-text-secondary)', marginRight: 8 }}>Автор</span>
+              <span style={{ color: 'var(--app-text-secondary)', marginRight: 8 }}>Автор</span>
               {(() => {
                 const authorPerson = data.request.people?.find((p) => p.role === 'author');
                 if (data.request.author) {
@@ -417,13 +412,13 @@ export const RequestViewPage = () => {
               })()}
             </div>
             <div>
-              <span style={{ color: 'var(--cds-text-secondary)', marginRight: 8 }}>Дата создания</span>
+              <span style={{ color: 'var(--app-text-secondary)', marginRight: 8 }}>Дата создания</span>
               <span style={{ fontSize: 13 }}>
                 {formatDate(data.request.created_at)}
               </span>
             </div>
             <div>
-              <span style={{ color: 'var(--cds-text-secondary)', marginRight: 8 }}>Дата изменения</span>
+              <span style={{ color: 'var(--app-text-secondary)', marginRight: 8 }}>Дата изменения</span>
               <span style={{ fontSize: 13 }}>
                 {formatDate(data.request.updated_at ?? data.request.created_at)}
               </span>
@@ -435,12 +430,11 @@ export const RequestViewPage = () => {
       {/* Close Confirmation Modal */}
       <Modal
         open={closeConfirmOpen}
-        modalHeading="Закрыть заявку?"
-        primaryButtonText="Да"
-        secondaryButtonText="Отмена"
-        onRequestSubmit={handleCloseRequest}
-        onRequestClose={() => setCloseConfirmOpen(false)}
-        size="xs"
+        title="Закрыть заявку?"
+        okText="Да"
+        cancelText="Отмена"
+        onOk={() => void handleCloseRequest()}
+        onCancel={() => setCloseConfirmOpen(false)}
       >
         <p>Вы уверены, что хотите закрыть заявку?</p>
       </Modal>
@@ -448,13 +442,12 @@ export const RequestViewPage = () => {
       {/* Delete Confirmation Modal */}
       <Modal
         open={deleteConfirmOpen}
-        danger
-        modalHeading="Удалить заявку?"
-        primaryButtonText="Удалить"
-        secondaryButtonText="Отмена"
-        onRequestSubmit={handleDelete}
-        onRequestClose={() => setDeleteConfirmOpen(false)}
-        size="xs"
+        title="Удалить заявку?"
+        okText="Удалить"
+        cancelText="Отмена"
+        okButtonProps={{ danger: true }}
+        onOk={() => void handleDelete()}
+        onCancel={() => setDeleteConfirmOpen(false)}
       >
         <p>Вы уверены, что хотите удалить заявку?</p>
       </Modal>
@@ -464,7 +457,7 @@ export const RequestViewPage = () => {
         style={{
           flex: 1,
           minHeight: 0,
-          background: 'var(--cds-background)',
+          background: 'var(--app-bg)',
           overflow: 'hidden',
         }}
       >
@@ -477,26 +470,19 @@ export const RequestViewPage = () => {
               minHeight: '60vh',
             }}
           >
-            <Loading withOverlay={false} />
+            <Spin size="large" />
           </div>
         ) : error ? (
           <div style={{ padding: 24 }}>
-            <InlineNotification
-              kind="error"
-              title="Ошибка загрузки"
-              subtitle={error}
-              lowContrast
-              hideCloseButton
-            />
+            <Alert type="error" message="Ошибка загрузки" description={error} showIcon />
           </div>
         ) : !data ? (
           <div style={{ padding: 24 }}>
-            <InlineNotification
-              kind="error"
-              title="Заявка не найдена"
-              subtitle="Проверьте корректность ссылки или вернитесь к реестру заявок."
-              lowContrast
-              hideCloseButton
+            <Alert
+              type="error"
+              message="Заявка не найдена"
+              description="Проверьте корректность ссылки или вернитесь к реестру заявок."
+              showIcon
             />
           </div>
         ) : (
@@ -526,401 +512,393 @@ export const RequestViewPage = () => {
                     padding: '0 0 1rem 0',
                   }}
                 >
-                  <InlineNotification
-                    kind={inlineNotification.kind}
-                    title={inlineNotification.title}
-                    subtitle={inlineNotification.subtitle}
-                    lowContrast
-                    onCloseButtonClick={() => setInlineNotification(null)}
+                  <Alert
+                    type={inlineNotification.kind}
+                    message={inlineNotification.title}
+                    description={inlineNotification.subtitle}
+                    showIcon
+                    closable
+                    onClose={() => setInlineNotification(null)}
                   />
                 </div>
               )}
 
               <div className="app-request-view-tabs-wrap">
-                <Tabs
-                  selectedIndex={activeTabIndex}
-                  onChange={({ selectedIndex }: { selectedIndex: number }) =>
-                    setActiveTabIndex(selectedIndex)
-                  }
+                <div
+                  className="app-request-view-tabs-bar"
+                  style={{
+                    flexShrink: 0,
+                    borderBottom: '1px solid var(--app-border)',
+                  }}
                 >
-                  <div
-                    className="app-request-view-tabs-bar"
-                    style={{
-                      flexShrink: 0,
-                      borderBottom: '1px solid var(--cds-border-subtle)',
-                    }}
-                  >
-                    <TabList aria-label="Разделы заявки">
-                      <Tab>Информация</Tab>
-                      <Tab>Исполнение</Tab>
-                      <Tab>Люди</Tab>
-                    </TabList>
-                  </div>
-                  <TabPanels>
-                  {/* Info tab */}
-                  <TabPanel>
-                    <div
-                      style={{
-                        flex: 1,
-                        minHeight: 0,
-                        overflow: 'auto',
-                        boxSizing: 'border-box',
-                        padding: '1rem 0 1.5rem',
-                      }}
-                    >
-                      {data?.request && (
-                        <Tile style={{ padding: 16, marginBottom: 16 }}>
-                          <span style={{ fontWeight: 600, display: 'block', marginBottom: 12 }}>
-                            Жизненный цикл
-                          </span>
+                  <Tabs
+                    activeKey={activeTabKey}
+                    onChange={setActiveTabKey}
+                    items={[
+                      {
+                        key: 'info',
+                        label: 'Информация',
+                        children: (
+                          <div
+                            style={{
+                              flex: 1,
+                              minHeight: 0,
+                              overflow: 'auto',
+                              boxSizing: 'border-box',
+                              padding: '1rem 0 1.5rem',
+                            }}
+                          >
+                            {data?.request && (
+                              <Card style={{ marginBottom: 16 }}>
+                                <span style={{ fontWeight: 600, display: 'block', marginBottom: 12 }}>
+                                  Жизненный цикл
+                                </span>
+                                <div
+                                  style={{
+                                    display: 'flex',
+                                    flexWrap: 'wrap',
+                                    gap: 16,
+                                    alignItems: 'center',
+                                    fontSize: 13,
+                                  }}
+                                >
+                                  <div>
+                                    <Tag>Создана</Tag>{' '}
+                                    <span style={{ color: 'var(--app-text-secondary)' }}>
+                                      {formatDateTime(data.request.created_at)}
+                                    </span>
+                                  </div>
+                                  {data.request.status === 'closed' && data.request.closedAt ? (
+                                    <div>
+                                      <Tag color="red">Закрыта</Tag>{' '}
+                                      <span style={{ color: 'var(--app-text-secondary)' }}>
+                                        {formatDateTime(data.request.closedAt)}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <div>
+                                      <Tag color="blue">Активна</Tag>
+                                    </div>
+                                  )}
+                                </div>
+                                <p
+                                  style={{
+                                    margin: '12px 0 0',
+                                    fontSize: 12,
+                                    color: 'var(--app-text-secondary)',
+                                    lineHeight: 1.45,
+                                  }}
+                                >
+                                  Этапы и передачи задач — во вкладке «Исполнение». Проверка качества и ТЗ —
+                                  на панели справа.
+                                </p>
+                              </Card>
+                            )}
+                            {fields.length > 0 ? (
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: 16,
+                                }}
+                              >
+                                {hasMissingFilledFields && (
+                                  <Alert
+                                    type="warning"
+                                    message="Форма была изменена после создания заявки"
+                                    description="Некоторые поля могут не отображаться."
+                                    showIcon
+                                  />
+                                )}
+                                {fields.map((field) => {
+                                  if (
+                                    field.type === 'file_image' ||
+                                    field.type === 'file_vector' ||
+                                    field.type === 'file_document'
+                                  ) return null;
+
+                                  const rawValue = activeDataSource[field.id];
+                                  if (rawValue === undefined) return null;
+
+                                  const formatted = formatFieldValue(field, rawValue);
+                                  return (
+                                    <div key={field.id} className="app-request-form-value-row">
+                                      <FieldLabel label={field.label || 'Без названия'} />
+                                      <span className="app-request-form-value">{formatted}</span>
+                                    </div>
+                                  );
+                                })}
+
+                                {(() => {
+                                  const fileFields = fields.filter(
+                                    (f) =>
+                                      f.type === 'file_image' ||
+                                      f.type === 'file_vector' ||
+                                      f.type === 'file_document',
+                                  );
+                                  const nonEmptyFileFields = fileFields.filter(
+                                    (f) => normalizeFileValues(activeDataSource[f.id]).length > 0,
+                                  );
+                                  if (!nonEmptyFileFields.length) return null;
+
+                                  return (
+                                    <div style={{ marginTop: 8 }}>
+                                      <h5 style={{ marginBottom: 8, fontSize: '0.875rem', fontWeight: 600 }}>
+                                        Файлы
+                                      </h5>
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                                        {nonEmptyFileFields.map((field) => {
+                                          const fileMetas = normalizeFileValues(activeDataSource[field.id]);
+
+                                          return (
+                                            <div key={field.id} className="app-request-form-value-row">
+                                              <FieldLabel label={field.label || 'Без названия'} />
+
+                                              {field.type === 'file_image' ? (
+                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                                                  {fileMetas.map((meta, idx) => (
+                                                    <div
+                                                      key={meta.id ?? `${meta.file_name}-${idx}`}
+                                                      style={{
+                                                        border: '1px solid var(--app-border)',
+                                                        borderRadius: 4,
+                                                        overflow: 'hidden',
+                                                        maxWidth: 300,
+                                                        background: 'var(--app-surface)',
+                                                      }}
+                                                    >
+                                                      {meta.file_url ? (
+                                                        <img
+                                                          src={meta.file_url}
+                                                          alt={meta.file_name}
+                                                          style={{
+                                                            maxWidth: 300,
+                                                            maxHeight: 200,
+                                                            objectFit: 'contain',
+                                                            display: 'block',
+                                                          }}
+                                                        />
+                                                      ) : (
+                                                        <div style={{ padding: 16, textAlign: 'center' }}>
+                                                          <FileTextOutlined
+                                                            style={{ fontSize: 32, color: 'var(--app-text-placeholder)' }}
+                                                          />
+                                                        </div>
+                                                      )}
+                                                      <div
+                                                        style={{
+                                                          padding: '6px 10px',
+                                                          borderTop: '1px solid var(--app-border)',
+                                                          fontSize: 12,
+                                                          color: 'var(--app-text-secondary)',
+                                                          display: 'flex',
+                                                          justifyContent: 'space-between',
+                                                          alignItems: 'center',
+                                                        }}
+                                                      >
+                                                        <span
+                                                          style={{
+                                                            overflow: 'hidden',
+                                                            textOverflow: 'ellipsis',
+                                                            whiteSpace: 'nowrap',
+                                                            maxWidth: '70%',
+                                                          }}
+                                                        >
+                                                          {meta.file_name}
+                                                        </span>
+                                                        {meta.file_size ? <span>{formatSize(meta.file_size)}</span> : null}
+                                                      </div>
+                                                    </div>
+                                                  ))}
+                                                </div>
+                                              ) : (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                                  {fileMetas.map((meta, idx) => (
+                                                    <div
+                                                      key={meta.id ?? `${meta.file_name}-${idx}`}
+                                                      style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: 10,
+                                                        padding: '8px 12px',
+                                                        border: '1px solid var(--app-border)',
+                                                        borderRadius: 4,
+                                                        background: 'var(--app-surface)',
+                                                      }}
+                                                    >
+                                                      <FileTextOutlined
+                                                        style={{ fontSize: 18, color: 'var(--app-text-secondary)' }}
+                                                      />
+                                                      <div style={{ flex: 1, minWidth: 0 }}>
+                                                        <span
+                                                          style={{
+                                                            fontSize: 14,
+                                                            fontWeight: 500,
+                                                            display: 'block',
+                                                            overflow: 'hidden',
+                                                            textOverflow: 'ellipsis',
+                                                            whiteSpace: 'nowrap',
+                                                          }}
+                                                        >
+                                                          {meta.file_name}
+                                                        </span>
+                                                        {(meta.file_type || meta.file_size) && (
+                                                          <span
+                                                            style={{
+                                                              fontSize: 12,
+                                                              color: 'var(--app-text-secondary)',
+                                                            }}
+                                                          >
+                                                            {[meta.file_type, formatSize(meta.file_size)]
+                                                              .filter(Boolean)
+                                                              .join(' · ')}
+                                                          </span>
+                                                        )}
+                                                      </div>
+                                                      {meta.file_url && (
+                                                        <Tooltip title="Скачать">
+                                                          <a
+                                                            href={meta.file_url}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            style={{
+                                                              display: 'inline-flex',
+                                                              color: 'var(--app-link)',
+                                                            }}
+                                                          >
+                                                            <DownloadOutlined style={{ fontSize: 16 }} />
+                                                          </a>
+                                                        </Tooltip>
+                                                      )}
+                                                    </div>
+                                                  ))}
+                                                </div>
+                                              )}
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
+                              </div>
+                            ) : (
+                              <span style={{ color: 'var(--app-text-secondary)' }}>
+                                У связанной формы нет полей.
+                              </span>
+                            )}
+                            <Alert
+                              type="info"
+                              message="Исполнение и назначение"
+                              description="Назначить исполнителя и управлять этапами можно только во вкладке «Исполнение». Справа — подсказки ИИ без дублирования действий."
+                              showIcon
+                              style={{ marginTop: 24 }}
+                            />
+                          </div>
+                        ),
+                      },
+                      {
+                        key: 'execution',
+                        label: 'Исполнение',
+                        children: (
+                          <div
+                            style={{
+                              boxSizing: 'border-box',
+                              height: '100%',
+                              minHeight: 0,
+                              overflow: 'auto',
+                              padding: '1rem 0 1.5rem',
+                            }}
+                          >
+                            {data?.request && (
+                              <RequestExecutionPanel
+                                requestId={data.request.id}
+                                organizationId={data.request.organization_id ?? null}
+                                executionStatus={data.request.execution_status ?? null}
+                                stages={data.request.stages ?? []}
+                                executionEvents={data.request.execution_events ?? []}
+                                requestClosed={data.request.status === 'closed'}
+                                onReload={reloadRequest}
+                              />
+                            )}
+                          </div>
+                        ),
+                      },
+                      {
+                        key: 'people',
+                        label: 'Люди',
+                        children: (
                           <div
                             style={{
                               display: 'flex',
-                              flexWrap: 'wrap',
-                              gap: 16,
-                              alignItems: 'center',
-                              fontSize: 13,
+                              flexDirection: 'column',
+                              gap: 12,
+                              boxSizing: 'border-box',
+                              minHeight: 0,
+                              overflow: 'auto',
+                              padding: '1rem 0 1.5rem',
                             }}
                           >
-                            <div>
-                              <Tag size="sm">Создана</Tag>{' '}
-                              <span style={{ color: 'var(--cds-text-secondary)' }}>
-                                {formatDateTime(data.request.created_at)}
-                              </span>
-                            </div>
-                            {data.request.status === 'closed' && data.request.closedAt ? (
-                              <div>
-                                <Tag type="red" size="sm">Закрыта</Tag>{' '}
-                                <span style={{ color: 'var(--cds-text-secondary)' }}>
-                                  {formatDateTime(data.request.closedAt)}
-                                </span>
-                              </div>
-                            ) : (
-                              <div>
-                                <Tag type="blue" size="sm">
-                                  Активна
-                                </Tag>
-                              </div>
-                            )}
-                          </div>
-                          <p
-                            style={{
-                              margin: '12px 0 0',
-                              fontSize: 12,
-                              color: 'var(--cds-text-secondary)',
-                              lineHeight: 1.45,
-                            }}
-                          >
-                            Этапы и передачи задач — во вкладке «Исполнение». Проверка качества и ТЗ —
-                            на панели справа.
-                          </p>
-                        </Tile>
-                      )}
-                      {fields.length > 0 ? (
-                        <div
-                          style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 16,
-                          }}
-                        >
-                          {hasMissingFilledFields && (
-                            <InlineNotification
-                              kind="warning"
-                              title="Форма была изменена после создания заявки"
-                              subtitle="Некоторые поля могут не отображаться."
-                              lowContrast
-                              hideCloseButton
+                            <Alert
+                              type="info"
+                              message="Роли и контакты"
+                              description="Назначение исполнителя на этап выполняется во вкладке «Исполнение»."
+                              showIcon
                             />
-                          )}
-                          {/* TODO: Store form snapshot in request at creation time
-                              to prevent ID mismatch when form is edited later. */}
-                          {fields.map((field) => {
-                            if (
-                              field.type === 'file_image' ||
-                              field.type === 'file_vector' ||
-                              field.type === 'file_document'
-                            ) return null;
-
-                            const rawValue = activeDataSource[field.id];
-                            if (rawValue === undefined) return null;
-
-                            const formatted = formatFieldValue(field, rawValue);
-                            return (
-                              <div key={field.id} className="app-request-form-value-row">
-                                <FieldLabel label={field.label || 'Без названия'} />
-                                <span className="app-request-form-value">{formatted}</span>
-                              </div>
-                            );
-                          })}
-
-                          {(() => {
-                            const fileFields = fields.filter(
-                              (f) =>
-                                f.type === 'file_image' ||
-                                f.type === 'file_vector' ||
-                                f.type === 'file_document',
-                            );
-                            const nonEmptyFileFields = fileFields.filter(
-                              (f) => normalizeFileValues(activeDataSource[f.id]).length > 0,
-                            );
-                            if (!nonEmptyFileFields.length) return null;
-
-                            return (
-                              <div style={{ marginTop: 8 }}>
-                                <h5 style={{ marginBottom: 8, fontSize: '0.875rem', fontWeight: 600 }}>
-                                  Файлы
-                                </h5>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                                  {nonEmptyFileFields.map((field) => {
-                                    const fileMetas = normalizeFileValues(activeDataSource[field.id]);
-
-                                    return (
-                                      <div key={field.id} className="app-request-form-value-row">
-                                        <FieldLabel label={field.label || 'Без названия'} />
-
-                                        {field.type === 'file_image' ? (
-                                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-                                            {fileMetas.map((meta, idx) => (
-                                              <div
-                                                key={meta.id ?? `${meta.file_name}-${idx}`}
-                                                style={{
-                                                  border: '1px solid var(--cds-border-subtle)',
-                                                  borderRadius: 4,
-                                                  overflow: 'hidden',
-                                                  maxWidth: 300,
-                                                  background: 'var(--cds-layer-01)',
-                                                }}
-                                              >
-                                                {meta.file_url ? (
-                                                  <img
-                                                    src={meta.file_url}
-                                                    alt={meta.file_name}
-                                                    style={{
-                                                      maxWidth: 300,
-                                                      maxHeight: 200,
-                                                      objectFit: 'contain',
-                                                      display: 'block',
-                                                    }}
-                                                  />
-                                                ) : (
-                                                  <div style={{ padding: 16, textAlign: 'center' }}>
-                                                    <Document
-                                                      size={32}
-                                                      style={{ color: 'var(--cds-text-disabled)' }}
-                                                    />
-                                                  </div>
-                                                )}
-                                                <div
-                                                  style={{
-                                                    padding: '6px 10px',
-                                                    borderTop: '1px solid var(--cds-border-subtle)',
-                                                    fontSize: 12,
-                                                    color: 'var(--cds-text-secondary)',
-                                                    display: 'flex',
-                                                    justifyContent: 'space-between',
-                                                    alignItems: 'center',
-                                                  }}
-                                                >
-                                                  <span
-                                                    style={{
-                                                      overflow: 'hidden',
-                                                      textOverflow: 'ellipsis',
-                                                      whiteSpace: 'nowrap',
-                                                      maxWidth: '70%',
-                                                    }}
-                                                  >
-                                                    {meta.file_name}
-                                                  </span>
-                                                  {meta.file_size ? <span>{formatSize(meta.file_size)}</span> : null}
-                                                </div>
-                                              </div>
-                                            ))}
-                                          </div>
-                                        ) : (
-                                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                            {fileMetas.map((meta, idx) => (
-                                              <div
-                                                key={meta.id ?? `${meta.file_name}-${idx}`}
-                                                style={{
-                                                  display: 'flex',
-                                                  alignItems: 'center',
-                                                  gap: 10,
-                                                  padding: '8px 12px',
-                                                  border: '1px solid var(--cds-border-subtle)',
-                                                  borderRadius: 4,
-                                                  background: 'var(--cds-layer-01)',
-                                                }}
-                                              >
-                                                <Document
-                                                  size={18}
-                                                  style={{ color: 'var(--cds-text-secondary)' }}
-                                                />
-                                                <div style={{ flex: 1, minWidth: 0 }}>
-                                                  <span
-                                                    style={{
-                                                      fontSize: 14,
-                                                      fontWeight: 500,
-                                                      display: 'block',
-                                                      overflow: 'hidden',
-                                                      textOverflow: 'ellipsis',
-                                                      whiteSpace: 'nowrap',
-                                                    }}
-                                                  >
-                                                    {meta.file_name}
-                                                  </span>
-                                                  {(meta.file_type || meta.file_size) && (
-                                                    <span
-                                                      style={{
-                                                        fontSize: 12,
-                                                        color: 'var(--cds-text-secondary)',
-                                                      }}
-                                                    >
-                                                      {[meta.file_type, formatSize(meta.file_size)]
-                                                        .filter(Boolean)
-                                                        .join(' · ')}
-                                                    </span>
-                                                  )}
-                                                </div>
-                                                {meta.file_url && (
-                                                  <Tooltip label="Скачать" align="top">
-                                                    <a
-                                                      href={meta.file_url}
-                                                      target="_blank"
-                                                      rel="noopener noreferrer"
-                                                      style={{
-                                                        display: 'inline-flex',
-                                                        color: 'var(--cds-link-primary)',
-                                                      }}
-                                                    >
-                                                      <Download size={16} />
-                                                    </a>
-                                                  </Tooltip>
-                                                )}
-                                              </div>
-                                            ))}
-                                          </div>
+                            {data.request.people && data.request.people.length > 0 ? (
+                              data.request.people.map((person, idx) => (
+                                <Card key={`${person.role}-${idx}`}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                    <div
+                                      style={{
+                                        width: 40,
+                                        height: 40,
+                                        borderRadius: '50%',
+                                        background: 'var(--app-primary)',
+                                        color: 'var(--app-text-on-brand)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        fontSize: 14,
+                                        fontWeight: 600,
+                                        flexShrink: 0,
+                                      }}
+                                    >
+                                      {person.name
+                                        .split(' ')
+                                        .filter(Boolean)
+                                        .slice(0, 2)
+                                        .map((w) => w[0]?.toUpperCase() ?? '')
+                                        .join('')}
+                                    </div>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <span style={{ fontWeight: 500, fontSize: 14 }}>{person.name}</span>
+                                        <Tag color="blue">
+                                          {person.role === 'author' ? 'Автор' : person.role}
+                                        </Tag>
+                                        {person.source === 'public_link' && (
+                                          <Tag>Публичная заявка</Tag>
                                         )}
                                       </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            );
-                          })()}
-                        </div>
-                      ) : (
-                        <span style={{ color: 'var(--cds-text-secondary)' }}>
-                          У связанной формы нет полей.
-                        </span>
-                      )}
-                      <InlineNotification
-                        kind="info"
-                        title="Исполнение и назначение"
-                        subtitle="Назначить исполнителя и управлять этапами можно только во вкладке «Исполнение». Справа — подсказки ИИ без дублирования действий."
-                        lowContrast
-                        hideCloseButton
-                        style={{ marginTop: 24 }}
-                      />
-                    </div>
-                  </TabPanel>
-
-                  <TabPanel>
-                    <div
-                      style={{
-                        boxSizing: 'border-box',
-                        height: '100%',
-                        minHeight: 0,
-                        overflow: 'auto',
-                        padding: '1rem 0 1.5rem',
-                      }}
-                    >
-                      {data?.request && (
-                        <RequestExecutionPanel
-                          requestId={data.request.id}
-                          organizationId={data.request.organization_id ?? null}
-                          executionStatus={data.request.execution_status ?? null}
-                          stages={data.request.stages ?? []}
-                          executionEvents={data.request.execution_events ?? []}
-                          requestClosed={data.request.status === 'closed'}
-                          onReload={reloadRequest}
-                        />
-                      )}
-                    </div>
-                  </TabPanel>
-
-                  {/* People tab */}
-                  <TabPanel>
-                    <div
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 12,
-                        boxSizing: 'border-box',
-                        minHeight: 0,
-                        overflow: 'auto',
-                        padding: '1rem 0 1.5rem',
-                      }}
-                    >
-                      <InlineNotification
-                        kind="info"
-                        title="Роли и контакты"
-                        subtitle="Назначение исполнителя на этап выполняется во вкладке «Исполнение»."
-                        lowContrast
-                        hideCloseButton
-                      />
-                      {data.request.people && data.request.people.length > 0 ? (
-                        data.request.people.map((person, idx) => (
-                          <Tile key={`${person.role}-${idx}`} style={{ padding: 16 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                              <div
-                                style={{
-                                  width: 40,
-                                  height: 40,
-                                  borderRadius: '50%',
-                                  background: 'var(--cds-interactive)',
-                                  color: 'var(--cds-text-on-color)',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  fontSize: 14,
-                                  fontWeight: 600,
-                                  flexShrink: 0,
-                                }}
-                              >
-                                {person.name
-                                  .split(' ')
-                                  .filter(Boolean)
-                                  .slice(0, 2)
-                                  .map((w) => w[0]?.toUpperCase() ?? '')
-                                  .join('')}
-                              </div>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                  <span style={{ fontWeight: 500, fontSize: 14 }}>{person.name}</span>
-                                  <Tag type="blue" size="sm">
-                                    {person.role === 'author' ? 'Автор' : person.role}
-                                  </Tag>
-                                  {person.source === 'public_link' && (
-                                    <Tag type="warm-gray" size="sm">Публичная заявка</Tag>
-                                  )}
-                                </div>
-                                <div style={{ fontSize: 13, color: 'var(--cds-text-secondary)', marginTop: 2 }}>
-                                  {[person.email, person.phone].filter(Boolean).join(' · ') || '—'}
-                                </div>
-                              </div>
-                            </div>
-                          </Tile>
-                        ))
-                      ) : (
-                        <span style={{ color: 'var(--cds-text-secondary)' }}>
-                          Нет связанных людей.
-                        </span>
-                      )}
-                    </div>
-                  </TabPanel>
-                </TabPanels>
-                </Tabs>
+                                      <div style={{ fontSize: 13, color: 'var(--app-text-secondary)', marginTop: 2 }}>
+                                        {[person.email, person.phone].filter(Boolean).join(' · ') || '—'}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </Card>
+                              ))
+                            ) : (
+                              <span style={{ color: 'var(--app-text-secondary)' }}>
+                                Нет связанных людей.
+                              </span>
+                            )}
+                          </div>
+                        ),
+                      },
+                    ]}
+                  />
+                </div>
               </div>
             </div>
 
@@ -935,9 +913,9 @@ export const RequestViewPage = () => {
               >
                 <div
                   style={{
-                    background: 'var(--cds-layer-01)',
+                    background: 'var(--app-surface)',
                     height: '100%',
-                    borderLeft: '1px solid var(--cds-border-subtle)',
+                    borderLeft: '1px solid var(--app-border)',
                     padding: 16,
                     overflowY: 'auto',
                   }}
@@ -947,7 +925,7 @@ export const RequestViewPage = () => {
                       margin: '0 0 14px',
                       fontSize: 12,
                       fontWeight: 600,
-                      color: 'var(--cds-text-secondary)',
+                      color: 'var(--app-text-secondary)',
                       letterSpacing: '0.02em',
                       textTransform: 'uppercase',
                     }}

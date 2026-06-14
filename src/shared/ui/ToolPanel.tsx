@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Search } from '@carbon/react';
+import { Input } from 'antd';
 import { DraggableFieldItem } from './form-builder/DraggableFieldItem';
 
 // ─── Color config for tool-panel field groups ─────────────────────────────────
@@ -17,36 +17,36 @@ const FIELD_GROUP_META: Record<string, FieldGroupMeta> = {
     type: 'structure',
     label: 'Структура',
     icon: 'material-symbols:folder-open',
-    iconColor: 'var(--cds-text-secondary)',
-    iconBg: 'var(--cds-layer-hover)',
+    iconColor: 'var(--app-text-secondary)',
+    iconBg: 'var(--app-surface-hover)',
   },
   'Основные поля': {
     type: 'basic',
     label: 'Основные поля',
     icon: 'material-symbols:text-fields',
-    iconColor: 'var(--cds-link-primary)',
-    iconBg: 'var(--cds-highlight)',
+    iconColor: 'var(--app-link)',
+    iconBg: 'var(--app-highlight)',
   },
   'Контактная информация': {
     type: 'contact',
     label: 'Контактная информация',
     icon: 'material-symbols:person',
-    iconColor: 'var(--cds-support-success)',
-    iconBg: 'color-mix(in srgb, var(--cds-support-success) 15%, transparent)',
+    iconColor: 'var(--app-success)',
+    iconBg: 'color-mix(in srgb, var(--app-success) 15%, transparent)',
   },
   'Дата и время': {
     type: 'datetime',
     label: 'Дата и время',
     icon: 'material-symbols:calendar-today',
-    iconColor: 'var(--cds-support-warning)',
-    iconBg: 'color-mix(in srgb, var(--cds-support-warning) 15%, transparent)',
+    iconColor: 'var(--app-warning)',
+    iconBg: 'color-mix(in srgb, var(--app-warning) 15%, transparent)',
   },
   'Поля загрузки файлов': {
     type: 'file',
     label: 'Поля загрузки файлов',
     icon: 'material-symbols:upload-file',
-    iconColor: 'var(--cds-support-info)',
-    iconBg: 'color-mix(in srgb, var(--cds-support-info) 15%, transparent)',
+    iconColor: 'var(--app-info)',
+    iconBg: 'color-mix(in srgb, var(--app-info) 15%, transparent)',
   },
 };
 
@@ -68,25 +68,28 @@ const ALL_FIELDS: FieldTypeItem[] = [
   { key: 'radio', label: 'Один вариант', iconName: 'material-symbols:radio-button-checked', category: 'Основные поля' },
   { key: 'yesNo', label: 'Да / Нет', iconName: 'material-symbols:toggle-on', category: 'Основные поля' },
   { key: 'number', label: 'Число', iconName: 'material-symbols:pin', category: 'Основные поля' },
+  { key: 'rating', label: 'Оценка по шкале', iconName: 'material-symbols:star-rate', category: 'Основные поля' },
   { key: 'fullName', label: 'Полное имя', iconName: 'material-symbols:person', category: 'Контактная информация' },
   { key: 'phone', label: 'Номер телефона', iconName: 'material-symbols-light:phone-enabled', category: 'Контактная информация' },
   { key: 'email', label: 'Электронная почта', iconName: 'material-symbols-light:mail-rounded', category: 'Контактная информация' },
+  { key: 'location', label: 'Города и страны', iconName: 'material-symbols:public', category: 'Контактная информация' },
+  { key: 'address', label: 'Адрес', iconName: 'material-symbols:location-on', category: 'Контактная информация' },
   { key: 'date', label: 'Дата', iconName: 'material-symbols:calendar-today', category: 'Дата и время' },
   { key: 'dateTime', label: 'Дата и время', iconName: 'material-symbols:event', category: 'Дата и время' },
   { key: 'time', label: 'Время', iconName: 'material-symbols:schedule', category: 'Дата и время' },
   { key: 'fileVector', label: 'Векторные файлы', iconName: 'material-symbols-light:polyline-rounded', category: 'Поля загрузки файлов' },
   { key: 'fileImage', label: 'Изображения', iconName: 'material-symbols-light:image-rounded', category: 'Поля загрузки файлов' },
   { key: 'fileDocument', label: 'Документы', iconName: 'material-symbols-light:docs-rounded', category: 'Поля загрузки файлов' },
-  { key: 'address', label: 'Адрес', iconName: 'material-symbols:location-on', category: 'Контактная информация' },
 ];
 
 const CATEGORIES = [...new Set(ALL_FIELDS.map((f) => f.category))];
 
 interface ToolPanelProps {
   isCompact?: boolean;
+  onFieldAdd?: (fieldKey: string) => void;
 }
 
-export const ToolPanel = ({ isCompact = false }: ToolPanelProps) => {
+export const ToolPanel = ({ isCompact = false, onFieldAdd }: ToolPanelProps) => {
   const [search, setSearch] = useState('');
 
   const groupedByCategory = useMemo(() => {
@@ -127,13 +130,12 @@ export const ToolPanel = ({ isCompact = false }: ToolPanelProps) => {
         }}
       >
         <span style={{ fontWeight: 600, fontSize: 14 }}>Поля формы</span>
-        <Search
-          size="md"
+        <Input.Search
           placeholder="Поиск поля"
-          labelText="Поиск по полям формы"
-          closeButtonLabelText="Очистить"
+          allowClear
+          aria-label="Поиск по полям формы"
           value={search}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
+          onChange={(e) => setSearch(e.target.value)}
         />
       </div>
 
@@ -156,7 +158,7 @@ export const ToolPanel = ({ isCompact = false }: ToolPanelProps) => {
                   textTransform: 'uppercase' as const,
                   letterSpacing: '0.06em',
                   marginBottom: 8,
-                  color: 'var(--cds-text-placeholder)',
+                  color: 'var(--app-text-placeholder)',
                 }}
               >
                 {category}
@@ -181,6 +183,7 @@ export const ToolPanel = ({ isCompact = false }: ToolPanelProps) => {
                       iconName={item.iconName}
                       iconColor={meta?.iconColor}
                       iconBackground={meta?.iconBg}
+                      onDoubleClickAdd={onFieldAdd}
                     />
                   );
                 })}
@@ -189,7 +192,7 @@ export const ToolPanel = ({ isCompact = false }: ToolPanelProps) => {
           ))
         ) : (
           <div style={{ padding: '24px 16px', textAlign: 'center' }}>
-            <span style={{ color: 'var(--cds-text-secondary)' }}>Поля не найдены</span>
+            <span style={{ color: 'var(--app-text-secondary)' }}>Поля не найдены</span>
           </div>
         )}
       </div>

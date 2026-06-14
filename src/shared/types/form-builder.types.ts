@@ -16,11 +16,15 @@ export type FormFieldType =
   | 'file_vector'
   | 'file_image'
   | 'file_document'
-  | 'address';
+  | 'address'
+  | 'location'
+  | 'rating';
 
 export interface FieldOption {
   id: string;
   label: string;
+  /** When true, respondent can enter a custom text value */
+  isOther?: boolean;
 }
 
 export interface FormFieldInstance {
@@ -31,7 +35,9 @@ export interface FormFieldInstance {
   required: boolean;
   options?: FieldOption[];    // radio / checkbox / dropdown only
   children?: FormFieldInstance[]; // group only
-  /** Optional runtime value for fields like address; not persisted in schema */
+  /** Type-specific settings persisted in form schema */
+  config?: Record<string, unknown>;
+  /** Optional runtime value; not persisted in schema */
   value?: string;
 }
 
@@ -75,6 +81,8 @@ export const PANEL_KEY_TO_FIELD_TYPE: Readonly<Partial<Record<string, FormFieldT
   fileImage: 'file_image',
   fileDocument: 'file_document',
   address: 'address',
+  location: 'location',
+  rating: 'rating',
 } as const;
 
 /** Human-readable labels for each field type */
@@ -97,6 +105,8 @@ export const FIELD_TYPE_LABELS: Readonly<Record<FormFieldType, string>> = {
   file_image: 'Загрузка изображений',
   file_document: 'Загрузка документов',
   address: 'Адрес',
+  location: 'Города и страны',
+  rating: 'Оценка по шкале',
 } as const;
 
 /** Field types that carry an options array */

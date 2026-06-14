@@ -213,28 +213,28 @@ async def create_request(
     )
     req = await request_repository.create(session, req)
     await session.commit()
+    request_id = req.id
 
     try:
-        await request_summary_service.generate_summary(session, req.id)
+        await request_summary_service.generate_summary(session, request_id)
     except Exception:
-        logger.exception("AI summary generation failed for request %s", req.id)
+        logger.exception("AI summary generation failed for request %s", request_id)
         await session.rollback()
 
     try:
-        await request_analysis_service.generate_analysis(session, req.id)
+        await request_analysis_service.generate_analysis(session, request_id)
     except request_analysis_service.AnalysisGenerationFailed:
-        logger.warning("AI analysis skipped (LLM unavailable) for request %s", req.id)
+        logger.warning("AI analysis skipped (LLM unavailable) for request %s", request_id)
         await session.rollback()
     except Exception:
-        logger.exception("AI analysis generation failed for request %s", req.id)
+        logger.exception("AI analysis generation failed for request %s", request_id)
         await session.rollback()
 
-    # Reload with selectinload(author) so the response includes ai_summary and author.
-    req = await request_repository.get_by_id(session, req.id)  # type: ignore[assignment]
-    events = await request_stage_repository.list_execution_events(session, req.id, limit=50)
-    return _to_response(
-        req, include_stages=True, execution_events_rows=events  # type: ignore[arg-type]
-    )
+    req = await request_repository.get_by_id(session, request_id)
+    if req is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")
+    events = await request_stage_repository.list_execution_events(session, request_id, limit=50)
+    return _to_response(req, include_stages=True, execution_events_rows=events)
 
 
 async def update_request(

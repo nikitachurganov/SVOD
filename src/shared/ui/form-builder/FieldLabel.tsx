@@ -6,7 +6,7 @@ interface FieldLabelProps {
 }
 
 /**
- * Лейбол в стиле Carbon (класс `.cds--label`): размер, цвет, нижний отступ.
+ * Лейбл поля формы: размер, цвет, нижний отступ через `.app-field-label`.
  * Обязательность — красная звёздочка после текста.
  */
 export const FieldLabel = ({ label, required, htmlFor }: FieldLabelProps) => {
@@ -23,11 +23,11 @@ export const FieldLabel = ({ label, required, htmlFor }: FieldLabelProps) => {
 
   if (htmlFor) {
     return (
-      <label className="cds--label app-field-label" htmlFor={htmlFor}>
+      <label className="app-field-label" htmlFor={htmlFor}>
         {inner}
       </label>
     );
   }
 
-  return <div className="cds--label app-field-label">{inner}</div>;
+  return <div className="app-field-label">{inner}</div>;
 };

@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { createForm, mapPagesToPayload } from '../shared/api/forms.api';
 import { FormEditor } from '../shared/ui/form-builder/FormEditor';
 import type { FormPageInstance } from '../shared/types/form-builder.types';
-import { useOrganization } from '../shared/context/organization.context';
+import { useOrganization } from '../shared/hooks/organization.hooks';
 
 export const CreateFormPage = () => {
   const navigate = useNavigate();

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, Tag, Modal } from '@carbon/react';
+import { Button, Tag, Modal } from 'antd';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { DragHandle } from './DragHandle';
@@ -8,23 +8,39 @@ import {
   GROUP_CANVAS_PREFIX,
   type FormFieldInstance,
 } from '../../types/form-builder.types';
+import { FieldMoveControls } from './FieldMoveControls';
+import type { FieldSiblingPosition } from '../../utils/fieldMove.utils';
 
 interface GroupBlockProps {
   field: FormFieldInstance;
+  allFields: FormFieldInstance[];
   onChange: (changes: Partial<FormFieldInstance>) => void;
   onDelete: () => void;
   onChildChange: (childId: string, changes: Partial<FormFieldInstance>) => void;
   onChildDelete: (childId: string) => void;
+  onMoveUp?: (fieldId: string) => void;
+  onMoveDown?: (fieldId: string) => void;
+  onMoveBefore?: (fieldId: string, beforeFieldId: string | null) => void;
   dragHandleProps: React.HTMLAttributes<HTMLDivElement>;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
+  siblingPositions?: FieldSiblingPosition[];
 }
 
 export const GroupBlock = ({
   field,
+  allFields,
   onChange,
   onDelete,
   onChildChange,
   onChildDelete,
+  onMoveUp,
+  onMoveDown,
+  onMoveBefore,
   dragHandleProps,
+  canMoveUp = false,
+  canMoveDown = false,
+  siblingPositions = [],
 }: GroupBlockProps) => {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const children = field.children ?? [];
@@ -36,8 +52,8 @@ export const GroupBlock = ({
   return (
     <div
       style={{
-        background: 'var(--cds-layer-01)',
-        border: '1px solid var(--cds-border-subtle)',
+        background: 'var(--app-surface)',
+        border: '1px solid var(--app-border)',
         borderRadius: 4,
         boxShadow: 'none',
         overflow: 'hidden',
@@ -47,7 +63,7 @@ export const GroupBlock = ({
 
       <div style={{ padding: '0 16px 12px' }}>
         <div style={{ marginBottom: 8 }}>
-          <Tag type="blue" size="sm" style={{ userSelect: 'none' }}>
+          <Tag color="blue" style={{ userSelect: 'none' }}>
             Группа полей
           </Tag>
         </div>
@@ -60,7 +76,7 @@ export const GroupBlock = ({
             padding: '0 4px',
             fontSize: '1rem',
             fontWeight: 600,
-            color: 'var(--cds-text-primary)',
+            color: 'var(--app-text)',
             width: '100%',
             marginBottom: 2,
             border: 'none',
@@ -76,7 +92,7 @@ export const GroupBlock = ({
           style={{
             padding: '0 4px',
             fontSize: '0.75rem',
-            color: 'var(--cds-text-secondary)',
+            color: 'var(--app-text-secondary)',
             width: '100%',
             marginBottom: 12,
             border: 'none',
@@ -90,8 +106,8 @@ export const GroupBlock = ({
           style={{
             minHeight: 80,
             borderRadius: 4,
-            border: `2px dashed ${isOver ? 'var(--cds-interactive)' : 'var(--cds-border-subtle)'}`,
-            background: isOver ? 'var(--cds-highlight)' : 'var(--cds-background)',
+            border: `2px dashed ${isOver ? 'var(--app-primary)' : 'var(--app-border)'}`,
+            background: isOver ? 'var(--app-highlight)' : 'var(--app-bg)',
             transition: 'border-color 250ms, background 250ms',
           }}
         >
@@ -104,7 +120,7 @@ export const GroupBlock = ({
                 justifyContent: 'center',
               }}
             >
-              <span style={{ color: 'var(--cds-text-secondary)', fontSize: 12 }}>
+              <span style={{ color: 'var(--app-text-secondary)', fontSize: 12 }}>
                 Перетащите поле в группу
               </span>
             </div>
@@ -125,8 +141,13 @@ export const GroupBlock = ({
                   <DroppedFieldCard
                     key={child.id}
                     field={child}
+                    allFields={allFields}
+                    parentGroupId={field.id}
                     onChange={(changes) => onChildChange(child.id, changes)}
                     onDelete={() => onChildDelete(child.id)}
+                    onMoveUp={onMoveUp}
+                    onMoveDown={onMoveDown}
+                    onMoveBefore={onMoveBefore}
                   />
                 ))}
               </SortableContext>
@@ -134,10 +155,30 @@ export const GroupBlock = ({
           )}
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginTop: 10,
+          }}
+        >
+          {onMoveUp && onMoveDown && onMoveBefore ? (
+            <FieldMoveControls
+              canMoveUp={canMoveUp}
+              canMoveDown={canMoveDown}
+              siblingPositions={siblingPositions}
+              onMoveUp={() => onMoveUp(field.id)}
+              onMoveDown={() => onMoveDown(field.id)}
+              onMoveBefore={(beforeFieldId) => onMoveBefore(field.id, beforeFieldId)}
+            />
+          ) : (
+            <span />
+          )}
           <Button
-            kind="danger--ghost"
-            size="sm"
+            type="text"
+            danger
+            size="small"
             onClick={() => setConfirmDelete(true)}
           >
             Удалить группу
@@ -147,16 +188,15 @@ export const GroupBlock = ({
 
       <Modal
         open={confirmDelete}
-        onRequestClose={() => setConfirmDelete(false)}
-        onRequestSubmit={() => {
+        title="Удалить группу?"
+        okText="Удалить"
+        cancelText="Отмена"
+        okButtonProps={{ danger: true }}
+        onCancel={() => setConfirmDelete(false)}
+        onOk={() => {
           onDelete();
           setConfirmDelete(false);
         }}
-        modalHeading="Удалить группу?"
-        primaryButtonText="Удалить"
-        secondaryButtonText="Отмена"
-        danger
-        size="xs"
       />
     </div>
   );

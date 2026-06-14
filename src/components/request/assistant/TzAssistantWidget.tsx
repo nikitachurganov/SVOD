@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, Modal, Tag, Tile } from '@carbon/react';
+import { Button, Card, Modal, Tag } from 'antd';
 import { RequestTechnicalSpecPanel } from '../RequestTechnicalSpecPanel';
 import type { RequestTechnicalSpecEnvelope } from '../../../types/technicalSpec';
 
@@ -20,15 +20,15 @@ export function TzAssistantWidget({
 
   return (
     <>
-      <Tile style={{ padding: 14 }}>
+      <Card styles={{ body: { padding: 14 } }}>
         <span style={{ display: 'block', fontWeight: 600, marginBottom: 8, fontSize: 14 }}>
           Техническое задание
         </span>
-        <p style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--cds-text-secondary)', lineHeight: 1.45 }}>
+        <p style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--app-text-secondary)', lineHeight: 1.45 }}>
           Артефакт для передачи исполнителю. Редактирование и подтверждение — в полном виде.
         </p>
         {!organizationId ? (
-          <span style={{ fontSize: 12, color: 'var(--cds-text-secondary)' }}>
+          <span style={{ fontSize: 12, color: 'var(--app-text-secondary)' }}>
             Нужна организация у заявки.
           </span>
         ) : tz ? (
@@ -36,9 +36,9 @@ export function TzAssistantWidget({
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
               <span style={{ fontSize: 12 }}>Статус:</span>
               {tz.status === 'confirmed' ? (
-                <Tag type="green">Подтверждено</Tag>
+                <Tag color="success">Подтверждено</Tag>
               ) : (
-                <Tag type="blue">Черновик</Tag>
+                <Tag color="blue">Черновик</Tag>
               )}
             </div>
             {tz.sections?.title ? (
@@ -46,28 +46,28 @@ export function TzAssistantWidget({
                 {tz.sections.title}
               </span>
             ) : null}
-            <Button kind="primary" size="sm" onClick={() => setFullOpen(true)}>
+            <Button type="primary" size="small" onClick={() => setFullOpen(true)}>
               Открыть полностью
             </Button>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <span style={{ fontSize: 12, color: 'var(--cds-text-secondary)' }}>
+            <span style={{ fontSize: 12, color: 'var(--app-text-secondary)' }}>
               ТЗ ещё не сформировано.
             </span>
-            <Button kind="primary" size="sm" onClick={() => setFullOpen(true)}>
+            <Button type="primary" size="small" onClick={() => setFullOpen(true)}>
               Сгенерировать и открыть
             </Button>
           </div>
         )}
-      </Tile>
+      </Card>
 
       <Modal
         open={fullOpen}
-        onRequestClose={() => setFullOpen(false)}
-        modalHeading="Техническое задание"
-        passiveModal
-        size="lg"
+        onCancel={() => setFullOpen(false)}
+        title="Техническое задание"
+        footer={null}
+        width={800}
       >
         <div style={{ maxHeight: '70vh', overflowY: 'auto' }}>
           <RequestTechnicalSpecPanel

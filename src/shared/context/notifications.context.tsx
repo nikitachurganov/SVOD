@@ -4,11 +4,9 @@ import {
   useCallback,
   useContext,
   useMemo,
-  useRef,
-  useState,
   type ReactNode,
 } from 'react';
-import { ToastNotification } from '@carbon/react';
+import { notification } from 'antd';
 
 type NotificationKind = 'success' | 'error' | 'info' | 'warning';
 
@@ -17,16 +15,8 @@ export interface NotificationOptions {
   title: string;
   subtitle?: string;
   caption?: string;
-  /** Auto-dismiss timeout (ms). 0 disables auto-dismiss. Default per Carbon DS: 6s. */
+  /** Auto-dismiss timeout (ms). 0 disables auto-dismiss. Default: 6s. */
   timeout?: number;
-}
-
-interface ToastItem extends Required<Pick<NotificationOptions, 'title'>> {
-  id: string;
-  kind: NotificationKind;
-  subtitle?: string;
-  caption?: string;
-  timeout: number;
 }
 
 interface NotificationsContextValue {
@@ -39,36 +29,23 @@ interface NotificationsContextValue {
 
 const NotificationsContext = createContext<NotificationsContextValue | null>(null);
 
-const DEFAULT_TIMEOUT = 6000;
+const DEFAULT_TIMEOUT = 6;
+
+const kindToType = (kind: NotificationKind): 'success' | 'error' | 'info' | 'warning' => kind;
 
 export function NotificationsProvider({ children }: { children: ReactNode }) {
-  const [toasts, setToasts] = useState<ToastItem[]>([]);
-  const timersRef = useRef(new Map<string, number>());
-
-  const remove = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-    const timer = timersRef.current.get(id);
-    if (timer) {
-      window.clearTimeout(timer);
-      timersRef.current.delete(id);
-    }
-  }, []);
-
   const notify = useCallback(
     ({ kind = 'info', title, subtitle, caption, timeout = DEFAULT_TIMEOUT }: NotificationOptions) => {
-      const id =
-        typeof crypto !== 'undefined' && 'randomUUID' in crypto
-          ? crypto.randomUUID()
-          : `toast-${Date.now()}-${Math.random()}`;
-      const toast: ToastItem = { id, kind, title, subtitle, caption, timeout };
-      setToasts((prev) => [...prev, toast]);
-
-      if (timeout > 0) {
-        const timer = window.setTimeout(() => remove(id), timeout);
-        timersRef.current.set(id, timer);
-      }
+      const description = [subtitle, caption].filter(Boolean).join(' — ') || undefined;
+      notification.open({
+        type: kindToType(kind),
+        message: title,
+        description,
+        duration: timeout > 0 ? timeout / 1000 : 0,
+        placement: 'topRight',
+      });
     },
-    [remove],
+    [],
   );
 
   const notifySuccess = useCallback(
@@ -96,22 +73,6 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   return (
     <NotificationsContext.Provider value={value}>
       {children}
-      <div className="app-toast-stack" role="region" aria-label="Уведомления">
-        {toasts.map((toast) => (
-          <ToastNotification
-            key={toast.id}
-            kind={toast.kind}
-            title={toast.title}
-            subtitle={toast.subtitle}
-            caption={toast.caption}
-            lowContrast
-            onClose={() => {
-              remove(toast.id);
-              return true;
-            }}
-          />
-        ))}
-      </div>
     </NotificationsContext.Provider>
   );
 }

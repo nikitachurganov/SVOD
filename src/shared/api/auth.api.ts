@@ -57,14 +57,3 @@ export const signUpWithEmail = async ({
 export const signOut = async (): Promise<void> => {
   localStorage.removeItem('access_token');
 };
-
-export const requestPasswordReset = async (_email: string): Promise<void> => {
-  // TODO: Implement when the backend adds a forgot-password endpoint.
-  // For now, this is a no-op placeholder so the UI compiles.
-  throw new Error('Password reset is not yet implemented');
-};
-
-export const updatePassword = async (_password: string): Promise<void> => {
-  // TODO: Implement when the backend adds a change-password endpoint.
-  throw new Error('Password update is not yet implemented');
-};

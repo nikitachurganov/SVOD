@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Button, InlineLoading, InlineNotification, Tag, Tile } from '@carbon/react';
+import { Alert, Button, Card, Spin, Tag } from 'antd';
 import { getRequestPerformers } from '../../../shared/api/requests.api';
 import type { PerformerRecommendationResponse } from '../../../types/performerSelection';
 
@@ -49,12 +49,12 @@ export function PerformerHintAssistant({
 
   if (!organizationId) {
     return (
-      <Tile style={{ padding: 14 }}>
+      <Card styles={{ body: { padding: 14 } }}>
         <span style={{ display: 'block', fontWeight: 600, marginBottom: 8 }}>Подсказка по исполнителю</span>
-        <span style={{ fontSize: 12, color: 'var(--cds-text-secondary)' }}>
+        <span style={{ fontSize: 12, color: 'var(--app-text-secondary)' }}>
           Укажите организацию у заявки.
         </span>
-      </Tile>
+      </Card>
     );
   }
 
@@ -63,42 +63,40 @@ export function PerformerHintAssistant({
     : reco?.performers[0];
 
   return (
-    <Tile style={{ padding: 14 }}>
+    <Card styles={{ body: { padding: 14 } }}>
       <span style={{ display: 'block', fontWeight: 600, marginBottom: 8, fontSize: 14 }}>
         Рекомендация исполнителя
       </span>
-      <p style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--cds-text-secondary)', lineHeight: 1.45 }}>
+      <p style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--app-text-secondary)', lineHeight: 1.45 }}>
         Только подсказка. Назначение и передача задачи выполняются во вкладке «Исполнение».
       </p>
 
       {loading && (
         <div style={{ padding: '8px 0' }}>
-          <InlineLoading description="Загрузка…" />
+          <Spin tip="Загрузка…" />
         </div>
       )}
 
       {error && (
-        <InlineNotification kind="warning" title="" subtitle={error} lowContrast hideCloseButton />
+        <Alert type="warning" description={error} showIcon closable={false} />
       )}
 
       {!loading && reco && (
         <>
-          <div style={{ fontSize: 12, marginBottom: 8, color: 'var(--cds-text-secondary)' }}>
+          <div style={{ fontSize: 12, marginBottom: 8, color: 'var(--app-text-secondary)' }}>
             {STATUS_HEADLINE[reco.status] ?? reco.status}
             {reco.confidence != null ? ` · уверенность ${reco.confidence}%` : ''}
           </div>
           {recommended ? (
             <div style={{ marginBottom: 12 }}>
               <div style={{ fontWeight: 600, fontSize: 14 }}>{recommended.full_name}</div>
-              <div style={{ fontSize: 12, color: 'var(--cds-text-secondary)' }}>
+              <div style={{ fontSize: 12, color: 'var(--app-text-secondary)' }}>
                 {recommended.position}
                 {recommended.organization ? ` · ${recommended.organization}` : ''}
               </div>
               {reco.recommended_performer_id === recommended.id ? (
                 <div style={{ marginTop: 6 }}>
-                  <Tag type="green" size="sm">
-                    Рекомендуемый
-                  </Tag>
+                  <Tag color="success">Рекомендуемый</Tag>
                 </div>
               ) : null}
             </div>
@@ -107,11 +105,11 @@ export function PerformerHintAssistant({
               Подходящих кандидатов в списке нет — подберите вручную во вкладке «Исполнение».
             </p>
           )}
-          <Button kind="primary" size="sm" onClick={onGoToExecution}>
+          <Button type="primary" size="small" onClick={onGoToExecution}>
             Перейти к назначению
           </Button>
         </>
       )}
-    </Tile>
+    </Card>
   );
 }

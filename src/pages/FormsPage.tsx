@@ -1,24 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  DataTable,
-  Table,
-  TableHead,
-  TableRow,
-  TableHeader,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableToolbar,
-  TableToolbarContent,
-  Pagination,
-  Button,
-  DataTableSkeleton,
-  Modal,
-  Tabs,
-  TabList,
-  Tab,
-} from '@carbon/react';
-import { Add, Archive, Edit } from '@carbon/react/icons';
+import { Table, Button, Modal, Card } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
+import { PlusOutlined, InboxOutlined, EditOutlined } from '@ant-design/icons';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   deleteForm,
@@ -28,7 +11,7 @@ import {
   type FormsCounts,
 } from '../shared/api/forms.api';
 import { buildDisplayName } from '../shared/utils/userName';
-import { useOrganization } from '../shared/context/organization.context';
+import { useOrganization } from '../shared/hooks/organization.hooks';
 import { useNotifications } from '../shared/context/notifications.context';
 
 function formatDate(iso: string): string {
@@ -40,16 +23,23 @@ function formatDate(iso: string): string {
 
 const PAGE_SIZES = [20, 50, 100];
 
-const HEADERS = [
-  { key: 'name', header: 'Название' },
-  { key: 'author', header: 'Автор' },
-  { key: 'created_at', header: 'Дата создания' },
-  { key: 'actions', header: 'Действия' },
-];
+type FormRow = {
+  id: string;
+  name: string;
+  author: string;
+  created_at: string;
+};
 
 type FormsTabKey = 'all' | 'mine' | 'unused' | 'archive';
 
 const TAB_ORDER: FormsTabKey[] = ['all', 'mine', 'unused', 'archive'];
+
+const TAB_LABELS: Record<FormsTabKey, string> = {
+  all: 'Все',
+  mine: 'Мои',
+  unused: 'Неиспользуемые',
+  archive: 'Архив',
+};
 
 const EMPTY_MESSAGE: Record<FormsTabKey, string> = {
   all: 'Активных форм пока нет.',
@@ -135,51 +125,16 @@ export const FormsPage = () => {
     [loadForms, loadCounts, notifySuccess, notifyError],
   );
 
-  const rows = useMemo(() => forms.map((f) => ({
+  const rows = useMemo<FormRow[]>(() => forms.map((f) => ({
     id: f.id,
     name: f.name,
     author: f.author ? buildDisplayName(f.author) : 'Неизвестный автор',
     created_at: f.created_at,
-    actions: f.id,
   })), [forms]);
-
-  const paginatedRows = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    return rows.slice(start, start + pageSize);
-  }, [rows, page, pageSize]);
 
   const isArchive = activeTab === 'archive';
 
-  const renderCell = (key: string, value: unknown, rowId: string) => {
-    switch (key) {
-      case 'name':
-        return <Link to={`/forms/${rowId}`} style={{ fontWeight: 500 }}>{value as string}</Link>;
-      case 'created_at':
-        return formatDate(value as string);
-      case 'actions':
-        if (isArchive) {
-          return <span style={{ color: 'var(--cds-text-secondary)' }}>—</span>;
-        }
-        return (
-          <div style={{ display: 'flex', gap: 4 }}>
-            <Button kind="ghost" size="sm" renderIcon={Edit} iconDescription="Изменить" hasIconOnly onClick={() => navigate(`/forms/${value}/edit`)} />
-            <Button
-              kind="ghost"
-              size="sm"
-              renderIcon={Archive}
-              iconDescription="Переместить в архив"
-              hasIconOnly
-              disabled={deletingId === (value as string)}
-              onClick={() => setConfirmDeleteId(value as string)}
-            />
-          </div>
-        );
-      default:
-        return value as string;
-    }
-  };
-
-  const tabLabel = (key: FormsTabKey, label: string): string => {
+  const tabLabel = (key: FormsTabKey): string => {
     const count =
       key === 'all'
         ? counts.all
@@ -188,71 +143,132 @@ export const FormsPage = () => {
           : key === 'unused'
             ? counts.unused
             : counts.archived;
-    return `${label} (${count})`;
+    return `${TAB_LABELS[key]} (${count})`;
   };
 
-  return (
-    <div style={{ display: 'flex', flex: 1, flexDirection: 'column', height: '100%', minHeight: 0 }}>
-      {loading ? (
-        <div style={{ padding: 16 }}>
-          <DataTableSkeleton headers={HEADERS} rowCount={8} columnCount={HEADERS.length} />
-        </div>
-      ) : (
-        <DataTable rows={paginatedRows} headers={HEADERS} isSortable>
-          {({ rows: carbonRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
-            <TableContainer title="Реестр форм" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-              <div
-                style={{
-                  background: 'var(--cds-layer-01)',
-                  borderBottom: '1px solid var(--cds-border-subtle)',
-                }}
-              >
-                <Tabs selectedIndex={TAB_ORDER.indexOf(activeTab)}>
-                  <TabList aria-label="Фильтр форм">
-                    <Tab onClick={() => setActiveTab('all')}>{tabLabel('all', 'Все')}</Tab>
-                    <Tab onClick={() => setActiveTab('mine')}>{tabLabel('mine', 'Мои')}</Tab>
-                    <Tab onClick={() => setActiveTab('unused')}>{tabLabel('unused', 'Неиспользуемые')}</Tab>
-                    <Tab onClick={() => setActiveTab('archive')}>{tabLabel('archive', 'Архив')}</Tab>
-                  </TabList>
-                </Tabs>
-              </div>
-              <TableToolbar>
-                <TableToolbarContent>
-                  <Button renderIcon={Add} onClick={() => navigate('/forms/create')}>Создать форму</Button>
-                </TableToolbarContent>
-              </TableToolbar>
-              <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
-                <Table {...getTableProps()} size="lg" useZebraStyles>
-                  <TableHead>
-                    <TableRow>
-                      {headers.map((h) => { const { key: _k, ...hp } = getHeaderProps({ header: h }); return <TableHeader key={h.key} {...hp}>{h.header}</TableHeader>; })}
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {carbonRows.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={headers.length} style={{ textAlign: 'center' }}>
-                          {EMPTY_MESSAGE[activeTab]}
-                        </TableCell>
-                      </TableRow>
-                    ) : carbonRows.map((row) => {
-                      const { key: _k, ...rp } = getRowProps({ row });
-                      return <TableRow key={row.id} {...rp}>{row.cells.map((cell) => <TableCell key={cell.id}>{renderCell(cell.info.header, cell.value, row.id)}</TableCell>)}</TableRow>;
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-              <Pagination totalItems={rows.length} pageSize={pageSize} pageSizes={PAGE_SIZES} page={page} onChange={({ page: p, pageSize: s }: { page: number; pageSize: number }) => { setPage(p); setPageSize(s); }} itemsPerPageText="Записей на странице:" />
-            </TableContainer>
-          )}
-        </DataTable>
-      )}
+  const columns = useMemo<ColumnsType<FormRow>>(
+    () => [
+      {
+        title: 'Название',
+        dataIndex: 'name',
+        key: 'name',
+        sorter: (a, b) => a.name.localeCompare(b.name, 'ru'),
+        render: (name: string, record) => (
+          <Link to={`/forms/${record.id}`} style={{ fontWeight: 500 }}>{name}</Link>
+        ),
+      },
+      {
+        title: 'Автор',
+        dataIndex: 'author',
+        key: 'author',
+        sorter: (a, b) => a.author.localeCompare(b.author, 'ru'),
+      },
+      {
+        title: 'Дата создания',
+        dataIndex: 'created_at',
+        key: 'created_at',
+        sorter: (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+        render: (value: string) => formatDate(value),
+      },
+      {
+        title: 'Действия',
+        key: 'actions',
+        width: 100,
+        render: (_, record) => {
+          if (isArchive) {
+            return <span style={{ color: 'var(--app-text-secondary)' }}>—</span>;
+          }
+          return (
+            <div style={{ display: 'flex', gap: 4 }}>
+              <Button
+                type="text"
+                size="small"
+                icon={<EditOutlined />}
+                title="Изменить"
+                onClick={() => navigate(`/forms/${record.id}/edit`)}
+              />
+              <Button
+                type="text"
+                size="small"
+                icon={<InboxOutlined />}
+                title="Переместить в архив"
+                disabled={deletingId === record.id}
+                onClick={() => setConfirmDeleteId(record.id)}
+              />
+            </div>
+          );
+        },
+      },
+    ],
+    [deletingId, isArchive, navigate],
+  );
 
-      {confirmDeleteId && (
-        <Modal open danger modalHeading="Переместить в архив?" primaryButtonText="В архив" secondaryButtonText="Отмена" onRequestClose={() => setConfirmDeleteId(null)} onRequestSubmit={() => void handleDelete(confirmDeleteId)} size="xs">
-          <p>Форма будет перемещена в архив. Её можно будет найти во вкладке «Архив».</p>
-        </Modal>
-      )}
+  return (
+    <div className="registry-page">
+      <div className="registry-page__header">
+        <div className="registry-page__title-row">
+          <h1 className="registry-page__title">Формы</h1>
+          <Button
+            type="primary"
+            className="registry-page__create-btn"
+            icon={<PlusOutlined />}
+            onClick={() => navigate('/forms/create')}
+          >
+            Создать форму
+          </Button>
+        </div>
+        <div className="registry-page__tabs" role="tablist" aria-label="Фильтр форм">
+          {TAB_ORDER.map((key) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === key}
+              className={`registry-page__tab${activeTab === key ? ' registry-page__tab--active' : ''}`}
+              onClick={() => setActiveTab(key)}
+            >
+              {tabLabel(key)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="registry-page__content">
+        <Card className="registry-page__card">
+          <Table<FormRow>
+            rowKey="id"
+            columns={columns}
+            dataSource={rows}
+            loading={loading}
+            locale={{ emptyText: EMPTY_MESSAGE[activeTab] }}
+            pagination={{
+              current: page,
+              pageSize,
+              total: rows.length,
+              pageSizeOptions: PAGE_SIZES,
+              showSizeChanger: true,
+              showTotal: (total, [min, max]) => `${min}–${max} из ${total}`,
+              onChange: (newPage, newSize) => {
+                setPage(newPage);
+                setPageSize(newSize);
+              },
+            }}
+            size="middle"
+          />
+        </Card>
+      </div>
+
+      <Modal
+        open={!!confirmDeleteId}
+        title="Переместить в архив?"
+        okText="В архив"
+        cancelText="Отмена"
+        okButtonProps={{ danger: true }}
+        onCancel={() => setConfirmDeleteId(null)}
+        onOk={() => confirmDeleteId && void handleDelete(confirmDeleteId)}
+      >
+        <p>Форма будет перемещена в архив. Её можно будет найти во вкладке «Архив».</p>
+      </Modal>
     </div>
   );
 };

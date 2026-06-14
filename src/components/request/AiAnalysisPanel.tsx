@@ -1,6 +1,7 @@
-import { Button, Tag } from '@carbon/react';
+import { Button, Tag } from 'antd';
 import type { Field } from '../../types/form';
 import type { AIRequestAnalysis } from '../../types/request';
+import { fieldLabelForId } from './aiAnalysis.utils';
 
 const ISSUE_TYPE_LABELS: Record<string, string> = {
   missing_info: 'Не хватает данных',
@@ -25,22 +26,16 @@ const SEVERITY_LABELS: Record<string, string> = {
   high: 'Высокая важность',
 };
 
-export const fieldLabelForId = (fields: Field[], fieldId: string): string | null => {
-  if (!fieldId || fieldId === 'general') return null;
-  const f = fields.find((x) => x.id === fieldId);
-  return f?.label?.trim() || fieldId;
+const statusTagColor = (s: string): string => {
+  if (s === 'ready') return 'success';
+  if (s === 'not_ready') return 'error';
+  return 'default';
 };
 
-const statusTagType = (s: string): 'green' | 'blue' | 'red' | 'warm-gray' => {
-  if (s === 'ready') return 'green';
-  if (s === 'not_ready') return 'red';
-  return 'warm-gray';
-};
-
-const severityTagType = (s: string): 'red' | 'warm-gray' | 'blue' => {
-  if (s === 'high') return 'red';
+const severityTagColor = (s: string): string => {
+  if (s === 'high') return 'error';
   if (s === 'low') return 'blue';
-  return 'warm-gray';
+  return 'default';
 };
 
 export type AiAnalysisPanelProps = {
@@ -54,12 +49,12 @@ export function AiAnalysisPanel({ analysis, fields, running, onAnalyze }: AiAnal
   if (!analysis) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <span style={{ color: 'var(--cds-text-secondary)', fontSize: 14, lineHeight: 1.45 }}>
+        <span style={{ color: 'var(--app-text-secondary)', fontSize: 14, lineHeight: 1.45 }}>
           Проверка качества заявки: пустые обязательные поля, срок, бюджет, ясность цели, противоречия
           и другие моменты, которые мешают передать заявку в работу.
         </span>
         <div>
-          <Button kind="primary" size="sm" disabled={running} onClick={onAnalyze}>
+          <Button type="primary" size="small" disabled={running} onClick={onAnalyze}>
             {running ? 'Анализ…' : 'Проанализировать заявку'}
           </Button>
         </div>
@@ -74,21 +69,21 @@ export function AiAnalysisPanel({ analysis, fields, running, onAnalyze }: AiAnal
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
-        <span style={{ fontSize: 13, color: 'var(--cds-text-secondary)' }}>Статус</span>
-        <Tag type={statusTagType(statusKey)}>{statusLabel}</Tag>
-        <span style={{ fontSize: 13, color: 'var(--cds-text-secondary)' }}>
+        <span style={{ fontSize: 13, color: 'var(--app-text-secondary)' }}>Статус</span>
+        <Tag color={statusTagColor(statusKey)}>{statusLabel}</Tag>
+        <span style={{ fontSize: 13, color: 'var(--app-text-secondary)' }}>
           В работу «как есть»
         </span>
         {analysis.ready_for_processing ? (
-          <Tag type="green">Да</Tag>
+          <Tag color="success">Да</Tag>
         ) : (
-          <Tag type="red">Нет</Tag>
+          <Tag color="error">Нет</Tag>
         )}
       </div>
 
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-          <span style={{ fontSize: 13, color: 'var(--cds-text-secondary)' }}>
+          <span style={{ fontSize: 13, color: 'var(--app-text-secondary)' }}>
             Оценка полноты (0–100)
           </span>
           <span style={{ fontSize: 13, fontWeight: 600 }}>{score} / 100</span>
@@ -101,7 +96,7 @@ export function AiAnalysisPanel({ analysis, fields, running, onAnalyze }: AiAnal
           style={{
             height: 8,
             borderRadius: 4,
-            background: 'var(--cds-border-subtle)',
+            background: 'var(--app-border)',
             overflow: 'hidden',
           }}
         >
@@ -109,7 +104,7 @@ export function AiAnalysisPanel({ analysis, fields, running, onAnalyze }: AiAnal
             style={{
               height: '100%',
               width: `${Math.min(100, Math.max(0, score))}%`,
-              background: 'var(--cds-interactive)',
+              background: 'var(--app-primary)',
               transition: 'width 0.2s ease',
             }}
           />
@@ -160,14 +155,10 @@ export function AiAnalysisPanel({ analysis, fields, running, onAnalyze }: AiAnal
               return (
                 <li key={`${issue.type}-${issue.field}-${idx}`} style={{ fontSize: 14 }}>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
-                    <Tag type="blue" size="sm">
-                      {typeLabel}
-                    </Tag>
-                    <Tag type={severityTagType(sev)} size="sm">
-                      {sevLabel}
-                    </Tag>
+                    <Tag color="blue">{typeLabel}</Tag>
+                    <Tag color={severityTagColor(sev)}>{sevLabel}</Tag>
                     {fl ? (
-                      <span style={{ fontSize: 12, color: 'var(--cds-text-secondary)' }}>{fl}</span>
+                      <span style={{ fontSize: 12, color: 'var(--app-text-secondary)' }}>{fl}</span>
                     ) : null}
                   </div>
                   <div style={{ marginTop: 4 }}>{issue.message}</div>
@@ -177,7 +168,7 @@ export function AiAnalysisPanel({ analysis, fields, running, onAnalyze }: AiAnal
           </ul>
         </div>
       ) : (
-        <span style={{ fontSize: 14, color: 'var(--cds-text-secondary)' }}>
+        <span style={{ fontSize: 14, color: 'var(--app-text-secondary)' }}>
           Системных замечаний нет — заявка выглядит согласованной по проверке.
         </span>
       )}
@@ -190,7 +181,7 @@ export function AiAnalysisPanel({ analysis, fields, running, onAnalyze }: AiAnal
       </div>
 
       <div>
-        <Button kind="secondary" size="sm" disabled={running} onClick={onAnalyze}>
+        <Button size="small" disabled={running} onClick={onAnalyze}>
           {running ? 'Обновление…' : 'Обновить анализ'}
         </Button>
       </div>

@@ -1,42 +1,27 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  Button,
-  ComboBox,
-  InlineNotification,
-  Loading,
-  TextInput,
-} from '@carbon/react';
-import { ArrowLeft } from '@carbon/react/icons';
+import { Alert, Breadcrumb, Button, Form, Input, Select, Spin } from 'antd';
+import { ArrowLeftOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import {
   getForms,
   pagesPayloadToInstances,
   type FormResponse,
 } from '../shared/api/forms.api';
 import { createRequest } from '../shared/api/requests.api';
-import { useOrganization } from '../shared/context/organization.context';
-import { uploadFieldFiles, type FileMetadata } from '../shared/api/files.api';
-import type { Field, FieldOption, FormEntity } from '../types/form';
+import { useOrganization } from '../shared/hooks/organization.hooks';
 import { mapDataToSnapshot } from '../shared/utils/mapDataToSnapshot';
-import type { FormFieldInstance, FormPageInstance } from '../shared/types/form-builder.types';
-import { PreviewField } from '../shared/ui/form-builder/FormPreviewModal';
-import { useFormStore, FormProvider } from '../shared/hooks/useFormStore';
-
-const FILE_FIELD_TYPES = new Set(['file_image', 'file_vector', 'file_document']);
-
-const collectFieldIds = (fields: FormFieldInstance[]): string[] => {
-  const ids: string[] = [];
-  for (const field of fields) {
-    if (field.type === 'group' && field.children && field.children.length > 0) {
-      ids.push(...collectFieldIds(field.children));
-    } else {
-      ids.push(field.id);
-    }
-  }
-  return ids;
-};
+import type { FormPageInstance } from '../shared/types/form-builder.types';
+import { collectFieldIds, collectLeafFields } from '../shared/formily/collectFieldIds';
+import {
+  buildFormSnapshot,
+  processRequestFormValues,
+} from '../shared/formily/formSubmit.utils';
+import {
+  FormFillRenderer,
+  type FormFillRendererHandle,
+} from '../shared/ui/form-fill/FormFillRenderer';
+import { useFormStore } from '../shared/hooks/useFormStore';
 
 interface MetaErrors {
   title?: string;
@@ -52,6 +37,7 @@ export const CreateRequestPage = () => {
   const [error, setError] = useState<string | null>(null);
 
   const formStore = useFormStore();
+  const fillRef = useRef<FormFillRendererHandle>(null);
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [selectedFormId, setSelectedFormId] = useState<string | undefined>();
   const [requestTitle, setRequestTitle] = useState('');
@@ -98,7 +84,7 @@ export const CreateRequestPage = () => {
 
   useEffect(() => {
     setPageIndex(0);
-    formStore.resetFields();
+    fillRef.current?.resetFields();
   }, [selectedForm]);
 
   const scrollToTop = () => {
@@ -111,7 +97,7 @@ export const CreateRequestPage = () => {
     if (!currentPage) return;
     const ids = collectFieldIds(currentPage.fields);
     try {
-      await formStore.validateFields(ids);
+      await fillRef.current?.validateFields(ids);
       setPageIndex((idx) => Math.min(idx + 1, pageInstances.length - 1));
       scrollToTop();
     } catch {
@@ -122,98 +108,6 @@ export const CreateRequestPage = () => {
   const handlePrevPage = () => {
     setPageIndex((idx) => Math.max(0, idx - 1));
     scrollToTop();
-  };
-
-  const collectLeafFields = (fields: FormFieldInstance[]): FormFieldInstance[] => {
-    const result: FormFieldInstance[] = [];
-    const walk = (inner: FormFieldInstance[]) => {
-      for (const field of inner) {
-        if (field.type === 'group' && field.children && field.children.length > 0) {
-          walk(field.children);
-        } else {
-          result.push(field);
-        }
-      }
-    };
-    walk(fields);
-    return result;
-  };
-
-  const buildSnapshot = (formRow: FormResponse, pages: FormPageInstance[]): FormEntity => {
-    const allLeafFields: FormFieldInstance[] = [];
-    for (const page of pages) {
-      allLeafFields.push(...collectLeafFields(page.fields));
-    }
-
-    const fields: Field[] = allLeafFields.map((f) => ({
-      id: f.id,
-      label: f.label,
-      type: f.type,
-      required: f.required,
-      options: f.options?.map<FieldOption>((opt) => ({ id: opt.id, label: opt.label })),
-    }));
-
-    return {
-      id: formRow.id,
-      title: formRow.name,
-      fields,
-    };
-  };
-
-  const serializeOne = (val: unknown): unknown => {
-    if (val === null || val === undefined) return null;
-    if (typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean') return val;
-
-    if (typeof val === 'object' && val !== null) {
-      if ('toISOString' in val && typeof (val as Record<string, unknown>).toISOString === 'function') {
-        return (val as { toISOString: () => string }).toISOString();
-      }
-      if (Array.isArray(val)) {
-        return val.map(serializeOne);
-      }
-    }
-    return val;
-  };
-
-  const processValues = async (
-    raw: Record<string, unknown>,
-    allFields: FormFieldInstance[],
-    requestId: string,
-  ): Promise<Record<string, unknown>> => {
-    const fieldTypeMap = new Map<string, string>();
-    const walk = (fields: FormFieldInstance[]) => {
-      for (const f of fields) {
-        fieldTypeMap.set(f.id, f.type);
-        if (f.type === 'group' && f.children) walk(f.children);
-      }
-    };
-    walk(allFields);
-
-    const out: Record<string, unknown> = {};
-
-    for (const [key, val] of Object.entries(raw)) {
-      const fieldType = fieldTypeMap.get(key);
-
-      if (fieldType && FILE_FIELD_TYPES.has(fieldType) && Array.isArray(val) && val.length > 0) {
-        const hasFiles = val.some(
-          (item: Record<string, unknown>) => item?.originFileObj instanceof File,
-        );
-        if (hasFiles) {
-          const uploaded: FileMetadata[] = await uploadFieldFiles(
-            val as Array<{ originFileObj?: File; name?: string }>,
-            fieldType,
-            requestId,
-            key,
-          );
-          out[key] = uploaded;
-          continue;
-        }
-      }
-
-      out[key] = serializeOne(val);
-    }
-
-    return out;
   };
 
   const validateMeta = (): { title: string; formId: string } | null => {
@@ -229,23 +123,26 @@ export const CreateRequestPage = () => {
     try {
       const meta = validateMeta();
       if (!meta) return;
-      await formStore.validateFields();
+      await fillRef.current?.validateFields();
       setIsSubmitting(true);
 
-      const rawValues = formStore.getFieldsValue();
+      const rawValues = fillRef.current?.getFieldsValue() ?? {};
 
       const snapshot = selectedForm
-        ? buildSnapshot(selectedForm, pageInstances)
+        ? buildFormSnapshot(selectedForm, pageInstances)
         : undefined;
 
       const pendingRequestId = crypto.randomUUID();
 
-      const allLeafFields: FormFieldInstance[] = [];
-      for (const page of pageInstances) {
-        allLeafFields.push(...collectLeafFields(page.fields));
-      }
+      const allLeafFields = pageInstances.flatMap((page) =>
+        collectLeafFields(page.fields),
+      );
 
-      const processed = await processValues(rawValues, allLeafFields, pendingRequestId);
+      const processed = await processRequestFormValues(
+        rawValues,
+        allLeafFields,
+        pendingRequestId,
+      );
       const alignedData =
         snapshot != null ? mapDataToSnapshot(processed, snapshot) : processed;
 
@@ -275,10 +172,25 @@ export const CreateRequestPage = () => {
       navigate('/requests');
     } catch (err) {
       if (err instanceof Error && !('errorFields' in err)) {
+        let subtitle = err.message;
+        if (axios.isAxiosError(err)) {
+          if (err.code === 'ERR_NETWORK') {
+            subtitle = 'Сервер недоступен. Проверьте, что backend запущен.';
+          } else if (err.response?.status === 500) {
+            subtitle = 'Внутренняя ошибка сервера. Попробуйте ещё раз.';
+          } else if (
+            err.response?.data &&
+            typeof err.response.data === 'object' &&
+            'detail' in err.response.data
+          ) {
+            const detail = (err.response.data as { detail?: unknown }).detail;
+            subtitle = typeof detail === 'string' ? detail : subtitle;
+          }
+        }
         setInlineNotification({
           kind: 'error',
-          title: 'Ошибка загрузки файлов',
-          subtitle: err.message,
+          title: 'Не удалось создать заявку',
+          subtitle,
         });
       }
     } finally {
@@ -288,7 +200,7 @@ export const CreateRequestPage = () => {
 
   const pageTitle = 'Создание заявки';
 
-  const comboBoxItems = forms.map((f) => ({ id: f.id, text: f.name }));
+  const formOptions = forms.map((f) => ({ value: f.id, label: f.name }));
 
   return (
     <div
@@ -303,20 +215,25 @@ export const CreateRequestPage = () => {
       {/* ── Header ── */}
       <div
         style={{
-          background: 'var(--cds-layer-01)',
-          borderBottom: '1px solid var(--cds-border-subtle)',
+          background: 'var(--app-surface)',
+          borderBottom: '1px solid var(--app-border)',
           padding: '12px 24px 16px',
           flexShrink: 0,
         }}
       >
-        <Breadcrumb noTrailingSlash style={{ marginBottom: 8 }}>
-          <BreadcrumbItem>
-            <a onClick={() => navigate('/requests')} style={{ cursor: 'pointer' }}>
-              Заявки
-            </a>
-          </BreadcrumbItem>
-          <BreadcrumbItem isCurrentPage>Создание заявки</BreadcrumbItem>
-        </Breadcrumb>
+        <Breadcrumb
+          style={{ marginBottom: 8 }}
+          items={[
+            {
+              title: (
+                <a onClick={() => navigate('/requests')} style={{ cursor: 'pointer' }}>
+                  Заявки
+                </a>
+              ),
+            },
+            { title: 'Создание заявки' },
+          ]}
+        />
 
         <div
           style={{
@@ -327,11 +244,10 @@ export const CreateRequestPage = () => {
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <Button
-              kind="ghost"
-              size="sm"
-              hasIconOnly
-              renderIcon={ArrowLeft}
-              iconDescription="Вернуться к реестру заявок"
+              type="text"
+              size="small"
+              icon={<ArrowLeftOutlined />}
+              aria-label="Вернуться к реестру заявок"
               onClick={() => navigate('/requests')}
             />
             <h4 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 600 }}>
@@ -348,7 +264,7 @@ export const CreateRequestPage = () => {
           flex: 1,
           minHeight: 0,
           overflowY: 'auto',
-          background: 'var(--cds-background)',
+          background: 'var(--app-bg)',
         }}
       >
         {loadingForms ? (
@@ -360,74 +276,79 @@ export const CreateRequestPage = () => {
               minHeight: '60vh',
             }}
           >
-            <Loading withOverlay={false} />
+            <Spin size="large" />
           </div>
         ) : error ? (
           <div style={{ padding: 24 }}>
-            <InlineNotification
-              kind="error"
+            <Alert
+              type="error"
               title="Ошибка загрузки"
-              subtitle={error}
-              lowContrast
-              hideCloseButton
+              description={error}
+              showIcon
+              closable={false}
             />
           </div>
         ) : (
           <div style={{ maxWidth: 720, margin: '0 auto', padding: 24 }}>
             {inlineNotification && (
               <div style={{ marginBottom: 16 }}>
-                <InlineNotification
-                  kind={inlineNotification.kind}
+                <Alert
+                  type={inlineNotification.kind}
                   title={inlineNotification.title}
-                  subtitle={inlineNotification.subtitle}
-                  lowContrast
-                  onCloseButtonClick={() => setInlineNotification(null)}
+                  description={inlineNotification.subtitle}
+                  showIcon
+                  closable
+                  onClose={() => setInlineNotification(null)}
                 />
               </div>
             )}
 
             {/* Step 1 + 2 — meta info */}
             <div style={{ marginBottom: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <TextInput
-                id="meta-title"
-                labelText="Название заявки"
-                placeholder="Например: Заявка на доступ"
-                value={requestTitle}
-                invalid={!!metaErrors.title}
-                invalidText={metaErrors.title}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                  const value = e.target.value;
-                  setRequestTitle(value);
-                  setMetaErrors((prev) => ({ ...prev, title: undefined }));
-                  if (step === 1 && selectedFormId) {
-                    setStep(2);
-                  }
-                }}
-              />
+              <Form.Item
+                label="Название заявки"
+                validateStatus={metaErrors.title ? 'error' : undefined}
+                help={metaErrors.title}
+              >
+                <Input
+                  id="meta-title"
+                  placeholder="Например: Заявка на доступ"
+                  value={requestTitle}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                    const value = e.target.value;
+                    setRequestTitle(value);
+                    setMetaErrors((prev) => ({ ...prev, title: undefined }));
+                    if (step === 1 && selectedFormId) {
+                      setStep(2);
+                    }
+                  }}
+                />
+              </Form.Item>
 
-              <ComboBox
-                id="meta-formId"
-                titleText="Форма"
-                placeholder="Выберите форму"
-                items={comboBoxItems}
-                itemToString={(item: { id: string; text: string } | null) => item?.text ?? ''}
-                selectedItem={comboBoxItems.find((item) => item.id === selectedFormId) ?? null}
-                invalid={!!metaErrors.formId}
-                invalidText={metaErrors.formId}
-                onChange={(data) => {
-                  const selectedItem = data.selectedItem ?? null;
-                  const value = selectedItem?.id;
-                  setSelectedFormId(value);
-                  setMetaErrors((prev) => ({ ...prev, formId: undefined }));
-                  if (value) setStep(2);
-                }}
-              />
+              <Form.Item
+                label="Форма"
+                validateStatus={metaErrors.formId ? 'error' : undefined}
+                help={metaErrors.formId}
+              >
+                <Select
+                  id="meta-formId"
+                  showSearch
+                  placeholder="Выберите форму"
+                  optionFilterProp="label"
+                  options={formOptions}
+                  value={selectedFormId}
+                  onChange={(value) => {
+                    setSelectedFormId(value);
+                    setMetaErrors((prev) => ({ ...prev, formId: undefined }));
+                    if (value) setStep(2);
+                  }}
+                />
+              </Form.Item>
             </div>
 
             {step === 2 && (
               <Button
-                kind="primary"
-                size="md"
+                type="primary"
                 disabled={!selectedFormId || !requestTitle.trim()}
                 onClick={() => {
                   const meta = validateMeta();
@@ -441,10 +362,13 @@ export const CreateRequestPage = () => {
             {/* Step 3 + 4 — fill form */}
             {step === 3 && selectedForm ? (
               hasPages && currentPage && currentPage.fields.length > 0 ? (
-                <FormProvider store={formStore}>
-                  {currentPage.fields.map((field) => (
-                    <PreviewField key={field.id} field={field} />
-                  ))}
+                <>
+                  <FormFillRenderer
+                    ref={fillRef}
+                    pages={pageInstances}
+                    pageIndex={pageIndex}
+                    legacyStore={formStore}
+                  />
 
                   <div
                     style={{
@@ -455,34 +379,34 @@ export const CreateRequestPage = () => {
                     }}
                   >
                     {!isFirst && (
-                      <Button kind="secondary" size="md" onClick={handlePrevPage}>
+                      <Button onClick={handlePrevPage}>
                         Назад
                       </Button>
                     )}
                     {!isLast && (
-                      <Button kind="primary" size="md" onClick={handleNextPage}>
+                      <Button type="primary" onClick={handleNextPage}>
                         Далее
                       </Button>
                     )}
                     {isLast && (
                       <Button
-                        kind="primary"
-                        size="md"
+                        type="primary"
                         onClick={handleSubmit}
                         disabled={isSubmitting}
+                        loading={isSubmitting}
                       >
                         {isSubmitting ? 'Сохранение…' : 'Сохранить заявку'}
                       </Button>
                     )}
                   </div>
-                </FormProvider>
+                </>
               ) : (
-                <span style={{ color: 'var(--cds-text-secondary)' }}>
+                <span style={{ color: 'var(--app-text-secondary)' }}>
                   У выбранной формы нет полей.
                 </span>
               )
             ) : (
-              <span style={{ color: 'var(--cds-text-secondary)' }}>
+              <span style={{ color: 'var(--app-text-secondary)' }}>
                 Укажите название заявки и выберите форму, чтобы продолжить заполнение.
               </span>
             )}

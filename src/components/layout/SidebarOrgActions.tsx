@@ -1,21 +1,20 @@
 import { useState } from 'react';
-import { createPortal } from 'react-dom';
-import { Button, ToastNotification } from '@carbon/react';
-import { useAuth } from '../../shared/context/auth.context';
-import { useOrganization } from '../../shared/context/organization.context';
+import { message } from 'antd';
+import { useAuth } from '../../shared/hooks/auth.hooks';
+import { useOrganization } from '../../shared/hooks/organization.hooks';
 import { getOrCreatePublicLink } from '../../shared/api/organizations.api';
 import { InviteMemberModal } from '../organization/InviteMemberModal';
 
 /**
  * Owner/member actions for the active org: public request link + invite (owner only).
- * Rendered in the left sidebar below the organization switcher.
+ * Rendered in the left sidebar below the organization profile row.
  */
 export const SidebarOrgActions = () => {
   const { user } = useAuth();
   const { organizations, activeOrganization, isLoading } = useOrganization();
 
   const [inviteOpen, setInviteOpen] = useState(false);
-  const [copyToast, setCopyToast] = useState<{ id: number } | null>(null);
+  const [messageApi, contextHolder] = message.useMessage();
 
   if (isLoading || organizations.length === 0 || !activeOrganization) {
     return null;
@@ -28,7 +27,10 @@ export const SidebarOrgActions = () => {
       const link = await getOrCreatePublicLink(activeOrganization.id);
       const url = `${window.location.origin}/form/${link.token}`;
       await navigator.clipboard.writeText(url);
-      setCopyToast({ id: Date.now() });
+      messageApi.success({
+        content: 'Ссылка для подачи заявки скопирована в буфер обмена.',
+        duration: 5,
+      });
     } catch {
       // silently fail
     }
@@ -36,30 +38,23 @@ export const SidebarOrgActions = () => {
 
   return (
     <>
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 4,
-        }}
-      >
-        <Button
-          kind="ghost"
-          size="sm"
+      {contextHolder}
+      <div className="app-sidebar-org-actions">
+        <button
+          type="button"
+          className="app-sidebar-org-actions__link"
           onClick={() => void handleCopyPublicLink()}
-          style={{ width: '100%', maxWidth: '100%', justifyContent: 'flex-start' }}
         >
-          Скопировать ссылку для заявок
-        </Button>
+          Ссылка на заполнение заявки
+        </button>
         {isOwner && (
-          <Button
-            kind="ghost"
-            size="sm"
+          <button
+            type="button"
+            className="app-sidebar-org-actions__link"
             onClick={() => setInviteOpen(true)}
-            style={{ width: '100%', maxWidth: '100%', justifyContent: 'flex-start' }}
           >
-            Пригласить пользователя
-          </Button>
+            Ссылка на приглашение
+          </button>
         )}
       </div>
 
@@ -68,23 +63,6 @@ export const SidebarOrgActions = () => {
         onClose={() => setInviteOpen(false)}
         organizationId={activeOrganization.id}
       />
-
-      {copyToast &&
-        createPortal(
-          <div className="app-sidebar-copy-toast-anchor">
-            <ToastNotification
-              key={copyToast.id}
-              kind="success"
-              lowContrast
-              title="Ссылка скопирована"
-              subtitle="Ссылка для подачи заявки скопирована в буфер обмена."
-              timeout={5000}
-              onClose={() => setCopyToast(null)}
-              aria-label="Закрыть уведомление"
-            />
-          </div>,
-          document.body,
-        )}
     </>
   );
 };

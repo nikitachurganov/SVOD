@@ -1,13 +1,6 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import {
-  Button,
-  Breadcrumb,
-  BreadcrumbItem,
-  InlineNotification,
-  Modal,
-  ToastNotification,
-} from '@carbon/react';
-import { ArrowLeft, TrashCan, View } from '@carbon/react/icons';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Alert, Breadcrumb, Button, Modal, notification } from 'antd';
+import { ArrowLeftOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import {
   DndContext,
   DragOverlay,
@@ -22,11 +15,12 @@ import { arrayMove } from '@dnd-kit/sortable';
 import { ToolPanel } from '../ToolPanel';
 import { FormCanvas } from './FormCanvas';
 import { CanvasFieldOverlay } from './DroppedFieldCard';
-import { PreviewField } from './FormPreviewModal';
+import { useFormStore } from '../../hooks/useFormStore';
+import { collectFieldIds } from '../../formily/collectFieldIds';
 import {
-  useFormStore,
-  FormProvider,
-} from '../../hooks/useFormStore';
+  FormFillRenderer,
+  type FormFillRendererHandle,
+} from '../form-fill/FormFillRenderer';
 import {
   FIELD_TYPES_WITH_OPTIONS,
   PANEL_KEY_TO_FIELD_TYPE,
@@ -38,6 +32,8 @@ import {
   type FormFieldType,
   type FormPageInstance,
 } from '../../types/form-builder.types';
+import { getDefaultFieldConfig } from '../../utils/fieldConfig';
+import { moveFieldBeforeTarget, moveFieldByOffset } from '../../utils/fieldMove.utils';
 
 // ─── Public props ─────────────────────────────────────────────────────────────
 
@@ -70,7 +66,7 @@ const FormTitleInput = ({ value, onChange }: FormTitleInputProps) => {
         fontSize: '1.25rem',
         fontWeight: 600,
         lineHeight: 1.4,
-        color: 'var(--cds-text-primary)',
+        color: 'var(--app-text)',
         background: 'transparent',
         width: '100%',
         border: 'none',
@@ -89,11 +85,11 @@ const PanelDragChip = ({ label }: { label: string }) => {
         display: 'inline-flex',
         alignItems: 'center',
         padding: '6px 14px',
-        background: 'var(--cds-layer-01)',
-        border: '1px solid var(--cds-interactive)',
+        background: 'var(--app-surface)',
+        border: '1px solid var(--app-primary)',
         borderRadius: 8,
         boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
-        color: 'var(--cds-interactive)',
+        color: 'var(--app-primary)',
         fontSize: 13,
         fontWeight: 500,
         whiteSpace: 'nowrap',
@@ -125,6 +121,8 @@ interface PendingDeletion {
 // ─── Tool-panel drop zone ─────────────────────────────────────────────────────
 
 export const TOOL_PANEL_DROP_ID = 'tool-panel';
+
+const DELETION_NOTIFICATION_KEY = 'form-editor-deletion-undo';
 
 interface ToolPanelDropZoneProps {
   isCanvasDragging: boolean;
@@ -164,11 +162,11 @@ const ToolPanelDropZone = ({
           flexDirection: 'column',
           minHeight: 0,
           borderRight: deleteMode
-            ? '2px dashed var(--cds-support-error)'
-            : '1px solid var(--cds-border-subtle)',
+            ? '2px dashed var(--app-error)'
+            : '1px solid var(--app-border)',
           background: deleteMode
-            ? 'color-mix(in srgb, var(--cds-support-error) 10%, var(--cds-layer-01))'
-            : 'var(--cds-layer-01)',
+            ? 'color-mix(in srgb, var(--app-error) 10%, var(--app-surface))'
+            : 'var(--app-surface)',
           transition: 'background 150ms ease, border-color 150ms ease, border-width 150ms ease',
           overflow: deleteMode ? 'hidden' : 'auto',
         }}
@@ -183,7 +181,7 @@ const ToolPanelDropZone = ({
               padding: '24px 32px',
             }}
           >
-            <TrashCan size={32} style={{ color: 'var(--cds-support-error)' }} />
+            <DeleteOutlined style={{ fontSize: 32, color: 'var(--app-error)' }} />
           </div>
         ) : (
           children
@@ -223,21 +221,10 @@ const createField = (type: FormFieldType): FormFieldInstance => ({
   required: false,
   options: needsOptions(type) ? createDefaultOptions() : undefined,
   children: type === 'group' ? [] : undefined,
+  config: getDefaultFieldConfig(type),
 });
 
 // ─── Inline preview panel (multi-page) ───────────────────────────────────────
-
-const collectFieldIds = (fields: FormFieldInstance[]): string[] => {
-  const ids: string[] = [];
-  for (const field of fields) {
-    if (field.type === 'group' && field.children && field.children.length > 0) {
-      ids.push(...collectFieldIds(field.children));
-    } else {
-      ids.push(field.id);
-    }
-  }
-  return ids;
-};
 
 const cloneField = (field: FormFieldInstance): FormFieldInstance => {
   if (typeof structuredClone === 'function') {
@@ -281,6 +268,7 @@ interface InlinePreviewProps {
 
 const InlinePreview = ({ formTitle, pages }: InlinePreviewProps) => {
   const store = useFormStore();
+  const fillRef = useRef<FormFillRendererHandle>(null);
   const [pageIndex, setPageIndex] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -300,7 +288,7 @@ const InlinePreview = ({ formTitle, pages }: InlinePreviewProps) => {
     if (!currentPage) return;
     const ids = collectFieldIds(currentPage.fields);
     try {
-      await store.validateFields(ids);
+      await fillRef.current?.validateFields(ids);
       setPageIndex((idx) => Math.min(idx + 1, pages.length - 1));
       scrollToTop();
     } catch {
@@ -315,10 +303,10 @@ const InlinePreview = ({ formTitle, pages }: InlinePreviewProps) => {
 
   const handleSubmit = async () => {
     try {
-      await store.validateFields();
+      await fillRef.current?.validateFields();
       setIsSubmitting(true);
       await new Promise<void>((resolve) => setTimeout(resolve, 500));
-      store.resetFields();
+      fillRef.current?.resetFields();
       setPageIndex(0);
       scrollToTop();
     } catch {
@@ -335,7 +323,7 @@ const InlinePreview = ({ formTitle, pages }: InlinePreviewProps) => {
         flex: 1,
         minHeight: 0,
         overflowY: 'auto',
-        background: 'var(--cds-background)',
+        background: 'var(--app-bg)',
         padding: 24,
       }}
     >
@@ -345,10 +333,13 @@ const InlinePreview = ({ formTitle, pages }: InlinePreviewProps) => {
         )}
 
         {hasPages && currentPage && currentPage.fields.length > 0 ? (
-          <FormProvider store={store}>
-            {currentPage.fields.map((field) => (
-              <PreviewField key={field.id} field={field} />
-            ))}
+          <>
+            <FormFillRenderer
+              ref={fillRef}
+              pages={pages}
+              pageIndex={pageIndex}
+              legacyStore={store}
+            />
 
             <div
               style={{
@@ -359,18 +350,18 @@ const InlinePreview = ({ formTitle, pages }: InlinePreviewProps) => {
               }}
             >
               {!isFirst && (
-                <Button kind="secondary" onClick={handleBack}>
+                <Button onClick={handleBack}>
                   Назад
                 </Button>
               )}
               {!isLast && (
-                <Button kind="primary" onClick={handleNext}>
+                <Button type="primary" onClick={handleNext}>
                   Далее
                 </Button>
               )}
               {isLast && (
                 <Button
-                  kind="primary"
+                  type="primary"
                   onClick={handleSubmit}
                   disabled={isSubmitting}
                 >
@@ -378,10 +369,10 @@ const InlinePreview = ({ formTitle, pages }: InlinePreviewProps) => {
                 </Button>
               )}
             </div>
-          </FormProvider>
+          </>
         ) : (
           <div style={{ textAlign: 'center', padding: '48px 0' }}>
-            <span style={{ color: 'var(--cds-text-secondary)' }}>
+            <span style={{ color: 'var(--app-text-secondary)' }}>
               В форму не добавлено ни одного поля.
             </span>
           </div>
@@ -464,7 +455,10 @@ export const FormEditor = ({
 
   const activePage: FormPageInstance | undefined =
     pages.find((p) => p.id === activePageId) ?? pages[0];
-  const activeFields: FormFieldInstance[] = activePage?.fields ?? [];
+  const activeFields = useMemo<FormFieldInstance[]>(
+    () => activePage?.fields ?? [],
+    [activePage],
+  );
 
   useEffect(() => {
     if (!pendingDeletion) return;
@@ -557,6 +551,32 @@ export const FormEditor = ({
     });
   }, []);
 
+  useEffect(() => {
+    if (!pendingDeletion) {
+      notification.destroy(DELETION_NOTIFICATION_KEY);
+      return;
+    }
+
+    const secondsLeft = Math.max(
+      1,
+      Math.ceil((pendingDeletion.expiresAt - undoNow) / 1000),
+    );
+
+    notification.warning({
+      key: DELETION_NOTIFICATION_KEY,
+      message: 'Элемент удален',
+      description: `Можно вернуть в течение ${secondsLeft} сек.`,
+      duration: 0,
+      placement: 'bottomRight',
+      onClose: clearPendingDeletion,
+      btn: (
+        <Button size="small" onClick={handleUndoDelete}>
+          Вернуть
+        </Button>
+      ),
+    });
+  }, [pendingDeletion, undoNow, clearPendingDeletion, handleUndoDelete]);
+
   const setActivePageFields = useCallback(
     (updater: (fields: FormFieldInstance[]) => FormFieldInstance[]) => {
       setPages((prevPages) =>
@@ -627,6 +647,37 @@ export const FormEditor = ({
       );
     },
     [activeFields, queueDeletionUndo, setActivePageFields],
+  );
+
+  const addFieldFromPanel = useCallback(
+    (fieldKey: string) => {
+      const fieldType = PANEL_KEY_TO_FIELD_TYPE[fieldKey];
+      if (!fieldType) return;
+      const newField = createField(fieldType);
+      setActivePageFields((prev) => [...prev, newField]);
+    },
+    [setActivePageFields],
+  );
+
+  const handleFieldMoveUp = useCallback(
+    (fieldId: string) => {
+      setActivePageFields((prev) => moveFieldByOffset(prev, fieldId, -1));
+    },
+    [setActivePageFields],
+  );
+
+  const handleFieldMoveDown = useCallback(
+    (fieldId: string) => {
+      setActivePageFields((prev) => moveFieldByOffset(prev, fieldId, 1));
+    },
+    [setActivePageFields],
+  );
+
+  const handleFieldMoveBefore = useCallback(
+    (fieldId: string, beforeFieldId: string | null) => {
+      setActivePageFields((prev) => moveFieldBeforeTarget(prev, fieldId, beforeFieldId));
+    },
+    [setActivePageFields],
   );
 
   // ── Drag start ───────────────────────────────────────────────────────────────
@@ -855,26 +906,31 @@ export const FormEditor = ({
         {/* ── Page header ── */}
         <div
           style={{
-            background: 'var(--cds-layer-01)',
-            borderBottom: '1px solid var(--cds-border-subtle)',
+            background: 'var(--app-surface)',
+            borderBottom: '1px solid var(--app-border)',
             padding: '12px 24px 16px',
             flexShrink: 0,
           }}
         >
-          <Breadcrumb style={{ marginBottom: 8 }}>
-            <BreadcrumbItem>
-              <a
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  onBack();
-                }}
-              >
-                Формы
-              </a>
-            </BreadcrumbItem>
-            <BreadcrumbItem isCurrentPage>{breadcrumbLabel}</BreadcrumbItem>
-          </Breadcrumb>
+          <Breadcrumb
+            style={{ marginBottom: 8 }}
+            items={[
+              {
+                title: (
+                  <a
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      onBack();
+                    }}
+                  >
+                    Формы
+                  </a>
+                ),
+              },
+              { title: breadcrumbLabel },
+            ]}
+          />
 
           <div
             style={{
@@ -885,30 +941,25 @@ export const FormEditor = ({
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <Button
-                kind="ghost"
-                hasIconOnly
-                renderIcon={ArrowLeft}
-                iconDescription="Вернуться к списку форм"
+                type="text"
+                icon={<ArrowLeftOutlined />}
+                aria-label="Вернуться к списку форм"
                 onClick={onBack}
-                size="md"
               />
               <h4 style={{ margin: 0 }}>{pageTitle}</h4>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <Button
-                kind={isPreviewMode ? 'primary' : 'ghost'}
-                hasIconOnly
-                renderIcon={View}
-                iconDescription={isPreviewMode ? 'К редактированию' : 'Предпросмотр'}
+                type={isPreviewMode ? 'primary' : 'text'}
+                icon={<EyeOutlined />}
+                aria-label={isPreviewMode ? 'К редактированию' : 'Предпросмотр'}
                 onClick={() => setIsPreviewMode((prev) => !prev)}
                 disabled={isSaving}
-                size="md"
               />
               {pendingDeletion && (
                 <Button
-                  kind="ghost"
-                  size="md"
+                  type="text"
                   onClick={handleUndoDelete}
                   disabled={isSaving}
                 >
@@ -916,7 +967,7 @@ export const FormEditor = ({
                 </Button>
               )}
               <Button
-                kind="primary"
+                type="primary"
                 onClick={handleSave}
                 disabled={isSaving}
               >
@@ -927,11 +978,11 @@ export const FormEditor = ({
         </div>
 
         {saveError && (
-          <InlineNotification
-            kind="error"
-            title={saveError}
-            lowContrast
-            onCloseButtonClick={() => setSaveError(null)}
+          <Alert
+            type="error"
+            message={saveError}
+            closable
+            onClose={() => setSaveError(null)}
             style={{ marginBottom: 0 }}
           />
         )}
@@ -948,7 +999,7 @@ export const FormEditor = ({
                 width={toolboxWidth}
                 onResizeStart={handleToolboxResizeStart}
               >
-                <ToolPanel isCompact={toolboxWidth < 320} />
+                <ToolPanel isCompact={toolboxWidth < 320} onFieldAdd={addFieldFromPanel} />
               </ToolPanelDropZone>
 
               {/* Right — Form Builder canvas */}
@@ -972,7 +1023,7 @@ export const FormEditor = ({
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    borderBottom: '2px solid var(--cds-border-subtle)',
+                    borderBottom: '2px solid var(--app-border)',
                     gap: 0,
                     flexWrap: 'wrap',
                   }}
@@ -990,12 +1041,12 @@ export const FormEditor = ({
                           padding: '8px 16px',
                           cursor: 'pointer',
                           borderBottom: isActive
-                            ? '2px solid var(--cds-interactive)'
+                            ? '2px solid var(--app-primary)'
                             : '2px solid transparent',
                           marginBottom: -2,
                           color: isActive
-                            ? 'var(--cds-text-primary)'
-                            : 'var(--cds-text-secondary)',
+                            ? 'var(--app-text)'
+                            : 'var(--app-text-secondary)',
                           fontWeight: isActive ? 600 : 400,
                           fontSize: '0.875rem',
                           userSelect: 'none',
@@ -1035,7 +1086,7 @@ export const FormEditor = ({
                   <span
                     onClick={handleAddPage}
                     style={{
-                      color: 'var(--cds-link-primary)',
+                      color: 'var(--app-link)',
                       cursor: 'pointer',
                       marginLeft: 8,
                       userSelect: 'none',
@@ -1054,6 +1105,9 @@ export const FormEditor = ({
                   onFieldDelete={handleFieldDelete}
                   onGroupChildChange={handleGroupChildChange}
                   onGroupChildDelete={handleGroupChildDelete}
+                  onFieldMoveUp={handleFieldMoveUp}
+                  onFieldMoveDown={handleFieldMoveDown}
+                  onFieldMoveBefore={handleFieldMoveBefore}
                 />
               </div>
             </>
@@ -1063,52 +1117,18 @@ export const FormEditor = ({
 
       <DragOverlay dropAnimation={null}>{renderOverlay()}</DragOverlay>
 
-      {pendingDeletion && (
-        <div
-          style={{
-            position: 'fixed',
-            right: 24,
-            bottom: 24,
-            zIndex: 10001,
-            maxWidth: 420,
-          }}
-        >
-          <ToastNotification
-            kind="warning"
-            lowContrast
-            title="Элемент удален"
-            subtitle={`Можно вернуть в течение ${Math.max(1, Math.ceil((pendingDeletion.expiresAt - undoNow) / 1000))} сек.`}
-            timeout={0}
-            onClose={clearPendingDeletion}
-            aria-label="Закрыть уведомление"
-          />
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'flex-end',
-              marginTop: 8,
-            }}
-          >
-            <Button kind="secondary" size="sm" onClick={handleUndoDelete}>
-              Вернуть
-            </Button>
-          </div>
-        </div>
-      )}
-
       {/* ── Delete page confirmation modal ── */}
       <Modal
         open={!!deletePageId}
-        onRequestClose={() => setDeletePageId(null)}
-        onRequestSubmit={() => {
+        title="Удалить страницу"
+        okText="Удалить"
+        cancelText="Отменить"
+        okButtonProps={{ danger: true }}
+        onCancel={() => setDeletePageId(null)}
+        onOk={() => {
           if (deletePageId) handleTabEdit(deletePageId, 'remove');
           setDeletePageId(null);
         }}
-        modalHeading="Удалить страницу"
-        primaryButtonText="Удалить"
-        secondaryButtonText="Отменить"
-        danger
-        size="xs"
       >
         <p style={{ marginBottom: 16 }}>
           Вы уверены, что хотите удалить страницу? Это действие нельзя отменить.

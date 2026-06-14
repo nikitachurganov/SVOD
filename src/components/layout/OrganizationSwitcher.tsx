@@ -1,43 +1,49 @@
-import { Dropdown } from '@carbon/react';
-import { useOrganization } from '../../shared/context/organization.context';
+import { Avatar, Dropdown } from 'antd';
+import type { MenuProps } from 'antd';
+import { SwapOutlined } from '@ant-design/icons';
+import { useOrganization } from '../../shared/hooks/organization.hooks';
+
+const ORG_PLAN_LABEL = 'Тариф «Бизнес»';
 
 export const OrganizationSwitcher = () => {
   const { organizations, activeOrganization, isLoading, setActiveOrganizationId } =
     useOrganization();
 
-  if (isLoading || organizations.length === 0) return null;
+  if (isLoading || organizations.length === 0 || !activeOrganization) {
+    return null;
+  }
 
-  const items = organizations.map((o) => ({ id: o.id, text: o.name }));
-  const selectedItem = items.find((i) => i.id === activeOrganization?.id) ?? null;
+  const initial = activeOrganization.name.trim().charAt(0).toUpperCase() || '?';
+
+  const menuItems: MenuProps['items'] = organizations.map((org) => ({
+    key: org.id,
+    label: org.name,
+    onClick: () => setActiveOrganizationId(org.id),
+  }));
 
   return (
-    <>
-      <span
-        style={{
-          color: 'var(--cds-text-secondary)',
-          fontSize: 11,
-          textTransform: 'uppercase',
-          letterSpacing: 0.5,
-          display: 'block',
-          marginBottom: 4,
-        }}
-      >
-        Организация
-      </span>
+    <div className="app-sidebar-org-profile-wrap">
       <Dropdown
-        id="org-switcher"
-        size="sm"
-        items={items}
-        itemToString={(item: { id: string; text: string } | null) => item?.text ?? ''}
-        selectedItem={selectedItem}
-        onChange={({ selectedItem: item }) => {
-          if (item) setActiveOrganizationId(item.id);
-        }}
-        titleText="Выберите организацию"
-        label="Выберите организацию"
-        hideLabel
-        autoAlign
-      />
-    </>
+        menu={{ items: menuItems, selectedKeys: [activeOrganization.id] }}
+        trigger={['click']}
+        placement="topLeft"
+      >
+        <button
+          type="button"
+          className="app-sidebar-org-profile"
+          aria-label="Переключить организацию"
+          aria-haspopup="listbox"
+        >
+          <Avatar className="app-sidebar-org-profile__avatar" size={32}>
+            {initial}
+          </Avatar>
+          <span className="app-sidebar-org-profile__text">
+            <span className="app-sidebar-org-profile__name">{activeOrganization.name}</span>
+            <span className="app-sidebar-org-profile__meta">{ORG_PLAN_LABEL}</span>
+          </span>
+          <SwapOutlined className="app-sidebar-org-profile__switch" aria-hidden />
+        </button>
+      </Dropdown>
+    </div>
   );
 };

@@ -3,15 +3,15 @@ export const GlobalScrollbarStyles = () => {
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb {
-      background: var(--cds-text-placeholder, rgba(0,0,0,0.25));
+      background: var(--app-text-placeholder, rgba(0,0,0,0.25));
       border-radius: 999px;
     }
     ::-webkit-scrollbar-thumb:hover {
-      background: var(--cds-text-secondary, rgba(0,0,0,0.45));
+      background: var(--app-text-secondary, rgba(0,0,0,0.45));
     }
     * {
       scrollbar-width: thin;
-      scrollbar-color: var(--cds-text-placeholder, rgba(0,0,0,0.25)) transparent;
+      scrollbar-color: var(--app-text-placeholder, rgba(0,0,0,0.25)) transparent;
     }
   `;
 

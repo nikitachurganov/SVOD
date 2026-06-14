@@ -9,6 +9,7 @@ export interface DraggableFieldItemProps {
   iconName: string;
   iconColor?: string;
   iconBackground?: string;
+  onDoubleClickAdd?: (fieldKey: string) => void;
 }
 
 export const DraggableFieldItem = ({
@@ -17,6 +18,7 @@ export const DraggableFieldItem = ({
   iconName,
   iconColor,
   iconBackground,
+  onDoubleClickAdd,
 }: DraggableFieldItemProps) => {
   const [hovered, setHovered] = useState(false);
 
@@ -40,9 +42,9 @@ export const DraggableFieldItem = ({
         cursor: isDragging ? 'grabbing' : 'grab',
         borderRadius: 4,
         background: isDragging
-          ? 'var(--cds-highlight)'
+          ? 'var(--app-highlight)'
           : hovered
-            ? 'var(--cds-layer-hover)'
+            ? 'var(--app-surface-hover)'
             : 'transparent',
         transition: 'background 150ms',
         userSelect: 'none',
@@ -51,6 +53,8 @@ export const DraggableFieldItem = ({
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onDoubleClick={() => onDoubleClickAdd?.(fieldKey)}
+      title="Перетащите или дважды кликните, чтобы добавить"
     >
       <span
         style={{
@@ -59,9 +63,9 @@ export const DraggableFieldItem = ({
           justifyContent: 'center',
           width: 24,
           height: 24,
-          background: iconBackground ?? 'var(--cds-highlight)',
+          background: iconBackground ?? 'var(--app-highlight)',
           borderRadius: 4,
-          color: iconColor ?? 'var(--cds-link-primary)',
+          color: iconColor ?? 'var(--app-link)',
           flexShrink: 0,
         }}
       >

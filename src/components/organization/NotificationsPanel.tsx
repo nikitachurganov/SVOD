@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, Loading } from '@carbon/react';
+import { Button, Spin } from 'antd';
 import {
   acceptInvitation,
   declineInvitation,
@@ -86,7 +86,7 @@ export const NotificationsPanelContent = ({
       </h2>
       {loading ? (
         <div className="app-notifications-panel__loading">
-          <Loading withOverlay={false} small />
+          <Spin size="small" />
         </div>
       ) : invitations.length === 0 ? (
         <p className="app-notifications-panel__empty">Нет уведомлений</p>
@@ -106,16 +106,16 @@ export const NotificationsPanelContent = ({
                 <div className="app-notifications-panel__date">{dateLabel}</div>
                 <div className="app-notifications-panel__actions">
                   <Button
-                    kind="primary"
-                    size="sm"
+                    type="primary"
+                    size="small"
                     disabled={busy}
                     onClick={() => void handleAccept(inv.id)}
                   >
                     Принять
                   </Button>
                   <Button
-                    kind="danger--tertiary"
-                    size="sm"
+                    danger
+                    size="small"
                     disabled={busy}
                     onClick={() => void handleDecline(inv.id)}
                   >

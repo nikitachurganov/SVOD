@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { HeaderGlobalAction, Popover, PopoverContent } from '@carbon/react';
-import { Notification } from '@carbon/react/icons';
+import { Popover } from 'antd';
+import { BellOutlined } from '@ant-design/icons';
 import { useRegisterAuxiliaryPanelCloser } from '../../shared/context/appShellPanels.context';
-import { useOrganization } from '../../shared/context/organization.context';
+import { useOrganization } from '../../shared/hooks/organization.hooks';
 import { getMyInvitations } from '../../shared/api/organizations.api';
 import { NotificationsPanelContent } from '../organization/NotificationsPanel';
 
@@ -32,8 +32,16 @@ export const HeaderNotifications = ({
   }, []);
 
   useEffect(() => {
-    void refreshCount();
-  }, [refreshCount, location.pathname]);
+    let cancelled = false;
+    getMyInvitations()
+      .then((data) => {
+        if (!cancelled) setPendingCount(data.length);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [location.pathname]);
 
   useRegisterAuxiliaryPanelCloser(() => onOpenChange(false));
 
@@ -45,37 +53,38 @@ export const HeaderNotifications = ({
   return (
     <Popover
       open={open}
-      onRequestClose={() => onOpenChange(false)}
-      align="bottom-end"
-      autoAlign
-      caret={false}
-      dropShadow
+      onOpenChange={onOpenChange}
+      trigger="click"
+      placement="bottomRight"
+      arrow={false}
+      content={
+        <div className="app-header-notifications-popover-content">
+          <NotificationsPanelContent
+            open={open}
+            onAccepted={() => void refreshOrganizations()}
+            onInvitationsChanged={() => void refreshCount()}
+          />
+        </div>
+      }
     >
       <span className="app-header-notifications-wrap">
-        <HeaderGlobalAction
+        <button
+          type="button"
+          className={`app-header__action-btn${open ? ' app-header__action-btn--active' : ''}`}
           aria-label={label}
-          tooltipAlignment="end"
-          isActive={open}
           onClick={() => {
             closeProfile();
             onOpenChange(!open);
           }}
         >
-          <Notification size={20} />
-        </HeaderGlobalAction>
+          <BellOutlined style={{ fontSize: 16 }} />
+        </button>
         {pendingCount > 0 ? (
           <span className="app-header-notifications-badge" aria-hidden>
             {pendingCount > 99 ? '99+' : pendingCount}
           </span>
         ) : null}
       </span>
-      <PopoverContent className="app-header-notifications-popover-content">
-        <NotificationsPanelContent
-          open={open}
-          onAccepted={() => void refreshOrganizations()}
-          onInvitationsChanged={() => void refreshCount()}
-        />
-      </PopoverContent>
     </Popover>
   );
 };

@@ -1,28 +1,43 @@
 import { useEffect, useState } from 'react';
 import {
   Button,
-  Checkbox,
   DatePicker,
-  DatePickerInput,
-  Dropdown,
-  FileUploaderDropContainer,
+  Input,
   Modal,
-  RadioButton,
+  Radio,
+  Select,
   Tag,
-  TextArea,
-  TextInput,
   TimePicker,
-} from '@carbon/react';
+  Upload,
+  message,
+} from 'antd';
+import dayjs from 'dayjs';
 import type { FormFieldInstance } from '../../types/form-builder.types';
-import {
-  useFormStore,
-  useFormCtx,
-  FormProvider,
-  type Rule,
-} from '../../hooks/useFormStore';
+import { useFormStore } from '../../hooks/useFormStore';
+import { useFormCtx } from '../../hooks/useFormCtx';
+import { FormProvider } from '../../hooks/FormProvider';
+import type { Rule } from '../../hooks/formStore.types';
 import { REQUIRED_FIELD_MESSAGE } from '../../constants/formValidation';
+import {
+  validateCheckboxChoiceValue,
+  validateFullNameValue,
+  validatePhoneValue,
+  validateRadioChoiceValue,
+  validateYesNoValue,
+} from '../../utils/fieldValueValidation';
+import { validateFieldFile } from '../../utils/fileFieldValidation';
+import {
+  getOtherOption,
+  hasOtherOption,
+  parseRadioValue,
+} from '../../utils/choiceField.utils';
 import { AddressField } from './AddressField';
+import { LocationField } from './LocationField';
+import { RatingField } from './RatingField';
 import { FieldLabel } from './FieldLabel';
+import { CheckboxChoiceField, RadioChoiceField } from './ChoiceFieldInputs';
+
+const { TextArea } = Input;
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -67,7 +82,7 @@ interface FileUploadFieldProps {
 }
 
 const FileUploadField = ({ field }: FileUploadFieldProps) => {
-  const ctx = useFormCtx();
+  const { registerField, unregisterField, values, errors, setFieldValue } = useFormCtx();
 
   useEffect(() => {
     const rules: Rule[] = field.required
@@ -80,143 +95,55 @@ const FileUploadField = ({ field }: FileUploadFieldProps) => {
           },
         ]
       : [];
-    ctx.registerField(field.id, rules);
-    return () => ctx.unregisterField(field.id);
-  }, [field.id, field.required]);
+    registerField(field.id, rules);
+    return () => unregisterField(field.id);
+  }, [field.id, field.required, registerField, unregisterField]);
 
-  const files = (ctx.values[field.id] as File[]) ?? [];
-  const error = ctx.errors[field.id];
+  const files = (values[field.id] as File[]) ?? [];
+  const error = errors[field.id];
 
   return (
     <div style={{ marginBottom: 24 }}>
       {field.label && <FieldLabel label={field.label} required={field.required} />}
-      <FileUploaderDropContainer
-        accept={getFileAccept(field.type)}
-        labelText={getFileUploadPrompt(field.type)}
-        onAddFiles={(_evt: unknown, { addedFiles }: { addedFiles: File[] }) => {
-          ctx.setFieldValue(field.id, [...files, ...addedFiles]);
+      <Upload.Dragger
+        accept={getFileAccept(field.type).join(',')}
+        multiple
+        showUploadList
+        fileList={files.map((file, index) => ({
+          uid: `${field.id}-${index}`,
+          name: file.name,
+          status: 'done' as const,
+        }))}
+        beforeUpload={(file) => {
+          const fileError = validateFieldFile(file, field.type);
+          if (fileError) {
+            message.error(fileError);
+            return Upload.LIST_IGNORE;
+          }
+          setFieldValue(field.id, [...files, file]);
+          return false;
         }}
-      />
+        onRemove={(file) => {
+          const index = files.findIndex((f) => f.name === file.name);
+          if (index === -1) return false;
+          const next = [...files];
+          next.splice(index, 1);
+          setFieldValue(field.id, next);
+          return true;
+        }}
+      >
+        <p style={{ margin: 0 }}>{getFileUploadPrompt(field.type)}</p>
+      </Upload.Dragger>
       {field.description && (
-        <div style={{ color: 'var(--cds-text-helper)', fontSize: '0.75rem', marginTop: 4 }}>
+        <div style={{ color: 'var(--app-text-helper)', fontSize: '0.75rem', marginTop: 4 }}>
           {field.description}
         </div>
       )}
       {error && (
-        <div style={{ color: 'var(--cds-text-error)', fontSize: '0.75rem', marginTop: 4 }}>
+        <div style={{ color: 'var(--app-text-error)', fontSize: '0.75rem', marginTop: 4 }}>
           {error}
         </div>
       )}
-    </div>
-  );
-};
-
-// ─── CheckboxGroupField ───────────────────────────────────────────────────────
-
-interface CheckboxGroupFieldProps {
-  options: { label: string; value: string }[];
-  value?: string[];
-  onChange?: (values: string[]) => void;
-}
-
-const CheckboxGroupField = ({
-  options,
-  value = [],
-  onChange,
-}: CheckboxGroupFieldProps) => {
-  const toggle = (optValue: string) => {
-    const next = value.includes(optValue)
-      ? value.filter((v) => v !== optValue)
-      : [...value, optValue];
-    onChange?.(next);
-  };
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {options.map((opt) => {
-        const checked = value.includes(opt.value);
-        return (
-          <div
-            key={opt.value}
-            onClick={() => toggle(opt.value)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              padding: '8px 12px',
-              border: `1px solid ${checked ? 'var(--cds-interactive)' : 'var(--cds-border-subtle)'}`,
-              borderRadius: 4,
-              background: checked ? 'var(--cds-highlight)' : 'var(--cds-layer-01)',
-              cursor: 'pointer',
-              userSelect: 'none',
-              transition: 'border-color 0.2s ease, background 0.2s ease',
-            }}
-          >
-            <span style={{ pointerEvents: 'none', display: 'flex', alignItems: 'center' }}>
-              <Checkbox
-                id={`cbg-${opt.value}`}
-                labelText={opt.label}
-                hideLabel
-                checked={checked}
-                onChange={() => {}}
-              />
-            </span>
-            <span>{opt.label}</span>
-          </div>
-        );
-      })}
-    </div>
-  );
-};
-
-// ─── RadioGroupField ──────────────────────────────────────────────────────────
-
-interface RadioGroupFieldProps {
-  options: { label: string; value: string }[];
-  value?: string;
-  onChange?: (value: string) => void;
-}
-
-const RadioGroupField = ({ options, value, onChange }: RadioGroupFieldProps) => {
-  const select = (optValue: string) => {
-    if (optValue === value) return;
-    onChange?.(optValue);
-  };
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {options.map((opt) => {
-        const checked = value === opt.value;
-        return (
-          <div
-            key={opt.value}
-            onClick={() => select(opt.value)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              padding: '8px 12px',
-              border: `1px solid ${checked ? 'var(--cds-interactive)' : 'var(--cds-border-subtle)'}`,
-              borderRadius: 4,
-              background: checked ? 'var(--cds-highlight)' : 'var(--cds-layer-01)',
-              cursor: 'pointer',
-              userSelect: 'none',
-              transition: 'border-color 0.2s ease, background 0.2s ease',
-            }}
-          >
-            <span style={{ pointerEvents: 'none', display: 'flex', alignItems: 'center' }}>
-              <RadioButton
-                id={`rbg-${opt.value}`}
-                value={opt.value}
-                labelText={opt.label}
-                hideLabel
-                checked={checked}
-              />
-            </span>
-            <span>{opt.label}</span>
-          </div>
-        );
-      })}
     </div>
   );
 };
@@ -252,9 +179,9 @@ const YesNoRadioGroupField = ({ value, onChange }: YesNoRadioGroupFieldProps) =>
               alignItems: 'center',
               gap: 8,
               padding: '8px 12px',
-              border: `1px solid ${checked ? 'var(--cds-interactive)' : 'var(--cds-border-subtle)'}`,
+              border: `1px solid ${checked ? 'var(--app-primary)' : 'var(--app-border)'}`,
               borderRadius: 4,
-              background: checked ? 'var(--cds-highlight)' : 'var(--cds-layer-01)',
+              background: checked ? 'var(--app-highlight)' : 'var(--app-surface)',
               cursor: 'pointer',
               userSelect: 'none',
               transition: 'border-color 0.2s ease, background 0.2s ease',
@@ -262,13 +189,7 @@ const YesNoRadioGroupField = ({ value, onChange }: YesNoRadioGroupFieldProps) =>
             }}
           >
             <span style={{ pointerEvents: 'none', display: 'flex', alignItems: 'center' }}>
-              <RadioButton
-                id={`yesno-${opt.value}`}
-                value={opt.value}
-                labelText={opt.label}
-                hideLabel
-                checked={checked}
-              />
+              <Radio checked={checked} value={opt.value} />
             </span>
             <span>{opt.label}</span>
           </div>
@@ -285,7 +206,7 @@ interface PreviewFieldProps {
 }
 
 export const PreviewField = ({ field }: PreviewFieldProps) => {
-  const ctx = useFormCtx();
+  const { registerField, unregisterField, values, errors, setFieldValue } = useFormCtx();
 
   // ── Group: titled section with nested fields ────────────────────────────
   if (field.type === 'group') {
@@ -326,6 +247,16 @@ export const PreviewField = ({ field }: PreviewFieldProps) => {
     return <AddressField field={field} />;
   }
 
+  // ── Location ────────────────────────────────────────────────────────────
+  if (field.type === 'location') {
+    return <LocationField field={field} />;
+  }
+
+  // ── Rating ──────────────────────────────────────────────────────────────
+  if (field.type === 'rating') {
+    return <RatingField field={field} />;
+  }
+
   // ── File upload ─────────────────────────────────────────────────────────
   if (
     field.type === 'file_vector' ||
@@ -336,251 +267,355 @@ export const PreviewField = ({ field }: PreviewFieldProps) => {
   }
 
   // ── Standard fields ─────────────────────────────────────────────────────
-  const options = (field.options ?? []).map((o) => ({ label: o.label, value: o.id }));
 
   // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
-    let rules: Rule[] = [];
-    if (field.type === 'checkbox') {
-      rules = field.required
-        ? [
-            {
-              validator: (_: unknown, value: unknown) =>
-                value && Array.isArray(value) && (value as string[]).length > 0
-                  ? Promise.resolve()
-                  : Promise.reject(new Error('Выберите хотя бы один вариант')),
-            },
-          ]
-        : [];
-    } else {
-      rules = field.required
-        ? [{ required: true, message: REQUIRED_FIELD_MESSAGE }]
-        : [];
-    }
-    ctx.registerField(field.id, rules);
-    return () => ctx.unregisterField(field.id);
-  }, [field.id, field.required, field.type]);
+    const makeValidator =
+      (validate: (value: unknown) => string | null) =>
+      (_: unknown, fieldValue: unknown) => {
+        const error = validate(fieldValue);
+        return error ? Promise.reject(new Error(error)) : Promise.resolve();
+      };
 
-  const value = ctx.values[field.id];
-  const error = ctx.errors[field.id];
+    let rules: Rule[] = [];
+
+    switch (field.type) {
+      case 'phone':
+        rules = [
+          {
+            validator: makeValidator((fieldValue) =>
+              validatePhoneValue(fieldValue, field.required),
+            ),
+          },
+        ];
+        break;
+      case 'fullName':
+        rules = [
+          {
+            validator: makeValidator((fieldValue) =>
+              validateFullNameValue(fieldValue, field.required),
+            ),
+          },
+        ];
+        break;
+      case 'yesNo':
+        rules = [
+          {
+            validator: makeValidator((fieldValue) =>
+              validateYesNoValue(fieldValue, field.required),
+            ),
+          },
+        ];
+        break;
+      case 'radio':
+      case 'dropdown':
+        rules = [
+          {
+            validator: makeValidator((fieldValue) =>
+              validateRadioChoiceValue(fieldValue, field.options, field.required),
+            ),
+          },
+        ];
+        break;
+      case 'checkbox':
+        rules = [
+          {
+            validator: makeValidator((fieldValue) =>
+              validateCheckboxChoiceValue(fieldValue, field.options, field.required),
+            ),
+          },
+        ];
+        break;
+      default:
+        if (field.required) {
+          rules = [{ required: true, message: REQUIRED_FIELD_MESSAGE }];
+        }
+    }
+
+    registerField(field.id, rules);
+    return () => unregisterField(field.id);
+  }, [field.id, field.required, field.type, field.options, registerField, unregisterField]);
+
+  const value = values[field.id];
+  const error = errors[field.id];
 
   const renderControl = () => {
     switch (field.type) {
       case 'shortText':
         return (
-          <TextInput
-            id={`field-${field.id}`}
-            labelText=""
-            hideLabel
-            placeholder={field.description || undefined}
-            value={(value as string) ?? ''}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              ctx.setFieldValue(field.id, e.target.value)
-            }
-            invalid={!!error}
-            invalidText={error}
-          />
+          <>
+            <Input
+              id={`field-${field.id}`}
+              placeholder={field.description || undefined}
+              value={(value as string) ?? ''}
+              onChange={(e) => setFieldValue(field.id, e.target.value)}
+              status={error ? 'error' : undefined}
+            />
+            {error && (
+              <div style={{ color: 'var(--app-text-error)', fontSize: '0.75rem', marginTop: 4 }}>
+                {error}
+              </div>
+            )}
+          </>
         );
 
       case 'longText':
         return (
-          <TextArea
-            id={`field-${field.id}`}
-            labelText=""
-            hideLabel
-            rows={3}
-            placeholder={field.description || undefined}
-            value={(value as string) ?? ''}
-            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-              ctx.setFieldValue(field.id, e.target.value)
-            }
-            invalid={!!error}
-            invalidText={error}
-          />
+          <>
+            <TextArea
+              id={`field-${field.id}`}
+              rows={3}
+              placeholder={field.description || undefined}
+              value={(value as string) ?? ''}
+              onChange={(e) => setFieldValue(field.id, e.target.value)}
+              status={error ? 'error' : undefined}
+            />
+            {error && (
+              <div style={{ color: 'var(--app-text-error)', fontSize: '0.75rem', marginTop: 4 }}>
+                {error}
+              </div>
+            )}
+          </>
         );
 
-      case 'radio': {
-        const radioOptions = options.length
-          ? options
-          : [{ label: 'Вариант 1', value: '__1' }];
+      case 'radio':
         return (
-          <RadioGroupField
-            options={radioOptions}
-            value={value as string | undefined}
-            onChange={(v) => ctx.setFieldValue(field.id, v)}
-          />
+          <>
+            <RadioChoiceField
+              options={field.options?.length ? field.options : [{ id: '__1', label: 'Вариант 1' }]}
+              value={value}
+              onChange={(next) => setFieldValue(field.id, next)}
+            />
+            {error && (
+              <div style={{ color: 'var(--app-text-error)', fontSize: '0.75rem', marginTop: 4 }}>
+                {error}
+              </div>
+            )}
+          </>
         );
-      }
 
-      case 'checkbox': {
-        const checkboxOptions = options.length
-          ? options
-          : [{ label: 'Вариант 1', value: '__1' }];
+      case 'checkbox':
         return (
-          <CheckboxGroupField
-            options={checkboxOptions}
-            value={(value as string[]) ?? []}
-            onChange={(v) => ctx.setFieldValue(field.id, v)}
-          />
+          <>
+            <CheckboxChoiceField
+              options={field.options?.length ? field.options : [{ id: '__1', label: 'Вариант 1' }]}
+              value={value}
+              onChange={(next) => setFieldValue(field.id, next)}
+            />
+            {error && (
+              <div style={{ color: 'var(--app-text-error)', fontSize: '0.75rem', marginTop: 4 }}>
+                {error}
+              </div>
+            )}
+          </>
         );
-      }
 
       case 'dropdown': {
-        type DropdownItem = { label: string; value: string };
-        const selectedItem = options.find((o) => o.value === value) ?? null;
+        const dropdownOptions = field.options ?? [];
+        const parsed = parseRadioValue(value);
+        const otherOption = getOtherOption(dropdownOptions);
+        const showOtherInput = Boolean(otherOption && parsed.selected === otherOption.id);
+
         return (
-          <Dropdown
-            id={`field-${field.id}`}
-            titleText=""
-            label="Выберите вариант"
-            items={options}
-            itemToString={(item: DropdownItem | null) => item?.label ?? ''}
-            selectedItem={selectedItem}
-            onChange={({ selectedItem: sel }: { selectedItem: DropdownItem | null }) => {
-              ctx.setFieldValue(field.id, sel?.value ?? null);
-            }}
-            invalid={!!error}
-            invalidText={error}
-          />
+          <>
+            <Select
+              id={`field-${field.id}`}
+              placeholder="Выберите вариант"
+              value={parsed.selected || undefined}
+              onChange={(sel) => {
+                if (!sel) {
+                  setFieldValue(field.id, hasOtherOption(dropdownOptions) ? { selected: '', otherText: '' } : '');
+                  return;
+                }
+                if (hasOtherOption(dropdownOptions)) {
+                  setFieldValue(field.id, {
+                    selected: sel,
+                    otherText: sel === otherOption?.id ? parsed.otherText : undefined,
+                  });
+                  return;
+                }
+                setFieldValue(field.id, sel);
+              }}
+              status={error ? 'error' : undefined}
+              options={dropdownOptions.map((opt) => ({ label: opt.label, value: opt.id }))}
+              style={{ width: '100%' }}
+              allowClear
+            />
+            {showOtherInput && (
+              <Input
+                placeholder="Укажите свой вариант"
+                value={parsed.otherText}
+                onChange={(e) =>
+                  otherOption &&
+                  setFieldValue(field.id, { selected: otherOption.id, otherText: e.target.value })
+                }
+                style={{ marginTop: 8 }}
+              />
+            )}
+            {error && (
+              <div style={{ color: 'var(--app-text-error)', fontSize: '0.75rem', marginTop: 4 }}>
+                {error}
+              </div>
+            )}
+          </>
         );
       }
 
       case 'yesNo':
         return (
-          <YesNoRadioGroupField
-            value={value as string | undefined}
-            onChange={(v) => ctx.setFieldValue(field.id, v)}
-          />
+          <>
+            <YesNoRadioGroupField
+              value={value as string | undefined}
+              onChange={(v) => setFieldValue(field.id, v)}
+            />
+            {error && (
+              <div style={{ color: 'var(--app-text-error)', fontSize: '0.75rem', marginTop: 4 }}>
+                {error}
+              </div>
+            )}
+          </>
         );
 
       case 'number':
         return (
-          <TextInput
-            id={`field-${field.id}`}
-            labelText=""
-            hideLabel
-            type="number"
-            placeholder={field.description || 'Введите число'}
-            value={(value as string) ?? ''}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              ctx.setFieldValue(field.id, e.target.value)
-            }
-            invalid={!!error}
-            invalidText={error}
-          />
+          <>
+            <Input
+              id={`field-${field.id}`}
+              type="number"
+              placeholder={field.description || 'Введите число'}
+              value={(value as string) ?? ''}
+              onChange={(e) => setFieldValue(field.id, e.target.value)}
+              status={error ? 'error' : undefined}
+            />
+            {error && (
+              <div style={{ color: 'var(--app-text-error)', fontSize: '0.75rem', marginTop: 4 }}>
+                {error}
+              </div>
+            )}
+          </>
         );
 
       case 'fullName':
         return (
-          <TextInput
-            id={`field-${field.id}`}
-            labelText=""
-            hideLabel
-            placeholder={field.description || 'Полное имя'}
-            value={(value as string) ?? ''}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              ctx.setFieldValue(field.id, e.target.value)
-            }
-            invalid={!!error}
-            invalidText={error}
-          />
+          <>
+            <Input
+              id={`field-${field.id}`}
+              placeholder={field.description || 'Полное имя'}
+              value={(value as string) ?? ''}
+              onChange={(e) => setFieldValue(field.id, e.target.value)}
+              status={error ? 'error' : undefined}
+            />
+            {error && (
+              <div style={{ color: 'var(--app-text-error)', fontSize: '0.75rem', marginTop: 4 }}>
+                {error}
+              </div>
+            )}
+          </>
         );
 
       case 'phone':
         return (
-          <TextInput
-            id={`field-${field.id}`}
-            labelText=""
-            hideLabel
-            type="tel"
-            placeholder={field.description || '+7 (___) ___-__-__'}
-            value={(value as string) ?? ''}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              ctx.setFieldValue(field.id, e.target.value)
-            }
-            invalid={!!error}
-            invalidText={error}
-          />
+          <>
+            <Input
+              id={`field-${field.id}`}
+              type="tel"
+              placeholder={field.description || '+7 (___) ___-__-__'}
+              value={(value as string) ?? ''}
+              onChange={(e) => setFieldValue(field.id, e.target.value)}
+              status={error ? 'error' : undefined}
+            />
+            {error && (
+              <div style={{ color: 'var(--app-text-error)', fontSize: '0.75rem', marginTop: 4 }}>
+                {error}
+              </div>
+            )}
+          </>
         );
 
       case 'email':
         return (
-          <TextInput
-            id={`field-${field.id}`}
-            labelText=""
-            hideLabel
-            type="email"
-            placeholder={field.description || 'example@mail.com'}
-            value={(value as string) ?? ''}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              ctx.setFieldValue(field.id, e.target.value)
-            }
-            invalid={!!error}
-            invalidText={error}
-          />
+          <>
+            <Input
+              id={`field-${field.id}`}
+              type="email"
+              placeholder={field.description || 'example@mail.com'}
+              value={(value as string) ?? ''}
+              onChange={(e) => setFieldValue(field.id, e.target.value)}
+              status={error ? 'error' : undefined}
+            />
+            {error && (
+              <div style={{ color: 'var(--app-text-error)', fontSize: '0.75rem', marginTop: 4 }}>
+                {error}
+              </div>
+            )}
+          </>
         );
 
       case 'dateTime':
         return (
-          <DatePicker
-            datePickerType="single"
-            value={value ? [value as Date] : []}
-            onChange={(dates: Date[]) => ctx.setFieldValue(field.id, dates[0])}
-          >
-            <DatePickerInput
+          <>
+            <DatePicker
               id={`field-${field.id}`}
+              showTime
               placeholder="dd/mm/yyyy"
-              labelText=""
-              hideLabel
-              invalid={!!error}
-              invalidText={error}
+              value={value ? dayjs(value as Date) : null}
+              onChange={(date) => setFieldValue(field.id, date?.toDate() ?? null)}
+              status={error ? 'error' : undefined}
+              style={{ width: '100%' }}
             />
-          </DatePicker>
+            {error && (
+              <div style={{ color: 'var(--app-text-error)', fontSize: '0.75rem', marginTop: 4 }}>
+                {error}
+              </div>
+            )}
+          </>
         );
 
       case 'date':
         return (
-          <DatePicker
-            datePickerType="single"
-            value={value ? [value as Date] : []}
-            onChange={(dates: Date[]) => ctx.setFieldValue(field.id, dates[0])}
-          >
-            <DatePickerInput
+          <>
+            <DatePicker
               id={`field-${field.id}`}
               placeholder="dd/mm/yyyy"
-              labelText=""
-              hideLabel
-              invalid={!!error}
-              invalidText={error}
+              value={value ? dayjs(value as Date) : null}
+              onChange={(date) => setFieldValue(field.id, date?.toDate() ?? null)}
+              status={error ? 'error' : undefined}
+              style={{ width: '100%' }}
             />
-          </DatePicker>
+            {error && (
+              <div style={{ color: 'var(--app-text-error)', fontSize: '0.75rem', marginTop: 4 }}>
+                {error}
+              </div>
+            )}
+          </>
         );
 
       case 'time':
         return (
-          <TimePicker
-            id={`field-${field.id}`}
-            labelText=""
-            hideLabel
-            value={(value as string) ?? ''}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              ctx.setFieldValue(field.id, e.target.value)
-            }
-            invalid={!!error}
-            invalidText={error}
-          />
+          <>
+            <TimePicker
+              id={`field-${field.id}`}
+              format="HH:mm"
+              placeholder="Время"
+              value={value ? dayjs(value as string, 'HH:mm') : null}
+              onChange={(time) => setFieldValue(field.id, time?.format('HH:mm') ?? '')}
+              status={error ? 'error' : undefined}
+              style={{ width: '100%' }}
+            />
+            {error && (
+              <div style={{ color: 'var(--app-text-error)', fontSize: '0.75rem', marginTop: 4 }}>
+                {error}
+              </div>
+            )}
+          </>
         );
 
       default:
         return (
-          <TextInput
+          <Input
             id={`field-${field.id}`}
-            labelText=""
-            hideLabel
             value={(value as string) ?? ''}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              ctx.setFieldValue(field.id, e.target.value)
-            }
+            onChange={(e) => setFieldValue(field.id, e.target.value)}
           />
         );
     }
@@ -613,12 +648,12 @@ export const PreviewField = ({ field }: PreviewFieldProps) => {
       )}
       {renderControl()}
       {field.description && (
-        <div style={{ color: 'var(--cds-text-helper)', fontSize: '0.75rem', marginTop: 4 }}>
+        <div style={{ color: 'var(--app-text-helper)', fontSize: '0.75rem', marginTop: 4 }}>
           {field.description}
         </div>
       )}
       {error && !hasInlineError && (
-        <div style={{ color: 'var(--cds-text-error)', fontSize: '0.75rem', marginTop: 4 }}>
+        <div style={{ color: 'var(--app-text-error)', fontSize: '0.75rem', marginTop: 4 }}>
           {error}
         </div>
       )}
@@ -635,16 +670,17 @@ export const FormPreviewModal = ({
   fields,
 }: FormPreviewModalProps) => {
   const store = useFormStore();
+  const { resetFields } = store;
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (!open) {
-      store.resetFields();
+      resetFields();
     }
-  }, [open]);
+  }, [open, resetFields]);
 
   const handleClose = () => {
-    store.resetFields();
+    resetFields();
     onClose();
   };
 
@@ -653,7 +689,7 @@ export const FormPreviewModal = ({
       await store.validateFields();
       setIsSubmitting(true);
       await new Promise<void>((resolve) => setTimeout(resolve, 500));
-      store.resetFields();
+      resetFields();
     } catch {
       // Validation errors are shown inline
     } finally {
@@ -666,22 +702,22 @@ export const FormPreviewModal = ({
   return (
     <Modal
       open={open}
-      onRequestClose={handleClose}
-      modalHeading={
+      onCancel={handleClose}
+      title={
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           Предпросмотр формы
-          <Tag type="blue" size="sm" style={{ fontWeight: 400, fontSize: 12 }}>
+          <Tag color="blue" style={{ fontWeight: 400, fontSize: 12 }}>
             Только просмотр
           </Tag>
         </div>
       }
-      passiveModal
-      size="lg"
+      footer={null}
+      width={800}
     >
       {/* Form header */}
       <div
         style={{
-          borderBottom: '1px solid var(--cds-border-subtle)',
+          borderBottom: '1px solid var(--app-border)',
           paddingBottom: 16,
           marginBottom: 24,
           paddingTop: 8,
@@ -689,7 +725,7 @@ export const FormPreviewModal = ({
       >
         <h4 style={{ margin: 0 }}>
           {formTitle || (
-            <span style={{ color: 'var(--cds-text-secondary)', fontStyle: 'italic', fontWeight: 'normal' }}>
+            <span style={{ color: 'var(--app-text-secondary)', fontStyle: 'italic', fontWeight: 'normal' }}>
               Название не задано
             </span>
           )}
@@ -703,10 +739,10 @@ export const FormPreviewModal = ({
             <PreviewField key={field.id} field={field} />
           ))}
 
-          <hr style={{ border: 'none', borderTop: '1px solid var(--cds-border-subtle)', marginTop: 8 }} />
+          <hr style={{ border: 'none', borderTop: '1px solid var(--app-border)', marginTop: 8 }} />
 
           <Button
-            kind="primary"
+            type="primary"
             onClick={handleMockSubmit}
             disabled={isSubmitting}
           >
@@ -715,7 +751,7 @@ export const FormPreviewModal = ({
         </FormProvider>
       ) : (
         <div style={{ textAlign: 'center', padding: '48px 0' }}>
-          <span style={{ color: 'var(--cds-text-secondary)' }}>
+          <span style={{ color: 'var(--app-text-secondary)' }}>
             В форму не добавлено ни одного поля.
           </span>
         </div>
