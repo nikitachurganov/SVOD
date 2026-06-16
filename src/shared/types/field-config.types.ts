@@ -1,3 +1,9 @@
+export interface CountryCityFieldConfig {
+  placeholderCountry?: string;
+  placeholderCity?: string;
+  disabled?: boolean;
+}
+
 export type LocationMode = 'country_only' | 'city_only' | 'country_and_city';
 
 export interface LocationFieldConfig {
@@ -38,6 +44,12 @@ export interface AddressFieldConfig {
   allowManualInput?: boolean;
   disabled?: boolean;
 }
+
+export const DEFAULT_COUNTRY_CITY_CONFIG: CountryCityFieldConfig = {
+  placeholderCountry: 'Выберите страну',
+  placeholderCity: 'Выберите город',
+  disabled: false,
+};
 
 export const DEFAULT_LOCATION_CONFIG: LocationFieldConfig = {
   mode: 'country_and_city',

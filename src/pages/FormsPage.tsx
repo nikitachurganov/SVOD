@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Table, Button, Modal, Card } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { PlusOutlined, InboxOutlined, EditOutlined } from '@ant-design/icons';
+import { PlusOutlined, InboxOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import { Link, useNavigate } from 'react-router-dom';
+import { IconDefaultButton } from '../shared/ui/IconDefaultButton';
 import {
   deleteForm,
   getForms,
@@ -173,13 +174,19 @@ export const FormsPage = () => {
       {
         title: 'Действия',
         key: 'actions',
-        width: 100,
+        width: 132,
         render: (_, record) => {
           if (isArchive) {
             return <span style={{ color: 'var(--app-text-secondary)' }}>—</span>;
           }
           return (
             <div style={{ display: 'flex', gap: 4 }}>
+              <IconDefaultButton
+                icon={<EyeOutlined />}
+                title="Просмотр"
+                aria-label="Просмотр"
+                onClick={() => navigate(`/forms/${record.id}`)}
+              />
               <Button
                 type="text"
                 size="small"

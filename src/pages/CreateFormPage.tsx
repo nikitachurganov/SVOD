@@ -19,7 +19,6 @@ export const CreateFormPage = () => {
 
   return (
     <FormEditor
-      breadcrumbLabel="Создание новой формы"
       pageTitle="Новая форма"
       saveButtonLabel="Сохранить"
       onSave={handleSave}

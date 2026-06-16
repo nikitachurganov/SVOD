@@ -2,6 +2,11 @@ import type { FormEntity } from './form';
 import type { AuthorPreview } from './author';
 import type { ExecutionStatus, RequestExecutionEventDTO, RequestStageDTO } from './execution';
 import type { RequestTechnicalSpecEnvelope } from './technicalSpec';
+import type {
+  RequestHistoryEventDTO,
+  RequestTaskDTO,
+  WorkflowStatus,
+} from './requestWorkflow';
 
 export interface AISummary {
   summary: string;
@@ -58,6 +63,13 @@ export interface RequestEntity {
   execution_status?: ExecutionStatus | string | null;
   stages?: RequestStageDTO[];
   execution_events?: RequestExecutionEventDTO[];
+  workflow_status?: WorkflowStatus | string;
+  priority?: string;
+  due_date?: string | null;
+  responsible_user_id?: string | null;
+  responsible_user?: AuthorPreview | null;
+  tasks?: RequestTaskDTO[];
+  history?: RequestHistoryEventDTO[];
   ai_tz?: RequestTechnicalSpecEnvelope | null;
   source?: string | null;
   applicant_name?: string | null;

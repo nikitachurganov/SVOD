@@ -27,13 +27,25 @@ from app.schemas.request_execution import (
     UnblockStagePayload,
 )
 from app.schemas.request_tz import PatchRequestTZPayload, RequestTZResponse
+from app.schemas.request_workflow import (
+    CreateRequestTaskPayload,
+    PatchRequestTaskAssigneePayload,
+    PatchRequestTaskStatusPayload,
+    PatchWorkflowStatusPayload,
+    RequestHistoryEventResponse,
+    RequestTaskResponse,
+    UpdateRequestTaskPayload,
+    WorkflowStatusSuggestion,
+)
 from app.services import (
     performer_selection_service,
     request_analysis_service,
     request_execution_service,
     request_service,
     request_summary_service,
+    request_task_service,
     request_tz_service,
+    request_workflow_service,
 )
 
 router = APIRouter()
@@ -101,6 +113,106 @@ async def patch_status(
     _user: CurrentUser,
 ) -> RequestResponse:
     return await request_service.patch_status(session, request_id, payload.status)
+
+
+@router.patch("/{request_id}/workflow-status", response_model=RequestResponse)
+async def patch_workflow_status(
+    request_id: int,
+    payload: PatchWorkflowStatusPayload,
+    session: DbSession,
+    user: CurrentUser,
+) -> RequestResponse:
+    req = await request_workflow_service.change_workflow_status(
+        session, request_id, payload, user
+    )
+    events = await request_stage_repository.list_execution_events(session, request_id, limit=50)
+    return request_service.map_request_to_response(
+        req, include_stages=True, execution_events_rows=events, include_workflow=True
+    )
+
+
+@router.get("/{request_id}/workflow-suggestion", response_model=WorkflowStatusSuggestion | None)
+async def get_workflow_suggestion(
+    request_id: int,
+    session: DbSession,
+    user: CurrentUser,
+) -> WorkflowStatusSuggestion | None:
+    return await request_workflow_service.suggest_workflow_status(session, request_id, user)
+
+
+@router.get("/{request_id}/history", response_model=list[RequestHistoryEventResponse])
+async def list_request_history(
+    request_id: int,
+    session: DbSession,
+    user: CurrentUser,
+) -> list[RequestHistoryEventResponse]:
+    return await request_workflow_service.list_history(session, request_id, user)
+
+
+@router.get("/{request_id}/tasks", response_model=list[RequestTaskResponse])
+async def list_request_tasks(
+    request_id: int,
+    session: DbSession,
+    user: CurrentUser,
+) -> list[RequestTaskResponse]:
+    return await request_task_service.list_tasks(session, request_id, user)
+
+
+@router.post("/{request_id}/tasks", response_model=RequestTaskResponse, status_code=201)
+async def create_request_task(
+    request_id: int,
+    payload: CreateRequestTaskPayload,
+    session: DbSession,
+    user: CurrentUser,
+) -> RequestTaskResponse:
+    return await request_task_service.create_task(session, request_id, payload, user)
+
+
+@router.patch("/{request_id}/tasks/{task_id}", response_model=RequestTaskResponse)
+async def update_request_task(
+    request_id: int,
+    task_id: uuid.UUID,
+    payload: UpdateRequestTaskPayload,
+    session: DbSession,
+    user: CurrentUser,
+) -> RequestTaskResponse:
+    return await request_task_service.update_task(session, request_id, task_id, payload, user)
+
+
+@router.patch("/{request_id}/tasks/{task_id}/status", response_model=RequestTaskResponse)
+async def patch_request_task_status(
+    request_id: int,
+    task_id: uuid.UUID,
+    payload: PatchRequestTaskStatusPayload,
+    session: DbSession,
+    user: CurrentUser,
+) -> RequestTaskResponse:
+    return await request_task_service.patch_task_status(
+        session, request_id, task_id, payload, user
+    )
+
+
+@router.patch("/{request_id}/tasks/{task_id}/assignee", response_model=RequestTaskResponse)
+async def patch_request_task_assignee(
+    request_id: int,
+    task_id: uuid.UUID,
+    payload: PatchRequestTaskAssigneePayload,
+    session: DbSession,
+    user: CurrentUser,
+) -> RequestTaskResponse:
+    return await request_task_service.patch_task_assignee(
+        session, request_id, task_id, payload, user
+    )
+
+
+@router.delete("/{request_id}/tasks/{task_id}", response_model=RequestTaskResponse)
+async def cancel_request_task(
+    request_id: int,
+    task_id: uuid.UUID,
+    session: DbSession,
+    user: CurrentUser,
+) -> RequestTaskResponse:
+    return await request_task_service.delete_task(session, request_id, task_id, user)
 
 
 @router.post("/{request_id}/analysis", response_model=AIRequestAnalysisResponse)

@@ -44,6 +44,7 @@ export const FORMILY_SUPPORTED_FIELD_TYPES: ReadonlySet<FormFieldType> = new Set
   'file_image',
   'file_document',
   'address',
+  'address_country_city',
   'location',
   'rating',
 ]);

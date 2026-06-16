@@ -2,6 +2,7 @@ import type { Field } from '../../types/form';
 import { getChoiceDisplayLabel } from './choiceField.utils';
 import {
   isAddressFieldValue,
+  isCountryCityFieldValue,
   isLocationFieldValue,
   isRatingFieldValue,
 } from '../types/field-values.types';
@@ -21,6 +22,11 @@ export function formatFieldValue(
     (Array.isArray(rawValue) && rawValue.length === 0)
   ) {
     return '—';
+  }
+
+  if (field.type === 'address_country_city' && isCountryCityFieldValue(rawValue)) {
+    const parts = [rawValue.countryName, rawValue.city].filter(Boolean);
+    return parts.length > 0 ? parts.join(', ') : '—';
   }
 
   if (field.type === 'location' && isLocationFieldValue(rawValue)) {
@@ -63,6 +69,7 @@ export function formatFieldValue(
     field.type === 'phone' ||
     field.type === 'email' ||
     field.type === 'address' ||
+    field.type === 'address_country_city' ||
     field.type === 'location' ||
     field.type === 'rating'
   ) {

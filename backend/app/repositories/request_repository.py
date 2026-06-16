@@ -5,7 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.request import Request
+from app.models.request_history_event import RequestHistoryEvent
 from app.models.request_stage import RequestStage
+from app.models.request_task import RequestTask
 
 
 async def get_all(session: AsyncSession) -> list[Request]:
@@ -94,10 +96,14 @@ async def get_by_id(session: AsyncSession, request_id: int) -> Request | None:
         select(Request)
         .options(
             selectinload(Request.author),
+            selectinload(Request.responsible_user),
             selectinload(Request.assigned_internal_user),
             selectinload(Request.assigned_external_contractor),
             selectinload(Request.stages).selectinload(RequestStage.assignee_internal_user),
             selectinload(Request.stages).selectinload(RequestStage.assignee_external_contractor),
+            selectinload(Request.tasks).selectinload(RequestTask.assignee),
+            selectinload(Request.tasks).selectinload(RequestTask.created_by),
+            selectinload(Request.history_events).selectinload(RequestHistoryEvent.actor),
         )
         .where(Request.id == request_id)
     )

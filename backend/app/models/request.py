@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -27,6 +27,15 @@ class Request(Base):
     )
     data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="open")
+    workflow_status: Mapped[str] = mapped_column(String(32), nullable=False, default="new", index=True)
+    priority: Mapped[str] = mapped_column(String(16), nullable=False, default="medium")
+    due_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    responsible_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     execution_status: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     form_snapshot: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
@@ -38,6 +47,8 @@ class Request(Base):
     applicant_company: Mapped[str | None] = mapped_column(String(500), nullable=True)
     applicant_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
     applicant_phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    applicant_description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    public_link_token: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     closed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -74,7 +85,12 @@ class Request(Base):
     assigned_internal_user: Mapped["User | None"] = relationship(  # noqa: F821
         foreign_keys=[assigned_internal_user_id],
         lazy="selectin",
-        overlaps="author",
+        overlaps="author,responsible_user",
+    )
+    responsible_user: Mapped["User | None"] = relationship(  # noqa: F821
+        foreign_keys=[responsible_user_id],
+        lazy="selectin",
+        overlaps="author,assigned_internal_user",
     )
     assigned_external_contractor: Mapped["ExternalContractor | None"] = relationship(  # noqa: F821
         foreign_keys=[assigned_external_contractor_id],
@@ -89,4 +105,15 @@ class Request(Base):
     execution_events: Mapped[list["RequestExecutionEvent"]] = relationship(  # noqa: F821
         back_populates="request",
         lazy="selectin",
+    )
+    tasks: Mapped[list["RequestTask"]] = relationship(  # noqa: F821
+        back_populates="request",
+        order_by="RequestTask.order_index",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+    )
+    history_events: Mapped[list["RequestHistoryEvent"]] = relationship(  # noqa: F821
+        back_populates="request",
+        lazy="selectin",
+        cascade="all, delete-orphan",
     )

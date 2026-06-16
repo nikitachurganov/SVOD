@@ -36,12 +36,9 @@ export const FormilyRadioChoice = ({ fieldMeta }: FormilyRadioChoiceProps) => {
         options={fieldMeta.options ?? []}
         value={field.value}
         onChange={(value) => field.onInput(value)}
+        error={error === 'Укажите свой вариант' ? undefined : error}
+        otherError={error === 'Укажите свой вариант' ? error : undefined}
       />
-      {error ? (
-        <div style={{ color: 'var(--app-text-error)', fontSize: '0.75rem', marginTop: 4 }}>
-          {error}
-        </div>
-      ) : null}
     </div>
   );
 };
@@ -67,12 +64,9 @@ export const FormilyCheckboxChoice = ({ fieldMeta }: FormilyCheckboxChoiceProps)
         options={fieldMeta.options ?? []}
         value={field.value}
         onChange={(value) => field.onInput(value)}
+        error={error === 'Укажите свой вариант' ? undefined : error}
+        otherError={error === 'Укажите свой вариант' ? error : undefined}
       />
-      {error ? (
-        <div style={{ color: 'var(--app-text-error)', fontSize: '0.75rem', marginTop: 4 }}>
-          {error}
-        </div>
-      ) : null}
     </div>
   );
 };

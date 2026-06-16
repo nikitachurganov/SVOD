@@ -1,7 +1,19 @@
-import { useState, type FormEvent } from 'react';
+import { useState } from 'react';
 import { Alert, Button, Form, Input, Tabs } from 'antd';
+import { PhoneInput } from '../shared/ui/PhoneInput';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../shared/hooks/auth.hooks';
+import {
+  emailRules,
+  passwordRules,
+  phoneRules,
+  requiredRule,
+  toAntValidator,
+} from '../shared/utils/formRules';
+import {
+  validatePasswordConfirmValue,
+  validateShortTextValue,
+} from '../shared/utils/fieldValueValidation';
 
 type AuthTabIndex = 0 | 1;
 
@@ -18,10 +30,27 @@ interface SignUpValues extends SignInValues {
   confirmPassword: string;
 }
 
+const nameRules = (label: string) => [
+  requiredRule(`${label} обязательно`),
+  {
+    validator: toAntValidator((value, required) => {
+      const base = validateShortTextValue(value, required, 100);
+      if (base) return base;
+      const text = typeof value === 'string' ? value.trim() : '';
+      if (text.length < 2) return `Минимум 2 символа`;
+      return null;
+    }, true),
+  },
+];
+
 const mapAuthError = (error: unknown): string => {
   if (!(error instanceof Error)) return 'Неожиданная ошибка аутентификации';
-  if (error.message.includes('Invalid login credentials')) return 'Неверный адрес электронной почты или пароль';
-  if (error.message.includes('User already registered')) return 'Пользователь с таким адресом электронной почты уже зарегистрирован';
+  if (error.message.includes('Invalid login credentials')) {
+    return 'Неверный адрес электронной почты или пароль';
+  }
+  if (error.message.includes('User already registered')) {
+    return 'Пользователь с таким адресом электронной почты уже зарегистрирован';
+  }
   return error.message;
 };
 
@@ -29,13 +58,8 @@ export const AuthPage = () => {
   const [activeTab, setActiveTab] = useState<AuthTabIndex>(0);
   const [loading, setLoading] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
-
-  const [signInFields, setSignInFields] = useState<SignInValues>({ email: '', password: '' });
-  const [signUpFields, setSignUpFields] = useState<SignUpValues>({
-    email: '', password: '', firstName: '', lastName: '',
-    middleName: '', phoneNumber: '', confirmPassword: '',
-  });
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [signInForm] = Form.useForm<SignInValues>();
+  const [signUpForm] = Form.useForm<SignUpValues>();
 
   const { signIn, signUp } = useAuth();
   const navigate = useNavigate();
@@ -45,17 +69,11 @@ export const AuthPage = () => {
       ? (location.state as { from: string }).from
       : '/requests';
 
-  const onSignIn = async (e: FormEvent) => {
-    e.preventDefault();
-    const errors: Record<string, string> = {};
-    if (!signInFields.email) errors['si-email'] = 'Электронная почта обязательна';
-    if (!signInFields.password) errors['si-password'] = 'Пароль обязателен';
-    if (Object.keys(errors).length) { setFieldErrors(errors); return; }
-
+  const onSignIn = async (values: SignInValues) => {
     setLoading(true);
     setErrorText(null);
     try {
-      await signIn(signInFields);
+      await signIn(values);
       navigate(redirectTo, { replace: true });
     } catch (error) {
       setErrorText(mapAuthError(error));
@@ -64,30 +82,21 @@ export const AuthPage = () => {
     }
   };
 
-  const onSignUp = async (e: FormEvent) => {
-    e.preventDefault();
-    const errors: Record<string, string> = {};
-    if (!signUpFields.lastName || signUpFields.lastName.length < 2) errors['su-lastName'] = 'Фамилия обязательна (мин. 2 символа)';
-    if (!signUpFields.firstName || signUpFields.firstName.length < 2) errors['su-firstName'] = 'Имя обязательно (мин. 2 символа)';
-    if (!signUpFields.email) errors['su-email'] = 'Электронная почта обязательна';
-    if (!signUpFields.phoneNumber) errors['su-phone'] = 'Номер телефона обязателен';
-    if (!signUpFields.password || signUpFields.password.length < 8) errors['su-password'] = 'Пароль должен содержать не менее 8 символов';
-    if (signUpFields.password !== signUpFields.confirmPassword) errors['su-confirmPassword'] = 'Пароли не совпадают';
-    if (Object.keys(errors).length) { setFieldErrors(errors); return; }
-
+  const onSignUp = async (values: SignUpValues) => {
     setLoading(true);
     setErrorText(null);
     try {
       await signUp({
-        firstName: signUpFields.firstName.trim(),
-        lastName: signUpFields.lastName.trim(),
-        middleName: signUpFields.middleName?.trim() || undefined,
-        email: signUpFields.email.trim().toLowerCase(),
-        phoneNumber: signUpFields.phoneNumber.trim(),
-        password: signUpFields.password,
+        firstName: values.firstName.trim(),
+        lastName: values.lastName.trim(),
+        middleName: values.middleName?.trim() || undefined,
+        email: values.email.trim().toLowerCase(),
+        phoneNumber: values.phoneNumber.trim(),
+        password: values.password,
       });
       setErrorText(null);
       setActiveTab(0);
+      signUpForm.resetFields();
     } catch (error) {
       setErrorText(mapAuthError(error));
     } finally {
@@ -95,75 +104,91 @@ export const AuthPage = () => {
     }
   };
 
-  const clearError = (key: string) => {
-    setFieldErrors((prev) => {
-      const next = { ...prev };
-      delete next[key];
-      return next;
-    });
-  };
-
-  const signInForm = (
-    <form onSubmit={(e) => void onSignIn(e)} style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 16 }}>
+  const signInFormNode = (
+    <Form
+      form={signInForm}
+      layout="vertical"
+      onFinish={(values) => void onSignIn(values)}
+      style={{ paddingTop: 16 }}
+    >
       <Form.Item
+        name="email"
         label="Электронная почта"
-        validateStatus={fieldErrors['si-email'] ? 'error' : undefined}
-        help={fieldErrors['si-email'] || undefined}
+        rules={[{ required: true, message: 'Электронная почта обязательна' }, ...emailRules()]}
       >
-        <Input
-          id="si-email"
-          placeholder="name@example.com"
-          autoComplete="email"
-          value={signInFields.email}
-          onChange={(e) => { setSignInFields((p) => ({ ...p, email: e.target.value })); clearError('si-email'); }}
-        />
+        <Input placeholder="name@example.com" autoComplete="email" />
       </Form.Item>
       <Form.Item
+        name="password"
         label="Пароль"
-        validateStatus={fieldErrors['si-password'] ? 'error' : undefined}
-        help={fieldErrors['si-password'] || undefined}
+        rules={[{ required: true, message: 'Пароль обязателен' }, ...passwordRules()]}
       >
-        <Input.Password
-          id="si-password"
-          placeholder="Введите пароль"
-          autoComplete="current-password"
-          value={signInFields.password}
-          onChange={(e) => { setSignInFields((p) => ({ ...p, password: e.target.value })); clearError('si-password'); }}
-        />
+        <Input.Password placeholder="Введите пароль" autoComplete="current-password" />
       </Form.Item>
-      <Button type="primary" htmlType="submit" loading={loading}>
+      <Button type="primary" htmlType="submit" loading={loading} block>
         {loading ? 'Вход…' : 'Войти'}
       </Button>
-    </form>
+    </Form>
   );
 
-  const signUpForm = (
-    <form onSubmit={(e) => void onSignUp(e)} style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 16 }}>
-      <Form.Item label="Фамилия" validateStatus={fieldErrors['su-lastName'] ? 'error' : undefined} help={fieldErrors['su-lastName'] || undefined}>
-        <Input id="su-lastName" placeholder="Иванов" autoComplete="family-name" value={signUpFields.lastName} onChange={(e) => { setSignUpFields((p) => ({ ...p, lastName: e.target.value })); clearError('su-lastName'); }} />
+  const signUpFormNode = (
+    <Form
+      form={signUpForm}
+      layout="vertical"
+      onFinish={(values) => void onSignUp(values)}
+      style={{ paddingTop: 16 }}
+    >
+      <Form.Item name="lastName" label="Фамилия" rules={nameRules('Фамилия')}>
+        <Input placeholder="Иванов" autoComplete="family-name" />
       </Form.Item>
-      <Form.Item label="Имя" validateStatus={fieldErrors['su-firstName'] ? 'error' : undefined} help={fieldErrors['su-firstName'] || undefined}>
-        <Input id="su-firstName" placeholder="Иван" autoComplete="given-name" value={signUpFields.firstName} onChange={(e) => { setSignUpFields((p) => ({ ...p, firstName: e.target.value })); clearError('su-firstName'); }} />
+      <Form.Item name="firstName" label="Имя" rules={nameRules('Имя')}>
+        <Input placeholder="Иван" autoComplete="given-name" />
       </Form.Item>
-      <Form.Item label="Отчество (необязательно)">
-        <Input id="su-middleName" placeholder="Иванович" autoComplete="additional-name" value={signUpFields.middleName} onChange={(e) => setSignUpFields((p) => ({ ...p, middleName: e.target.value }))} />
+      <Form.Item name="middleName" label="Отчество (необязательно)">
+        <Input placeholder="Иванович" autoComplete="additional-name" />
       </Form.Item>
-      <Form.Item label="Электронная почта" validateStatus={fieldErrors['su-email'] ? 'error' : undefined} help={fieldErrors['su-email'] || undefined}>
-        <Input id="su-email" placeholder="name@example.com" autoComplete="email" value={signUpFields.email} onChange={(e) => { setSignUpFields((p) => ({ ...p, email: e.target.value })); clearError('su-email'); }} />
+      <Form.Item
+        name="email"
+        label="Электронная почта"
+        rules={[{ required: true, message: 'Электронная почта обязательна' }, ...emailRules()]}
+      >
+        <Input placeholder="name@example.com" autoComplete="email" />
       </Form.Item>
-      <Form.Item label="Номер телефона" validateStatus={fieldErrors['su-phone'] ? 'error' : undefined} help={fieldErrors['su-phone'] || undefined}>
-        <Input id="su-phone" placeholder="+79001234567" autoComplete="tel" value={signUpFields.phoneNumber} onChange={(e) => { setSignUpFields((p) => ({ ...p, phoneNumber: e.target.value })); clearError('su-phone'); }} />
+      <Form.Item
+        name="phoneNumber"
+        label="Номер телефона"
+        rules={[{ required: true, message: 'Номер телефона обязателен' }, ...phoneRules()]}
+      >
+        <PhoneInput autoComplete="tel" />
       </Form.Item>
-      <Form.Item label="Пароль" validateStatus={fieldErrors['su-password'] ? 'error' : undefined} help={fieldErrors['su-password'] || undefined}>
-        <Input.Password id="su-password" placeholder="Придумайте пароль" autoComplete="new-password" value={signUpFields.password} onChange={(e) => { setSignUpFields((p) => ({ ...p, password: e.target.value })); clearError('su-password'); }} />
+      <Form.Item
+        name="password"
+        label="Пароль"
+        rules={[{ required: true, message: 'Пароль обязателен' }, ...passwordRules()]}
+      >
+        <Input.Password placeholder="Придумайте пароль" autoComplete="new-password" />
       </Form.Item>
-      <Form.Item label="Подтвердите пароль" validateStatus={fieldErrors['su-confirmPassword'] ? 'error' : undefined} help={fieldErrors['su-confirmPassword'] || undefined}>
-        <Input.Password id="su-confirmPassword" placeholder="Повторите пароль" autoComplete="new-password" value={signUpFields.confirmPassword} onChange={(e) => { setSignUpFields((p) => ({ ...p, confirmPassword: e.target.value })); clearError('su-confirmPassword'); }} />
+      <Form.Item
+        name="confirmPassword"
+        label="Подтвердите пароль"
+        dependencies={['password']}
+        rules={[
+          { required: true, message: 'Подтвердите пароль' },
+          {
+            validator: async (_, value) => {
+              const password = signUpForm.getFieldValue('password');
+              const error = validatePasswordConfirmValue(password, value);
+              if (error) throw new Error(error);
+            },
+          },
+        ]}
+      >
+        <Input.Password placeholder="Повторите пароль" autoComplete="new-password" />
       </Form.Item>
-      <Button type="primary" htmlType="submit" loading={loading}>
+      <Button type="primary" htmlType="submit" loading={loading} block>
         {loading ? 'Регистрация…' : 'Зарегистрироваться'}
       </Button>
-    </form>
+    </Form>
   );
 
   return (
@@ -202,12 +227,11 @@ export const AuthPage = () => {
           activeKey={String(activeTab)}
           onChange={(key) => {
             setErrorText(null);
-            setFieldErrors({});
             setActiveTab(Number(key) as AuthTabIndex);
           }}
           items={[
-            { key: '0', label: 'Вход', children: signInForm },
-            { key: '1', label: 'Регистрация', children: signUpForm },
+            { key: '0', label: 'Вход', children: signInFormNode },
+            { key: '1', label: 'Регистрация', children: signUpFormNode },
           ]}
         />
       </div>

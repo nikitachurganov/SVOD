@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Alert, Breadcrumb, Button, Modal, notification } from 'antd';
+import { Alert, Button, Modal, notification } from 'antd';
 import { ArrowLeftOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import {
   DndContext,
@@ -13,6 +13,7 @@ import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
 
 import { ToolPanel } from '../ToolPanel';
+import { IconDefaultButton } from '../IconDefaultButton';
 import { FormCanvas } from './FormCanvas';
 import { CanvasFieldOverlay } from './DroppedFieldCard';
 import { useFormStore } from '../../hooks/useFormStore';
@@ -38,7 +39,6 @@ import { moveFieldBeforeTarget, moveFieldByOffset } from '../../utils/fieldMove.
 // ─── Public props ─────────────────────────────────────────────────────────────
 
 export interface FormEditorProps {
-  breadcrumbLabel: string;
   pageTitle: string;
   saveButtonLabel?: string;
   initialTitle?: string;
@@ -53,26 +53,41 @@ export interface FormEditorProps {
 interface FormTitleInputProps {
   value: string;
   onChange: (value: string) => void;
+  error?: string | null;
 }
 
-const FormTitleInput = ({ value, onChange }: FormTitleInputProps) => {
+const FormTitleInput = ({ value, onChange, error }: FormTitleInputProps) => {
   return (
-    <input
-      placeholder="Название формы"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      style={{
-        padding: 0,
-        fontSize: '1.25rem',
-        fontWeight: 600,
-        lineHeight: 1.4,
-        color: 'var(--app-text)',
-        background: 'transparent',
-        width: '100%',
-        border: 'none',
-        outline: 'none',
-      }}
-    />
+    <div>
+      <input
+        placeholder="Название формы"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-invalid={error ? true : undefined}
+        style={{
+          padding: 0,
+          fontSize: '1.25rem',
+          fontWeight: 600,
+          lineHeight: 1.4,
+          color: 'var(--app-text)',
+          background: 'transparent',
+          width: '100%',
+          border: 'none',
+          outline: 'none',
+        }}
+      />
+      {error ? (
+        <div
+          style={{
+            color: 'var(--app-text-error)',
+            fontSize: '0.75rem',
+            marginTop: 4,
+          }}
+        >
+          {error}
+        </div>
+      ) : null}
+    </div>
   );
 };
 
@@ -385,7 +400,6 @@ const InlinePreview = ({ formTitle, pages }: InlinePreviewProps) => {
 // ─── FormEditor ───────────────────────────────────────────────────────────────
 
 export const FormEditor = ({
-  breadcrumbLabel,
   pageTitle,
   saveButtonLabel = 'Сохранить',
   initialTitle = '',
@@ -415,6 +429,7 @@ export const FormEditor = ({
   const [activeDrag, setActiveDrag] = useState<ActiveDragInfo>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [titleError, setTitleError] = useState<string | null>(null);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [deletePageId, setDeletePageId] = useState<string | null>(null);
   const [pendingDeletion, setPendingDeletion] = useState<PendingDeletion | null>(null);
@@ -829,9 +844,11 @@ export const FormEditor = ({
   // ── Save ─────────────────────────────────────────────────────────────────────
   const handleSave = useCallback(async () => {
     if (!formTitle.trim()) {
-      setSaveError('Укажите название формы.');
+      setTitleError('Укажите название формы');
       return;
     }
+
+    setTitleError(null);
 
     const totalFields = pages.reduce((count, page) => {
       return count + page.fields.reduce((c, field) => {
@@ -912,26 +929,6 @@ export const FormEditor = ({
             flexShrink: 0,
           }}
         >
-          <Breadcrumb
-            style={{ marginBottom: 8 }}
-            items={[
-              {
-                title: (
-                  <a
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      onBack();
-                    }}
-                  >
-                    Формы
-                  </a>
-                ),
-              },
-              { title: breadcrumbLabel },
-            ]}
-          />
-
           <div
             style={{
               display: 'flex',
@@ -950,10 +947,11 @@ export const FormEditor = ({
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Button
-                type={isPreviewMode ? 'primary' : 'text'}
+              <IconDefaultButton
+                size="middle"
                 icon={<EyeOutlined />}
                 aria-label={isPreviewMode ? 'К редактированию' : 'Предпросмотр'}
+                aria-pressed={isPreviewMode}
                 onClick={() => setIsPreviewMode((prev) => !prev)}
                 disabled={isSaving}
               />
@@ -1015,7 +1013,16 @@ export const FormEditor = ({
                   flexDirection: 'column',
                 }}
               >
-                <FormTitleInput value={formTitle} onChange={setFormTitle} />
+                <FormTitleInput
+                  value={formTitle}
+                  onChange={(next) => {
+                    setFormTitle(next);
+                    if (titleError && next.trim()) {
+                      setTitleError(null);
+                    }
+                  }}
+                  error={titleError}
+                />
                 <div style={{ marginBottom: 16 }} />
 
                 {/* ── Custom page tabs ── */}

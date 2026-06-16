@@ -94,6 +94,10 @@
 
   --app-info: var(--ant-color-info, #1677ff);
 
+  --app-sidebar-org-link: var(--ant-color-info, #1677ff);
+
+  --app-sidebar-org-link-hover: var(--ant-color-info-hover, #4096ff);
+
   --app-error: var(--ant-color-error, #ff4d4f);
 
 
@@ -136,6 +140,10 @@ html[data-theme='light'] {
 
   --app-link-hover: var(--brand-600);
 
+  --app-sidebar-org-link: var(--ant-color-info, #1677ff);
+
+  --app-sidebar-org-link-hover: var(--ant-color-info-hover, #4096ff);
+
 }
 
 
@@ -151,6 +159,10 @@ html[data-theme='dark'] {
   --app-link-hover: var(--brand-200);
 
   --app-menu-active-bg: rgba(245, 87, 13, 0.15);
+
+  --app-sidebar-org-link: var(--ant-color-info, #1677ff);
+
+  --app-sidebar-org-link-hover: var(--ant-color-info-hover, #4096ff);
 
 }
 

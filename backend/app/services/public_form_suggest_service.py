@@ -39,6 +39,45 @@ def count_words(text: str) -> int:
     return len([w for w in _WORD_SPLIT.split(stripped) if w])
 
 
+def _count_leaf_fields(fields: list | None) -> int:
+    if not isinstance(fields, list):
+        return 0
+    total = 0
+    for field in fields:
+        if not isinstance(field, dict):
+            continue
+        if field.get("type") == "group":
+            total += _count_leaf_fields(field.get("children"))
+        else:
+            total += 1
+    return total
+
+
+def count_form_fields(form: Form) -> int:
+    pages = form.fields if isinstance(form.fields, list) else []
+    total = 0
+    for page in pages:
+        if isinstance(page, dict):
+            total += _count_leaf_fields(page.get("fields"))
+    return total
+
+
+def _form_to_card(
+    form: Form,
+    *,
+    relevance_score: float,
+    reason: str,
+) -> PublicSuggestedFormCard:
+    return PublicSuggestedFormCard(
+        id=str(form.id),
+        name=form.name,
+        short_description=_truncate(form.description, 80),
+        field_count=count_form_fields(form),
+        relevance_score=round(max(0.0, min(1.0, relevance_score)), 2),
+        reason=reason,
+    )
+
+
 def _truncate(text: str | None, limit: int = 80) -> str:
     t = (text or "").strip()
     if len(t) <= limit:
@@ -189,16 +228,16 @@ def _lexical_scores(text: str, forms: list[Form]) -> list[tuple[Form, int]]:
     return scored
 
 
-def _forms_to_cards(forms: list[Form]) -> list[PublicSuggestedFormCard]:
+def _forms_to_cards(
+    forms: list[Form],
+    *,
+    base_score: float = 0.7,
+    reason: str = "Подходит по описанию вашей задачи",
+) -> list[PublicSuggestedFormCard]:
     cards: list[PublicSuggestedFormCard] = []
-    for f in forms[:3]:
-        cards.append(
-            PublicSuggestedFormCard(
-                id=str(f.id),
-                name=f.name,
-                short_description=_truncate(f.description, 80),
-            )
-        )
+    for index, form in enumerate(forms[:3]):
+        score = max(0.35, base_score - index * 0.12)
+        cards.append(_form_to_card(form, relevance_score=score, reason=reason))
     return cards
 
 
@@ -257,10 +296,10 @@ def _blend_lexical_top_into_cards(
     ids = {c.id for c in cards}
     if str(top_f.id) in ids:
         return cards
-    extra = PublicSuggestedFormCard(
-        id=str(top_f.id),
-        name=top_f.name,
-        short_description=_truncate(top_f.description, 80),
+    extra = _form_to_card(
+        top_f,
+        relevance_score=0.82,
+        reason="Совпадение по ключевым словам из вашего описания",
     )
     rest = [c for c in cards if c.id != extra.id]
     return [extra, *rest[:2]]
@@ -279,15 +318,16 @@ def _cards_from_llm_ids(
             break
     by_id = {str(f.id): f for f in candidates}
     cards: list[PublicSuggestedFormCard] = []
-    for pid in picked:
+    for index, pid in enumerate(picked):
         f = by_id.get(str(pid))
         if f is None:
             continue
+        score = max(0.45, 0.95 - index * 0.15)
         cards.append(
-            PublicSuggestedFormCard(
-                id=str(f.id),
-                name=f.name,
-                short_description=_truncate(f.description, 80),
+            _form_to_card(
+                f,
+                relevance_score=score,
+                reason="Рекомендовано на основе анализа вашего описания",
             )
         )
     return cards
@@ -300,9 +340,23 @@ def _fallback_cards(
     lexical = _lexical_scores(text, candidates)
     if lexical:
         forms = [f for f, _s in lexical[:3]]
-        return _forms_to_cards(forms), _HINT_LEXICAL
+        return (
+            _forms_to_cards(
+                forms,
+                base_score=0.78,
+                reason="Совпадение по ключевым словам из вашего описания",
+            ),
+            _HINT_LEXICAL,
+        )
     ranked = sorted(candidates, key=lambda f: (-f.usage_count, f.name))
-    return _forms_to_cards(ranked[:3]), _HINT_POPULAR
+    return (
+        _forms_to_cards(
+            ranked[:3],
+            base_score=0.55,
+            reason="Популярная форма среди заявок организации",
+        ),
+        _HINT_POPULAR,
+    )
 
 
 async def suggest_forms_for_public_token(
@@ -310,22 +364,28 @@ async def suggest_forms_for_public_token(
 ) -> PublicSuggestFormsResponse:
     link = await public_link_repository.get_by_token(session, token)
     if link is None:
+        inactive = await public_link_repository.get_by_token_any(session, token)
+        if inactive is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="link_not_found",
+            )
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Public link not found or inactive",
+            status_code=status.HTTP_410_GONE,
+            detail="link_inactive",
         )
 
-    forms = await form_repository.get_all_by_org(session, link.organization_id)
+    forms = await form_repository.get_active_by_org(session, link.organization_id)
     # Prefer matching specialized templates; universal is a separate fallback in UI.
     candidates = [f for f in forms if not f.is_universal]
     if not candidates:
         candidates = list(forms)
 
-    wc = count_words(text)
-    if wc < 3:
+    stripped = text.strip()
+    if len(stripped) < 10:
         return PublicSuggestFormsResponse(
             forms=[],
-            hint="Опишите задачу подробнее",
+            hint="Опишите задачу подробнее (минимум 10 символов)",
             used_llm=False,
         )
 

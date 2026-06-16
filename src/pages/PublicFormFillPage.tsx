@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Button, Spin } from 'antd';
-import { Navigate, useNavigate, useParams } from 'react-router-dom';
+import { Alert, Button, Form, Input, Spin } from 'antd';
+import { ArrowLeftOutlined } from '@ant-design/icons';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
-  getPublicPageData,
+  mapPublicApiError,
   submitPublicRequest,
   type PublicFormSummary,
 } from '../shared/api/public.api';
@@ -15,20 +16,35 @@ import type { FormPageInstance } from '../shared/types/form-builder.types';
 import { collectFieldIds, collectLeafFields } from '../shared/formily/collectFieldIds';
 import {
   buildFormSnapshot,
-  serializeFormValues,
+  serializeFormValuesWithFields,
 } from '../shared/formily/formSubmit.utils';
 import {
   FormFillRenderer,
   type FormFillRendererHandle,
 } from '../shared/ui/form-fill/FormFillRenderer';
+import { FormFillWizardLayout } from '../shared/ui/form-fill/FormFillWizardLayout';
 import { useFormStore } from '../shared/hooks/useFormStore';
-import { loadPublicApplicantDraft } from '../shared/utils/publicApplicantDraft';
+import { usePublicFormFlow } from '../shared/hooks/publicFormFlow.hooks';
+import type { PublicContactFormValues } from '../shared/context/publicFormFlow.context';
+import { PublicOrgHeader } from '../components/public/PublicOrgHeader';
+import { PhoneInput } from '../shared/ui/PhoneInput';
+import { requiredRule } from '../shared/utils/formRules';
+import { validateEmailValue, validatePhoneValue } from '../shared/utils/fieldValueValidation';
 
-/** First text-like field across pages — used to pre-fill draft description for universal flows. */
+const EMPTY_CONTACTS: PublicContactFormValues = {
+  fullName: '',
+  email: '',
+  phone: '',
+  company: '',
+};
+
+const safeTrim = (value: string | undefined | null): string =>
+  typeof value === 'string' ? value.trim() : '';
+
 const findFirstTextFieldId = (pages: FormPageInstance[]): string | null => {
   for (const page of pages) {
     const leaves = collectLeafFields(page.fields);
-    const hit = leaves.find((f) => f.type === 'shortText' || f.type === 'longText');
+    const hit = leaves.find((field) => field.type === 'shortText' || field.type === 'longText');
     if (hit) return hit.id;
   }
   return null;
@@ -37,44 +53,34 @@ const findFirstTextFieldId = (pages: FormPageInstance[]): string | null => {
 export const PublicFormFillPage = () => {
   const { token, formId } = useParams<{ token: string; formId: string }>();
   const navigate = useNavigate();
+  const [contactForm] = Form.useForm<PublicContactFormValues>();
+  const flow = usePublicFormFlow();
 
-  const draft = token ? loadPublicApplicantDraft(token) : null;
+  const {
+    pageData,
+    pageLoading,
+    description,
+    saveFormData,
+    getFormData,
+    saveContactData,
+    getContactData,
+    clearFormSession,
+    setSuccess,
+    goBackToSuggestions,
+  } = flow;
 
-  const [pageData, setPageData] = useState<Awaited<
-    ReturnType<typeof getPublicPageData>
-  > | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [notification, setNotification] = useState<{
-    kind: 'success' | 'error';
-    title: string;
-    subtitle?: string;
-  } | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const formStore = useFormStore();
   const fillRef = useRef<FormFillRendererHandle>(null);
+  const contactSectionRef = useRef<HTMLDivElement | null>(null);
   const [pageIndex, setPageIndex] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [step, setStep] = useState<'fill' | 'done'>('fill');
   const contentRef = useRef<HTMLDivElement | null>(null);
-  const prefilledRef = useRef(false);
-
-  useEffect(() => {
-    if (!token) return;
-    setLoading(true);
-    getPublicPageData(token)
-      .then((data) => {
-        setPageData(data);
-        setError(null);
-      })
-      .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : 'Не удалось загрузить данные');
-      })
-      .finally(() => setLoading(false));
-  }, [token]);
+  const restoredRef = useRef(false);
 
   const selectedForm: PublicFormSummary | undefined = useMemo(
-    () => pageData?.forms.find((f) => f.id === formId),
+    () => pageData?.forms.find((form) => form.id === formId),
     [pageData, formId],
   );
 
@@ -92,24 +98,58 @@ export const PublicFormFillPage = () => {
     : null;
   const isFirst = pageIndex === 0;
   const isLast = hasPages && pageIndex === pageInstances.length - 1;
+  const showContacts = !hasPages || isLast;
 
   useEffect(() => {
+    if (!formId) return;
+    restoredRef.current = false;
     setPageIndex(0);
     fillRef.current?.resetFields();
-    prefilledRef.current = false;
-  }, [selectedForm?.id]);
+    contactForm.resetFields();
+  }, [formId, contactForm]);
 
   useEffect(() => {
-    if (!draft?.draftDescription || !pageInstances.length || prefilledRef.current) return;
-    const fieldId = findFirstTextFieldId(pageInstances);
-    if (fieldId) {
-      fillRef.current?.setFieldsValue({ [fieldId]: draft.draftDescription });
-      prefilledRef.current = true;
+    if (!formId || restoredRef.current) return;
+
+    const savedValues = getFormData(formId);
+    const savedContacts = getContactData(formId);
+
+    if (savedValues && Object.keys(savedValues).length > 0) {
+      fillRef.current?.setFieldsValue(savedValues);
+      restoredRef.current = true;
+    } else if (description && pageInstances.length > 0) {
+      const fieldId = findFirstTextFieldId(pageInstances);
+      if (fieldId) {
+        fillRef.current?.setFieldsValue({ [fieldId]: description });
+        restoredRef.current = true;
+      }
     }
-  }, [draft?.draftDescription, pageInstances]);
+
+    if (savedContacts) {
+      contactForm.setFieldsValue({ ...EMPTY_CONTACTS, ...savedContacts });
+    }
+  }, [formId, getFormData, getContactData, description, pageInstances, contactForm]);
 
   const scrollToTop = () => {
     contentRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const scrollToContacts = () => {
+    contactSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const persistDraftAndGoBack = () => {
+    if (!token || !formId) return;
+    const values = fillRef.current?.getFieldsValue() ?? {};
+    saveFormData(formId, values);
+    const contacts = contactForm.getFieldsValue(true) as PublicContactFormValues;
+    saveContactData(formId, { ...EMPTY_CONTACTS, ...contacts });
+    goBackToSuggestions();
+    navigate(`/form/${token}`);
+  };
+
+  const handleBack = () => {
+    persistDraftAndGoBack();
   };
 
   const handleNextPage = async () => {
@@ -126,7 +166,7 @@ export const PublicFormFillPage = () => {
 
   const handlePrevPage = () => {
     if (isFirst) {
-      if (token) navigate(`/form/${token}`);
+      handleBack();
       return;
     }
     setPageIndex((idx) => Math.max(0, idx - 1));
@@ -134,41 +174,58 @@ export const PublicFormFillPage = () => {
   };
 
   const handleSubmit = async () => {
-    if (!token || !selectedForm || !draft) return;
+    if (!token || !selectedForm || !formId) return;
+    setSubmitError(null);
+
     try {
       await fillRef.current?.validateFields();
+    } catch {
+      scrollToTop();
+      return;
+    }
+
+    let contacts: PublicContactFormValues;
+    try {
+      contacts = await contactForm.validateFields();
+    } catch {
+      scrollToContacts();
+      return;
+    }
+
+    try {
       setIsSubmitting(true);
 
       const rawValues = fillRef.current?.getFieldsValue() ?? {};
-      const processed = serializeFormValues(rawValues);
+      const allLeafFields = pageInstances.flatMap((page) => collectLeafFields(page.fields));
+      const processed = serializeFormValuesWithFields(rawValues, allLeafFields);
 
       const snapshot = buildFormSnapshot(selectedForm, pageInstances);
       const alignedData = mapDataToSnapshot(processed, snapshot);
 
       const titleBase =
-        draft.draftDescription.trim().slice(0, 120) ||
-        selectedForm.name ||
-        'Заявка';
+        safeTrim(description).slice(0, 120) || selectedForm.name || 'Заявка';
 
-      await submitPublicRequest(token, {
-        full_name: draft.fullName,
-        applicant_company: draft.company,
-        email: draft.email.trim() || undefined,
-        phone: draft.phone.trim() || undefined,
+      const created = await submitPublicRequest(token, {
+        full_name: safeTrim(contacts.fullName),
+        applicant_company: safeTrim(contacts.company) || undefined,
+        email: safeTrim(contacts.email),
+        phone: safeTrim(contacts.phone) || undefined,
         form_id: selectedForm.id,
         title: titleBase.slice(0, 500),
         data: alignedData,
         form_snapshot: snapshot,
+        applicant_description: safeTrim(description) || undefined,
       });
 
-      setStep('done');
-    } catch (err) {
+      clearFormSession(formId);
+      setSuccess({
+        requestNumber: created.request_number ?? created.id,
+        organizationName: pageData?.organization_name ?? '',
+      });
+      navigate(`/form/${token}`, { replace: true });
+    } catch (err: unknown) {
       if (err instanceof Error && !('errorFields' in err)) {
-        setNotification({
-          kind: 'error',
-          title: 'Ошибка отправки',
-          subtitle: err.message,
-        });
+        setSubmitError(mapPublicApiError(err).message);
       }
     } finally {
       setIsSubmitting(false);
@@ -179,162 +236,154 @@ export const PublicFormFillPage = () => {
     return null;
   }
 
-  if (!draft) {
-    return <Navigate to={`/form/${token}`} replace />;
-  }
-
-  if (loading) {
+  if (pageLoading) {
     return (
-      <div
-        style={{
-          minHeight: '100vh',
-          display: 'grid',
-          placeItems: 'center',
-          background: 'var(--app-bg)',
-        }}
-      >
-        <Spin />
+      <div className="public-form-flow public-form-flow--centered">
+        <Spin size="large" tip="Загрузка формы…" />
       </div>
     );
   }
 
-  if (error || !pageData || !selectedForm) {
+  if (!pageData || !selectedForm) {
     return (
-      <div style={{ padding: 32, maxWidth: 600, margin: '0 auto' }}>
-        <Alert
-          type="error"
-          message="Ошибка"
-          description={error || 'Форма не найдена'}
-          showIcon
-        />
+      <div className="public-form-flow">
+        <div className="public-form-flow__content">
+          <Alert type="error" message="Ошибка" description="Форма не найдена" showIcon />
+          <Button type="link" onClick={() => navigate(`/form/${token}`)} style={{ marginTop: 16 }}>
+            Вернуться назад
+          </Button>
+        </div>
       </div>
     );
   }
 
-  if (step === 'done') {
-    return (
-      <div
-        style={{
-          minHeight: '100vh',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 16,
-          padding: 32,
-          background: 'var(--app-bg)',
-        }}
-      >
-        <Alert
-          type="success"
-          message="Заявка отправлена"
-          description="Ваша заявка была успешно создана. Спасибо!"
-          showIcon
-          style={{ maxWidth: 480 }}
-        />
-      </div>
-    );
-  }
+  const organization = pageData.organization ?? null;
+
+  const fillActions = (
+    <div className="public-form-flow__submit-bar">
+      {hasPages && currentPage && currentPage.fields.length > 0 ? (
+        <>
+          <Button onClick={handlePrevPage}>Назад</Button>
+          {!isLast && (
+            <Button type="primary" onClick={() => void handleNextPage()}>
+              Далее
+            </Button>
+          )}
+          {isLast && (
+            <Button type="primary" onClick={() => void handleSubmit()} loading={isSubmitting}>
+              {isSubmitting ? 'Отправка…' : 'Отправить заявку'}
+            </Button>
+          )}
+        </>
+      ) : (
+        <Button type="primary" onClick={() => void handleSubmit()} loading={isSubmitting}>
+          {isSubmitting ? 'Отправка…' : 'Отправить заявку'}
+        </Button>
+      )}
+    </div>
+  );
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        background: 'var(--app-bg)',
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-    >
-      <header
-        style={{
-          height: '3rem',
-          display: 'flex',
-          alignItems: 'center',
-          paddingInline: '1rem',
-          background: 'var(--app-surface)',
-          borderBottom: '1px solid var(--app-border)',
-          flexShrink: 0,
-        }}
-      >
-        <span style={{ fontWeight: 600, fontSize: '0.875rem' }}>
-          {pageData.organization_name} — {selectedForm.name}
-        </span>
-      </header>
+    <div className="public-form-flow public-form-flow--fill">
+      <PublicOrgHeader
+        organization={organization}
+        organizationName={pageData.organization_name}
+        subtitle={selectedForm.name}
+      />
 
-      <div
-        ref={contentRef}
-        style={{
-          flex: 1,
-          overflowY: 'auto',
-          padding: 24,
-        }}
-      >
-        <div style={{ maxWidth: 640, margin: '0 auto' }}>
-          {notification && (
-            <div style={{ marginBottom: 16 }}>
+      <div className="public-form-flow__fill-toolbar">
+        <Button
+          type="text"
+          icon={<ArrowLeftOutlined />}
+          onClick={handleBack}
+          aria-label="Назад к подбору форм"
+        >
+          Назад
+        </Button>
+      </div>
+
+      <div className="public-form-flow__fill-main">
+        <FormFillWizardLayout
+          contentRef={contentRef}
+          pageIndex={pageIndex}
+          pageCount={pageInstances.length}
+          pageTitle={currentPage?.title}
+          notification={
+            submitError ? (
               <Alert
-                type={notification.kind}
-                message={notification.title}
-                description={notification.subtitle}
+                type="error"
+                message="Ошибка отправки"
+                description={submitError}
                 closable
-                onClose={() => setNotification(null)}
+                onClose={() => setSubmitError(null)}
+                style={{ marginBottom: 16 }}
               />
-            </div>
-          )}
+            ) : null
+          }
+          actions={fillActions}
+        >
+          <h1 className="public-form-flow__form-title">{selectedForm.name}</h1>
 
           {hasPages && currentPage && currentPage.fields.length > 0 ? (
-            <>
-              {pageInstances.length > 1 && (
-                <p
-                  style={{
-                    color: 'var(--app-text-secondary)',
-                    fontSize: '0.75rem',
-                    marginBottom: 12,
-                  }}
-                >
-                  Страница {pageIndex + 1} из {pageInstances.length} — {currentPage.title}
-                </p>
-              )}
-
-              <FormFillRenderer
-                ref={fillRef}
-                pages={pageInstances}
-                pageIndex={pageIndex}
-                legacyStore={formStore}
-              />
-
-              <div
-                style={{
-                  display: 'flex',
-                  gap: 10,
-                  marginTop: 16,
-                }}
-              >
-                <Button onClick={handlePrevPage}>
-                  Назад
-                </Button>
-                {!isLast && (
-                  <Button type="primary" onClick={handleNextPage}>
-                    Далее
-                  </Button>
-                )}
-                {isLast && (
-                  <Button
-                    type="primary"
-                    onClick={handleSubmit}
-                    loading={isSubmitting}
-                  >
-                    {isSubmitting ? 'Отправка…' : 'Отправить заявку'}
-                  </Button>
-                )}
-              </div>
-            </>
+            <FormFillRenderer
+              ref={fillRef}
+              pages={pageInstances}
+              pageIndex={pageIndex}
+              legacyStore={formStore}
+            />
           ) : (
-            <p style={{ color: 'var(--app-text-secondary)' }}>
-              У выбранной формы нет полей.
-            </p>
+            <p style={{ color: 'var(--app-text-secondary)' }}>У выбранной формы нет полей.</p>
           )}
-        </div>
+
+          {showContacts ? (
+            <div ref={contactSectionRef} className="public-form-flow__contacts">
+              <h2 className="public-form-flow__contacts-title">Ваши контакты</h2>
+              <Form
+                form={contactForm}
+                layout="vertical"
+                initialValues={EMPTY_CONTACTS}
+                scrollToFirstError={{ behavior: 'smooth', block: 'center' }}
+              >
+                <Form.Item name="fullName" label="Имя" rules={[requiredRule('Укажите имя')]}>
+                  <Input placeholder="Иван Иванов" />
+                </Form.Item>
+                <Form.Item
+                  name="email"
+                  label="Email"
+                  rules={[
+                    requiredRule('Укажите email'),
+                    {
+                      validator: async (_, value: string) => {
+                        const emailError = validateEmailValue(value, true);
+                        if (emailError) throw new Error(emailError);
+                      },
+                    },
+                  ]}
+                >
+                  <Input placeholder="example@mail.com" />
+                </Form.Item>
+                <Form.Item
+                  name="phone"
+                  label="Телефон"
+                  rules={[
+                    {
+                      validator: async (_, value: string | undefined) => {
+                        if (!value?.trim()) return;
+                        const phoneError = validatePhoneValue(value, false);
+                        if (phoneError) throw new Error(phoneError);
+                      },
+                    },
+                  ]}
+                >
+                  <PhoneInput />
+                </Form.Item>
+                <Form.Item name="company" label="Организация">
+                  <Input placeholder="Название вашей организации" />
+                </Form.Item>
+              </Form>
+            </div>
+          ) : null}
+        </FormFillWizardLayout>
       </div>
     </div>
   );

@@ -6,11 +6,13 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants import request_execution as C
+from app.constants import request_workflow as W
 from app.models.request import Request
 from app.models.user import User
-from app.repositories import request_repository, request_stage_repository
+from app.repositories import request_history_repository, request_repository, request_stage_repository
 from app.services import request_execution_service
 from app.services import request_analysis_service, request_summary_service
+from app.services import request_task_service, request_workflow_service
 from app.services.request_analysis_parser import normalize_legacy_stored_payload
 from app.schemas.request import (
     AIRequestAnalysisResponse,
@@ -91,6 +93,7 @@ def _to_response(
     *,
     include_stages: bool = False,
     execution_events_rows: list | None = None,
+    include_workflow: bool = False,
 ) -> RequestResponse:
     stages_out: list = []
     if include_stages and req.stages is not None:
@@ -102,6 +105,15 @@ def _to_response(
         events_out = [
             request_execution_service.event_to_response(e) for e in execution_events_rows
         ]
+
+    tasks_out: list = []
+    history_out: list = []
+    if include_workflow:
+        if req.tasks is not None:
+            tasks_out = [request_task_service.task_to_response(t) for t in sorted(req.tasks, key=lambda t: t.order_index)]
+        if req.history_events is not None:
+            sorted_history = sorted(req.history_events, key=lambda e: e.created_at, reverse=True)
+            history_out = [request_workflow_service.history_to_response(e) for e in sorted_history]
 
     return RequestResponse(
         id=str(req.id),
@@ -130,6 +142,13 @@ def _to_response(
         execution_status=req.execution_status,
         stages=stages_out,
         execution_events=events_out,
+        workflow_status=getattr(req, "workflow_status", W.WF_NEW),
+        priority=getattr(req, "priority", W.PRIORITY_MEDIUM),
+        due_date=req.due_date.isoformat() if getattr(req, "due_date", None) else None,
+        responsible_user_id=str(req.responsible_user_id) if getattr(req, "responsible_user_id", None) else None,
+        responsible_user=_to_author(req.responsible_user) if getattr(req, "responsible_user", None) else None,
+        tasks=tasks_out,
+        history=history_out,
         ai_tz=req.ai_tz,
     )
 
@@ -139,11 +158,13 @@ def map_request_to_response(
     *,
     include_stages: bool = False,
     execution_events_rows: list | None = None,
+    include_workflow: bool = False,
 ) -> RequestResponse:
     return _to_response(
         req,
         include_stages=include_stages,
         execution_events_rows=execution_events_rows,
+        include_workflow=include_workflow,
     )
 
 
@@ -193,7 +214,12 @@ async def get_request(session: AsyncSession, request_id: int) -> RequestResponse
     if not req:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")
     events = await request_stage_repository.list_execution_events(session, request_id, limit=50)
-    return _to_response(req, include_stages=True, execution_events_rows=events)
+    return _to_response(
+        req,
+        include_stages=True,
+        execution_events_rows=events,
+        include_workflow=True,
+    )
 
 
 async def create_request(
@@ -206,12 +232,14 @@ async def create_request(
         created_by_user_id=current_user.id,
         organization_id=org_id,
         data=payload.data,
-        status=payload.status,
+        status=payload.status if payload.status != "open" else "open",
+        workflow_status=W.WF_NEW if payload.status == "open" else W.WF_DRAFT,
         deleted=False,
         execution_status=C.EXEC_NEW,
         form_snapshot=payload.form_snapshot,
     )
     req = await request_repository.create(session, req)
+    await request_workflow_service.log_request_created(session, req.id, current_user.id)
     await session.commit()
     request_id = req.id
 

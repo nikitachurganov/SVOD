@@ -1,11 +1,16 @@
 import { useState } from 'react';
 import { Form, Input, Modal } from 'antd';
 import { inviteUser } from '../../shared/api/organizations.api';
+import { emailRules, requiredRule } from '../../shared/utils/formRules';
 
 interface Props {
   open: boolean;
   onClose: () => void;
   organizationId: string;
+}
+
+interface InviteFormValues {
+  email: string;
 }
 
 const API_ERROR_MESSAGES: Record<string, string> = {
@@ -17,33 +22,28 @@ const API_ERROR_MESSAGES: Record<string, string> = {
 
 export const InviteMemberModal = ({ open, onClose, organizationId }: Props) => {
   const [loading, setLoading] = useState(false);
-  const [email, setEmail] = useState('');
-  const [emailError, setEmailError] = useState('');
+  const [form] = Form.useForm<InviteFormValues>();
 
   const reset = () => {
-    setEmail('');
-    setEmailError('');
+    form.resetFields();
   };
 
-  const handleSubmit = async () => {
-    const trimmed = email.trim().toLowerCase();
-    if (!trimmed) {
-      setEmailError('Введите email');
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-      setEmailError('Некорректный формат email');
-      return;
-    }
-
+  const handleSubmit = async (values: InviteFormValues) => {
+    const trimmed = values.email.trim().toLowerCase();
     setLoading(true);
     try {
       await inviteUser(organizationId, trimmed);
       reset();
       onClose();
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setEmailError(API_ERROR_MESSAGES[detail ?? ''] ?? 'Не удалось отправить приглашение');
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data
+        ?.detail;
+      form.setFields([
+        {
+          name: 'email',
+          errors: [API_ERROR_MESSAGES[detail ?? ''] ?? 'Не удалось отправить приглашение'],
+        },
+      ]);
     } finally {
       setLoading(false);
     }
@@ -56,26 +56,27 @@ export const InviteMemberModal = ({ open, onClose, organizationId }: Props) => {
       okText={loading ? 'Отправка…' : 'Пригласить'}
       cancelText="Отмена"
       confirmLoading={loading}
-      onCancel={() => { reset(); onClose(); }}
-      onOk={() => void handleSubmit()}
+      onCancel={() => {
+        reset();
+        onClose();
+      }}
+      onOk={() => form.submit()}
+      destroyOnHidden
     >
-      <div style={{ paddingTop: 8 }}>
+      <Form
+        form={form}
+        layout="vertical"
+        onFinish={(values) => void handleSubmit(values)}
+        style={{ paddingTop: 8 }}
+      >
         <Form.Item
+          name="email"
           label="Email пользователя"
-          validateStatus={emailError ? 'error' : undefined}
-          help={emailError || undefined}
+          rules={[requiredRule('Введите email'), ...emailRules()]}
         >
-          <Input
-            id="invite-email"
-            placeholder="user@example.com"
-            value={email}
-            onChange={(e) => {
-              setEmail(e.target.value);
-              if (emailError) setEmailError('');
-            }}
-          />
+          <Input placeholder="user@example.com" />
         </Form.Item>
-      </div>
+      </Form>
     </Modal>
   );
 };

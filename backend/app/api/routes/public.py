@@ -36,7 +36,7 @@ async def suggest_public_forms(
             detail="Слишком много запросов. Подождите минуту и попробуйте снова.",
         )
     return await public_form_suggest_service.suggest_forms_for_public_token(
-        session, token, payload.text
+        session, token, payload.text or (payload.description or "")
     )
 
 

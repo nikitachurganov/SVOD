@@ -1,5 +1,11 @@
 export type NpsCategory = 'detractor' | 'passive' | 'promoter';
 
+export interface CountryCityFieldValue {
+  country: string;
+  countryName: string;
+  city: string;
+}
+
 export interface LocationFieldValue {
   countryCode?: string;
   countryName?: string;
@@ -38,6 +44,13 @@ export const getNpsCategory = (value: number): NpsCategory => {
   if (value <= 8) return 'passive';
   return 'promoter';
 };
+
+export const isCountryCityFieldValue = (value: unknown): value is CountryCityFieldValue =>
+  typeof value === 'object' &&
+  value !== null &&
+  typeof (value as CountryCityFieldValue).country === 'string' &&
+  typeof (value as CountryCityFieldValue).countryName === 'string' &&
+  typeof (value as CountryCityFieldValue).city === 'string';
 
 export const isLocationFieldValue = (value: unknown): value is LocationFieldValue =>
   typeof value === 'object' &&

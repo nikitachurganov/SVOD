@@ -1,10 +1,12 @@
 import { Breadcrumb, Button } from 'antd';
 import { MenuUnfoldOutlined } from '@ant-design/icons';
+import { Link } from 'react-router-dom';
+import type { AppBreadcrumbItem } from './appBreadcrumbs';
 import { HeaderNotifications } from './HeaderNotifications';
 import { HeaderProfileMenu } from './HeaderProfileMenu';
 
 interface AppContentHeaderProps {
-  breadcrumbs: { title: string }[];
+  breadcrumbs: AppBreadcrumbItem[] | null;
   notificationsOpen: boolean;
   onNotificationsOpenChange: (open: boolean) => void;
   profileOpen: boolean;
@@ -43,13 +45,19 @@ export const AppContentHeader = ({
             onClick={onMobileMenuClick}
           />
         )}
-        <Breadcrumb
-          className="app-content-header__breadcrumb"
-          items={breadcrumbs.map((item, index) => ({
-            title: item.title,
-            key: `${item.title}-${index}`,
-          }))}
-        />
+        {breadcrumbs && breadcrumbs.length > 0 ? (
+          <Breadcrumb
+            className="app-content-header__breadcrumb"
+            items={breadcrumbs.map((item, index) => ({
+              title: item.path ? (
+                <Link to={item.path}>{item.title}</Link>
+              ) : (
+                item.title
+              ),
+              key: `${item.title}-${index}`,
+            }))}
+          />
+        ) : null}
       </div>
       <HeaderNotifications
         open={notificationsOpen}

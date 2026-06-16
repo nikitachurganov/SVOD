@@ -11,10 +11,12 @@ import {
 
 import { FormGroupTitle } from './components/FormGroupTitle';
 import { FormilyAddressInput } from './components/FormilyAddressInput';
+import { FormilyCountryCityInput } from './components/FormilyCountryCityInput';
 import { FormilyLocationInput } from './components/FormilyLocationInput';
 import { FormilyRatingInput } from './components/FormilyRatingInput';
 import { FormilyFileUpload } from './components/FormilyFileUpload';
 import { FormilyRadioChoice, FormilyCheckboxChoice, FormilyDropdownChoice } from './components/FormilyChoiceInputs';
+import { FormilyPhoneInput } from './components/FormilyPhoneInput';
 
 /** Shared SchemaField registry for Formily runtime */
 export const SchemaField = createSchemaField({
@@ -28,11 +30,13 @@ export const SchemaField = createSchemaField({
     Radio,
     FormGroupTitle,
     FormilyAddressInput,
+    FormilyCountryCityInput,
     FormilyLocationInput,
     FormilyRatingInput,
     FormilyFileUpload,
     FormilyRadioChoice,
     FormilyCheckboxChoice,
     FormilyDropdownChoice,
+    FormilyPhoneInput,
   },
 });

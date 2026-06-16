@@ -38,6 +38,8 @@ import { AppContentHeader } from './components/layout/AppContentHeader';
 
 import { getBreadcrumbsForPath } from './components/layout/appBreadcrumbs';
 
+import { BreadcrumbProvider, useBreadcrumbEntity } from './shared/context/breadcrumb.context';
+
 import { buildDisplayName } from './shared/utils/userName';
 
 import { CreateFormPage } from './pages/CreateFormPage';
@@ -63,6 +65,8 @@ import { AuthPage } from './pages/AuthPage';
 import { PublicFormFillPage } from './pages/PublicFormFillPage';
 
 import { PublicFormLandingPage } from './pages/PublicFormLandingPage';
+
+import { PublicFormFlowProvider } from './shared/context/publicFormFlow.provider';
 
 import { PublicRequestLegacyRedirect } from './pages/PublicRequestLegacyRedirect';
 
@@ -111,6 +115,8 @@ const AppLayoutContent = () => {
   const navigate = useNavigate();
 
   const isDesktop = useMediaQuery('(min-width: 1056px)');
+
+  const { entityTitle } = useBreadcrumbEntity();
 
   const selectedKey = getSelectedMenuKey(location.pathname);
 
@@ -274,24 +280,6 @@ const AppLayoutContent = () => {
 
 
 
-      {!isDesktop && mobileSidebarOpen && (
-
-        <button
-
-          type="button"
-
-          className="app-mobile-sidebar-backdrop"
-
-          aria-label="Закрыть боковую навигацию"
-
-          onClick={() => setMobileSidebarOpen(false)}
-
-        />
-
-      )}
-
-
-
       <div className={shellClass}>
 
         <AppSidebar
@@ -314,11 +302,29 @@ const AppLayoutContent = () => {
 
 
 
+        {!isDesktop && mobileSidebarOpen && (
+
+          <button
+
+            type="button"
+
+            className="app-mobile-sidebar-backdrop"
+
+            aria-label="Закрыть боковую навигацию"
+
+            onClick={() => setMobileSidebarOpen(false)}
+
+          />
+
+        )}
+
+
+
         <div className="app-shell-main">
 
           <AppContentHeader
 
-            breadcrumbs={getBreadcrumbsForPath(location.pathname)}
+            breadcrumbs={getBreadcrumbsForPath(location.pathname, entityTitle)}
 
             notificationsOpen={headerNotificationsOpen}
 
@@ -394,7 +400,11 @@ const AppLayout = () => (
 
     <AppShellPanelsProvider>
 
-      <AppLayoutContent />
+      <BreadcrumbProvider>
+
+        <AppLayoutContent />
+
+      </BreadcrumbProvider>
 
     </AppShellPanelsProvider>
 
@@ -450,9 +460,14 @@ const router = createBrowserRouter([
 
   { path: '/auth', element: <PublicOnlyAuthPage /> },
 
-  { path: '/form/:token', element: <PublicFormLandingPage /> },
-
-  { path: '/form/:token/fill/:formId', element: <PublicFormFillPage /> },
+  {
+    path: '/form/:token',
+    element: <PublicFormFlowProvider />,
+    children: [
+      { index: true, element: <PublicFormLandingPage /> },
+      { path: 'fill/:formId', element: <PublicFormFillPage /> },
+    ],
+  },
 
   { path: '/public/request/:token', element: <PublicRequestLegacyRedirect /> },
 

@@ -20,22 +20,30 @@ import type { Rule } from '../../hooks/formStore.types';
 import { REQUIRED_FIELD_MESSAGE } from '../../constants/formValidation';
 import {
   validateCheckboxChoiceValue,
+  validateDateValue,
+  validateEmailValue,
   validateFullNameValue,
+  validateLongTextValue,
+  validateNumberValue,
   validatePhoneValue,
   validateRadioChoiceValue,
+  validateShortTextValue,
   validateYesNoValue,
 } from '../../utils/fieldValueValidation';
 import { validateFieldFile } from '../../utils/fileFieldValidation';
+import { getFileAccept, getFileUploadPrompt } from '../../utils/fileUpload.utils';
 import {
   getOtherOption,
   hasOtherOption,
   parseRadioValue,
 } from '../../utils/choiceField.utils';
 import { AddressField } from './AddressField';
+import { CountryCityField } from './CountryCityField';
 import { LocationField } from './LocationField';
 import { RatingField } from './RatingField';
 import { FieldLabel } from './FieldLabel';
 import { CheckboxChoiceField, RadioChoiceField } from './ChoiceFieldInputs';
+import { PhoneInput } from '../../ui/PhoneInput';
 
 const { TextArea } = Input;
 
@@ -49,31 +57,6 @@ interface FormPreviewModalProps {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const getFileAccept = (type: FormFieldInstance['type']): string[] => {
-  switch (type) {
-    case 'file_vector':
-      return ['.svg', '.ai', '.eps', '.pdf'];
-    case 'file_image':
-      return ['image/*'];
-    case 'file_document':
-      return ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt'];
-    default:
-      return [];
-  }
-};
-
-const getFileUploadPrompt = (type: FormFieldInstance['type']): string => {
-  switch (type) {
-    case 'file_vector':
-      return 'Нажмите или перетащите векторный файл для загрузки';
-    case 'file_image':
-      return 'Нажмите или перетащите изображение для загрузки';
-    case 'file_document':
-    default:
-      return 'Нажмите или перетащите документ для загрузки';
-  }
-};
 
 // ─── FileUploadField ──────────────────────────────────────────────────────────
 
@@ -247,6 +230,11 @@ export const PreviewField = ({ field }: PreviewFieldProps) => {
     return <AddressField field={field} />;
   }
 
+  // ── Country & city ──────────────────────────────────────────────────────
+  if (field.type === 'address_country_city') {
+    return <CountryCityField field={field} />;
+  }
+
   // ── Location ────────────────────────────────────────────────────────────
   if (field.type === 'location') {
     return <LocationField field={field} />;
@@ -326,6 +314,53 @@ export const PreviewField = ({ field }: PreviewFieldProps) => {
           },
         ];
         break;
+      case 'email':
+        rules = [
+          {
+            validator: makeValidator((fieldValue) =>
+              validateEmailValue(fieldValue, field.required),
+            ),
+          },
+        ];
+        break;
+      case 'shortText':
+        rules = [
+          {
+            validator: makeValidator((fieldValue) =>
+              validateShortTextValue(fieldValue, field.required),
+            ),
+          },
+        ];
+        break;
+      case 'longText':
+        rules = [
+          {
+            validator: makeValidator((fieldValue) =>
+              validateLongTextValue(fieldValue, field.required),
+            ),
+          },
+        ];
+        break;
+      case 'number':
+        rules = [
+          {
+            validator: makeValidator((fieldValue) =>
+              validateNumberValue(fieldValue, field.required),
+            ),
+          },
+        ];
+        break;
+      case 'date':
+      case 'dateTime':
+      case 'time':
+        rules = [
+          {
+            validator: makeValidator((fieldValue) =>
+              validateDateValue(fieldValue, field.required),
+            ),
+          },
+        ];
+        break;
       default:
         if (field.required) {
           rules = [{ required: true, message: REQUIRED_FIELD_MESSAGE }];
@@ -380,34 +415,24 @@ export const PreviewField = ({ field }: PreviewFieldProps) => {
 
       case 'radio':
         return (
-          <>
-            <RadioChoiceField
-              options={field.options?.length ? field.options : [{ id: '__1', label: 'Вариант 1' }]}
-              value={value}
-              onChange={(next) => setFieldValue(field.id, next)}
-            />
-            {error && (
-              <div style={{ color: 'var(--app-text-error)', fontSize: '0.75rem', marginTop: 4 }}>
-                {error}
-              </div>
-            )}
-          </>
+          <RadioChoiceField
+            options={field.options?.length ? field.options : [{ id: '__1', label: 'Вариант 1' }]}
+            value={value}
+            onChange={(next) => setFieldValue(field.id, next)}
+            error={error === 'Укажите свой вариант' ? undefined : error}
+            otherError={error === 'Укажите свой вариант' ? error : undefined}
+          />
         );
 
       case 'checkbox':
         return (
-          <>
-            <CheckboxChoiceField
-              options={field.options?.length ? field.options : [{ id: '__1', label: 'Вариант 1' }]}
-              value={value}
-              onChange={(next) => setFieldValue(field.id, next)}
-            />
-            {error && (
-              <div style={{ color: 'var(--app-text-error)', fontSize: '0.75rem', marginTop: 4 }}>
-                {error}
-              </div>
-            )}
-          </>
+          <CheckboxChoiceField
+            options={field.options?.length ? field.options : [{ id: '__1', label: 'Вариант 1' }]}
+            value={value}
+            onChange={(next) => setFieldValue(field.id, next)}
+            error={error === 'Укажите свой вариант' ? undefined : error}
+            otherError={error === 'Укажите свой вариант' ? error : undefined}
+          />
         );
 
       case 'dropdown': {
@@ -516,12 +541,10 @@ export const PreviewField = ({ field }: PreviewFieldProps) => {
       case 'phone':
         return (
           <>
-            <Input
+            <PhoneInput
               id={`field-${field.id}`}
-              type="tel"
-              placeholder={field.description || '+7 (___) ___-__-__'}
               value={(value as string) ?? ''}
-              onChange={(e) => setFieldValue(field.id, e.target.value)}
+              onChange={(next) => setFieldValue(field.id, next)}
               status={error ? 'error' : undefined}
             />
             {error && (

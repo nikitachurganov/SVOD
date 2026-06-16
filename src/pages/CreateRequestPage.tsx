@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Breadcrumb, Button, Form, Input, Select, Spin } from 'antd';
+import { Alert, Button, Card, Form, Input, Select, Spin } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -21,16 +21,19 @@ import {
   FormFillRenderer,
   type FormFillRendererHandle,
 } from '../shared/ui/form-fill/FormFillRenderer';
+import { FormFillWizardLayout } from '../shared/ui/form-fill/FormFillWizardLayout';
 import { useFormStore } from '../shared/hooks/useFormStore';
+import { requiredRule } from '../shared/utils/formRules';
 
-interface MetaErrors {
-  title?: string;
-  formId?: string;
+interface MetaFormValues {
+  title: string;
+  formId: string;
 }
 
 export const CreateRequestPage = () => {
   const navigate = useNavigate();
   const { activeOrganization } = useOrganization();
+  const [metaForm] = Form.useForm<MetaFormValues>();
 
   const [forms, setForms] = useState<FormResponse[]>([]);
   const [loadingForms, setLoadingForms] = useState(true);
@@ -39,13 +42,14 @@ export const CreateRequestPage = () => {
   const formStore = useFormStore();
   const fillRef = useRef<FormFillRendererHandle>(null);
   const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [selectedFormId, setSelectedFormId] = useState<string | undefined>();
-  const [requestTitle, setRequestTitle] = useState('');
+  const [metaCollapsed, setMetaCollapsed] = useState(false);
   const [pageIndex, setPageIndex] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const contentRef = useRef<HTMLDivElement | null>(null);
 
-  const [metaErrors, setMetaErrors] = useState<MetaErrors>({});
+  const selectedFormId = Form.useWatch('formId', metaForm);
+  const requestTitle = Form.useWatch('title', metaForm) ?? '';
+
   const [inlineNotification, setInlineNotification] = useState<{
     kind: 'success' | 'error';
     title: string;
@@ -87,6 +91,12 @@ export const CreateRequestPage = () => {
     fillRef.current?.resetFields();
   }, [selectedForm]);
 
+  useEffect(() => {
+    if (step === 3) {
+      setMetaCollapsed(true);
+    }
+  }, [step]);
+
   const scrollToTop = () => {
     if (contentRef.current) {
       contentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
@@ -110,18 +120,22 @@ export const CreateRequestPage = () => {
     scrollToTop();
   };
 
-  const validateMeta = (): { title: string; formId: string } | null => {
-    const newErrors: MetaErrors = {};
-    if (!requestTitle.trim()) newErrors.title = 'Введите название заявки';
-    if (!selectedFormId) newErrors.formId = 'Выберите форму';
-    setMetaErrors(newErrors);
-    if (Object.keys(newErrors).length > 0) return null;
-    return { title: requestTitle.trim(), formId: selectedFormId! };
+  const validateMeta = async (): Promise<MetaFormValues | null> => {
+    try {
+      return await metaForm.validateFields();
+    } catch {
+      return null;
+    }
+  };
+
+  const handleProceedToFill = async () => {
+    const meta = await validateMeta();
+    if (meta) setStep(3);
   };
 
   const handleSubmit = async () => {
     try {
-      const meta = validateMeta();
+      const meta = await validateMeta();
       if (!meta) return;
       await fillRef.current?.validateFields();
       setIsSubmitting(true);
@@ -156,7 +170,7 @@ export const CreateRequestPage = () => {
       }
 
       await createRequest({
-        title: meta.title,
+        title: meta.title.trim(),
         form_id: meta.formId,
         organization_id: activeOrganization?.id ?? null,
         data: alignedData,
@@ -199,8 +213,33 @@ export const CreateRequestPage = () => {
   };
 
   const pageTitle = 'Создание заявки';
-
   const formOptions = forms.map((f) => ({ value: f.id, label: f.name }));
+
+  const fillActions =
+    step === 3 && selectedForm && hasPages && currentPage && currentPage.fields.length > 0 ? (
+      <>
+        <Button
+          onClick={() => {
+            setStep(2);
+            setMetaCollapsed(false);
+            scrollToTop();
+          }}
+        >
+          Назад к параметрам
+        </Button>
+        {!isFirst && <Button onClick={handlePrevPage}>Назад</Button>}
+        {!isLast && (
+          <Button type="primary" onClick={handleNextPage}>
+            Далее
+          </Button>
+        )}
+        {isLast && (
+          <Button type="primary" onClick={handleSubmit} disabled={isSubmitting} loading={isSubmitting}>
+            {isSubmitting ? 'Сохранение…' : 'Сохранить заявку'}
+          </Button>
+        )}
+      </>
+    ) : null;
 
   return (
     <div
@@ -212,7 +251,6 @@ export const CreateRequestPage = () => {
         minHeight: 0,
       }}
     >
-      {/* ── Header ── */}
       <div
         style={{
           background: 'var(--app-surface)',
@@ -221,198 +259,137 @@ export const CreateRequestPage = () => {
           flexShrink: 0,
         }}
       >
-        <Breadcrumb
-          style={{ marginBottom: 8 }}
-          items={[
-            {
-              title: (
-                <a onClick={() => navigate('/requests')} style={{ cursor: 'pointer' }}>
-                  Заявки
-                </a>
-              ),
-            },
-            { title: 'Создание заявки' },
-          ]}
-        />
-
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <Button
-              type="text"
-              size="small"
-              icon={<ArrowLeftOutlined />}
-              aria-label="Вернуться к реестру заявок"
-              onClick={() => navigate('/requests')}
-            />
-            <h4 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 600 }}>
-              {pageTitle}
-            </h4>
-          </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Button
+            type="text"
+            size="small"
+            icon={<ArrowLeftOutlined />}
+            aria-label="Вернуться к реестру заявок"
+            onClick={() => navigate('/requests')}
+          />
+          <h4 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 600 }}>{pageTitle}</h4>
         </div>
       </div>
 
-      {/* ── Content ── */}
-      <div
-        ref={contentRef}
-        style={{
-          flex: 1,
-          minHeight: 0,
-          overflowY: 'auto',
-          background: 'var(--app-bg)',
-        }}
-      >
-        {loadingForms ? (
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              minHeight: '60vh',
-            }}
-          >
-            <Spin size="large" />
-          </div>
-        ) : error ? (
-          <div style={{ padding: 24 }}>
-            <Alert
-              type="error"
-              title="Ошибка загрузки"
-              description={error}
-              showIcon
-              closable={false}
-            />
-          </div>
-        ) : (
-          <div style={{ maxWidth: 720, margin: '0 auto', padding: 24 }}>
-            {inlineNotification && (
-              <div style={{ marginBottom: 16 }}>
-                <Alert
-                  type={inlineNotification.kind}
-                  title={inlineNotification.title}
-                  description={inlineNotification.subtitle}
-                  showIcon
-                  closable
-                  onClose={() => setInlineNotification(null)}
-                />
-              </div>
-            )}
-
-            {/* Step 1 + 2 — meta info */}
-            <div style={{ marginBottom: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {loadingForms ? (
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            flex: 1,
+            minHeight: '60vh',
+          }}
+        >
+          <Spin size="large" tip="Загрузка формы…" />
+        </div>
+      ) : error ? (
+        <div style={{ padding: 24 }}>
+          <Alert type="error" title="Ошибка загрузки" description={error} showIcon closable={false} />
+        </div>
+      ) : (
+        <FormFillWizardLayout
+          contentRef={contentRef}
+          pageIndex={step === 3 ? pageIndex : undefined}
+          pageCount={step === 3 ? pageInstances.length : undefined}
+          pageTitle={step === 3 ? currentPage?.title : undefined}
+          notification={
+            inlineNotification ? (
+              <Alert
+                type={inlineNotification.kind}
+                title={inlineNotification.title}
+                description={inlineNotification.subtitle}
+                showIcon
+                closable
+                onClose={() => setInlineNotification(null)}
+                style={{ marginBottom: 16 }}
+              />
+            ) : null
+          }
+          actions={fillActions}
+        >
+          {step < 3 || !metaCollapsed ? (
+            <Form
+              form={metaForm}
+              layout="vertical"
+              style={{ marginBottom: 24 }}
+              onValuesChange={(changed) => {
+                if ('title' in changed && step === 1 && selectedFormId) {
+                  setStep(2);
+                }
+                if ('formId' in changed && changed.formId) {
+                  setStep(2);
+                }
+              }}
+            >
               <Form.Item
+                name="title"
                 label="Название заявки"
-                validateStatus={metaErrors.title ? 'error' : undefined}
-                help={metaErrors.title}
+                rules={[requiredRule('Введите название заявки')]}
               >
-                <Input
-                  id="meta-title"
-                  placeholder="Например: Заявка на доступ"
-                  value={requestTitle}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                    const value = e.target.value;
-                    setRequestTitle(value);
-                    setMetaErrors((prev) => ({ ...prev, title: undefined }));
-                    if (step === 1 && selectedFormId) {
-                      setStep(2);
-                    }
-                  }}
-                />
+                <Input placeholder="Например: Заявка на доступ" />
               </Form.Item>
-
               <Form.Item
+                name="formId"
                 label="Форма"
-                validateStatus={metaErrors.formId ? 'error' : undefined}
-                help={metaErrors.formId}
+                rules={[requiredRule('Выберите форму')]}
               >
                 <Select
-                  id="meta-formId"
                   showSearch
                   placeholder="Выберите форму"
                   optionFilterProp="label"
                   options={formOptions}
-                  value={selectedFormId}
-                  onChange={(value) => {
-                    setSelectedFormId(value);
-                    setMetaErrors((prev) => ({ ...prev, formId: undefined }));
-                    if (value) setStep(2);
-                  }}
                 />
               </Form.Item>
-            </div>
+              {step === 2 && (
+                <Button
+                  type="primary"
+                  disabled={!selectedFormId || !requestTitle.trim()}
+                  onClick={() => void handleProceedToFill()}
+                >
+                  Далее
+                </Button>
+              )}
+            </Form>
+          ) : (
+            <Card
+              size="small"
+              style={{ marginBottom: 16 }}
+              extra={
+                <Button type="link" onClick={() => setMetaCollapsed(false)}>
+                  Изменить параметры
+                </Button>
+              }
+            >
+              <p style={{ margin: '0 0 4px' }}>
+                <strong>Название:</strong> {requestTitle}
+              </p>
+              <p style={{ margin: 0 }}>
+                <strong>Форма:</strong> {selectedForm?.name}
+              </p>
+            </Card>
+          )}
 
-            {step === 2 && (
-              <Button
-                type="primary"
-                disabled={!selectedFormId || !requestTitle.trim()}
-                onClick={() => {
-                  const meta = validateMeta();
-                  if (meta) setStep(3);
-                }}
-              >
-                Далее
-              </Button>
-            )}
-
-            {/* Step 3 + 4 — fill form */}
-            {step === 3 && selectedForm ? (
-              hasPages && currentPage && currentPage.fields.length > 0 ? (
-                <>
-                  <FormFillRenderer
-                    ref={fillRef}
-                    pages={pageInstances}
-                    pageIndex={pageIndex}
-                    legacyStore={formStore}
-                  />
-
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'flex-start',
-                      gap: 10,
-                      marginTop: 16,
-                    }}
-                  >
-                    {!isFirst && (
-                      <Button onClick={handlePrevPage}>
-                        Назад
-                      </Button>
-                    )}
-                    {!isLast && (
-                      <Button type="primary" onClick={handleNextPage}>
-                        Далее
-                      </Button>
-                    )}
-                    {isLast && (
-                      <Button
-                        type="primary"
-                        onClick={handleSubmit}
-                        disabled={isSubmitting}
-                        loading={isSubmitting}
-                      >
-                        {isSubmitting ? 'Сохранение…' : 'Сохранить заявку'}
-                      </Button>
-                    )}
-                  </div>
-                </>
-              ) : (
-                <span style={{ color: 'var(--app-text-secondary)' }}>
-                  У выбранной формы нет полей.
-                </span>
-              )
+          {step === 3 && selectedForm ? (
+            hasPages && currentPage && currentPage.fields.length > 0 ? (
+              <FormFillRenderer
+                ref={fillRef}
+                pages={pageInstances}
+                pageIndex={pageIndex}
+                legacyStore={formStore}
+              />
             ) : (
               <span style={{ color: 'var(--app-text-secondary)' }}>
-                Укажите название заявки и выберите форму, чтобы продолжить заполнение.
+                У выбранной формы нет полей.
               </span>
-            )}
-          </div>
-        )}
-      </div>
+            )
+          ) : step < 3 ? (
+            <span style={{ color: 'var(--app-text-secondary)' }}>
+              Укажите название заявки и выберите форму, чтобы продолжить заполнение.
+            </span>
+          ) : null}
+        </FormFillWizardLayout>
+      )}
     </div>
   );
 };
