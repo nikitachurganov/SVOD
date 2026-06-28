@@ -13,6 +13,7 @@ from app.repositories import request_history_repository, request_repository, req
 from app.services import request_execution_service
 from app.services import request_analysis_service, request_summary_service
 from app.services import request_task_service, request_workflow_service
+from app.services import access_control, request_permissions as perms
 from app.services.request_analysis_parser import normalize_legacy_stored_payload
 from app.schemas.request import (
     AIRequestAnalysisResponse,
@@ -168,18 +169,41 @@ def map_request_to_response(
     )
 
 
+async def _load_request_for_basic_access(
+    session: AsyncSession,
+    request_id: int,
+    user: User,
+) -> Request:
+    req, member = await perms.load_request_with_access(
+        session, request_id, user, require_org=False
+    )
+    if not perms.can_view_request(req, user, member):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    return req
+
+
 async def list_requests(
     session: AsyncSession,
+    current_user: User,
     organization_id: uuid.UUID | None = None,
     archived: bool | None = None,
-    mine_user_id: uuid.UUID | None = None,
+    mine: bool = False,
     status: str | None = None,
 ) -> list[RequestResponse]:
+    organization_ids: list[uuid.UUID] | None = None
+    if organization_id is not None:
+        await access_control.ensure_organization_member(session, organization_id, current_user)
+    elif not mine:
+        organization_ids = await access_control.list_accessible_organization_ids(
+            session, current_user
+        )
+
     requests = await request_repository.get_all_filtered(
         session,
         organization_id=organization_id,
+        organization_ids=organization_ids,
         archived=archived,
-        created_by_user_id=mine_user_id,
+        created_by_user_id=current_user.id if mine else None,
         status=status,
     )
     return [_to_response(r, include_stages=False) for r in requests]
@@ -188,18 +212,42 @@ async def list_requests(
 async def get_counts(
     session: AsyncSession,
     organization_id: uuid.UUID | None,
+    current_user: User,
 ) -> dict[str, int]:
+    organization_ids: list[uuid.UUID] | None = None
+    if organization_id is not None:
+        await access_control.ensure_organization_member(session, organization_id, current_user)
+    else:
+        organization_ids = await access_control.list_accessible_organization_ids(
+            session, current_user
+        )
+
     open_count = await request_repository.count_filtered(
-        session, organization_id=organization_id, archived=False, status="open"
+        session,
+        organization_id=organization_id,
+        organization_ids=organization_ids,
+        archived=False,
+        status="open",
     )
     in_progress_count = await request_repository.count_filtered(
-        session, organization_id=organization_id, archived=False, status="assigned"
+        session,
+        organization_id=organization_id,
+        organization_ids=organization_ids,
+        archived=False,
+        status="assigned",
     )
     closed_count = await request_repository.count_filtered(
-        session, organization_id=organization_id, archived=False, status="closed"
+        session,
+        organization_id=organization_id,
+        organization_ids=organization_ids,
+        archived=False,
+        status="closed",
     )
     archived_count = await request_repository.count_filtered(
-        session, organization_id=organization_id, archived=True
+        session,
+        organization_id=organization_id,
+        organization_ids=organization_ids,
+        archived=True,
     )
     return {
         "open": open_count,
@@ -209,10 +257,10 @@ async def get_counts(
     }
 
 
-async def get_request(session: AsyncSession, request_id: int) -> RequestResponse:
-    req = await request_repository.get_by_id(session, request_id)
-    if not req:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")
+async def get_request(
+    session: AsyncSession, request_id: int, current_user: User
+) -> RequestResponse:
+    req = await _load_request_for_basic_access(session, request_id, current_user)
     events = await request_stage_repository.list_execution_events(session, request_id, limit=50)
     return _to_response(
         req,
@@ -226,6 +274,9 @@ async def create_request(
     session: AsyncSession, payload: CreateRequestPayload, current_user: User
 ) -> RequestResponse:
     org_id = uuid.UUID(payload.organization_id) if payload.organization_id else None
+    if org_id is not None:
+        await access_control.ensure_organization_member(session, org_id, current_user)
+
     req = Request(
         title=payload.title,
         form_id=uuid.UUID(payload.form_id),
@@ -266,11 +317,9 @@ async def create_request(
 
 
 async def update_request(
-    session: AsyncSession, request_id: int, payload: UpdateRequestPayload
+    session: AsyncSession, request_id: int, payload: UpdateRequestPayload, current_user: User
 ) -> RequestResponse:
-    req = await request_repository.get_by_id(session, request_id)
-    if not req:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")
+    req = await _load_request_for_basic_access(session, request_id, current_user)
 
     if payload.title is not None:
         req.title = payload.title
@@ -291,11 +340,9 @@ async def update_request(
 
 
 async def patch_status(
-    session: AsyncSession, request_id: int, new_status: str
+    session: AsyncSession, request_id: int, new_status: str, current_user: User
 ) -> RequestResponse:
-    req = await request_repository.get_by_id(session, request_id)
-    if not req:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")
+    req = await _load_request_for_basic_access(session, request_id, current_user)
 
     req.status = new_status
     if new_status == "closed":
@@ -310,7 +357,8 @@ async def patch_status(
     return _to_response(req, include_stages=True, execution_events_rows=events)
 
 
-async def delete_request(session: AsyncSession, request_id: int) -> None:
+async def delete_request(session: AsyncSession, request_id: int, current_user: User) -> None:
+    await _load_request_for_basic_access(session, request_id, current_user)
     deleted = await request_repository.remove(session, request_id)
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")

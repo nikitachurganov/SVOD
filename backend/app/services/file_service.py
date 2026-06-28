@@ -4,8 +4,10 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.form_file import FormFile
-from app.repositories import file_repository, request_repository
+from app.models.user import User
+from app.repositories import file_repository
 from app.schemas.form_file import CreateFormFileRequest, FormFileResponse
+from app.services import request_permissions as perms
 
 
 def _to_response(f: FormFile) -> FormFileResponse:
@@ -22,22 +24,29 @@ def _to_response(f: FormFile) -> FormFileResponse:
 
 
 async def list_files_for_request(
-    session: AsyncSession, request_id: int
+    session: AsyncSession, request_id: int, current_user: User
 ) -> list[FormFileResponse]:
-    req = await request_repository.get_by_id(session, request_id)
-    if not req:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")
+    req, member = await perms.load_request_with_access(
+        session, request_id, current_user, require_org=False
+    )
+    if not perms.can_view_request(req, current_user, member):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
     files = await file_repository.get_by_request_id(session, request_id)
     return [_to_response(f) for f in files]
 
 
 async def create_file_metadata(
-    session: AsyncSession, request_id: int, payload: CreateFormFileRequest
+    session: AsyncSession,
+    request_id: int,
+    payload: CreateFormFileRequest,
+    current_user: User,
 ) -> FormFileResponse:
-    req = await request_repository.get_by_id(session, request_id)
-    if not req:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")
+    req, member = await perms.load_request_with_access(
+        session, request_id, current_user, require_org=False
+    )
+    if not perms.can_view_request(req, current_user, member):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
     file = FormFile(
         request_id=request_id,
@@ -52,10 +61,21 @@ async def create_file_metadata(
     return _to_response(file)
 
 
-async def delete_file(session: AsyncSession, file_id: str) -> None:
+async def delete_file(session: AsyncSession, file_id: str, current_user: User) -> None:
     # TODO: When a file storage backend is connected, delete the actual
     # file object here before removing the metadata row.
-    deleted = await file_repository.remove(session, uuid.UUID(file_id))
+    file_uuid = uuid.UUID(file_id)
+    file = await file_repository.get_by_id(session, file_uuid)
+    if file is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+
+    req, member = await perms.load_request_with_access(
+        session, file.request_id, current_user, require_org=False
+    )
+    if not perms.can_view_request(req, current_user, member):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    deleted = await file_repository.remove(session, file_uuid)
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
     await session.commit()

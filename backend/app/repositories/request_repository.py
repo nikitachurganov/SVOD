@@ -1,6 +1,7 @@
 import uuid
+from collections.abc import Sequence
 
-from sqlalchemy import func, select
+from sqlalchemy import false, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -31,12 +32,18 @@ def _apply_request_filters(
     stmt,
     *,
     organization_id: uuid.UUID | None = None,
+    organization_ids: Sequence[uuid.UUID] | None = None,
     archived: bool | None = None,
     created_by_user_id: uuid.UUID | None = None,
     status: str | None = None,
 ):
     if organization_id is not None:
         stmt = stmt.where(Request.organization_id == organization_id)
+    elif organization_ids is not None:
+        if len(organization_ids) == 0:
+            stmt = stmt.where(false())
+        else:
+            stmt = stmt.where(Request.organization_id.in_(organization_ids))
     if created_by_user_id is not None:
         stmt = stmt.where(Request.created_by_user_id == created_by_user_id)
 
@@ -54,6 +61,7 @@ async def get_all_filtered(
     session: AsyncSession,
     *,
     organization_id: uuid.UUID | None = None,
+    organization_ids: Sequence[uuid.UUID] | None = None,
     archived: bool | None = None,
     created_by_user_id: uuid.UUID | None = None,
     status: str | None = None,
@@ -62,6 +70,7 @@ async def get_all_filtered(
     stmt = _apply_request_filters(
         stmt,
         organization_id=organization_id,
+        organization_ids=organization_ids,
         archived=archived,
         created_by_user_id=created_by_user_id,
         status=status,
@@ -75,6 +84,7 @@ async def count_filtered(
     session: AsyncSession,
     *,
     organization_id: uuid.UUID | None = None,
+    organization_ids: Sequence[uuid.UUID] | None = None,
     archived: bool | None = None,
     created_by_user_id: uuid.UUID | None = None,
     status: str | None = None,
@@ -83,6 +93,7 @@ async def count_filtered(
     stmt = _apply_request_filters(
         stmt,
         organization_id=organization_id,
+        organization_ids=organization_ids,
         archived=archived,
         created_by_user_id=created_by_user_id,
         status=status,

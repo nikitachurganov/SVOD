@@ -63,9 +63,10 @@ async def list_requests(
 ) -> list[RequestResponse]:
     return await request_service.list_requests(
         session,
+        current_user=user,
         organization_id=organization_id,
         archived=archived,
-        mine_user_id=user.id if mine else None,
+        mine=mine,
         status=status,
     )
 
@@ -73,17 +74,17 @@ async def list_requests(
 @router.get("/counts")
 async def requests_counts(
     session: DbSession,
-    _user: CurrentUser,
+    user: CurrentUser,
     organization_id: uuid.UUID | None = Query(default=None),
 ) -> dict[str, int]:
-    return await request_service.get_counts(session, organization_id)
+    return await request_service.get_counts(session, organization_id, user)
 
 
 @router.get("/{request_id}", response_model=RequestResponse)
 async def get_request(
-    request_id: int, session: DbSession, _user: CurrentUser
+    request_id: int, session: DbSession, user: CurrentUser
 ) -> RequestResponse:
-    return await request_service.get_request(session, request_id)
+    return await request_service.get_request(session, request_id, user)
 
 
 @router.post("", response_model=RequestResponse, status_code=201)
@@ -100,9 +101,9 @@ async def update_request(
     request_id: int,
     payload: UpdateRequestPayload,
     session: DbSession,
-    _user: CurrentUser,
+    user: CurrentUser,
 ) -> RequestResponse:
-    return await request_service.update_request(session, request_id, payload)
+    return await request_service.update_request(session, request_id, payload, user)
 
 
 @router.patch("/{request_id}/status", response_model=RequestResponse)
@@ -110,9 +111,9 @@ async def patch_status(
     request_id: int,
     payload: PatchStatusPayload,
     session: DbSession,
-    _user: CurrentUser,
+    user: CurrentUser,
 ) -> RequestResponse:
-    return await request_service.patch_status(session, request_id, payload.status)
+    return await request_service.patch_status(session, request_id, payload.status, user)
 
 
 @router.patch("/{request_id}/workflow-status", response_model=RequestResponse)
@@ -264,9 +265,9 @@ async def get_summary(
 
 @router.delete("/{request_id}", status_code=204)
 async def delete_request(
-    request_id: int, session: DbSession, _user: CurrentUser
+    request_id: int, session: DbSession, user: CurrentUser
 ) -> None:
-    await request_service.delete_request(session, request_id)
+    await request_service.delete_request(session, request_id, user)
 
 
 @router.post("/{request_id}/tz", response_model=RequestTZResponse)
