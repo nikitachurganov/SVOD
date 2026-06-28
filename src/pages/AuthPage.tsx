@@ -198,7 +198,7 @@ export const AuthPage = () => {
         </div>
       </Form>
       <Button type="primary" htmlType="submit" loading={loading} block className="auth-page__submit">
-        {loading ? 'Регистрация…' : 'Зарегистрироваться'}
+        {loading ? 'Создание аккаунта…' : 'Создать аккаунт'}
       </Button>
 
       {authSocialBlock}
@@ -231,7 +231,7 @@ export const AuthPage = () => {
       </div>
 
       <section className="auth-page__panel" aria-label="Форма авторизации">
-        <h1 className="auth-page__heading">{mode === 'signIn' ? 'Вход' : 'Регистрация'}</h1>
+        <h1 className="auth-page__heading">{mode === 'signIn' ? 'Вход' : 'Создать аккаунт'}</h1>
 
         <div className="auth-page__panel-body">
           {errorText && (
