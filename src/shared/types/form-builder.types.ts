@@ -17,6 +17,7 @@ export type FormFieldType =
   | 'file_image'
   | 'file_document'
   | 'address'
+  | 'address_country_city'
   | 'location'
   | 'rating';
 
@@ -81,6 +82,7 @@ export const PANEL_KEY_TO_FIELD_TYPE: Readonly<Partial<Record<string, FormFieldT
   fileImage: 'file_image',
   fileDocument: 'file_document',
   address: 'address',
+  countryCity: 'address_country_city',
   location: 'location',
   rating: 'rating',
 } as const;
@@ -105,6 +107,7 @@ export const FIELD_TYPE_LABELS: Readonly<Record<FormFieldType, string>> = {
   file_image: 'Загрузка изображений',
   file_document: 'Загрузка документов',
   address: 'Адрес',
+  address_country_city: 'Страна и город',
   location: 'Города и страны',
   rating: 'Оценка по шкале',
 } as const;

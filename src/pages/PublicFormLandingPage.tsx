@@ -1,436 +1,300 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { Alert, Button, Card, Form, Input, Spin } from 'antd';
+import { useCallback } from 'react';
+import { Alert, Button, Input, Spin } from 'antd';
+import { ArrowLeftOutlined } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
+import { PublicFormErrorScreen } from '../components/public/PublicFormErrorScreen';
+import { PublicFormSuccessScreen } from '../components/public/PublicFormSuccessScreen';
+import { PublicFormSuggestionCard } from '../components/public/PublicFormSuggestionCard';
+import { PublicOrgHeader } from '../components/public/PublicOrgHeader';
 import {
-  getPublicPageData,
+  mapPublicApiError,
   suggestPublicForms,
-  type PublicPageData,
-  type PublicPopularFormSummary,
-  type PublicSuggestedFormCard,
 } from '../shared/api/public.api';
+import { usePublicFormFlow } from '../shared/hooks/publicFormFlow.hooks';
 import {
-  countWords,
-  savePublicApplicantDraft,
-  type PublicApplicantDraft,
-} from '../shared/utils/publicApplicantDraft';
+  MIN_PUBLIC_DESCRIPTION_LENGTH,
+  savePublicDescriptionDraft,
+} from '../shared/utils/publicDescriptionDraft';
 
 const { TextArea } = Input;
 
-const DEBOUNCE_MS = 3000;
-const UNIVERSAL_CHARS = 50;
-
-interface MetaErrors {
-  fullName?: string;
-  company?: string;
-  contact?: string;
-}
-
-const FormChoiceCard = ({
-  title,
-  subtitle,
-  onClick,
-}: {
-  title: string;
-  subtitle: string;
-  onClick: () => void;
-}) => (
-  <Card
-    role="button"
-    tabIndex={0}
-    onClick={onClick}
-    onKeyDown={(e: KeyboardEvent) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        onClick();
-      }
-    }}
-    styles={{
-      body: {
-        cursor: 'pointer',
-        padding: '1rem',
-        marginBottom: 8,
-        border: '1px solid var(--app-border)',
-        borderRadius: 4,
-        background: 'var(--app-surface)',
-      },
-    }}
-  >
-    <div style={{ fontWeight: 600, fontSize: '0.875rem', marginBottom: 6 }}>{title}</div>
-    <div style={{ color: 'var(--app-text-secondary)', fontSize: '0.8125rem', lineHeight: 1.35 }}>
-      {subtitle}
-    </div>
-  </Card>
-);
+const SUGGEST_MIN_LOADING_MS = 1500;
 
 export const PublicFormLandingPage = () => {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
+  const flow = usePublicFormFlow();
 
-  const [pageData, setPageData] = useState<PublicPageData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    pageData,
+    pageLoading,
+    errorCode,
+    errorMessage,
+    step,
+    setStep,
+    description,
+    setDescription,
+    suggestions,
+    setSuggestions,
+    suggestHint,
+    setSuggestHint,
+    suggestError,
+    setSuggestError,
+    showManualList,
+    setShowManualList,
+    restoreSuggestionsFromCache,
+    cacheSuggestions,
+    success,
+    resetFlow,
+    goBackToLanding,
+  } = flow;
 
-  const [fullName, setFullName] = useState('');
-  const [company, setCompany] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [taskDescription, setTaskDescription] = useState('');
-  const [metaErrors, setMetaErrors] = useState<MetaErrors>({});
+  const organization = pageData?.organization ?? null;
+  const organizationName = pageData?.organization_name ?? organization?.name ?? '';
+  const landingTitle =
+    pageData?.link?.custom_title?.trim() || 'Опишите, что вам нужно';
+  const landingSubtitle =
+    pageData?.link?.custom_description?.trim() ||
+    'Мы подберём подходящую форму для вашей заявки';
 
-  const [debounceBusy, setDebounceBusy] = useState(false);
-  const [fetchBusy, setFetchBusy] = useState(false);
-  const [aiForms, setAiForms] = useState<PublicSuggestedFormCard[]>([]);
-  const [aiHint, setAiHint] = useState<string | null>(null);
+  const descriptionReady = description.trim().length >= MIN_PUBLIC_DESCRIPTION_LENGTH;
 
-  const abortRef = useRef<AbortController | null>(null);
+  const activeForms = (pageData?.forms ?? []).filter((form) => !form.is_universal);
 
-  useEffect(() => {
-    if (!token) return;
-    setLoading(true);
-    getPublicPageData(token)
-      .then((data) => {
-        setPageData(data);
-        setError(null);
-      })
-      .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : 'Не удалось загрузить данные');
-      })
-      .finally(() => setLoading(false));
-  }, [token]);
+  const handleSuggest = useCallback(async () => {
+    if (!token || !descriptionReady) return;
+    const trimmed = description.trim();
+    savePublicDescriptionDraft(token, trimmed);
 
-  useEffect(() => {
-    const text = taskDescription;
-    if (!token) return;
-
-    if (!text.trim()) {
-      setDebounceBusy(false);
-      setFetchBusy(false);
-      setAiForms([]);
-      setAiHint(null);
-      abortRef.current?.abort();
-      abortRef.current = null;
+    if (restoreSuggestionsFromCache(trimmed)) {
       return;
     }
 
-    setDebounceBusy(true);
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
+    setStep('suggesting');
+    setSuggestError(null);
+    setSuggestHint(null);
+    setShowManualList(false);
 
-    const timer = window.setTimeout(async () => {
-      setDebounceBusy(false);
-      const words = countWords(text);
-      if (words < 3) {
-        setAiHint('Опишите задачу подробнее');
-        setAiForms([]);
-        return;
+    const startedAt = Date.now();
+    try {
+      const result = await suggestPublicForms(token, trimmed);
+      const elapsed = Date.now() - startedAt;
+      if (elapsed < SUGGEST_MIN_LOADING_MS) {
+        await new Promise((resolve) => {
+          window.setTimeout(resolve, SUGGEST_MIN_LOADING_MS - elapsed);
+        });
       }
-
-      setAiHint(null);
-      setFetchBusy(true);
-      try {
-        const res = await suggestPublicForms(token, text, controller.signal);
-        if (!controller.signal.aborted) {
-          setAiForms(res.forms ?? []);
-          setAiHint(res.hint ?? null);
-        }
-      } catch (e: unknown) {
-        if (controller.signal.aborted) return;
-        const msg = e instanceof Error ? e.message : '';
-        if (!msg.includes('abort') && !msg.includes('canceled')) {
-          setAiForms([]);
-          setAiHint(null);
-        }
-      } finally {
-        if (!controller.signal.aborted) setFetchBusy(false);
+      setSuggestions(result.forms);
+      setSuggestHint(result.hint ?? null);
+      setStep('suggestions');
+      if (result.forms.length === 0) {
+        setShowManualList(true);
       }
-    }, DEBOUNCE_MS);
-
-    return () => {
-      clearTimeout(timer);
-      controller.abort();
-    };
-  }, [taskDescription, token]);
-
-  const showPopular = taskDescription.trim().length === 0;
-  const showSpinner =
-    taskDescription.trim().length >= 1 && (debounceBusy || fetchBusy);
-  const words = useMemo(() => countWords(taskDescription), [taskDescription]);
-  const showAiNoMatch =
-    !showSpinner &&
-    taskDescription.trim().length > 0 &&
-    words >= 3 &&
-    aiForms.length === 0 &&
-    !aiHint;
-
-  const showUniversalCta =
-    showAiNoMatch &&
-    taskDescription.trim().length >= UNIVERSAL_CHARS &&
-    Boolean(pageData?.universal_form_id);
-
-  const validateContact = useCallback((): boolean => {
-    const newErrors: MetaErrors = {};
-    if (!fullName.trim()) newErrors.fullName = 'Укажите ФИО';
-    if (!company.trim()) newErrors.company = 'Укажите филиал или компанию';
-    const hasEmail = email.trim().length > 0;
-    const hasPhone = phone.trim().length > 0;
-    if (!hasEmail && !hasPhone) {
-      newErrors.contact = 'Укажите телефон или email';
-    } else if (hasEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      newErrors.contact = 'Некорректный email';
+      cacheSuggestions(trimmed, {
+        forms: result.forms,
+        hint: result.hint ?? null,
+        suggestError: null,
+        showManualList: result.forms.length === 0,
+      });
+    } catch (err: unknown) {
+      const elapsed = Date.now() - startedAt;
+      if (elapsed < SUGGEST_MIN_LOADING_MS) {
+        await new Promise((resolve) => {
+          window.setTimeout(resolve, SUGGEST_MIN_LOADING_MS - elapsed);
+        });
+      }
+      const mapped = mapPublicApiError(err);
+      setSuggestError(mapped.message);
+      setSuggestions([]);
+      setStep('suggestions');
+      setShowManualList(true);
+      cacheSuggestions(trimmed, {
+        forms: [],
+        hint: null,
+        suggestError: mapped.message,
+        showManualList: true,
+      });
     }
-    setMetaErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  }, [fullName, company, email, phone]);
+  }, [
+    token,
+    description,
+    descriptionReady,
+    cacheSuggestions,
+    restoreSuggestionsFromCache,
+    setShowManualList,
+    setStep,
+    setSuggestError,
+    setSuggestHint,
+    setSuggestions,
+  ]);
 
-  const goToFill = useCallback(
+  const handleSelectForm = useCallback(
     (formId: string) => {
-      if (!token || !validateContact()) return;
-      const draft: PublicApplicantDraft = {
-        fullName: fullName.trim(),
-        company: company.trim(),
-        email: email.trim(),
-        phone: phone.trim(),
-        draftDescription: taskDescription.trim(),
-      };
-      savePublicApplicantDraft(token, draft);
+      if (!token) return;
+      savePublicDescriptionDraft(token, description.trim());
       navigate(`/form/${token}/fill/${formId}`);
     },
-    [token, fullName, company, email, phone, taskDescription, navigate, validateContact],
+    [token, description, navigate],
   );
 
-  const goToUniversal = useCallback(() => {
-    const id = pageData?.universal_form_id;
-    if (id) goToFill(id);
-  }, [pageData?.universal_form_id, goToFill]);
+  const handleSubmitAnother = useCallback(() => {
+    resetFlow();
+    if (token) navigate(`/form/${token}`, { replace: true });
+  }, [resetFlow, token, navigate]);
 
-  if (loading) {
+  if (pageLoading) {
     return (
-      <div
-        style={{
-          minHeight: '100vh',
-          display: 'grid',
-          placeItems: 'center',
-          background: 'var(--app-bg)',
-        }}
-      >
+      <div className="public-form-flow public-form-flow--centered">
         <Spin size="large" />
       </div>
     );
   }
 
-  if (error || !pageData) {
+  if (success) {
     return (
-      <div style={{ padding: 32, maxWidth: 600, margin: '0 auto' }}>
-        <Alert
-          type="error"
-          message="Ссылка недействительна"
-          description={error || 'Не удалось загрузить данные'}
-          showIcon
-          closable={false}
-        />
-      </div>
+      <PublicFormSuccessScreen
+        organizationName={success.organizationName}
+        requestNumber={success.requestNumber}
+        onSubmitAnother={handleSubmitAnother}
+      />
     );
   }
 
-  const popularForms = pageData.popular_forms ?? [];
+  if (step === 'error') {
+    return <PublicFormErrorScreen code={errorCode} message={errorMessage ?? undefined} />;
+  }
+
+  if (!pageData || !token) {
+    return <PublicFormErrorScreen />;
+  }
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        background: 'var(--app-bg)',
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-    >
-      <header
-        style={{
-          height: '3rem',
-          display: 'flex',
-          alignItems: 'center',
-          paddingInline: '1rem',
-          background: 'var(--app-surface)',
-          borderBottom: '1px solid var(--app-border)',
-          flexShrink: 0,
-        }}
-      >
-        <span style={{ fontWeight: 600, fontSize: '0.875rem' }}>
-          {pageData.organization_name} — Подать заявку
-        </span>
-      </header>
+    <div className="public-form-flow">
+      <PublicOrgHeader
+        organization={organization}
+        organizationName={organizationName}
+        subtitle="Подать заявку"
+      />
 
-      <div
-        style={{
-          flex: 1,
-          overflowY: 'auto',
-          padding: 24,
-        }}
-      >
-        <div style={{ maxWidth: 640, margin: '0 auto' }}>
-          {pageData.organization_description && (
-            <p
-              style={{
-                color: 'var(--app-text-secondary)',
-                marginBottom: 24,
-                fontSize: '0.875rem',
-              }}
-            >
-              {pageData.organization_description}
-            </p>
-          )}
+      <main className="public-form-flow__content">
+        {step === 'landing' && (
+          <div className="public-form-flow__panel public-form-flow--fade-in">
+            <h1 className="public-form-flow__title">{landingTitle}</h1>
+            <p className="public-form-flow__subtitle">{landingSubtitle}</p>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <Form.Item
-              label="ФИО"
-              validateStatus={metaErrors.fullName ? 'error' : undefined}
-              help={metaErrors.fullName}
-            >
-              <Input
-                id="pub-fullName"
-                placeholder="Иванов Иван Иванович"
-                value={fullName}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                  setFullName(e.target.value);
-                  setMetaErrors((p) => ({ ...p, fullName: undefined }));
-                }}
-              />
-            </Form.Item>
-            <Form.Item
-              label="Филиал / компания"
-              validateStatus={metaErrors.company ? 'error' : undefined}
-              help={metaErrors.company}
-            >
-              <Input
-                id="pub-company"
-                placeholder="Название филиала или компании"
-                value={company}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                  setCompany(e.target.value);
-                  setMetaErrors((p) => ({ ...p, company: undefined }));
-                }}
-              />
-            </Form.Item>
-            <Form.Item
-              label="Email"
-              validateStatus={metaErrors.contact ? 'error' : undefined}
-              help={metaErrors.contact}
-            >
-              <Input
-                id="pub-email"
-                placeholder="example@mail.com"
-                value={email}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                  setEmail(e.target.value);
-                  setMetaErrors((p) => ({ ...p, contact: undefined }));
-                }}
-              />
-            </Form.Item>
-            <Form.Item
-              label="Телефон"
-              validateStatus={metaErrors.contact ? 'error' : undefined}
-              help={metaErrors.contact}
-            >
-              <Input
-                id="pub-phone"
-                placeholder="+7 (999) 123-45-67"
-                value={phone}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                  setPhone(e.target.value);
-                  setMetaErrors((p) => ({ ...p, contact: undefined }));
-                }}
-              />
-            </Form.Item>
+            {pageData.organization_description ? (
+              <p className="public-form-flow__org-description">
+                {pageData.organization_description}
+              </p>
+            ) : null}
 
-            <Form.Item label="Кратко опишите задачу">
-              <TextArea
-                id="pub-task"
-                placeholder="Например: нужен баннер 2×3 м для новой точки в Екатеринбурге…"
-                value={taskDescription}
-                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-                  setTaskDescription(e.target.value)
-                }
-                rows={4}
-                showCount
-                maxLength={4000}
-              />
-            </Form.Item>
+            <TextArea
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              placeholder="Например: нужно заказать визитки для офиса, 500 штук, двусторонняя печать"
+              rows={5}
+              maxLength={4000}
+              showCount
+            />
 
-            {showPopular && popularForms.length > 0 && (
-              <div style={{ marginTop: 8 }}>
-                <p style={{ fontWeight: 600, fontSize: '0.875rem', marginBottom: 12 }}>
-                  Популярные типы заявок
-                </p>
-                {popularForms.map((f: PublicPopularFormSummary) => (
-                  <FormChoiceCard
-                    key={f.id}
-                    title={f.name}
-                    subtitle={f.short_description}
-                    onClick={() => goToFill(f.id)}
+            <Button
+              type="primary"
+              size="large"
+              block
+              disabled={!descriptionReady}
+              onClick={() => void handleSuggest()}
+              style={{ marginTop: 16 }}
+            >
+              Подобрать форму
+            </Button>
+
+            <button
+              type="button"
+              className="public-form-flow__manual-link"
+              onClick={() => setShowManualList(!showManualList)}
+            >
+              Или выберите форму вручную
+            </button>
+
+            {showManualList && activeForms.length > 0 && (
+              <div className="public-form-flow__manual-list">
+                <p className="public-form-flow__section-title">Выберите форму вручную:</p>
+                {activeForms.map((form) => (
+                  <PublicFormSuggestionCard
+                    key={form.id}
+                    form={form}
+                    onSelect={() => handleSelectForm(form.id)}
                   />
                 ))}
-              </div>
-            )}
-
-            {showSpinner && (
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  marginTop: 8,
-                  color: 'var(--app-text-secondary)',
-                  fontSize: '0.875rem',
-                }}
-                aria-busy="true"
-              >
-                <Spin tip="Анализируем ваш запрос…" />
-              </div>
-            )}
-
-            {aiHint && !showSpinner && (
-              <Alert type="info" description={aiHint} showIcon closable={false} />
-            )}
-
-            {!showPopular && aiForms.length > 0 && !showSpinner && (
-              <div style={{ marginTop: 8 }}>
-                <p style={{ fontWeight: 600, fontSize: '0.875rem', marginBottom: 12 }}>
-                  Подходящие типы заявок
-                </p>
-                {aiForms.map((f) => (
-                  <FormChoiceCard
-                    key={f.id}
-                    title={f.name}
-                    subtitle={f.short_description}
-                    onClick={() => goToFill(f.id)}
-                  />
-                ))}
-              </div>
-            )}
-
-            {showAiNoMatch && (
-              <Alert
-                type="warning"
-                description="Не удалось определить тип задачи. Пожалуйста, добавьте больше деталей"
-                showIcon
-                closable={false}
-              />
-            )}
-
-            {showUniversalCta && (
-              <div style={{ marginTop: 8 }}>
-                <p style={{ fontSize: '0.875rem', marginBottom: 8, color: 'var(--app-text-secondary)' }}>
-                  Можно заполнить универсальную форму заявки — опишите задачу в свободной форме и
-                  прикрепите файлы.
-                </p>
-                <Button type="text" onClick={goToUniversal}>
-                  Заполнить универсальную форму
-                </Button>
               </div>
             )}
           </div>
-        </div>
-      </div>
+        )}
+
+        {step === 'suggesting' && (
+          <div className="public-form-flow__panel public-form-flow__loading public-form-flow--fade-in">
+            <Spin size="large" />
+            <p>Анализируем вашу заявку...</p>
+          </div>
+        )}
+
+        {step === 'suggestions' && (
+          <div className="public-form-flow__panel public-form-flow--fade-in">
+            <Button
+              type="text"
+              icon={<ArrowLeftOutlined />}
+              onClick={goBackToLanding}
+              style={{ marginBottom: 12, paddingInline: 0 }}
+            >
+              Назад
+            </Button>
+
+            {suggestError ? (
+              <Alert
+                type="warning"
+                showIcon
+                message="Не удалось автоматически подобрать форму"
+                description={suggestError}
+                style={{ marginBottom: 16 }}
+              />
+            ) : suggestions.length === 0 ? (
+              <Alert
+                type="info"
+                showIcon
+                message="Не удалось автоматически подобрать форму"
+                style={{ marginBottom: 16 }}
+              />
+            ) : (
+              <p className="public-form-flow__section-title">Рекомендуемые формы</p>
+            )}
+
+            {suggestHint ? (
+              <Alert type="info" showIcon description={suggestHint} style={{ marginBottom: 16 }} />
+            ) : null}
+
+            {suggestions.map((form) => (
+              <PublicFormSuggestionCard
+                key={form.id}
+                form={form}
+                onSelect={() => handleSelectForm(form.id)}
+              />
+            ))}
+
+            {(showManualList || suggestions.length === 0) && activeForms.length > 0 && (
+              <div className="public-form-flow__manual-list">
+                <p className="public-form-flow__section-title">Выберите форму вручную:</p>
+                {activeForms.map((form) => (
+                  <PublicFormSuggestionCard
+                    key={form.id}
+                    form={form}
+                    onSelect={() => handleSelectForm(form.id)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </main>
     </div>
   );
 };

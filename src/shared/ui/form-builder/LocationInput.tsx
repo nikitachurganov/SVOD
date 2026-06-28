@@ -8,11 +8,13 @@ import {
   filterCountries,
   getCountryByCode,
 } from '../../data/locations';
-import { getLocationConfig } from '../../utils/fieldConfig';
+import { getCountryCityConfig, getLocationConfig } from '../../utils/fieldConfig';
 import {
   isLocationFieldValue,
+  type CountryCityFieldValue,
   type LocationFieldValue,
 } from '../../types/field-values.types';
+import { CountryCityInput } from './CountryCityInput';
 import { FieldLabel } from './FieldLabel';
 
 interface LocationInputProps {
@@ -29,6 +31,28 @@ const toLocationValue = (value: LocationFieldValue | string | undefined): Locati
   }
   return { displayValue: '' };
 };
+
+const locationToCountryCity = (
+  value: LocationFieldValue | string | undefined,
+): CountryCityFieldValue | undefined => {
+  const current = toLocationValue(value);
+  if (!current.countryCode && !current.countryName) return undefined;
+  return {
+    country: current.countryCode ?? '',
+    countryName: current.countryName ?? '',
+    city: current.cityName ?? '',
+  };
+};
+
+const countryCityToLocation = (value: CountryCityFieldValue): LocationFieldValue => ({
+  countryCode: value.country,
+  countryName: value.countryName,
+  cityName: value.city,
+  displayValue: buildLocationDisplayValue({
+    countryName: value.countryName,
+    cityName: value.city,
+  }),
+});
 
 export const LocationInput = ({ field, value, onChange, error }: LocationInputProps) => {
   const config = getLocationConfig(field);
@@ -53,6 +77,25 @@ export const LocationInput = ({ field, value, onChange, error }: LocationInputPr
       label: city.name,
     }));
   }, [cityQuery, current.countryCode, config.defaultCountry, config.allowedCountries]);
+
+  if (config.mode === 'country_and_city') {
+    const countryCityConfig = getCountryCityConfig(field);
+    return (
+      <CountryCityInput
+        field={field}
+        config={countryCityConfig}
+        value={locationToCountryCity(value)}
+        error={error}
+        onChange={(next) => {
+          if (!next) {
+            onChange({ displayValue: '' });
+            return;
+          }
+          onChange(countryCityToLocation(next));
+        }}
+      />
+    );
+  }
 
   const updateCountry = (countryCode: string) => {
     const country = getCountryByCode(countryCode);
@@ -200,23 +243,6 @@ export const LocationInput = ({ field, value, onChange, error }: LocationInputPr
 
       {config.mode === 'city_only' ? (
         <div>{renderCityControl()}</div>
-      ) : null}
-
-      {config.mode === 'country_and_city' ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div>
-            <div style={{ fontSize: 12, color: 'var(--app-text-secondary)', marginBottom: 4 }}>
-              Страна
-            </div>
-            {renderCountryControl()}
-          </div>
-          <div>
-            <div style={{ fontSize: 12, color: 'var(--app-text-secondary)', marginBottom: 4 }}>
-              Город
-            </div>
-            {renderCityControl(current.countryCode)}
-          </div>
-        </div>
       ) : null}
 
       {field.description ? (

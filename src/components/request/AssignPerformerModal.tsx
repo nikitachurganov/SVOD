@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Alert, Modal, Radio, Select } from 'antd';
 import { assignRequestPerformer } from '../../shared/api/requests.api';
+import { featureFlags } from '../../shared/config/featureFlags';
 import type { RecommendedPerformerDTO } from '../../types/performerSelection';
 
 export type AssignPerformerModalProps = {
@@ -32,6 +33,7 @@ export function AssignPerformerModal({
   recommendedPerformerId,
   onSuccess,
 }: AssignPerformerModalProps) {
+  const tzEnabled = featureFlags.tzGeneration;
   const [delivery, setDelivery] = useState<'status_only' | 'send_spec'>('status_only');
   const [contactMethod, setContactMethod] = useState('auto');
   const [submitting, setSubmitting] = useState(false);
@@ -117,12 +119,12 @@ export function AssignPerformerModal({
           >
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <Radio value="status_only">Только сменить статус и закрепить исполнителя</Radio>
-              <Radio value="send_spec">Отправить ТЗ исполнителю</Radio>
+              {tzEnabled && <Radio value="send_spec">Отправить ТЗ исполнителю</Radio>}
             </div>
           </Radio.Group>
         </div>
 
-        {sendTz && (
+        {tzEnabled && sendTz && (
           <>
             {!performer?.contact_available && (
               <Alert

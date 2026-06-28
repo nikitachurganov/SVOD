@@ -1,6 +1,7 @@
 import logging
 import secrets
 import uuid
+import asyncio
 
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,13 +18,16 @@ from app.repositories import (
 )
 from app.schemas.public_link import (
     PublicFormSummary,
+    PublicLinkInfo,
     PublicLinkResponse,
+    PublicOrganizationInfo,
     PublicPageDataResponse,
     PublicPopularFormSummary,
     PublicRequestCreatedResponse,
     PublicRequestSubmission,
 )
-from app.services import request_analysis_service, request_summary_service
+from app.services.public_form_suggest_service import count_form_fields
+from app.services.public_request_ai_tasks import run_public_request_ai_pipeline
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +66,27 @@ async def _get_org_and_check_owner(
         )
 
 
+async def _resolve_public_link(session: AsyncSession, token: str) -> PublicRequestLink:
+    link = await public_link_repository.get_by_token_any(session, token)
+    if link is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="link_not_found",
+        )
+    if not link.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="link_inactive",
+        )
+    org = link.organization
+    if org is None:
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="organization_unavailable",
+        )
+    return link
+
+
 async def get_or_create_link(
     session: AsyncSession, org_id: uuid.UUID, current_user: User
 ) -> PublicLinkResponse:
@@ -83,15 +108,10 @@ async def get_or_create_link(
 async def get_public_page_data(
     session: AsyncSession, token: str
 ) -> PublicPageDataResponse:
-    link = await public_link_repository.get_by_token(session, token)
-    if link is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Public link not found or inactive",
-        )
+    link = await _resolve_public_link(session, token)
 
     org = link.organization
-    forms = await form_repository.get_all_by_org(session, link.organization_id)
+    forms = await form_repository.get_active_by_org(session, link.organization_id)
 
     form_summaries = [
         PublicFormSummary(
@@ -100,6 +120,7 @@ async def get_public_page_data(
             description=f.description or "",
             pages=f.fields if isinstance(f.fields, list) else [],
             is_universal=bool(getattr(f, "is_universal", False)),
+            field_count=count_form_fields(f),
         )
         for f in forms
     ]
@@ -126,24 +147,31 @@ async def get_public_page_data(
         forms=form_summaries,
         popular_forms=popular_forms,
         universal_form_id=universal_form_id,
+        organization=PublicOrganizationInfo(
+            id=str(org.id),
+            name=org.name,
+            logo_url=None,
+            description=org.description,
+        ),
+        link=PublicLinkInfo(active=link.is_active),
     )
 
 
 async def submit_public_request(
     session: AsyncSession, token: str, payload: PublicRequestSubmission
 ) -> PublicRequestCreatedResponse:
-    link = await public_link_repository.get_by_token(session, token)
-    if link is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Public link not found or inactive",
-        )
+    link = await _resolve_public_link(session, token)
 
     form = await form_repository.get_by_id(session, uuid.UUID(payload.form_id))
     if form is None or form.organization_id != link.organization_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Selected form does not belong to this organization",
+        )
+    if form.archived:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Selected form is archived",
         )
 
     req = Request(
@@ -153,36 +181,35 @@ async def submit_public_request(
         organization_id=link.organization_id,
         data=payload.data,
         status="open",
+        workflow_status="new",
         execution_status=C.EXEC_NEW,
         form_snapshot=payload.form_snapshot,
         source="public_link",
         applicant_name=payload.full_name,
-        applicant_company=payload.applicant_company.strip(),
-        applicant_email=str(payload.email) if payload.email else None,
+        applicant_company=payload.applicant_company,
+        applicant_email=str(payload.email),
         applicant_phone=payload.phone or None,
+        applicant_description=(payload.applicant_description or "").strip() or None,
+        public_link_token=token,
     )
     req = await request_repository.create(session, req)
+    request_id = req.id
+    response_title = req.title
+    response_status = req.status
+    response_created_at = req.created_at
+
     form.usage_count = getattr(form, "usage_count", 0) + 1
+    link.usage_count = getattr(link, "usage_count", 0) + 1
     await form_repository.update(session, form)
     await session.commit()
 
-    try:
-        await request_summary_service.generate_summary(session, req.id)
-    except Exception:
-        logger.exception("AI summary generation failed for public request %s", req.id)
-
-    try:
-        await request_analysis_service.generate_analysis(session, req.id)
-    except request_analysis_service.AnalysisGenerationFailed:
-        logger.warning("AI analysis skipped (LLM unavailable) for public request %s", req.id)
-        await session.rollback()
-    except Exception:
-        logger.exception("AI analysis generation failed for public request %s", req.id)
-        await session.rollback()
+    asyncio.create_task(run_public_request_ai_pipeline(request_id))
 
     return PublicRequestCreatedResponse(
-        id=str(req.id),
-        title=req.title,
-        status=req.status,
-        created_at=req.created_at.isoformat(),
+        id=str(request_id),
+        title=response_title,
+        status=response_status,
+        created_at=response_created_at.isoformat(),
+        request_id=str(request_id),
+        request_number=str(request_id),
     )

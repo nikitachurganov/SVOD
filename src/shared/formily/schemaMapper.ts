@@ -7,8 +7,12 @@ import type {
 } from '../types/form-builder.types';
 import { hasOtherOption } from '../utils/choiceField.utils';
 import {
+  validateDateValue,
+  validateEmailValue,
   validateFullNameValue,
-  validatePhoneValue,
+  validateLongTextValue,
+  validateNumberValue,
+  validateShortTextValue,
   validateYesNoValue,
 } from '../utils/fieldValueValidation';
 import { isFormilyFieldTypeSupported } from './supportedTypes';
@@ -59,6 +63,7 @@ const fieldToSchemaProperty = (field: FormFieldInstance): ISchema | null => {
         'x-component-props': {
           placeholder: field.description || undefined,
         },
+        'x-validator': fieldValidator(validateShortTextValue, field.required),
       };
 
     case 'fullName':
@@ -74,12 +79,10 @@ const fieldToSchemaProperty = (field: FormFieldInstance): ISchema | null => {
     case 'phone':
       return {
         ...base,
-        'x-component': 'Input',
+        'x-component': 'FormilyPhoneInput',
         'x-component-props': {
-          placeholder: field.description || '+7 (___) ___-__-__',
-          type: 'tel',
+          fieldMeta: field,
         },
-        'x-validator': fieldValidator(validatePhoneValue, field.required),
       };
 
     case 'email':
@@ -90,6 +93,7 @@ const fieldToSchemaProperty = (field: FormFieldInstance): ISchema | null => {
           placeholder: field.description || undefined,
           type: 'email',
         },
+        'x-validator': fieldValidator(validateEmailValue, field.required),
       };
 
     case 'longText':
@@ -100,6 +104,7 @@ const fieldToSchemaProperty = (field: FormFieldInstance): ISchema | null => {
           placeholder: field.description || undefined,
           rows: 3,
         },
+        'x-validator': fieldValidator(validateLongTextValue, field.required),
       };
 
     case 'number':
@@ -110,6 +115,7 @@ const fieldToSchemaProperty = (field: FormFieldInstance): ISchema | null => {
           placeholder: field.description || 'Введите число',
           type: 'number',
         },
+        'x-validator': fieldValidator(validateNumberValue, field.required),
       };
 
     case 'dropdown': {
@@ -185,6 +191,7 @@ const fieldToSchemaProperty = (field: FormFieldInstance): ISchema | null => {
           format: 'YYYY-MM-DD',
           style: { width: '100%' },
         },
+        'x-validator': fieldValidator(validateDateValue, field.required),
       };
 
     case 'time':
@@ -195,6 +202,7 @@ const fieldToSchemaProperty = (field: FormFieldInstance): ISchema | null => {
           format: 'HH:mm',
           style: { width: '100%' },
         },
+        'x-validator': fieldValidator(validateDateValue, field.required),
       };
 
     case 'dateTime':
@@ -206,6 +214,7 @@ const fieldToSchemaProperty = (field: FormFieldInstance): ISchema | null => {
           format: 'YYYY-MM-DD HH:mm',
           style: { width: '100%' },
         },
+        'x-validator': fieldValidator(validateDateValue, field.required),
       };
 
     case 'address':
@@ -221,6 +230,15 @@ const fieldToSchemaProperty = (field: FormFieldInstance): ISchema | null => {
       return {
         ...base,
         'x-component': 'FormilyLocationInput',
+        'x-component-props': {
+          fieldMeta: field,
+        },
+      };
+
+    case 'address_country_city':
+      return {
+        ...base,
+        'x-component': 'FormilyCountryCityInput',
         'x-component-props': {
           fieldMeta: field,
         },
@@ -333,11 +351,13 @@ const componentToFieldType = (component: string, schema: ISchema): FormFieldType
   if (component === 'TimePicker') return 'time';
   if (component === 'FormilyAddressInput') return 'address';
   if (component === 'FormilyLocationInput') return 'location';
+  if (component === 'FormilyCountryCityInput') return 'address_country_city';
   if (component === 'FormilyRatingInput') return 'rating';
   if (component === 'FormilyFileUpload') {
     const props = schema['x-component-props'] as { fieldType?: FormFieldType } | undefined;
     return props?.fieldType ?? 'file_document';
   }
+  if (component === 'FormilyPhoneInput') return 'phone';
   if (component === 'Input') {
     const props = schema['x-component-props'] as { type?: string } | undefined;
     if (props?.type === 'number') return 'number';

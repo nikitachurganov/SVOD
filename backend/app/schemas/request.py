@@ -6,6 +6,10 @@ from app.schemas.request_execution import (
     RequestExecutionEventResponse,
     RequestStageResponse,
 )
+from app.schemas.request_workflow import (
+    RequestHistoryEventResponse,
+    RequestTaskResponse,
+)
 from app.schemas.user import PublicAuthorResponse
 
 
@@ -87,4 +91,11 @@ class RequestResponse(BaseModel):
     execution_status: str | None = None
     stages: list[RequestStageResponse] = []
     execution_events: list[RequestExecutionEventResponse] = []
+    workflow_status: str = "new"
+    priority: str = "medium"
+    due_date: str | None = None
+    responsible_user_id: str | None = None
+    responsible_user: PublicAuthorResponse | None = None
+    tasks: list[RequestTaskResponse] = []
+    history: list[RequestHistoryEventResponse] = []
     ai_tz: dict | None = None

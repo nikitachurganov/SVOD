@@ -205,6 +205,16 @@ export const FieldRenderer = ({ field }: FieldRendererProps) => {
         />
       );
 
+    case 'address_country_city':
+      return (
+        <Select
+          id={`${prefix}-country-city`}
+          disabled
+          placeholder={FIELD_TYPE_LABELS.address_country_city}
+          style={{ width: '100%' }}
+        />
+      );
+
     case 'location':
       return (
         <Select

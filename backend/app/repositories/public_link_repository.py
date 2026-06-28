@@ -17,6 +17,16 @@ async def get_by_token(session: AsyncSession, token: str) -> PublicRequestLink |
     return result.scalar_one_or_none()
 
 
+async def get_by_token_any(session: AsyncSession, token: str) -> PublicRequestLink | None:
+    stmt = (
+        select(PublicRequestLink)
+        .options(selectinload(PublicRequestLink.organization))
+        .where(PublicRequestLink.token == token)
+    )
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none()
+
+
 async def get_by_org(
     session: AsyncSession, org_id: uuid.UUID
 ) -> PublicRequestLink | None:

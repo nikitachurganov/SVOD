@@ -3,6 +3,7 @@ import { Table, Tag, Tooltip, Button, Modal, Card } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { PlusOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { Link, useNavigate } from 'react-router-dom';
+import { IconDefaultButton } from '../shared/ui/IconDefaultButton';
 import {
   deleteRequest,
   getRequests,
@@ -251,11 +252,10 @@ export const RequestsPage = () => {
         width: 100,
         render: (_, record) => (
           <div style={{ display: 'flex', gap: 4 }}>
-            <Button
-              type="text"
-              size="small"
+            <IconDefaultButton
               icon={<EyeOutlined />}
               title="Открыть"
+              aria-label="Открыть"
               onClick={() => navigate(`/requests/${record.id}`)}
             />
             {!isArchive && (

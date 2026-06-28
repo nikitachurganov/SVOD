@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  Breadcrumb,
   Button,
   Alert,
   Spin,
@@ -9,18 +8,31 @@ import {
   Tag,
   Card,
   Tooltip,
+  Descriptions,
+  Drawer,
+  FloatButton,
 } from 'antd';
-import { ArrowLeftOutlined, FileTextOutlined, DownloadOutlined } from '@ant-design/icons';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeftOutlined, FileTextOutlined, DownloadOutlined, RobotOutlined } from '@ant-design/icons';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useMediaQuery } from '../shared/hooks/useMediaQuery';
 import { RequestAssistantSidebar } from '../components/request/assistant/RequestAssistantSidebar';
 import { RequestExecutionPanel } from '../components/request/RequestExecutionPanel';
+import { RequestHistoryTimeline } from '../components/request/RequestHistoryTimeline';
+import { RequestTasksPanel } from '../components/request/RequestTasksPanel';
+import { featureFlags } from '../shared/config/featureFlags';
 import { getRequestWithForm, type RequestWithForm } from '../shared/api/requests.api';
 import { closeRequest, deleteRequest } from '../shared/api/requests.api';
+import { useAuth } from '../shared/hooks/auth.hooks';
+import { useOrganization } from '../shared/hooks/organization.hooks';
+import {
+  WORKFLOW_STATUS_COLORS,
+  WORKFLOW_STATUS_LABELS,
+} from '../types/requestWorkflow';
 import { formatFieldValue } from '../shared/utils/formatFieldValue';
 import { FieldLabel } from '../shared/ui/form-builder/FieldLabel';
 import { buildDisplayName } from '../shared/utils/userName';
 import type { RequestStageDTO } from '../types/execution';
+import { useBreadcrumbEntity } from '../shared/context/breadcrumb.context';
 import type { Field } from '../types/form';
 
 interface StoredFileMeta {
@@ -72,7 +84,16 @@ function findActiveStageHeader(stages: RequestStageDTO[] | undefined): RequestSt
 export const RequestViewPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const showAssistantPanel = useMediaQuery('(min-width: 1100px)');
+  const { user } = useAuth();
+  const { activeOrganization } = useOrganization();
+  const canManageWorkflow =
+    Boolean(activeOrganization?.owner_user_id && user?.id === activeOrganization.owner_user_id);
+  const isWideScreen = useMediaQuery('(min-width: 1100px)');
+  const showAssistantPanel = featureFlags.requestAssistant && isWideScreen;
+  const showAssistantDrawer = featureFlags.requestAssistant && !isWideScreen;
+  const [assistantDrawerOpen, setAssistantDrawerOpen] = useState(false);
+
+  const { setEntityTitle } = useBreadcrumbEntity();
 
   const [{ data, loading, error }, setState] = useState<RequestDetailsState>({
     data: null,
@@ -81,7 +102,7 @@ export const RequestViewPage = () => {
   });
   const [deleting, setDeleting] = useState(false);
   const [closing, setClosing] = useState(false);
-  const [activeTabKey, setActiveTabKey] = useState('execution');
+  const [activeTabKey, setActiveTabKey] = useState('tasks');
 
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
@@ -109,6 +130,10 @@ export const RequestViewPage = () => {
   useEffect(() => {
     void loadInitial();
   }, [loadInitial]);
+
+  useEffect(() => {
+    setEntityTitle(data?.request?.title ?? null);
+  }, [data?.request?.title, setEntityTitle]);
 
   const reloadRequest = useCallback(async () => {
     if (!id) return;
@@ -281,16 +306,6 @@ export const RequestViewPage = () => {
           flexShrink: 0,
         }}
       >
-        {data?.request && (
-          <Breadcrumb
-            style={{ marginBottom: 8 }}
-            items={[
-              { title: <Link to="/requests">Заявки</Link> },
-              { title: data.request.title },
-            ]}
-          />
-        )}
-
         <div
           style={{
             display: 'flex',
@@ -387,6 +402,24 @@ export const RequestViewPage = () => {
               <Tag color={statusTagColor(data.request.status)}>
                 {statusLabel(data.request.status)}
               </Tag>
+            </div>
+            <div>
+              <span style={{ color: 'var(--app-text-secondary)', marginRight: 8 }}>Workflow</span>
+              <Tag
+                color={
+                  WORKFLOW_STATUS_COLORS[
+                    (data.request.workflow_status as keyof typeof WORKFLOW_STATUS_COLORS) ?? 'new'
+                  ] ?? 'default'
+                }
+              >
+                {WORKFLOW_STATUS_LABELS[
+                  (data.request.workflow_status as keyof typeof WORKFLOW_STATUS_LABELS) ?? 'new'
+                ] ?? data.request.workflow_status}
+              </Tag>
+            </div>
+            <div>
+              <span style={{ color: 'var(--app-text-secondary)', marginRight: 8 }}>Приоритет</span>
+              <Tag>{data.request.priority ?? 'medium'}</Tag>
             </div>
             <div>
               <span style={{ color: 'var(--app-text-secondary)', marginRight: 8 }}>Тип заявки</span>
@@ -610,24 +643,27 @@ export const RequestViewPage = () => {
                                     showIcon
                                   />
                                 )}
-                                {fields.map((field) => {
-                                  if (
-                                    field.type === 'file_image' ||
-                                    field.type === 'file_vector' ||
-                                    field.type === 'file_document'
-                                  ) return null;
-
-                                  const rawValue = activeDataSource[field.id];
-                                  if (rawValue === undefined) return null;
-
-                                  const formatted = formatFieldValue(field, rawValue);
-                                  return (
-                                    <div key={field.id} className="app-request-form-value-row">
-                                      <FieldLabel label={field.label || 'Без названия'} />
-                                      <span className="app-request-form-value">{formatted}</span>
-                                    </div>
-                                  );
-                                })}
+                                <Descriptions
+                                  column={1}
+                                  size="small"
+                                  bordered
+                                  items={fields
+                                    .filter(
+                                      (field) =>
+                                        field.type !== 'file_image' &&
+                                        field.type !== 'file_vector' &&
+                                        field.type !== 'file_document' &&
+                                        activeDataSource[field.id] !== undefined,
+                                    )
+                                    .map((field) => ({
+                                      key: field.id,
+                                      label: field.label || 'Без названия',
+                                      children: formatFieldValue(
+                                        field,
+                                        activeDataSource[field.id],
+                                      ),
+                                    }))}
+                                />
 
                                 {(() => {
                                   const fileFields = fields.filter(
@@ -798,6 +834,30 @@ export const RequestViewPage = () => {
                         ),
                       },
                       {
+                        key: 'tasks',
+                        label: 'Подзадачи',
+                        children: data?.request ? (
+                          <RequestTasksPanel
+                            requestId={data.request.id}
+                            organizationId={data.request.organization_id}
+                            tasks={data.request.tasks ?? []}
+                            workflowStatus={data.request.workflow_status ?? 'new'}
+                            canManage={canManageWorkflow}
+                            currentUserId={user?.id ?? null}
+                            onReload={reloadRequest}
+                          />
+                        ) : null,
+                      },
+                      {
+                        key: 'history',
+                        label: 'История',
+                        children: (
+                          <div style={{ padding: '1rem 0 1.5rem' }}>
+                            <RequestHistoryTimeline events={data.request.history ?? []} />
+                          </div>
+                        ),
+                      },
+                      {
                         key: 'execution',
                         label: 'Исполнение',
                         children: (
@@ -946,6 +1006,34 @@ export const RequestViewPage = () => {
           </div>
         )}
       </div>
+
+      {showAssistantDrawer && data && (
+        <>
+          <FloatButton
+            icon={<RobotOutlined />}
+            type="primary"
+            tooltip="Помощник"
+            onClick={() => setAssistantDrawerOpen(true)}
+            style={{ insetInlineEnd: 24, insetBlockEnd: 24 }}
+          />
+          <Drawer
+            title="Помощник"
+            placement="right"
+            width={360}
+            open={assistantDrawerOpen}
+            onClose={() => setAssistantDrawerOpen(false)}
+          >
+            <RequestAssistantSidebar
+              requestId={data.request.id}
+              organizationId={data.request.organization_id ?? undefined}
+              aiAnalysis={data.request.ai_analysis}
+              tz={data.request.ai_tz}
+              onTzUpdated={reloadRequest}
+              onGoToExecution={goToExecution}
+            />
+          </Drawer>
+        </>
+      )}
     </div>
   );
 };

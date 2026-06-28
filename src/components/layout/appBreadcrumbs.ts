@@ -1,31 +1,53 @@
-const DEFAULT_CRUMBS = [
-  { title: 'Home' },
-  { title: 'Application Center' },
-  { title: 'Application List' },
-  { title: 'An Application' },
-];
+export type AppBreadcrumbItem = {
+  title: string;
+  path?: string;
+};
 
-export const getBreadcrumbsForPath = (pathname: string): { title: string }[] => {
-  if (pathname.startsWith('/requests')) return DEFAULT_CRUMBS;
-  if (pathname.startsWith('/forms')) {
+const LOADING_TITLE = 'Загрузка...';
+
+export const getBreadcrumbsForPath = (
+  pathname: string,
+  entityTitle?: string | null,
+): AppBreadcrumbItem[] | null => {
+  if (pathname === '/requests/create') {
     return [
-      { title: 'Home' },
-      { title: 'Application Center' },
-      { title: 'Forms' },
+      { title: 'Заявки', path: '/requests' },
+      { title: 'Создание заявки' },
     ];
   }
-  if (pathname.startsWith('/participants')) {
+
+  const requestDetailMatch = pathname.match(/^\/requests\/([^/]+)$/);
+  if (requestDetailMatch && requestDetailMatch[1] !== 'create') {
     return [
-      { title: 'Home' },
-      { title: 'Application Center' },
-      { title: 'Participants' },
+      { title: 'Заявки', path: '/requests' },
+      { title: entityTitle?.trim() || LOADING_TITLE },
     ];
   }
-  if (pathname.startsWith('/settings')) {
+
+  if (pathname === '/forms/create') {
     return [
-      { title: 'Home' },
-      { title: 'Settings' },
+      { title: 'Формы', path: '/forms' },
+      { title: 'Создание формы' },
     ];
   }
-  return [{ title: 'Home' }];
+
+  const formEditMatch = pathname.match(/^\/forms\/([^/]+)\/edit$/);
+  if (formEditMatch) {
+    const formId = formEditMatch[1];
+    return [
+      { title: 'Формы', path: '/forms' },
+      { title: entityTitle?.trim() || LOADING_TITLE, path: `/forms/${formId}` },
+      { title: 'Редактирование' },
+    ];
+  }
+
+  const formDetailMatch = pathname.match(/^\/forms\/([^/]+)$/);
+  if (formDetailMatch && formDetailMatch[1] !== 'create') {
+    return [
+      { title: 'Формы', path: '/forms' },
+      { title: entityTitle?.trim() || LOADING_TITLE },
+    ];
+  }
+
+  return null;
 };

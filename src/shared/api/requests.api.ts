@@ -7,6 +7,14 @@ import type { RequestExecutionEventDTO, RequestStageDTO } from '../../types/exec
 import type { AssignPerformerPayload, PerformerRecommendationResponse } from '../../types/performerSelection';
 import type { PatchRequestTZPayload, RequestTechnicalSpecEnvelope } from '../../types/technicalSpec';
 import type { AIRequestAnalysis, AISummary, RequestEntity, RequestPerson } from '../../types/request';
+import type {
+  RequestHistoryEventDTO,
+  RequestTaskDTO,
+  TaskPriority,
+  TaskStatus,
+  WorkflowStatus,
+  WorkflowStatusSuggestion,
+} from '../../types/requestWorkflow';
 import type { Field, FieldOption, FormEntity } from '../../types/form';
 
 export type RequestStatus = 'open' | 'closed' | 'assigned' | string;
@@ -38,6 +46,13 @@ export interface RequestResponse {
   execution_status?: string | null;
   stages?: RequestStageDTO[];
   execution_events?: RequestExecutionEventDTO[];
+  workflow_status?: WorkflowStatus | string;
+  priority?: string;
+  due_date?: string | null;
+  responsible_user_id?: string | null;
+  responsible_user?: AuthorPreview | null;
+  tasks?: RequestTaskDTO[];
+  history?: RequestHistoryEventDTO[];
   ai_tz?: RequestTechnicalSpecEnvelope | null;
 }
 
@@ -269,6 +284,122 @@ export const patchRequestTZ = async (
   return data;
 };
 
+export interface PatchWorkflowStatusPayload {
+  status: WorkflowStatus;
+  comment?: string | null;
+  force_complete?: boolean;
+}
+
+export interface CreateRequestTaskPayload {
+  title: string;
+  description?: string | null;
+  status?: TaskStatus;
+  assignee_id?: string | null;
+  priority?: TaskPriority;
+  due_date?: string | null;
+  is_required?: boolean;
+  order_index?: number;
+}
+
+export interface UpdateRequestTaskPayload {
+  title?: string;
+  description?: string | null;
+  status?: TaskStatus;
+  assignee_id?: string | null;
+  priority?: TaskPriority;
+  due_date?: string | null;
+  is_required?: boolean;
+  order_index?: number;
+}
+
+export const patchWorkflowStatus = async (
+  requestId: string,
+  payload: PatchWorkflowStatusPayload,
+): Promise<RequestResponse> => {
+  const { data } = await api.patch<RequestResponse>(
+    `/requests/${requestId}/workflow-status`,
+    payload,
+  );
+  return data;
+};
+
+export const getWorkflowSuggestion = async (
+  requestId: string,
+): Promise<WorkflowStatusSuggestion | null> => {
+  const { data } = await api.get<WorkflowStatusSuggestion | null>(
+    `/requests/${requestId}/workflow-suggestion`,
+  );
+  return data;
+};
+
+export const getRequestHistory = async (
+  requestId: string,
+): Promise<RequestHistoryEventDTO[]> => {
+  const { data } = await api.get<RequestHistoryEventDTO[]>(
+    `/requests/${requestId}/history`,
+  );
+  return data;
+};
+
+export const getRequestTasks = async (requestId: string): Promise<RequestTaskDTO[]> => {
+  const { data } = await api.get<RequestTaskDTO[]>(`/requests/${requestId}/tasks`);
+  return data;
+};
+
+export const createRequestTask = async (
+  requestId: string,
+  payload: CreateRequestTaskPayload,
+): Promise<RequestTaskDTO> => {
+  const { data } = await api.post<RequestTaskDTO>(`/requests/${requestId}/tasks`, payload);
+  return data;
+};
+
+export const updateRequestTask = async (
+  requestId: string,
+  taskId: string,
+  payload: UpdateRequestTaskPayload,
+): Promise<RequestTaskDTO> => {
+  const { data } = await api.patch<RequestTaskDTO>(
+    `/requests/${requestId}/tasks/${taskId}`,
+    payload,
+  );
+  return data;
+};
+
+export const patchRequestTaskStatus = async (
+  requestId: string,
+  taskId: string,
+  status: TaskStatus,
+): Promise<RequestTaskDTO> => {
+  const { data } = await api.patch<RequestTaskDTO>(
+    `/requests/${requestId}/tasks/${taskId}/status`,
+    { status },
+  );
+  return data;
+};
+
+export const patchRequestTaskAssignee = async (
+  requestId: string,
+  taskId: string,
+  assigneeId: string | null,
+): Promise<RequestTaskDTO> => {
+  const { data } = await api.patch<RequestTaskDTO>(
+    `/requests/${requestId}/tasks/${taskId}/assignee`,
+    { assignee_id: assigneeId },
+  );
+  return data;
+};
+
+export const cancelRequestTask = async (
+  requestId: string,
+  taskId: string,
+): Promise<RequestTaskDTO> => {
+  const { data } = await api.delete<RequestTaskDTO>(
+    `/requests/${requestId}/tasks/${taskId}`,
+  );
+  return data;
+};
+
 const collectLeafFields = (pages: FormPageInstance[]): FormFieldInstance[] => {
   const result: FormFieldInstance[] = [];
 
@@ -351,6 +482,13 @@ export async function getRequestWithForm(id: string): Promise<RequestWithForm> {
       execution_status: requestRow.execution_status ?? null,
       stages: requestRow.stages ?? [],
       execution_events: requestRow.execution_events ?? [],
+      workflow_status: requestRow.workflow_status ?? 'new',
+      priority: requestRow.priority ?? 'medium',
+      due_date: requestRow.due_date ?? null,
+      responsible_user_id: requestRow.responsible_user_id ?? null,
+      responsible_user: requestRow.responsible_user ?? null,
+      tasks: requestRow.tasks ?? [],
+      history: requestRow.history ?? [],
       ai_tz: requestRow.ai_tz ?? null,
     };
 

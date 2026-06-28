@@ -2,9 +2,11 @@ import { Input, InputNumber, Select, Switch } from 'antd';
 import type { FormFieldInstance } from '../../types/form-builder.types';
 import {
   DEFAULT_ADDRESS_CONFIG,
+  DEFAULT_COUNTRY_CITY_CONFIG,
   DEFAULT_LOCATION_CONFIG,
   DEFAULT_RATING_CONFIG,
   type AddressFieldConfig,
+  type CountryCityFieldConfig,
   type LocationFieldConfig,
   type RatingFieldConfig,
 } from '../../types/field-config.types';
@@ -24,6 +26,36 @@ export const FieldTypeSettings = ({ field, onChange }: FieldTypeSettingsProps) =
   const updateConfig = (patch: Record<string, unknown>) => {
     onChange({ config: { ...(field.config ?? {}), ...patch } });
   };
+
+  if (field.type === 'address_country_city') {
+    const config = mergeConfig<CountryCityFieldConfig>(
+      DEFAULT_COUNTRY_CITY_CONFIG,
+      field.config,
+    );
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12 }}>
+        <Input
+          size="small"
+          placeholder="Плейсхолдер страны"
+          value={config.placeholderCountry ?? ''}
+          onChange={(e) => updateConfig({ placeholderCountry: e.target.value })}
+        />
+        <Input
+          size="small"
+          placeholder="Плейсхолдер города"
+          value={config.placeholderCity ?? ''}
+          onChange={(e) => updateConfig({ placeholderCity: e.target.value })}
+        />
+        <Switch
+          size="small"
+          checked={Boolean(config.disabled)}
+          checkedChildren="Отключено"
+          unCheckedChildren="Активно"
+          onChange={(disabled) => updateConfig({ disabled })}
+        />
+      </div>
+    );
+  }
 
   if (field.type === 'location') {
     const config = mergeConfig<LocationFieldConfig>(DEFAULT_LOCATION_CONFIG, field.config);

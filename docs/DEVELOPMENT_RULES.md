@@ -6,6 +6,7 @@
 
 Связанные документы:
 
+- [PROJECT_OVERVIEW.md](./PROJECT_OVERVIEW.md) — обзор продукта, стек и бизнес-логика
 - [FRONTEND_RULES.md](./FRONTEND_RULES.md)
 - [BACKEND_RULES.md](./BACKEND_RULES.md)
 - [API_RULES.md](./API_RULES.md)

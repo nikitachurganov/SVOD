@@ -5,7 +5,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.request import Request
 from app.repositories import request_repository
 from app.services.gigachat_client import summarize_text
-from app.services.request_ai_common import build_internal_author_name, build_label_map, format_value
+from app.services.request_ai_common import (
+    build_applicant_block,
+    build_form_answers_text,
+    build_internal_author_name,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -15,18 +19,23 @@ def _build_prompt(req: Request) -> str:
         "Request data:",
         f"Title: {req.title}",
         f"Status: {req.status}",
+        f"Source: {req.source or 'internal'}",
     ]
 
-    if req.data and isinstance(req.data, dict):
-        labels = build_label_map(req.form_snapshot)
-        for key, value in req.data.items():
-            if not value:
-                continue
-            parts.append(f"{labels.get(key, key)}: {format_value(value)}")
+    description = getattr(req, "applicant_description", None)
+    if isinstance(description, str) and description.strip():
+        parts.append(f"Applicant task description: {description.strip()}")
+
+    parts.append("Form answers:")
+    parts.append(build_form_answers_text(req))
+
+    applicant = build_applicant_block(req)
+    if applicant:
+        parts.append(f"Applicant contacts:\n{applicant}")
 
     author_name = build_internal_author_name(req)
     if author_name:
-        parts.append(f"Author: {author_name}")
+        parts.append(f"Internal author: {author_name}")
 
     return "\n".join(parts)
 

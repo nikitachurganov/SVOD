@@ -1,0 +1,101 @@
+# Production Docker Compose for app.svodservice.ru
+#
+# Usage:
+#   cp .env.production.example .env
+#   cp backend/.env.production.example backend/.env
+#   docker compose -f docker-compose.production.yml up -d --build
+#
+# Local dev is unchanged: npm run dev + backend/docker-compose.yml
+
+name: svod-production
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-myapp}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - svod_internal
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-myapp}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-myapp}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - svod_internal
+    command: >
+      sh -c "
+        alembic upgrade head &&
+        uvicorn app.main:app --host 0.0.0.0 --port 8000
+      "
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:8000/health']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: /api
+        VITE_FORMILY_RUNTIME: ${VITE_FORMILY_RUNTIME:-true}
+    restart: unless-stopped
+    networks:
+      - svod_internal
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1/']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      frontend:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      # Before SSL: use app.svodservice.ru.http.conf
+      # After SSL:   switch to app.svodservice.ru.conf
+      - ./deploy/nginx/app.svodservice.ru.http.conf:/etc/nginx/conf.d/default.conf:ro
+      - certbot_www:/var/www/certbot:ro
+      - certbot_certs:/etc/letsencrypt:ro
+    networks:
+      - svod_internal
+
+volumes:
+  pgdata:
+  certbot_www:
+  certbot_certs:
+
+networks:
+  svod_internal:
+    driver: bridge

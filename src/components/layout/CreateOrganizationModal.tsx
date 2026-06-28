@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Modal, Input, Form } from 'antd';
+import { Form, Input, Modal } from 'antd';
 import { useOrganization } from '../../shared/hooks/organization.hooks';
+import { organizationNameRules } from '../../shared/utils/formRules';
 
 const { TextArea } = Input;
 
@@ -9,34 +10,26 @@ interface Props {
   onClose: () => void;
 }
 
+interface CreateOrgFormValues {
+  name: string;
+  description?: string;
+}
+
 export const CreateOrganizationModal = ({ open, onClose }: Props) => {
   const { createOrganization } = useOrganization();
   const [loading, setLoading] = useState(false);
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [nameError, setNameError] = useState('');
+  const [form] = Form.useForm<CreateOrgFormValues>();
 
   const reset = () => {
-    setName('');
-    setDescription('');
-    setNameError('');
+    form.resetFields();
   };
 
-  const handleSubmit = async () => {
-    if (!name.trim()) {
-      setNameError('Введите название организации');
-      return;
-    }
-    if (name.trim().length > 255) {
-      setNameError('Не более 255 символов');
-      return;
-    }
-
+  const handleSubmit = async (values: CreateOrgFormValues) => {
     setLoading(true);
     try {
       await createOrganization({
-        name: name.trim(),
-        description: description.trim() || null,
+        name: values.name.trim(),
+        description: values.description?.trim() || null,
       });
       reset();
       onClose();
@@ -54,38 +47,31 @@ export const CreateOrganizationModal = ({ open, onClose }: Props) => {
       okText={loading ? 'Создание…' : 'Создать'}
       cancelText="Отмена"
       confirmLoading={loading}
-      onCancel={() => { reset(); onClose(); }}
-      onOk={() => void handleSubmit()}
+      onCancel={() => {
+        reset();
+        onClose();
+      }}
+      onOk={() => form.submit()}
+      destroyOnHidden
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 8 }}>
-        <Form.Item
-          label="Название"
-          validateStatus={nameError ? 'error' : undefined}
-          help={nameError || undefined}
-        >
-          <Input
-            id="org-name"
-            placeholder="Название организации"
-            value={name}
-            maxLength={255}
-            onChange={(e) => {
-              setName(e.target.value);
-              if (nameError) setNameError('');
-            }}
-          />
+      <Form
+        form={form}
+        layout="vertical"
+        onFinish={(values) => void handleSubmit(values)}
+        style={{ paddingTop: 8 }}
+      >
+        <Form.Item name="name" label="Название" rules={organizationNameRules()}>
+          <Input placeholder="Название организации" maxLength={255} />
         </Form.Item>
-        <Form.Item label="Описание">
+        <Form.Item name="description" label="Описание">
           <TextArea
-            id="org-description"
             placeholder="Описание (необязательно)"
-            value={description}
             maxLength={1000}
             showCount
             rows={3}
-            onChange={(e) => setDescription(e.target.value)}
           />
         </Form.Item>
-      </div>
+      </Form>
     </Modal>
   );
 };

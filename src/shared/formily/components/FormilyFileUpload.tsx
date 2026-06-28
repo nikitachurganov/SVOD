@@ -4,32 +4,8 @@ import { useField } from '@formily/react';
 import type { Field } from '@formily/core';
 import type { FormFieldType } from '../../types/form-builder.types';
 import { validateFieldFile } from '../../utils/fileFieldValidation';
+import { getFileAccept, getFileUploadPrompt } from '../../utils/fileUpload.utils';
 import { FieldLabel } from '../../ui/form-builder/FieldLabel';
-
-const getFileAccept = (type: FormFieldType): string[] => {
-  switch (type) {
-    case 'file_vector':
-      return ['.svg', '.ai', '.eps', '.pdf'];
-    case 'file_image':
-      return ['image/*'];
-    case 'file_document':
-      return ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt'];
-    default:
-      return [];
-  }
-};
-
-const getFileUploadPrompt = (type: FormFieldType): string => {
-  switch (type) {
-    case 'file_vector':
-      return 'Нажмите или перетащите векторный файл для загрузки';
-    case 'file_image':
-      return 'Нажмите или перетащите изображение для загрузки';
-    case 'file_document':
-    default:
-      return 'Нажмите или перетащите документ для загрузки';
-  }
-};
 
 interface FormilyFileUploadProps {
   fieldType: FormFieldType;

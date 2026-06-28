@@ -1,6 +1,7 @@
 import type { FieldOption } from '../types/form-builder.types';
 
 export const OTHER_OPTION_LABEL = 'Другое';
+export const OTHER_VALUE_PREFIX = '__other__:';
 
 export interface ChoiceWithOtherValue {
   selected: string | string[];
@@ -33,6 +34,9 @@ export const parseRadioValue = (
     return { selected: value.selected, otherText: value.otherText?.trim() ?? '' };
   }
   if (typeof value === 'string') {
+    if (value.startsWith(OTHER_VALUE_PREFIX)) {
+      return { selected: value, otherText: value.slice(OTHER_VALUE_PREFIX.length).trim() };
+    }
     return { selected: value, otherText: '' };
   }
   return { selected: '', otherText: '' };
@@ -45,7 +49,12 @@ export const parseCheckboxValue = (
     return { selected: value.selected, otherText: value.otherText?.trim() ?? '' };
   }
   if (Array.isArray(value)) {
-    return { selected: value.filter((item): item is string => typeof item === 'string'), otherText: '' };
+    const selected = value.filter((item): item is string => typeof item === 'string');
+    const other = selected.find((item) => item.startsWith(OTHER_VALUE_PREFIX));
+    return {
+      selected,
+      otherText: other ? other.slice(OTHER_VALUE_PREFIX.length).trim() : '',
+    };
   }
   return { selected: [], otherText: '' };
 };
@@ -84,6 +93,9 @@ export const getChoiceDisplayLabel = (
   if (!options?.length) return '—';
   const radioParsed = parseRadioValue(value);
   if (radioParsed.selected) {
+    if (radioParsed.selected.startsWith(OTHER_VALUE_PREFIX) && radioParsed.otherText) {
+      return `Другое: ${radioParsed.otherText}`;
+    }
     const label = options.find((opt) => opt.id === radioParsed.selected)?.label;
     if (isOtherSelected(options, radioParsed.selected) && radioParsed.otherText) {
       return `${label ?? 'Другое'}: ${radioParsed.otherText}`;
@@ -95,6 +107,9 @@ export const getChoiceDisplayLabel = (
   if (checkboxParsed.selected.length) {
     return checkboxParsed.selected
       .map((id) => {
+        if (id.startsWith(OTHER_VALUE_PREFIX) && checkboxParsed.otherText) {
+          return `Другое: ${checkboxParsed.otherText}`;
+        }
         const label = options.find((opt) => opt.id === id)?.label ?? id;
         if (isOtherSelected(options, id) && checkboxParsed.otherText) {
           return `${label}: ${checkboxParsed.otherText}`;

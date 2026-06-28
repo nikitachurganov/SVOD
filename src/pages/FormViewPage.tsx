@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Breadcrumb, Button, Modal, Spin, Tag } from 'antd';
+import { Alert, Button, Modal, Spin, Tag } from 'antd';
 import { ArrowLeftOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -16,10 +16,13 @@ import {
   FormFillRenderer,
   type FormFillRendererHandle,
 } from '../shared/ui/form-fill/FormFillRenderer';
+import { FormFillWizardLayout } from '../shared/ui/form-fill/FormFillWizardLayout';
+import { useBreadcrumbEntity } from '../shared/context/breadcrumb.context';
 
 export const FormViewPage = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  const { setEntityTitle } = useBreadcrumbEntity();
 
   const [formData, setFormData] = useState<FormResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -47,6 +50,10 @@ export const FormViewPage = () => {
       })
       .finally(() => setLoading(false));
   }, [id]);
+
+  useEffect(() => {
+    setEntityTitle(formData?.name ?? null);
+  }, [formData?.name, setEntityTitle]);
 
   const pageInstances = useMemo<FormPageInstance[]>(
     () => (formData?.pages ? pagesPayloadToInstances(formData.pages) : []),
@@ -114,7 +121,28 @@ export const FormViewPage = () => {
   }, [id, navigate]);
 
   const pageTitle = loading ? 'Загрузка…' : (formData?.name ?? 'Форма');
-  const breadcrumbCurrent = loading ? 'Загрузка…' : (error ? 'Не найдено' : (formData?.name ?? 'Форма'));
+
+  const fillActions =
+    hasPages && currentPage && currentPage.fields.length > 0 ? (
+      <>
+        {!isFirst && <Button onClick={handlePrevPage}>Назад</Button>}
+        {!isLast && (
+          <Button type="primary" onClick={handleNextPage}>
+            Далее
+          </Button>
+        )}
+        {isLast && (
+          <Button
+            type="primary"
+            onClick={handleSubmitForm}
+            disabled={isSubmitting}
+            loading={isSubmitting}
+          >
+            {isSubmitting ? 'Отправка…' : 'Отправить'}
+          </Button>
+        )}
+      </>
+    ) : null;
 
   return (
     <div
@@ -135,20 +163,6 @@ export const FormViewPage = () => {
           flexShrink: 0,
         }}
       >
-        <Breadcrumb
-          style={{ marginBottom: 8 }}
-          items={[
-            {
-              title: (
-                <a onClick={() => navigate('/forms')} style={{ cursor: 'pointer' }}>
-                  Формы
-                </a>
-              ),
-            },
-            { title: breadcrumbCurrent },
-          ]}
-        />
-
         <div
           style={{
             display: 'flex',
@@ -210,119 +224,85 @@ export const FormViewPage = () => {
       </Modal>
 
       {/* ── Content ── */}
-      <div
-        style={{
-          flex: 1,
-          minHeight: 0,
-          overflowY: 'auto',
-          background: 'var(--app-bg)',
-        }}
-        ref={contentRef}
-      >
-        {loading ? (
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              minHeight: '60vh',
-            }}
-          >
-            <Spin size="large" />
-          </div>
-        ) : error ? (
-          <div style={{ padding: 24 }}>
-            <Alert
-              type="error"
-              message="Ошибка загрузки"
-              description={error}
-              showIcon
-              closable={false}
-            />
-          </div>
-        ) : (
-          <div style={{ maxWidth: 680, margin: '0 auto', padding: 24 }}>
-            {submitSuccess && (
-              <div style={{ marginBottom: 16 }}>
-                <Alert
-                  type="success"
-                  message="Форма заполнена"
-                  description="Это публичный просмотр — данные не отправляются."
-                  showIcon
-                  closable
-                  onClose={() => setSubmitSuccess(false)}
-                />
-              </div>
-            )}
-            {formData?.description && (
-              <span
-                style={{
-                  display: 'block',
-                  marginBottom: 24,
-                  fontSize: '1rem',
-                  color: 'var(--app-text-secondary)',
-                }}
-              >
-                {formData.description}
-              </span>
-            )}
+      {loading ? (
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            flex: 1,
+            minHeight: '60vh',
+          }}
+        >
+          <Spin size="large" tip="Загрузка формы…" />
+        </div>
+      ) : error ? (
+        <div style={{ padding: 24 }}>
+          <Alert
+            type="error"
+            message="Ошибка загрузки"
+            description={error}
+            showIcon
+            closable={false}
+          />
+        </div>
+      ) : (
+        <FormFillWizardLayout
+          contentRef={contentRef}
+          pageIndex={pageIndex}
+          pageCount={pageInstances.length}
+          pageTitle={currentPage?.title}
+          notification={
+            submitSuccess ? (
+              <Alert
+                type="success"
+                message="Форма заполнена"
+                description="Это публичный просмотр — данные не отправляются."
+                showIcon
+                closable
+                onClose={() => setSubmitSuccess(false)}
+                style={{ marginBottom: 16 }}
+              />
+            ) : null
+          }
+          actions={fillActions}
+        >
+          {formData?.description && (
             <span
               style={{
                 display: 'block',
-                marginBottom: 16,
+                marginBottom: 24,
+                fontSize: '1rem',
                 color: 'var(--app-text-secondary)',
               }}
             >
-              Автор: {formData?.author ? buildDisplayName(formData.author) : 'Неизвестный автор'}
+              {formData.description}
             </span>
+          )}
+          <span
+            style={{
+              display: 'block',
+              marginBottom: 16,
+              color: 'var(--app-text-secondary)',
+            }}
+          >
+            Автор: {formData?.author ? buildDisplayName(formData.author) : 'Неизвестный автор'}
+          </span>
 
-            {hasPages && currentPage && currentPage.fields.length > 0 ? (
-              <>
-                <FormFillRenderer
-                  ref={fillRef}
-                  pages={pageInstances}
-                  pageIndex={pageIndex}
-                  legacyStore={formStore}
-                />
-
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'flex-start',
-                    gap: 10,
-                    marginTop: 16,
-                  }}
-                >
-                  {!isFirst && (
-                    <Button onClick={handlePrevPage}>
-                      Назад
-                    </Button>
-                  )}
-                  {!isLast && (
-                    <Button type="primary" onClick={handleNextPage}>
-                      Далее
-                    </Button>
-                  )}
-                  {isLast && (
-                    <Button
-                      type="primary"
-                      onClick={handleSubmitForm}
-                      disabled={isSubmitting}
-                      loading={isSubmitting}
-                    >
-                      {isSubmitting ? 'Отправка…' : 'Отправить'}
-                    </Button>
-                  )}
-                </div>
-              </>
-            ) : (
-              <div style={{ textAlign: 'center', padding: '48px 0' }}>
-                <span style={{ color: 'var(--app-text-secondary)' }}>В форме нет полей.</span>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+          {hasPages && currentPage && currentPage.fields.length > 0 ? (
+            <FormFillRenderer
+              ref={fillRef}
+              pages={pageInstances}
+              pageIndex={pageIndex}
+              legacyStore={formStore}
+            />
+          ) : (
+            <div style={{ textAlign: 'center', padding: '48px 0' }}>
+              <span style={{ color: 'var(--app-text-secondary)' }}>В форме нет полей.</span>
+            </div>
+          )}
+        </FormFillWizardLayout>
+      )}
     </div>
   );
 };
