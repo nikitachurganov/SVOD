@@ -10,7 +10,7 @@ class RegisterRequest(BaseModel):
     # Backward compatibility for legacy clients during transition.
     full_name: str | None = Field(None, min_length=2, max_length=255)
     email: EmailStr
-    phone_number: str = Field(..., min_length=10, max_length=20)
+    phone_number: str = Field(default="", max_length=20)
     password: str = Field(..., min_length=8, max_length=64)
 
     @field_validator("first_name", "last_name", "middle_name", "full_name", mode="before")
@@ -22,7 +22,9 @@ class RegisterRequest(BaseModel):
 
     @field_validator("phone_number", mode="before")
     @classmethod
-    def normalize_phone(cls, value: str) -> str:
+    def normalize_phone(cls, value: str | None) -> str:
+        if value is None:
+            return ""
         return value.strip()
 
     @field_validator("password")

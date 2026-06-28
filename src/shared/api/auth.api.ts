@@ -10,7 +10,7 @@ export interface SignUpPayload {
   lastName: string;
   middleName?: string;
   email: string;
-  phoneNumber: string;
+  phoneNumber?: string;
   password: string;
 }
 
@@ -47,7 +47,7 @@ export const signUpWithEmail = async ({
     last_name: lastName,
     middle_name: middleName?.trim() || null,
     email,
-    phone_number: phoneNumber,
+    phone_number: phoneNumber?.trim() || '',
     password,
   });
   localStorage.setItem('access_token', data.access_token);
