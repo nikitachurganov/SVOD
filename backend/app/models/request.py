@@ -117,3 +117,15 @@ class Request(Base):
         lazy="selectin",
         cascade="all, delete-orphan",
     )
+    ai_stage_plan: Mapped["RequestAIStagePlan | None"] = relationship(  # noqa: F821
+        back_populates="request",
+        uselist=False,
+        lazy="selectin",
+        cascade="all, delete-orphan",
+    )
+    ai_jobs: Mapped[list["AIJob"]] = relationship(  # noqa: F821
+        back_populates="request",
+        order_by="AIJob.created_at",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+    )

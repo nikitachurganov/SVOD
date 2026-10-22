@@ -49,18 +49,6 @@ function validateFile(file: File, fieldType: string): void {
   }
 }
 
-/**
- * Uploads a single file by recording its metadata via the API.
- *
- * NOTE: Actual binary file upload is not yet wired up. This function
- * creates the metadata record. When a storage backend (local / S3) is
- * integrated, the flow should be:
- *   1. POST the binary to an upload endpoint → receive a file_url
- *   2. Create the metadata record with that file_url (as below)
- *
- * For now, the file_url is a placeholder path that indicates where the
- * file *would* be stored.
- */
 export async function uploadFile(
   file: File,
   fieldType: string,
@@ -69,8 +57,9 @@ export async function uploadFile(
 ): Promise<FileMetadata> {
   validateFile(file, fieldType);
 
-  const fileId = crypto.randomUUID();
-  const placeholderUrl = `/uploads/${requestId}/${fieldId}/${fileId}_${file.name}`;
+  const body = new FormData();
+  body.append('field_id', fieldId);
+  body.append('file', file);
 
   const { data } = await api.post<{
     id: string;
@@ -78,12 +67,8 @@ export async function uploadFile(
     file_type: string;
     file_size: number;
     file_url: string;
-  }>(`/requests/${requestId}/files`, {
-    field_id: fieldId,
-    file_name: file.name,
-    file_type: file.type,
-    file_size: file.size,
-    file_url: placeholderUrl,
+  }>(`/requests/${requestId}/files/upload`, body, {
+    headers: { 'Content-Type': 'multipart/form-data' },
   });
 
   return {
@@ -93,6 +78,12 @@ export async function uploadFile(
     file_size: data.file_size,
     file_url: data.file_url,
   };
+}
+
+export async function resolveFileDownloadUrl(fileUrl: string): Promise<string> {
+  if (!fileUrl.startsWith('/files/') || !fileUrl.endsWith('/download-url')) return fileUrl;
+  const { data } = await api.get<{ url: string }>(fileUrl);
+  return data.url;
 }
 
 /**

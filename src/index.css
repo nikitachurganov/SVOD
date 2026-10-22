@@ -4,6 +4,14 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+  /* One shared "elevated menu" style for every header/nav dropdown & popover
+     (profile menu, notifications, sidebar org switcher, "Добавить" menus, …) */
+  --app-menu-radius: 8px;
+  --app-menu-shadow:
+    0 6px 8px rgba(0, 0, 0, 0.08),
+    0 3px 3px rgba(0, 0, 0, 0),
+    0 9px 14px rgba(0, 0, 0, 0.05);
 }
 
 *,
@@ -29,7 +37,7 @@ body,
 #root {
   margin: 0;
   min-width: 320px;
-  height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   background: var(--app-bg);
 }
@@ -435,11 +443,30 @@ html[data-theme] body {
   display: flex;
   flex-direction: column;
   background: var(--app-surface);
-  border: 1px solid var(--app-border);
-  box-shadow: 0 4px 16px var(--app-shadow, rgba(0, 0, 0, 0.2));
-  border-radius: 4px;
+  box-shadow: var(--app-menu-shadow);
+  border-radius: var(--app-menu-radius);
   box-sizing: border-box;
   overflow: hidden;
+}
+
+/* This popover never stripped antd's own .ant-popover-container/-content chrome
+   (background/shadow/radius/padding) — the same "extra outer container" bug already
+   fixed for notifications and the profile menu. */
+.app-sidebar-org-popover .ant-popover-container,
+.app-sidebar-org-popover .ant-popover-content {
+  padding: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+
+/* antd's menu-mode Dropdown (organization switcher, "Добавить" menu) draws its own
+   chrome directly on .ant-dropdown-menu rather than a container div — same shared
+   style applied there so every dropdown/popover in the header/nav looks identical. */
+.app-menu-dropdown .ant-dropdown-menu {
+  border-radius: var(--app-menu-radius) !important;
+  box-shadow: var(--app-menu-shadow) !important;
+  background: var(--app-surface) !important;
 }
 
 .app-sidebar-collapsed-org-popover .app-sidebar-org-profile-wrap {
@@ -549,16 +576,843 @@ html[data-theme] body {
   overflow: hidden;
 }
 
-.app-request-view-tabs-wrap > .ant-tabs-content-holder {
+/* Height chain: wrap → bar → .ant-tabs → content holder (the only scrolling element) */
+.app-request-view-tabs-bar,
+.app-request-view-tabs-bar > .ant-tabs {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.app-request-view-tabs-bar > .ant-tabs > .ant-tabs-nav {
+  flex-shrink: 0;
+  /* The main column has no side padding: the white strip spans it edge to edge */
+  padding-inline: var(--request-main-pad, 0px);
+  background: var(--app-surface);
+  border-bottom: 1px solid var(--app-border);
+}
+
+/* antd draws its own thin line via ::before — replaced by the full-width border above */
+.app-request-view-tabs-bar > .ant-tabs > .ant-tabs-nav::before {
+  display: none;
+}
+
+.app-request-view-tabs-bar > .ant-tabs > .ant-tabs-content-holder {
   flex: 1;
   min-height: 0;
   overflow: auto;
   box-sizing: border-box;
+  /* Padding lives on the scroller so its scrollbar sits at the column edge */
+  padding-inline: var(--request-main-pad, 0px);
 }
 
-/* Без отдельного серого фона: только разделитель снизу (как просили для полосы табов) */
-.app-request-view-tabs-bar .ant-tabs-nav {
+.request-workspace__notification {
+  flex-shrink: 0;
+  padding: 1rem var(--request-main-pad, 0px) 0;
+}
+
+/* Request workspace: dense, task-focused layout inspired by modern work-management tools. */
+.request-workspace {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--app-bg);
+}
+
+.request-workspace__header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    'top'
+    'passport'
+    'description';
+  row-gap: 10px;
+  padding: 16px 28px;
+  background: var(--app-surface);
+  border-bottom: 1px solid var(--app-border);
+  flex-shrink: 0;
+}
+
+.request-workspace__header-top {
+  grid-area: top;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.request-workspace__title-group,
+.request-workspace__actions,
+.request-workspace__title-line {
+  display: flex;
+  align-items: center;
+}
+
+.request-workspace__title-group {
+  min-width: 0;
+  gap: 8px;
+}
+
+.request-workspace__title-copy {
+  min-width: 0;
+}
+
+.request-workspace__title-line {
+  min-width: 0;
+  gap: 9px;
+}
+
+.request-workspace__title-line h4 {
+  margin: 0;
+  overflow: hidden;
+  color: var(--app-text);
+  font-size: 1.25rem;
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.request-workspace__request-id {
+  flex-shrink: 0;
+  color: var(--app-text-secondary);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.request-workspace__actions {
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.request-passport {
+  grid-area: passport;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 32px;
+  margin: 0;
+}
+
+.request-passport__item {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.request-passport__item dt {
+  color: var(--app-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.request-passport__item dd {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  margin: 0;
+  color: var(--app-text);
+  font-size: 0.875rem;
+}
+
+.request-passport__muted {
+  color: var(--app-text-secondary);
+}
+
+.request-planning-card__title {
+  margin: 0;
+  color: var(--app-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.request-planning-card__hint {
+  margin: 4px 0 0;
+  color: var(--app-text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.request-planning-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.request-planning-card--panel .request-planning-card__actions {
+  flex-direction: column;
+}
+
+.request-planning-card--inline {
+  margin-bottom: 16px;
+}
+
+.request-planning-card__release.ant-btn {
+  margin-top: 8px;
+  padding-inline: 0;
+}
+
+.request-ai-plan-card--embedded .request-ai-plan-card__heading {
+  font-size: 0.8125rem;
+}
+
+.request-ai-plan-card__list--compact {
+  gap: 10px;
+}
+
+.request-ai-plan-card__item-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.request-ai-plan-card__item-title > span {
+  min-width: 0;
+  line-height: 1.4;
+}
+
+
+
+.request-ai-plan-card__toggle.ant-btn {
+  margin-top: 6px;
+  padding-inline: 0;
+}
+
+.request-workspace__sidepanel-section + .request-workspace__sidepanel-section {
+  margin-top: 24px;
+}
+
+.request-workspace__ai-description {
+  grid-area: description;
+  min-width: 0;
+  max-width: 980px;
+  line-height: 1.45;
+}
+
+.request-workspace__ai-description p {
+  margin: 0;
+  color: var(--app-text);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.request-workspace__content {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.request-workspace__body {
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+}
+
+.request-workspace__main {
+  --request-main-pad: 28px;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.request-workspace__main .app-request-view-tabs-bar .ant-tabs-nav {
+  margin: 0;
+}
+
+.request-workspace__main .ant-tabs-tab {
+  padding: 14px 4px 12px;
+  font-size: 0.8125rem;
+}
+
+.request-workspace__main .ant-tabs-tab[data-node-key='info'] { order: 1; }
+.request-workspace__main .ant-tabs-tab[data-node-key='stages'] { order: 3; }
+.request-workspace__main .ant-tabs-tab[data-node-key='files'] { order: 4; }
+.request-workspace__main .ant-tabs-tab[data-node-key='people'] { order: 5; }
+
+.request-stage-planner {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px 0 32px;
+}
+
+.request-stage-planner__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.request-stage-planner__header h2 {
+  margin: 0;
+  color: var(--app-text);
+  font-size: 1.125rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.request-stage-planner__header p {
+  max-width: 62ch;
+  margin: 4px 0 0;
+  color: var(--app-text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.request-stage-planner__header-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.request-stage-planner__list {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--app-border);
+}
+
+/* ── Stages tab: vertical stepper (done → current → upcoming) ─────────────── */
+.request-stage-planner__heading {
+  min-width: 0;
+}
+
+.stage-steps {
+  --stage-marker: 28px;
+  --stage-gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stage-step {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--stage-marker) minmax(0, 1fr);
+  column-gap: var(--stage-gap);
+  padding-bottom: 12px;
+}
+
+/* Rail between markers: solid green between finished stages, dashed ahead */
+.stage-step:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  top: calc(var(--stage-marker) + 4px);
+  bottom: 4px;
+  left: calc(var(--stage-marker) / 2 - 1px);
+  border-left: 2px dashed var(--app-border);
+}
+
+.stage-step--rail-done:not(:last-child)::before {
+  border-left-style: solid;
+  border-left-color: var(--app-success);
+}
+
+.stage-step__marker {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: var(--stage-marker);
+  height: var(--stage-marker);
+  margin-top: 12px;
+  place-items: center;
+  border: 2px solid var(--app-border-strong, var(--app-border));
+  border-radius: 50%;
+  background: var(--app-surface);
+  color: var(--app-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.stage-step__marker--done {
+  border-color: var(--app-success);
+  background: var(--app-success);
+  color: var(--app-text-on-brand, #fff);
+}
+
+.stage-step__marker--current {
+  /* A thicker border (not an outward box-shadow ring) stays inside the marker's own
+     28px box, so it never gets clipped when the rail sits flush against a container edge */
+  border-width: 3px;
+  border-color: var(--app-primary);
+  background: var(--app-surface);
+  color: var(--app-primary);
+}
+
+.stage-step__marker--blocked {
+  border-color: var(--app-error, var(--app-danger));
+  background: var(--app-error, var(--app-danger));
+  color: var(--app-text-on-brand, #fff);
+}
+
+.stage-step__card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  background: var(--app-surface);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.stage-step--current .stage-step__card {
+  border-color: color-mix(in srgb, var(--app-primary) 45%, var(--app-border));
+  box-shadow: 0 1px 2px rgb(0 0 0 / 4%), 0 4px 16px color-mix(in srgb, var(--app-primary) 8%, transparent);
+}
+
+.stage-step--blocked .stage-step__card {
+  border-color: color-mix(in srgb, var(--app-error, var(--app-danger)) 45%, var(--app-border));
+}
+
+.stage-step--done .stage-step__title {
+  color: var(--app-text-secondary);
+}
+
+.stage-step__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  padding-right: 8px;
+}
+
+.stage-step__toggle {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  padding: 14px 8px 14px 16px;
+  border: 0;
+  border-radius: 10px;
   background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.stage-step__toggle:hover .stage-step__title {
+  color: var(--app-primary);
+}
+
+.stage-step__toggle:focus-visible {
+  outline: 2px solid var(--app-focus, var(--app-primary));
+  outline-offset: 2px;
+}
+
+.stage-step__content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.stage-step__title-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.stage-step__title {
+  flex: 1;
+  min-width: 0;
+  color: var(--app-text);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.35;
+  transition: color 160ms ease;
+}
+
+/* Status/overdue tags: pinned to the right of the title, never squeezed */
+.stage-step__status {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.stage-step__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  color: var(--app-text-secondary);
+  font-size: 0.8125rem;
+}
+
+.stage-step__chevron {
+  flex-shrink: 0;
+  color: var(--app-text-secondary);
+  font-size: 12px;
+  transition: transform 200ms ease;
+}
+
+.stage-step--open .stage-step__chevron {
+  transform: rotate(180deg);
+}
+
+.stage-step__body {
+  padding: 0 16px 16px;
+  border-top: 1px solid var(--app-border);
+}
+
+/* Status pill: text + tone (never colour alone) */
+.stage-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--app-bg);
+  color: var(--app-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+.stage-status--done {
+  background: color-mix(in srgb, var(--app-success) 14%, transparent);
+  /* Darkened for 4.5:1 contrast on the pale background */
+  color: color-mix(in srgb, var(--app-success) 55%, var(--app-text));
+}
+
+.stage-status--current {
+  background: color-mix(in srgb, var(--app-primary) 12%, transparent);
+  color: var(--app-primary);
+}
+
+.stage-status--blocked {
+  background: color-mix(in srgb, var(--app-error, var(--app-danger)) 12%, transparent);
+  color: var(--app-error, var(--app-danger));
+}
+
+/* Details */
+.stage-details {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 16px;
+}
+
+.stage-details__description {
+  margin: 0;
+  color: var(--app-text);
+  font-size: 0.875rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.stage-props {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px 24px;
+  margin: 0;
+}
+
+.stage-props dt {
+  margin-bottom: 2px;
+  color: var(--app-text-secondary);
+  font-size: 0.75rem;
+}
+
+.stage-props dd {
+  margin: 0;
+  color: var(--app-text);
+  font-size: 0.875rem;
+}
+
+.stage-overdue {
+  color: var(--app-error, var(--app-danger));
+  font-weight: 600;
+}
+
+.stage-callout {
+  padding: 10px 12px;
+  border-left: 3px solid var(--app-success);
+  border-radius: 0 8px 8px 0;
+  background: var(--app-bg);
+}
+
+.stage-callout--danger {
+  border-left-color: var(--app-error, var(--app-danger));
+}
+
+.stage-callout span {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--app-text-secondary);
+  font-size: 0.75rem;
+}
+
+.stage-callout p {
+  margin: 0;
+  color: var(--app-text);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+/* Flush footer bar: bleeds into .stage-step__body's padding on all three open sides,
+   the card's own overflow:hidden + border-radius take care of the bottom corners */
+.stage-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 -16px -16px;
+  padding: 14px 16px;
+  border-top: 1px solid var(--app-border);
+  background: var(--app-bg);
+}
+
+/* Edit sits apart from the primary/assign actions, pinned to the far right */
+.stage-actions__edit {
+  margin-left: auto;
+}
+
+.stage-section h4 {
+  margin: 0 0 8px;
+  color: var(--app-text);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.stage-muted {
+  margin: 0;
+  color: var(--app-text-secondary);
+  font-size: 0.8125rem;
+}
+
+.stage-result {
+  margin: 0 0 6px;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.stage-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stage-files .ant-btn {
+  padding-inline: 0;
+}
+
+
+
+
+
+
+
+.stage-more.ant-collapse > .ant-collapse-item > .ant-collapse-header {
+  padding-inline: 0;
+  color: var(--app-text-secondary);
+  font-size: 0.8125rem;
+}
+
+.stage-more .ant-collapse-content-box {
+  padding-inline: 0 !important;
+}
+
+.stage-log {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stage-log li {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-left: 10px;
+  border-left: 2px solid var(--app-border);
+  font-size: 0.8125rem;
+}
+
+.stage-log li span {
+  color: var(--app-text-secondary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage-step__chevron,
+  .stage-step__card,
+  .stage-step__title {
+    transition: none;
+  }
+}
+
+.request-ai-plan-card .ant-card-body {
+  padding: 14px;
+}
+
+.request-ai-plan-card__heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--app-text);
+  font-size: 0.8125rem;
+}
+
+.request-ai-plan-card__heading .ant-tag {
+  margin-inline-start: auto;
+  margin-inline-end: 0;
+}
+
+.request-ai-plan-card p {
+  margin: 10px 0 0;
+  color: var(--app-text-secondary);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.request-ai-plan-card__list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 12px 0 0;
+  padding-left: 18px;
+  color: var(--app-text);
+  font-size: 0.75rem;
+}
+
+.request-ai-plan-card__list li > span,
+.request-ai-plan-card__list li > small {
+  display: block;
+}
+
+.request-ai-plan-card__list li small {
+  margin-top: 2px;
+  color: var(--app-text-secondary);
+}
+
+.request-ai-plan-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 12px;
+}
+
+@media (max-width: 720px) {
+  .request-stage-planner__header {
+    flex-direction: column;
+  }
+
+  .request-stage-planner__header-actions {
+    width: 100%;
+  }
+
+  .stage-steps {
+    --stage-marker: 24px;
+    --stage-gap: 10px;
+  }
+
+  .stage-step__head {
+    flex-direction: column;
+    padding-right: 0;
+  }
+}
+
+.request-workspace__sidepanel {
+  width: 344px;
+  height: 100%;
+  flex-shrink: 0;
+  overflow-y: auto;
+  background: var(--app-surface);
+  border-left: 1px solid var(--app-border);
+}
+
+.request-workspace__assistant {
+  padding: 20px;
+}
+
+.request-responsibility {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-bg);
+}
+
+.request-responsibility > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.request-responsibility span {
+  color: var(--app-text-secondary);
+  font-size: 12px;
+}
+
+.request-responsibility strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.request-workspace__assistant > p {
+  margin: 0 0 16px !important;
+  color: var(--app-text-secondary);
+  font-size: 0.6875rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.08em !important;
+}
+
+@media (max-width: 900px) {
+  .request-workspace__header {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      'top'
+      'passport'
+      'description';
+    padding: 14px 18px;
+    row-gap: 12px;
+  }
+
+  .request-workspace__main {
+    --request-main-pad: 18px;
+  }
+}
+
+@media (max-width: 600px) {
+  .request-workspace__header-top {
+    align-items: flex-start;
+  }
+
+  .request-workspace__actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .request-workspace__actions .ant-btn {
+    margin: 0;
+  }
+
+  .request-workspace__main {
+    --request-main-pad: 12px;
+  }
 }
 
 /* Header notifications (bell + badge) */
@@ -610,19 +1464,20 @@ html[data-theme] body {
   padding-top: 0 !important;
 }
 
-.app-profile-dropdown-popover .ant-popover-inner {
+/* .ant-popover-inner doesn't exist in this antd version — .ant-popover-container is
+   the real chrome-bearing element, with a nested .ant-popover-content adding a second
+   padding layer. The rule below used to target the wrong (nonexistent) class, so this
+   custom styling never actually applied; the popover was silently falling back to
+   antd's default background/shadow/radius. */
+.app-profile-dropdown-popover .ant-popover-container,
+.app-profile-dropdown-popover .ant-popover-content {
   padding: 0 !important;
-  border-radius: 8px !important;
-  border: none !important;
-  box-shadow:
-    0 6px 8px rgba(0, 0, 0, 0.08),
-    0 3px 3px rgba(0, 0, 0, 0),
-    0 9px 14px rgba(0, 0, 0, 0.05) !important;
-  background: var(--app-surface) !important;
 }
 
 .app-profile-dropdown-popover .ant-popover-container {
-  padding: 0;
+  border-radius: var(--app-menu-radius) !important;
+  box-shadow: var(--app-menu-shadow) !important;
+  background: var(--app-surface) !important;
 }
 
 .app-profile-trigger {
@@ -647,7 +1502,7 @@ html[data-theme] body {
 
 .app-profile-trigger:hover,
 .app-profile-trigger--open {
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--app-surface-hover);
 }
 
 .app-profile-avatar {
@@ -723,7 +1578,7 @@ html[data-theme] body {
 }
 
 .app-profile-dropdown__item:hover:not(:disabled) {
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--app-surface-hover);
 }
 
 .app-profile-dropdown__item:disabled {
@@ -737,7 +1592,7 @@ html[data-theme] body {
 }
 
 .app-profile-dropdown__item--switch:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--app-surface-hover);
 }
 
 .app-profile-dropdown__label {
@@ -751,7 +1606,7 @@ html[data-theme] body {
 }
 
 .app-profile-dropdown__item--danger:hover:not(:disabled) {
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--app-surface-hover);
   color: var(--app-error);
 }
 
@@ -814,17 +1669,37 @@ html[data-theme] body {
 /*
  * ── Header popovers (notifications) ─────────────────────────────────
  */
+
+/* Our own content div already draws the full chrome (border/shadow/radius/padding).
+   antd's real chrome-bearing elements here are .ant-popover-container (background,
+   radius, shadow, padding) and the nested .ant-popover-content (a second padding
+   layer) — NOT .ant-popover-inner, which this antd version doesn't render at all.
+   Left unstripped, they wrap our box in a second padded/shadowed box (the doubled
+   padding/shadow and the empty gap above the title). */
+.app-header-notifications-popover .ant-popover-container,
+.app-header-notifications-popover .ant-popover-content {
+  padding: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+
 .app-header-notifications-popover-content {
   background: var(--app-surface);
-  border: 1px solid var(--app-border);
-  box-shadow: 0 4px 16px var(--app-shadow, rgba(0, 0, 0, 0.2));
-  border-radius: 4px;
+  box-shadow: var(--app-menu-shadow);
+  border-radius: var(--app-menu-radius);
   box-sizing: border-box;
+  /* Clip the inner scroll box's corners to match ours, so its straight-edged native
+     scrollbar never pokes past the rounded corner (see .app-header-notifications-popover-scroll) */
+  overflow: hidden;
 }
 
 .app-header-notifications-popover-content {
   min-width: min(100vw - 2rem, 320px);
   max-width: min(100vw - 2rem, 400px);
+}
+
+.app-header-notifications-popover-scroll {
   max-height: min(75vh, 560px);
   overflow-x: hidden;
   overflow-y: auto;
@@ -884,6 +1759,21 @@ html[data-theme] body {
   display: flex;
   flex-wrap: wrap;
   gap: var(--app-space-3, 0.5rem);
+}
+
+.app-notifications-panel__workflow {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.app-notifications-panel__workflow--unread {
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
 }
 
 /* Organization settings page */
@@ -1522,4 +2412,168 @@ html[data-theme] body {
 
 .app-phone-input__field:disabled {
   cursor: not-allowed;
+}
+/* Organization settings: grouped profile, integrations and resource placeholders */
+.org-settings-page { gap: 24px; }
+.org-settings-page__header { max-width: 760px; gap: 6px; }
+.org-settings-page__title { font-size: 24px; line-height: 32px; color: var(--app-text); }
+.org-settings-page__subtitle { max-width: 680px; line-height: 1.5; }
+.org-settings { width: min(100%, 960px); max-width: none; gap: 32px; padding-bottom: 24px; }
+.org-settings__org-name { display: none; }
+.org-settings__intro { display: flex; align-items: center; gap: 12px; padding: 16px; border: 1px solid var(--app-border-secondary); border-radius: 10px; background: var(--app-surface); }
+.org-settings__intro-avatar { background: var(--app-surface-selected); color: var(--app-primary); font-weight: 700; }
+.org-settings__intro h3, .org-settings__intro p, .org-settings__group-heading h3, .org-settings__group-heading p, .org-settings__card-title-row h4, .org-settings__card-title-row p, .org-settings__integration-card h4, .org-settings__integration-card p { margin: 0; }
+.org-settings__intro h3 { font-size: 16px; font-weight: 600; color: var(--app-text); }
+.org-settings__intro p:not(.org-settings__eyebrow) { margin-top: 2px; color: var(--app-text-secondary); font-size: 13px; }
+.org-settings__group { display: flex; flex-direction: column; gap: 12px; }
+.org-settings__group-heading { max-width: 680px; }
+.org-settings__group-heading--split { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.org-settings__eyebrow { margin: 0 0 4px; color: var(--app-text-helper); font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.org-settings__group-heading h3 { color: var(--app-text); font-size: 18px; font-weight: 600; line-height: 26px; }
+.org-settings__group-heading > p:last-child, .org-settings__group-heading > div > p:last-child { margin-top: 4px; color: var(--app-text-secondary); font-size: 14px; line-height: 21px; }
+.org-settings__tile { border-color: var(--app-border-secondary); border-radius: 10px; box-shadow: none; }
+.org-settings__tile .ant-form-item { margin-bottom: 16px; }
+.org-settings__tile .ant-form-item:last-of-type { margin-bottom: 12px; }
+.org-settings__form-actions, .org-settings__transfer-controls { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px; }
+.org-settings__save-status { color: var(--app-success); font-size: 13px; }
+.org-settings__integration-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.org-settings__integration-card { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center; gap: 10px; min-height: 76px; padding: 12px; border: 1px solid var(--app-border-secondary); border-radius: 8px; background: var(--app-surface-elevated); }
+.org-settings__integration-icon { display: grid; width: 36px; height: 36px; place-items: center; border-radius: 10px; font-size: 18px; }
+.org-settings__integration-icon--yellow { background: #fff7e6; color: #d48806; }
+.org-settings__integration-icon--blue { background: #e6f4ff; color: #1677ff; }
+.org-settings__integration-icon--violet { background: #f4f0ff; color: #722ed1; }
+.org-settings__integration-icon--green { background: #f6ffed; color: #389e0d; }
+.org-settings__integration-icon--red { background: #fff1f0; color: #cf1322; }
+.org-settings__integration-icon--purple { background: #f9f0ff; color: #722ed1; }
+.org-settings__integration-card h4, .org-settings__card-title-row h4 { color: var(--app-text); font-size: 14px; font-weight: 600; line-height: 20px; }
+.org-settings__integration-card p, .org-settings__card-title-row p { color: var(--app-text-secondary); font-size: 12px; line-height: 18px; }
+.org-settings__integration-card .ant-tag, .org-settings__soon-tag { margin-inline-end: 0; color: var(--app-text-secondary); border-color: var(--app-border); background: transparent; }
+.org-settings__resource-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.org-settings__card-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.org-settings__info-icon, .org-settings__ai-icon { color: var(--app-text-secondary); font-size: 18px; }
+.org-settings__limit-value { display: flex; align-items: baseline; gap: 8px; margin: 20px 0 8px; }
+.org-settings__limit-value span { color: var(--app-text); font-size: 28px; font-weight: 600; line-height: 1; }
+.org-settings__limit-value small, .org-settings__placeholder-note { color: var(--app-text-secondary); font-size: 12px; line-height: 18px; }
+.org-settings__placeholder-note { margin: 12px 0 0; }
+.org-settings__ai-options { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.org-settings__ai-option { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--app-text); font-size: 13px; }
+.org-settings__field-wrap label { display: block; margin-bottom: 8px; font-size: 14px; font-weight: 500; color: var(--app-text); }
+.org-settings__tile--danger { border-color: color-mix(in srgb, var(--app-error) 55%, var(--app-border-secondary)); }
+.org-settings__transfer-confirm { display: grid; grid-template-columns: 40px 1fr; column-gap: 12px; align-items: center; }
+.org-settings__transfer-confirm p { margin: 0; color: var(--app-text); }
+.org-settings__transfer-confirm span { grid-column: 2; margin-top: 4px; color: var(--app-text-secondary); font-size: 13px; }
+@media (max-width: 760px) { .org-settings-page { padding: 16px; } .org-settings__integration-grid, .org-settings__resource-grid { grid-template-columns: 1fr; } .org-settings__integration-card { min-height: 68px; } }
+@media (max-width: 480px) { .org-settings__group-heading--split { align-items: flex-start; flex-direction: column; } .org-settings__form-actions .ant-btn, .org-settings__transfer-controls .ant-btn { width: 100%; } .org-settings__field-wrap { width: 100%; max-width: none; } }
+.org-settings__group[aria-labelledby='org-integrations-title'],
+.org-settings__group[aria-labelledby='org-ai-title'] { display: none; }
+
+/* Settings tabs */
+.org-settings__tabs { display: flex; align-items: flex-end; gap: 24px; border-bottom: 1px solid var(--app-border-secondary); }
+.org-settings__tab { position: relative; min-height: 40px; padding: 0 0 10px; border: 0; background: transparent; color: var(--app-text-secondary); font: inherit; font-size: 14px; cursor: pointer; }
+.org-settings__tab:hover { color: var(--app-text); }
+.org-settings__tab:focus-visible { outline: 2px solid var(--app-focus); outline-offset: 3px; border-radius: 2px; }
+.org-settings__tab--active { color: var(--app-text); font-weight: 600; }
+.org-settings__tab--active::after { content: ''; position: absolute; right: 0; bottom: -1px; left: 0; height: 2px; border-radius: 2px 2px 0 0; background: var(--app-primary); }
+.org-settings--organization .org-settings__connections-tab,
+.org-settings--organization .org-settings__ai-tab,
+.org-settings--connections .org-settings__general-tab,
+.org-settings--connections .org-settings__ai-tab,
+.org-settings--ai .org-settings__general-tab,
+.org-settings--ai .org-settings__connections-tab { display: none; }
+/* Theme-aware integration icon accents */
+html[data-theme='dark'] .org-settings__integration-icon--yellow { background: #3b2a0a; color: #ffd666; }
+html[data-theme='dark'] .org-settings__integration-icon--blue { background: #102f4a; color: #91caff; }
+html[data-theme='dark'] .org-settings__integration-icon--violet,
+html[data-theme='dark'] .org-settings__integration-icon--purple { background: #2d1f4a; color: #d3adf7; }
+html[data-theme='dark'] .org-settings__integration-icon--green { background: #183b20; color: #b7eb8f; }
+html[data-theme='dark'] .org-settings__integration-icon--red { background: #481b1f; color: #ffaaa8; }
+/* Form builder theme isolation */
+.app-form-editor {
+  background: var(--app-bg);
+  color: var(--app-text);
+  isolation: isolate;
+}
+
+.app-form-editor .ant-input,
+.app-form-editor .ant-input-affix-wrapper,
+.app-form-editor .ant-input-number,
+.app-form-editor .ant-select-selector,
+.app-form-editor .ant-picker {
+  background: var(--app-input-bg) !important;
+  border-color: var(--app-border) !important;
+  color: var(--app-text) !important;
+}
+
+.app-form-editor .ant-input-affix-wrapper .ant-input,
+.app-form-editor .ant-input-number-input,
+.app-form-editor .ant-picker-input > input,
+.app-form-editor .ant-select-selection-item,
+.app-form-editor .ant-select-selection-placeholder,
+.app-form-editor .ant-select-arrow,
+.app-form-editor .ant-picker-suffix {
+  color: var(--app-text) !important;
+}
+
+.app-form-editor .ant-select-selection-placeholder,
+.app-form-editor .ant-input::placeholder,
+.app-form-editor .ant-input-number-input::placeholder,
+.app-form-editor .ant-picker-input > input::placeholder,
+.app-form-editor input::placeholder,
+.app-form-editor textarea::placeholder {
+  color: var(--app-text-placeholder) !important;
+  opacity: 1;
+}
+
+.app-form-editor .ant-input:hover,
+.app-form-editor .ant-input-affix-wrapper:hover,
+.app-form-editor .ant-input-number:hover,
+.app-form-editor .ant-select:not(.ant-select-disabled):hover .ant-select-selector,
+.app-form-editor .ant-picker:hover {
+  border-color: var(--app-border-strong) !important;
+}
+
+.app-form-editor .ant-input:focus,
+.app-form-editor .ant-input-affix-wrapper-focused,
+.app-form-editor .ant-input-number-focused,
+.app-form-editor .ant-select-focused .ant-select-selector,
+.app-form-editor .ant-picker-focused {
+  border-color: var(--app-focus) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--app-focus) 18%, transparent) !important;
+}
+
+.app-form-editor .ant-input-disabled,
+.app-form-editor .ant-input-affix-wrapper-disabled,
+.app-form-editor .ant-input-number-disabled,
+.app-form-editor .ant-select-disabled .ant-select-selector,
+.app-form-editor .ant-picker-disabled {
+  background: var(--app-surface-accent) !important;
+  border-color: var(--app-border-secondary) !important;
+  color: var(--app-text-secondary) !important;
+  opacity: 1;
+}
+
+.app-form-editor .ant-input-disabled,
+.app-form-editor .ant-input-disabled::placeholder,
+.app-form-editor .ant-input-number-disabled .ant-input-number-input,
+.app-form-editor .ant-picker-disabled .ant-picker-input > input,
+.app-form-editor .ant-select-disabled .ant-select-selection-item,
+.app-form-editor .ant-select-disabled .ant-select-selection-placeholder {
+  color: var(--app-text-secondary) !important;
+  -webkit-text-fill-color: var(--app-text-secondary);
+}
+
+.app-form-editor .ant-form-item-label > label,
+.app-form-editor .ant-checkbox-wrapper,
+.app-form-editor .ant-radio-wrapper,
+.app-form-editor .ant-upload-wrapper {
+  color: var(--app-text) !important;
+}
+
+.app-form-editor .ant-upload-wrapper .ant-upload-drag {
+  background: var(--app-surface-accent) !important;
+  border-color: var(--app-border) !important;
+}
+
+.app-form-editor .ant-upload-wrapper .ant-upload-drag p {
+  color: var(--app-text-secondary) !important;
 }

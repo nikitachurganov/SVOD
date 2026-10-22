@@ -8,8 +8,8 @@
 
 - [PROJECT_OVERVIEW.md](./PROJECT_OVERVIEW.md) — обзор продукта, стек и бизнес-логика
 - [FRONTEND_RULES.md](./FRONTEND_RULES.md)
-- [BACKEND_RULES.md](./BACKEND_RULES.md)
-- [API_RULES.md](./API_RULES.md)
+- [BACKEND_RULES.md](BACKEND_RULES.md)
+- [API_RULES.md](API_RULES.md)
 - [REFACTORING_RULES.md](./REFACTORING_RULES.md)
 - [FIGMA_MCP_RULES.md](./FIGMA_MCP_RULES.md)
 - Cursor rules: `.cursor/rules/*.mdc`
@@ -177,7 +177,7 @@ Org gate: без организаций показывается empty state с�
 
 Модули: `auth.api.ts`, `profiles.api.ts`, `forms.api.ts`, `requests.api.ts`, `organizations.api.ts`, `files.api.ts`, `public.api.ts`.
 
-Подробности: [API_RULES.md](./API_RULES.md).
+Подробности: [API_RULES.md](API_RULES.md).
 
 ---
 

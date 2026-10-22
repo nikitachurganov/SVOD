@@ -24,6 +24,9 @@ class RequestStage(Base):
 
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    expected_result: Mapped[str | None] = mapped_column(Text, nullable=True)
+    recommended_role: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    due_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     assignee_kind: Mapped[str | None] = mapped_column(String(20), nullable=True)
     assignee_internal_user_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -71,4 +74,22 @@ class RequestStage(Base):
     assignee_external_contractor: Mapped["ExternalContractor | None"] = relationship(  # noqa: F821
         foreign_keys=[assignee_external_contractor_id],
         lazy="selectin",
+    )
+    artifacts: Mapped[list["RequestStageArtifact"]] = relationship(  # noqa: F821
+        back_populates="stage",
+        order_by="RequestStageArtifact.created_at",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+    )
+    specifications: Mapped[list["RequestStageSpecification"]] = relationship(  # noqa: F821
+        back_populates="stage",
+        order_by="RequestStageSpecification.version.desc()",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+    )
+    handoffs: Mapped[list["RequestStageHandoff"]] = relationship(  # noqa: F821
+        back_populates="stage",
+        order_by="RequestStageHandoff.assigned_at",
+        lazy="selectin",
+        cascade="all, delete-orphan",
     )

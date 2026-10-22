@@ -2,8 +2,7 @@ import { useEffect, useState } from 'react';
 
 import { useMediaQuery } from './shared/hooks/useMediaQuery';
 
-import { Button, Spin } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+import { Spin } from 'antd';
 
 import { GlobalScrollbarStyles } from './shared/ui/GlobalScrollbarStyles';
 
@@ -53,6 +52,11 @@ import { OrganizationSettingsPage } from './pages/OrganizationSettingsPage';
 import { FormViewPage } from './pages/FormViewPage';
 
 import { FormsPage } from './pages/FormsPage';
+import { SurveysPage } from './pages/SurveysPage';
+import { CreateSurveyPage } from './pages/CreateSurveyPage';
+import { EditSurveyPage } from './pages/EditSurveyPage';
+import { SurveyViewPage } from './pages/SurveyViewPage';
+import { PublicSurveyPage } from './pages/PublicSurveyPage';
 
 import { RequestsPage } from './pages/RequestsPage';
 
@@ -61,6 +65,8 @@ import { CreateRequestPage } from './pages/CreateRequestPage';
 import { RequestViewPage } from './pages/RequestViewPage';
 
 import { AuthPage } from './pages/AuthPage';
+import { ActivateAccountPage } from './pages/ActivateAccountPage';
+import { JoinOrganizationPage } from './pages/JoinOrganizationPage';
 
 import { PublicFormFillPage } from './pages/PublicFormFillPage';
 
@@ -73,6 +79,7 @@ import { PublicRequestLegacyRedirect } from './pages/PublicRequestLegacyRedirect
 import { FormilyBuilderPage } from './dev/formily/FormilyBuilderPage';
 
 import { CreateOrganizationModal } from './components/layout/CreateOrganizationModal';
+import { NoOrganizationState } from './components/layout/NoOrganizationState';
 
 
 
@@ -87,24 +94,6 @@ const getSelectedMenuKey = (pathname: string): string => {
   return matched?.key ?? 'requests';
 
 };
-
-
-
-const NoOrganizationState = ({ onCreateClick }: { onCreateClick: () => void }) => (
-
-  <div className="app-no-org-state">
-
-    <p>Для начала работы необходимо создать организацию</p>
-
-    <Button type="primary" icon={<PlusOutlined />} onClick={onCreateClick}>
-
-      Создать организацию
-
-    </Button>
-
-  </div>
-
-);
 
 
 
@@ -460,6 +449,12 @@ const router = createBrowserRouter([
 
   { path: '/auth', element: <PublicOnlyAuthPage /> },
 
+  // Public: account pre-created by an organization owner, link from the invitation email
+  { path: '/activate/:token', element: <ActivateAccountPage /> },
+
+  // Public: join an organization by its link (the owner moderates requests)
+  { path: '/join/:token', element: <JoinOrganizationPage /> },
+
   {
     path: '/form/:token',
     element: <PublicFormFlowProvider />,
@@ -470,6 +465,9 @@ const router = createBrowserRouter([
   },
 
   { path: '/public/request/:token', element: <PublicRequestLegacyRedirect /> },
+
+  // Public: respondent page of a survey
+  { path: '/survey/:token', element: <PublicSurveyPage /> },
 
   {
 
@@ -494,6 +492,14 @@ const router = createBrowserRouter([
       { path: 'forms/:id', element: <FormViewPage /> },
 
       { path: 'forms/:id/edit', element: <EditFormPage /> },
+
+      { path: 'surveys', element: <SurveysPage /> },
+
+      { path: 'surveys/create', element: <CreateSurveyPage /> },
+
+      { path: 'surveys/:id', element: <SurveyViewPage /> },
+
+      { path: 'surveys/:id/edit', element: <EditSurveyPage /> },
 
       { path: 'participants', element: <ParticipantsPage /> },
 

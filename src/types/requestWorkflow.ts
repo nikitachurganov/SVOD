@@ -3,11 +3,11 @@ import type { AuthorPreview } from './author';
 export type WorkflowStatus =
   | 'draft'
   | 'new'
-  | 'triage'
   | 'waiting_info'
+  | 'planning'
   | 'in_progress'
-  | 'review'
   | 'completed'
+  | 'closed'
   | 'cancelled'
   | 'archived';
 
@@ -83,13 +83,13 @@ export interface WorkflowStatusSuggestion {
   reason: string;
 }
 
-export const WORKFLOW_STATUS_LABELS: Record<WorkflowStatus, string> = {
+export const WORKFLOW_STATUS_LABELS: Record<string, string> = {
+  planning: 'Планирование',
+  closed: 'Закрыта',
   draft: 'Черновик',
   new: 'Новая',
-  triage: 'На разборе',
   waiting_info: 'Ожидает информации',
   in_progress: 'В работе',
-  review: 'На проверке',
   completed: 'Завершена',
   cancelled: 'Отменена',
   archived: 'В архиве',
@@ -111,13 +111,13 @@ export const TASK_PRIORITY_LABELS: Record<TaskPriority, string> = {
   urgent: 'Срочный',
 };
 
-export const WORKFLOW_STATUS_COLORS: Record<WorkflowStatus, string> = {
+export const WORKFLOW_STATUS_COLORS: Record<string, string> = {
+  planning: 'cyan',
+  closed: 'success',
   draft: 'default',
   new: 'blue',
-  triage: 'cyan',
   waiting_info: 'orange',
   in_progress: 'processing',
-  review: 'purple',
   completed: 'success',
   cancelled: 'error',
   archived: 'default',

@@ -2,18 +2,18 @@ import { useState } from 'react';
 import { message } from 'antd';
 import { useAuth } from '../../shared/hooks/auth.hooks';
 import { useOrganization } from '../../shared/hooks/organization.hooks';
-import { getOrCreatePublicLink } from '../../shared/api/organizations.api';
-import { InviteMemberModal } from '../organization/InviteMemberModal';
+import { getJoinLink, getOrCreatePublicLink } from '../../shared/api/organizations.api';
+import { JoinLinkModal } from '../organization/JoinLinkModal';
 
 /**
- * Owner/member actions for the active org: public request link + invite (owner only).
+ * Owner/member actions for the active org: public request link + join link (owner only).
  * Rendered in the left sidebar below the organization profile row.
  */
 export const SidebarOrgActions = () => {
   const { user } = useAuth();
   const { organizations, activeOrganization, isLoading } = useOrganization();
 
-  const [inviteOpen, setInviteOpen] = useState(false);
+  const [joinLinkOpen, setJoinLinkOpen] = useState(false);
   const [messageApi, contextHolder] = message.useMessage();
 
   if (isLoading || organizations.length === 0 || !activeOrganization) {
@@ -36,6 +36,24 @@ export const SidebarOrgActions = () => {
     }
   };
 
+  const handleCopyJoinLink = async () => {
+    try {
+      const link = await getJoinLink(activeOrganization.id);
+      if (!link.enabled || !link.url) {
+        // Link is off: let the owner turn it on first
+        setJoinLinkOpen(true);
+        return;
+      }
+      await navigator.clipboard.writeText(link.url);
+      messageApi.success({
+        content: 'Ссылка-приглашение скопирована. Заявки по ней появятся в «Участниках».',
+        duration: 5,
+      });
+    } catch {
+      setJoinLinkOpen(true);
+    }
+  };
+
   return (
     <>
       {contextHolder}
@@ -51,17 +69,17 @@ export const SidebarOrgActions = () => {
           <button
             type="button"
             className="app-sidebar-org-actions__link"
-            onClick={() => setInviteOpen(true)}
+            onClick={() => void handleCopyJoinLink()}
           >
             Ссылка на приглашение
           </button>
         )}
       </div>
 
-      <InviteMemberModal
-        open={inviteOpen}
-        onClose={() => setInviteOpen(false)}
+      <JoinLinkModal
+        open={joinLinkOpen}
         organizationId={activeOrganization.id}
+        onClose={() => setJoinLinkOpen(false)}
       />
     </>
   );

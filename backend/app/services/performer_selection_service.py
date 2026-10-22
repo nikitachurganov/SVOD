@@ -20,6 +20,7 @@ from app.repositories import (
     organization_repository,
     performer_analytics_repository,
     request_repository,
+    request_stage_repository,
 )
 from app.schemas.performer_selection import AssignRequestPayload
 from app.services import performer_hints
@@ -151,7 +152,9 @@ async def log_analytics(
 async def get_recommended_performers(
     session: AsyncSession,
     request_id: int,
-    current_user: User,
+    current_user: User | None,
+    stage_id: uuid.UUID | None = None,
+    context: str | None = None,
 ) -> dict[str, Any]:
     req = await request_repository.get_by_id(session, request_id)
     if req is None:
@@ -163,7 +166,8 @@ async def get_recommended_performers(
         )
 
     org_id = req.organization_id
-    await _ensure_org_member(session, org_id, current_user.id)
+    if current_user is not None:
+        await _ensure_org_member(session, org_id, current_user.id)
 
     form_row = await form_repository.get_by_id(session, req.form_id)
     hints_dict: dict[str, Any] | None = None
@@ -180,6 +184,24 @@ async def get_recommended_performers(
         ai_summary=req.ai_summary if isinstance(req.ai_summary, dict) else None,
         ai_analysis=req.ai_analysis if isinstance(req.ai_analysis, dict) else None,
     )
+    if stage_id is not None:
+        stage = await request_stage_repository.get_stage(session, stage_id)
+        if stage is None or stage.request_id != request_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stage not found")
+        stage_context = "\n".join(
+            value.strip()
+            for value in (
+                stage.title,
+                stage.description or "",
+                stage.expected_result or "",
+                stage.recommended_role or "",
+            )
+            if value and value.strip()
+        )
+        if stage_context:
+            req_spec = stage_context[:1500]
+    elif context and context.strip():
+        req_spec = context.strip()[:1500]
     req_geo = performer_hints.extract_geography_hint(
         performer_hints=hints_dict,
         request_data=req.data if isinstance(req.data, dict) else {},
@@ -322,22 +344,21 @@ async def get_recommended_performers(
         "geography": str(fb_geo or "Не указано"),
     }
 
-    clean = []
-    for p in top5:
-        clean.append(
-            {
-                "id": p["id"],
-                "full_name": p["full_name"],
-                "position": p["position"],
-                "organization": p["organization"],
-                "is_internal": p["is_internal"],
-                "score": p["score"],
-                "reasons": p["reasons"],
-                "warnings": p["warnings"],
-                "active_tasks": p["active_tasks"],
-                "contact_available": p["contact_available"],
-            }
-        )
+    def _public(p: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "id": p["id"],
+            "full_name": p["full_name"],
+            "position": p["position"],
+            "organization": p["organization"],
+            "is_internal": p["is_internal"],
+            "score": p["score"],
+            "reasons": p["reasons"],
+            "warnings": p["warnings"],
+            "active_tasks": p["active_tasks"],
+            "contact_available": p["contact_available"],
+        }
+
+    clean = [_public(p) for p in top5]
 
     await log_analytics(
         session,
@@ -354,6 +375,7 @@ async def get_recommended_performers(
         "recommended_performer_id": recommended_id,
         "performers": clean,
         "fallback": fallback,
+        "all_performers": [_public(p) for p in performers_out],
     }
 
 

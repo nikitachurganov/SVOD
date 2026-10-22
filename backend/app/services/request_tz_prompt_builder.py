@@ -1,4 +1,4 @@
-"""Build GigaChat messages for technical specification (ТЗ) generation."""
+"""Build LLM messages for technical specification (ТЗ) generation."""
 
 from __future__ import annotations
 

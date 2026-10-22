@@ -28,6 +28,9 @@ class PerformerRecommendationResponse(BaseModel):
     recommended_performer_id: str | None = None
     performers: list[RecommendedPerformerItem]
     fallback: RecommendationFallback
+    # Everyone assignable (members + external contractors), sorted by score: the picker shows
+    # recommendations first, then the rest grouped by kind.
+    all_performers: list[RecommendedPerformerItem] = Field(default_factory=list)
 
 
 class AssignRequestPayload(BaseModel):

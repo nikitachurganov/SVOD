@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Alert, Button, Modal, notification } from 'antd';
-import { ArrowLeftOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
+import {
+  ArrowLeftOutlined,
+  DeleteOutlined,
+  EyeOutlined,
+  RobotOutlined,
+} from '@ant-design/icons';
 import {
   DndContext,
   DragOverlay,
@@ -15,6 +20,7 @@ import { arrayMove } from '@dnd-kit/sortable';
 import { ToolPanel } from '../ToolPanel';
 import { IconDefaultButton } from '../IconDefaultButton';
 import { FormCanvas } from './FormCanvas';
+import { AiFormBuilderPanel, type MethodologyState } from './AiFormBuilderPanel';
 import { CanvasFieldOverlay } from './DroppedFieldCard';
 import { useFormStore } from '../../hooks/useFormStore';
 import { collectFieldIds } from '../../formily/collectFieldIds';
@@ -44,8 +50,15 @@ export interface FormEditorProps {
   initialTitle?: string;
   initialPages?: FormPageInstance[];
   initialFields?: FormFieldInstance[];
-  onSave: (title: string, pages: FormPageInstance[]) => Promise<void>;
+  onSave: (
+    title: string,
+    pages: FormPageInstance[],
+    methodology?: MethodologyState,
+  ) => Promise<void>;
   onBack: () => void;
+  /** 'survey' switches the AI builder to methodology-aware survey generation */
+  mode?: 'form' | 'survey';
+  initialMethodology?: MethodologyState;
 }
 
 // ─── FormTitleInput ───────────────────────────────────────────────────────────
@@ -54,13 +67,19 @@ interface FormTitleInputProps {
   value: string;
   onChange: (value: string) => void;
   error?: string | null;
+  placeholder?: string;
 }
 
-const FormTitleInput = ({ value, onChange, error }: FormTitleInputProps) => {
+const FormTitleInput = ({
+  value,
+  onChange,
+  error,
+  placeholder = 'Название формы',
+}: FormTitleInputProps) => {
   return (
     <div>
       <input
-        placeholder="Название формы"
+        placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         aria-invalid={error ? true : undefined}
@@ -407,7 +426,14 @@ export const FormEditor = ({
   initialFields = [],
   onSave,
   onBack,
+  mode = 'form',
+  initialMethodology,
 }: FormEditorProps) => {
+  const isSurvey = mode === 'survey';
+  const entityName = isSurvey ? 'опроса' : 'формы';
+  const [methodology, setMethodology] = useState<MethodologyState>(
+    initialMethodology ?? { meta: null, summary: null },
+  );
   const [formTitle, setFormTitle] = useState<string>(initialTitle);
   const resolvedInitialPages: FormPageInstance[] =
     initialPages && initialPages.length
@@ -434,6 +460,7 @@ export const FormEditor = ({
   const [deletePageId, setDeletePageId] = useState<string | null>(null);
   const [pendingDeletion, setPendingDeletion] = useState<PendingDeletion | null>(null);
   const [undoNow, setUndoNow] = useState(() => Date.now());
+  const [isAiPanelOpen, setIsAiPanelOpen] = useState(true);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -844,7 +871,7 @@ export const FormEditor = ({
   // ── Save ─────────────────────────────────────────────────────────────────────
   const handleSave = useCallback(async () => {
     if (!formTitle.trim()) {
-      setTitleError('Укажите название формы');
+      setTitleError(`Укажите название ${entityName}`);
       return;
     }
 
@@ -858,20 +885,42 @@ export const FormEditor = ({
     }, 0);
 
     if (totalFields === 0) {
-      setSaveError('Добавьте хотя бы один элемент формы.');
+      setSaveError(isSurvey ? 'Добавьте хотя бы один вопрос.' : 'Добавьте хотя бы один элемент формы.');
       return;
     }
 
     setSaveError(null);
     setIsSaving(true);
     try {
-      await onSave(formTitle.trim(), pages);
+      await onSave(formTitle.trim(), pages, isSurvey ? methodology : undefined);
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Не удалось сохранить форму.');
+      setSaveError(
+        err instanceof Error ? err.message : `Не удалось сохранить ${isSurvey ? 'опрос' : 'форму'}.`,
+      );
     } finally {
       setIsSaving(false);
     }
-  }, [formTitle, pages, onSave]);
+  }, [formTitle, pages, onSave, isSurvey, methodology, entityName]);
+
+  // ── AI builder ───────────────────────────────────────────────────────────────
+  const replaceFormState = useCallback(
+    (nextTitle: string | null, nextPages: FormPageInstance[]) => {
+      clearPendingDeletion();
+      if (nextTitle !== null) {
+        setFormTitle(nextTitle);
+        if (nextTitle.trim()) setTitleError(null);
+      }
+      const safePages: FormPageInstance[] = nextPages.length
+        ? nextPages
+        : [{ id: crypto.randomUUID(), title: 'Страница 1', fields: [] }];
+      setPages(safePages);
+      setActivePageId((prevId) =>
+        safePages.some((p) => p.id === prevId) ? prevId : safePages[0].id,
+      );
+      setSaveError(null);
+    },
+    [clearPendingDeletion],
+  );
 
   const handleAddPage = () => {
     const newPage: FormPageInstance = {
@@ -911,6 +960,7 @@ export const FormEditor = ({
   return (
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <div
+        className="app-form-editor"
         style={{
           display: 'flex',
           flex: 1,
@@ -918,6 +968,8 @@ export const FormEditor = ({
           height: '100%',
           minHeight: 0,
           position: 'relative',
+          background: 'var(--app-bg)',
+          color: 'var(--app-text)',
         }}
       >
         {/* ── Page header ── */}
@@ -940,13 +992,24 @@ export const FormEditor = ({
               <Button
                 type="text"
                 icon={<ArrowLeftOutlined />}
-                aria-label="Вернуться к списку форм"
+                aria-label={isSurvey ? 'Вернуться к списку опросов' : 'Вернуться к списку форм'}
                 onClick={onBack}
               />
               <h4 style={{ margin: 0 }}>{pageTitle}</h4>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {!isPreviewMode && (
+                <Button
+                  icon={<RobotOutlined />}
+                  aria-pressed={isAiPanelOpen}
+                  type={isAiPanelOpen ? 'default' : 'text'}
+                  onClick={() => setIsAiPanelOpen((prev) => !prev)}
+                  disabled={isSaving}
+                >
+                  ИИ-конструктор
+                </Button>
+              )}
               <IconDefaultButton
                 size="middle"
                 icon={<EyeOutlined />}
@@ -1011,9 +1074,12 @@ export const FormEditor = ({
                   overflowX: 'hidden',
                   display: 'flex',
                   flexDirection: 'column',
+                  background: 'var(--app-bg)',
+                  color: 'var(--app-text)',
                 }}
               >
                 <FormTitleInput
+                  placeholder={isSurvey ? 'Название опроса' : 'Название формы'}
                   value={formTitle}
                   onChange={(next) => {
                     setFormTitle(next);
@@ -1117,6 +1183,23 @@ export const FormEditor = ({
                   onFieldMoveBefore={handleFieldMoveBefore}
                 />
               </div>
+
+              {/* Far right — AI builder chat */}
+              {isAiPanelOpen && (
+                <AiFormBuilderPanel
+                  formTitle={formTitle}
+                  pages={pages}
+                  onApply={replaceFormState}
+                  onRestore={(title, restoredPages, restoredMethodology) => {
+                    replaceFormState(title, restoredPages);
+                    if (isSurvey && restoredMethodology) setMethodology(restoredMethodology);
+                  }}
+                  onClose={() => setIsAiPanelOpen(false)}
+                  mode={mode}
+                  methodology={methodology}
+                  onMethodologyChange={setMethodology}
+                />
+              )}
             </>
           )}
         </div>

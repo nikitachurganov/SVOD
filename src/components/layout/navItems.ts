@@ -1,6 +1,7 @@
 import {
   MailOutlined,
   FileTextOutlined,
+  FormOutlined,
   TeamOutlined,
   SettingOutlined,
 } from '@ant-design/icons';
@@ -16,6 +17,7 @@ export interface NavItem {
 export const NAV_ITEMS: NavItem[] = [
   { key: 'requests', label: 'Заявки', path: '/requests', Icon: MailOutlined },
   { key: 'forms', label: 'Формы', path: '/forms', Icon: FileTextOutlined },
+  { key: 'surveys', label: 'Опросы', path: '/surveys', Icon: FormOutlined },
   { key: 'participants', label: 'Участники', path: '/participants', Icon: TeamOutlined },
   {
     key: 'organization-settings',

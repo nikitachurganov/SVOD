@@ -7,7 +7,7 @@ import logging
 from typing import Any
 
 from app.schemas.request_tz import RequestTZSections
-from app.services.gigachat_client import strip_json_fence
+from app.services.openrouter_client import strip_json_fence
 
 logger = logging.getLogger(__name__)
 

@@ -12,6 +12,7 @@ const SidebarCollapsedOrgPopoverInner = () => {
   return (
     <div className="app-side-nav-rail__org">
       <Popover
+        classNames={{ root: 'app-sidebar-org-popover' }}
         open={open}
         onOpenChange={setOpen}
         trigger="click"

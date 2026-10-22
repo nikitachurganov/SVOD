@@ -137,11 +137,12 @@ nano backend/.env
 | Переменная | Описание |
 |------------|----------|
 | `SECRET_KEY` | Случайная строка (48+ символов) |
-| `GIGACHAT_AUTH_KEY` | Ключ GigaChat |
-| `GIGACHAT_SCOPE` | Например `GIGACHAT_API_PERS` |
-| `GIGACHAT_MODEL` | Например `GigaChat` |
+| `OPENROUTER_API_KEY` | API-ключ из OpenRouter |
+| `OPENROUTER_MODEL` | Например `z-ai/glm-5.3-flash` |
 | `CORS_ORIGINS` | `["https://app.svodservice.ru"]` |
-| `FILE_STORAGE_BASE_URL` | `https://app.svodservice.ru/api/uploads` |
+| `S3_ENDPOINT_URL` | приватный S3-совместимый endpoint, доступный контейнерам |
+| `S3_PUBLIC_ENDPOINT_URL` | endpoint, доступный браузеру для временных signed URL |
+| `S3_BUCKET` / `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | приватный bucket и доступ к нему |
 | `YANDEX_MAPS_API_KEY` | Для подсказок адреса (опционально) |
 | `DADATA_API_KEY` | Для DaData (опционально) |
 
@@ -196,12 +197,13 @@ Internet :80 / :443
         │
         ▼
     [nginx]  ── /api/* ──► [api:8000] ──► [db:5432]
-        │
-        └── /* ──► [frontend:80]  (Vite SPA static)
+        │                              ▲
+        └── /* ──► [frontend:80]       [worker]  AI-задачи, просрочки
+                (Vite SPA static)      [telegram-bot]  long polling → Telegram
 ```
 
 - **nginx** — единственный сервис с портами наружу (80, 443)
-- **api** и **db** — только внутренняя сеть `svod_internal`
+- **api**, **worker**, **telegram-bot** и **db** — только внутренняя сеть `svod_internal`; `migrate` выполняет `alembic upgrade head` и завершается
 - **frontend** — внутренний Nginx со статикой и SPA fallback
 
 Файлы:
@@ -213,6 +215,21 @@ Internet :80 / :443
 | `docker-compose.production.yml` | Production stack |
 | `deploy/nginx/app.svodservice.ru.http.conf` | HTTP до SSL |
 | `deploy/nginx/app.svodservice.ru.conf` | HTTPS после SSL |
+
+### Telegram-бот (контейнер `telegram-bot`)
+
+Бот работает через long polling — входящие порты и webhook не нужны. Контейнер ровно один:
+Telegram отдаёт обновления одного токена только одному потребителю.
+
+1. В @BotFather: `/newbot` → получить токен.
+2. Там же: `/setprivacy` → бот → **Disable**. Иначе в группах бот видит только команды и ответы себе,
+   и автоматический поиск заявок в переписке не работает (`/request` при этом работает).
+   Альтернатива — сделать бота администратором группы.
+3. В `backend/.env`: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME` (без `@`).
+4. `docker compose -f docker-compose.production.yml up -d --build telegram-bot`.
+
+Без токена контейнер не падает, а простаивает с предупреждением в логе. Локально бот запускается
+профилем: `docker compose --profile telegram up` в `backend/`.
 
 ---
 
@@ -388,10 +405,19 @@ docker compose -f docker-compose.production.yml build
 | `DATABASE_URL` | да | `postgresql+asyncpg://postgres:***@db:5432/myapp` |
 | `SECRET_KEY` | да | случайная строка |
 | `CORS_ORIGINS` | да | `["https://app.svodservice.ru"]` |
-| `GIGACHAT_*` | да | из кабинета GigaChat |
+| `OPENROUTER_API_KEY` | да | из кабинета OpenRouter |
+| `OPENROUTER_MODEL` | да | идентификатор модели из каталога OpenRouter |
 | `YANDEX_MAPS_API_KEY` | нет | для подсказок адреса |
 | `DADATA_API_KEY` | нет | для DaData |
-| `FILE_STORAGE_BASE_URL` | да | `https://app.svodservice.ru/api/uploads` |
+| `S3_ENDPOINT_URL` | да | endpoint приватного S3-хранилища |
+| `S3_PUBLIC_ENDPOINT_URL` | да | тот же endpoint, доступный браузеру |
+| `S3_BUCKET` | да | имя приватного bucket |
+| `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | да | учётные данные S3 |
+| `AI_JOBS_ENABLED` | нет | `true` включает фоновый AI-анализ |
+| `TELEGRAM_BOT_TOKEN` | нет | токен бота от @BotFather; пусто — интеграция выключена |
+| `TELEGRAM_BOT_USERNAME` | нет | имя бота без `@`, для ссылок `t.me/...` |
+| `TELEGRAM_ANALYSIS_MIN_MESSAGES` / `TELEGRAM_ANALYSIS_IDLE_SECONDS` | нет | анализ группы после N сообщений и M секунд тишины (3 / 180) |
+| `TELEGRAM_MESSAGE_RETENTION_DAYS` | нет | сколько дней хранятся сообщения групп (7) |
 
 ### Compose (корневой `.env`)
 

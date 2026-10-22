@@ -24,6 +24,7 @@ export const OrganizationSwitcher = () => {
   return (
     <div className="app-sidebar-org-profile-wrap">
       <Dropdown
+        classNames={{ root: 'app-menu-dropdown' }}
         menu={{ items: menuItems, selectedKeys: [activeOrganization.id] }}
         trigger={['click']}
         placement="topLeft"

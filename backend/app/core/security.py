@@ -14,7 +14,18 @@ def hash_password(plain: str) -> str:
     return pwd_context.hash(plain)
 
 
+# Placeholder for accounts created by an organization owner: no password until the invitee
+# activates the account by link. Never a valid bcrypt hash, so nobody can log in with it.
+PENDING_ACTIVATION_HASH = "!pending-activation"
+
+
+def is_pending_activation(password_hash: str) -> bool:
+    return password_hash == PENDING_ACTIVATION_HASH
+
+
 def verify_password(plain: str, hashed: str) -> bool:
+    if hashed.startswith("!"):
+        return False
     return pwd_context.verify(plain, hashed)
 
 

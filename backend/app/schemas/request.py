@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -27,6 +28,38 @@ class UpdateRequestPayload(BaseModel):
     status: str | None = None
     closedAt: str | None = None
     data: Any = None
+    priority: str | None = None
+    due_date: str | None = None
+
+
+class PatchResponsiblePayload(BaseModel):
+    responsible_user_id: str
+
+
+class RequestProgressResponse(BaseModel):
+    completed: int = 0
+    total: int = 0
+
+
+class RequestPermissionsResponse(BaseModel):
+    can_assign_responsible: bool = False
+    can_manage_plan: bool = False
+    can_start: bool = False
+    can_close: bool = False
+    can_cancel: bool = False
+    can_delete: bool = False
+    can_complete_active_stage: bool = False
+    can_block_active_stage: bool = False
+    can_unblock_active_stage: bool = False
+    can_take: bool = False
+    can_release: bool = False
+    can_self_execute: bool = False
+    can_edit_attributes: bool = False
+
+
+class PatchRequestAttributesPayload(BaseModel):
+    priority: str | None = None
+    due_date: datetime | None = None
 
 
 class PatchStatusPayload(BaseModel):
@@ -99,3 +132,7 @@ class RequestResponse(BaseModel):
     tasks: list[RequestTaskResponse] = []
     history: list[RequestHistoryEventResponse] = []
     ai_tz: dict | None = None
+    progress: RequestProgressResponse = Field(default_factory=RequestProgressResponse)
+    permissions: RequestPermissionsResponse = Field(default_factory=RequestPermissionsResponse)
+    ai_analysis_status: str | None = None
+    ai_stage_plan: dict | None = None

@@ -67,7 +67,10 @@ npm run preview  # preview production build
 | БД | PostgreSQL 16 |
 | Миграции | Alembic |
 | Auth | JWT (`python-jose`) + bcrypt |
-| AI (опционально) | GigaChat API |
+| AI (опционально) | OpenRouter API |
+| Фоновые задачи | `python -m app.worker` (очередь `ai_jobs` в PostgreSQL, просрочки этапов) |
+| Файлы | S3-совместимое хранилище (MinIO / приватный S3) |
+| Telegram-бот | aiogram 3, `python -m app.telegram_bot` (см. раздел 11a) |
 | Entry point | `backend/app/main.py` |
 
 ### Инфраструктура
@@ -75,7 +78,7 @@ npm run preview  # preview production build
 | Среда | Как запускается |
 |-------|-----------------|
 | Локальная разработка | `npm run dev` + `backend/docker-compose.yml` (db + api) |
-| Production | `docker-compose.production.yml` (db, api, frontend, nginx) |
+| Production | `docker-compose.production.yml` (db, migrate, api, worker, telegram-bot, frontend, nginx) |
 
 **Env frontend:** `VITE_API_URL` — обязателен.  
 **Env backend:** `DATABASE_URL`, `SECRET_KEY`, `CORS_ORIGINS` и др. — см. `backend/.env.example`.
@@ -339,7 +342,7 @@ Frontend: `files.api.ts`, дедупликация в `fileUpload.utils.ts`.
 
 ## 11. AI-возможности (опциональные)
 
-Интеграция с **GigaChat** на backend. На frontend управляются **feature flags** (`src/shared/config/featureFlags.ts`):
+Интеграция с **OpenRouter** на backend. На frontend управляются **feature flags** (`src/shared/config/featureFlags.ts`):
 
 | Flag | Env | По умолчанию |
 |------|-----|--------------|
@@ -359,6 +362,39 @@ Frontend: `files.api.ts`, дедупликация в `fileUpload.utils.ts`.
 **UI (при включённых flags):** `AiAnalysisPanel`, `AiReadinessAssistant`, `TzAssistantWidget`, `PerformerHintAssistant`.
 
 Ручной workflow (подзадачи, история, статусы) работает **независимо** от AI.
+
+---
+
+## 11a. Telegram-бот
+
+Отдельный процесс в backend-коде: `python -m app.telegram_bot` (aiogram 3, long polling), контейнер `telegram-bot`.
+Код: `backend/app/telegram/` (хендлеры, клавиатуры, тексты, фоновые циклы) + сервисы `telegram_*_service.py`,
+`request_draft_ai_service.py`. Работает с БД и сервисами напрямую, как `worker`.
+
+**Привязка аккаунта.** Меню профиля → «Telegram» (`TelegramLinkModal`) → `POST /telegram/link` выдаёт одноразовую
+ссылку `t.me/<bot>?start=<token>` (10 мин) → бот связывает Telegram-аккаунт с пользователем (`telegram_accounts`).
+
+**Уведомления.** Бот зеркалит таблицу `notifications` (outbox, отметка `telegram_sent_at`) — только тем, кто привязал
+Telegram, только созданные после привязки и не старше 24 ч. Кнопки: «Открыть в СВОД», «Взять в работу»
+(`request_created`), «Завершить этап» (`stage_started`). Типы, добавленные вместе с ботом:
+
+| Тип | Кому |
+|-----|------|
+| `request_created` | owner'ам org (кроме автора) — при создании из веба, публичной формы, Telegram |
+| `request_submitted` | автору: «Ваша заявка № N создана» |
+| `request_in_work`, `request_info_requested`, `request_completed`, `request_closed`, `request_cancelled` | автору, если действие сделал не он |
+
+**Личка.** `/new` — описание задачи → LLM подбирает форму org и заполняет поля (`request_draft_ai_service`) →
+карточка-черновик [Создать] [Изменить] [Другая форма] [Отмена]. `/my`, `/free` (с кнопками «Взять»), `/org`.
+
+**Группы** (только внутренние чаты команды, 1 группа = 1 org). Owner подключает `/connect`. Бот хранит сообщения
+(`telegram_messages`, 7 дней) и, когда в чате ≥3 новых сообщений и 3 мин тишины, ищет в них заявки; найденные
+показывает карточкой — подтвердить может любой участник org, он и становится автором. Продолжение той же темы
+обновляет открытую карточку. `/request` (реплаем, с текстом или упоминанием бота) — оформить сразу.
+`/pause`, `/resume`, `/disconnect`. Файлы из диалога крепятся к заявке полем `telegram_attachments`.
+
+Черновики — `telegram_request_suggestions` (протухают через 24 ч). Заявки из бота имеют `source = "telegram"`;
+в карточке заявки блок «Из Telegram» (`RequestTelegramSource`, `GET /telegram/requests/{id}/source`).
 
 ---
 
@@ -417,6 +453,9 @@ ThemeProvider
 | `/organizations` | `organizations.py` | orgs, members, invitations |
 | `/public/request` | `public.py` | публичные формы |
 | `/suggest` | `suggest.py` | address/yandex |
+| `/telegram` | `telegram.py` | привязка Telegram, источник заявки из бота |
+| `/notifications` | `notifications.py` | уведомления пользователя |
+| `/join` | `join.py` | вступление в организацию по ссылке |
 | `/health` | `main.py` | healthcheck |
 
 ---
@@ -425,7 +464,7 @@ ThemeProvider
 
 - **СУБД:** PostgreSQL 16
 - **Миграции:** Alembic, `backend/migrations/versions/`
-- **Текущая head:** `017_request_workflow` (workflow, tasks, history)
+- **Текущая head:** `027_telegram_groups` (Telegram: аккаунты, черновики заявок, группы)
 
 ### Цепочка миграций (кратко)
 
@@ -434,6 +473,8 @@ ThemeProvider
 → 009 public links → 010-012 AI fields → 013 execution stages
 → 014 public usage → 015 forms archived → 016 requests deleted
 → 017 request workflow / tasks / history
+→ 019-022 workflow v2, этапы, досье → 023 приглашения → 024 заявки на вступление
+→ 025-027 Telegram (аккаунты, черновики, группы)
 ```
 
 ### Запуск миграций
@@ -450,7 +491,7 @@ ThemeProvider
 ## 16. Развёртывание
 
 - **Локально:** `npm run dev` + `backend/docker-compose.yml`
-- **Production:** `docker-compose.production.yml` — db, api, frontend (Vite build), nginx, SSL
+- **Production:** `docker-compose.production.yml` — db, migrate, api, worker, telegram-bot, frontend (Vite build), nginx, SSL
 - Документация: `DEPLOYMENT_VPS.md`
 
 ---
@@ -500,6 +541,8 @@ npm run build   # успешный tsc + vite build
 
 ```bash
 python -c "from app.main import app"
+python -c "import app.telegram_bot"          # бот импортируется
+python -m unittest discover -s tests -t .  # из backend/, нужен OPENROUTER_API_KEY (любое значение)
 ```
 
 ---

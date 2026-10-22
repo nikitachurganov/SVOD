@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
-import { Alert, Modal, Radio, Select } from 'antd';
+import { Alert, Modal, Select, Tag } from 'antd';
 import { assignRequestPerformer } from '../../shared/api/requests.api';
-import { featureFlags } from '../../shared/config/featureFlags';
 import type { RecommendedPerformerDTO } from '../../types/performerSelection';
 
 export type AssignPerformerModalProps = {
@@ -12,17 +11,13 @@ export type AssignPerformerModalProps = {
   /** When set, POST …/stages/{id}/assign instead of legacy /assign */
   stageId?: string | null;
   performer: RecommendedPerformerDTO | null;
+  /** Top recommendations (shown first) */
+  performers?: RecommendedPerformerDTO[];
+  /** Everyone assignable: members and external contractors */
+  allPerformers?: RecommendedPerformerDTO[];
   recommendedPerformerId: string | null;
   onSuccess: () => Promise<void>;
 };
-
-const CONTACT_OPTIONS: { value: string; label: string }[] = [
-  { value: 'auto', label: 'Авто (email или телефон)' },
-  { value: 'email', label: 'Email' },
-  { value: 'telegram', label: 'Telegram' },
-  { value: 'phone', label: 'Телефон' },
-  { value: 'whatsapp', label: 'WhatsApp' },
-];
 
 export function AssignPerformerModal({
   open,
@@ -30,43 +25,67 @@ export function AssignPerformerModal({
   requestId,
   stageId,
   performer,
+  performers,
+  allPerformers,
   recommendedPerformerId,
   onSuccess,
 }: AssignPerformerModalProps) {
-  const tzEnabled = featureFlags.tzGeneration;
-  const [delivery, setDelivery] = useState<'status_only' | 'send_spec'>('status_only');
-  const [contactMethod, setContactMethod] = useState('auto');
   const [submitting, setSubmitting] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(performer?.id ?? null);
+  const everyone = useMemo(() => {
+    const byId = new Map<string, RecommendedPerformerDTO>();
+    [...(performers ?? []), ...(allPerformers ?? [])].forEach((item) => {
+      if (!byId.has(item.id)) byId.set(item.id, item);
+    });
+    return byId;
+  }, [performers, allPerformers]);
+  const selectedPerformer = (selectedId ? everyone.get(selectedId) : undefined) ?? performer;
+
+  // Recommendations first, then everyone else grouped by kind
+  const selectOptions = useMemo(() => {
+    const recommendedIds = new Set((performers ?? []).map((item) => item.id));
+    const rest = (allPerformers ?? []).filter((item) => !recommendedIds.has(item.id));
+    const byName = (a: RecommendedPerformerDTO, b: RecommendedPerformerDTO) =>
+      a.full_name.localeCompare(b.full_name, 'ru');
+    const toOption = (item: RecommendedPerformerDTO, withScore: boolean) => ({
+      value: item.id,
+      label: [item.full_name, item.position, withScore ? `${item.score}%` : null].filter(Boolean).join(' · '),
+    });
+    const groups = [
+      { label: 'Рекомендуемые', options: (performers ?? []).map((item) => toOption(item, true)) },
+      {
+        label: 'Участники организации',
+        options: rest.filter((item) => item.is_internal).sort(byName).map((item) => toOption(item, false)),
+      },
+      {
+        label: 'Подрядчики',
+        options: rest.filter((item) => !item.is_internal).sort(byName).map((item) => toOption(item, false)),
+      },
+    ];
+    return groups.filter((group) => group.options.length > 0);
+  }, [performers, allPerformers]);
 
   useEffect(() => {
     if (open) {
-      setDelivery('status_only');
-      setContactMethod('auto');
       setLocalError(null);
       setSubmitting(false);
+      setSelectedId(performer?.id ?? performers?.[0]?.id ?? null);
     }
-  }, [open, performer?.id]);
-
-  const sendTz = delivery === 'send_spec';
+  }, [open, performer?.id, performers]);
 
   const handleSubmit = async () => {
-    if (!performer) return;
+    if (!selectedPerformer) return;
     setLocalError(null);
-
-    if (sendTz && !performer.contact_available) {
-      setLocalError('У выбранного исполнителя нет контактных данных для отправки ТЗ.');
-      return;
-    }
 
     setSubmitting(true);
     try {
       await assignRequestPerformer(
         requestId,
         {
-          performer_id: performer.id,
-          send_tz: sendTz,
-          contact_method: contactMethod,
+          performer_id: selectedPerformer.id,
+          send_tz: false,
+          contact_method: 'auto',
           recommended_performer_id: recommendedPerformerId,
         },
         stageId ? { stageId } : undefined,
@@ -90,62 +109,44 @@ export function AssignPerformerModal({
     <Modal
       open={open}
       onCancel={() => !submitting && onClose()}
-      title="Передача задачи исполнителю"
-      okText={submitting ? 'Отправка…' : 'Подтвердить'}
+      title="Назначить исполнителя"
+      okText={submitting ? 'Сохранение…' : 'Назначить'}
       cancelText="Отмена"
-      okButtonProps={{ disabled: submitting || !performer, loading: submitting }}
+      okButtonProps={{ disabled: submitting || !selectedPerformer, loading: submitting }}
       onOk={() => void handleSubmit()}
       width={480}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {performer && (
-          <p style={{ margin: 0, fontSize: 14 }}>
-            <strong>{performer.full_name}</strong>
-            {performer.organization ? ` · ${performer.organization}` : ''}
+        {selectOptions.length > 0 ? (
+          <Select
+            value={selectedId ?? undefined}
+            onChange={setSelectedId}
+            options={selectOptions}
+            showSearch
+            optionFilterProp="label"
+            placeholder="Выберите исполнителя"
+            style={{ width: '100%' }}
+            aria-label="Исполнитель"
+          />
+        ) : null}
+        {selectedPerformer && (
+          <p style={{ margin: 0, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <strong>{selectedPerformer.full_name}</strong>
+            {selectedPerformer.organization ? <span>· {selectedPerformer.organization}</span> : null}
+            {!selectedPerformer.is_internal ? <Tag color="gold">Подрядчик</Tag> : null}
           </p>
         )}
+        {selectedPerformer && !selectedPerformer.is_internal ? (
+          <Alert
+            type="info"
+            showIcon
+            message="Подрядчик не входит в сервис"
+            description="Команда увидит, что этап у подрядчика, и его контакт. Отметить этап выполненным может ответственный за заявку."
+          />
+        ) : null}
 
         {localError && (
           <Alert type="error" message="Ошибка" description={localError} showIcon closable={false} />
-        )}
-
-        <div>
-          <span style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Действие</span>
-          <Radio.Group
-            value={delivery}
-            onChange={(e) =>
-              setDelivery(e.target.value === 'send_spec' ? 'send_spec' : 'status_only')
-            }
-          >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <Radio value="status_only">Только сменить статус и закрепить исполнителя</Radio>
-              {tzEnabled && <Radio value="send_spec">Отправить ТЗ исполнителю</Radio>}
-            </div>
-          </Radio.Group>
-        </div>
-
-        {tzEnabled && sendTz && (
-          <>
-            {!performer?.contact_available && (
-              <Alert
-                type="warning"
-                message="Нет контакта"
-                description="Добавьте контакт у исполнителя или выберите другой способ передачи."
-                showIcon
-                closable={false}
-              />
-            )}
-            <div>
-              <span style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Способ связи</span>
-              <Select
-                id="contact-method"
-                value={contactMethod}
-                onChange={setContactMethod}
-                options={CONTACT_OPTIONS}
-                style={{ width: '100%' }}
-              />
-            </div>
-          </>
         )}
       </div>
     </Modal>

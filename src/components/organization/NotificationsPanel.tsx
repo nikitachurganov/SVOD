@@ -1,11 +1,19 @@
 import { useEffect, useState } from 'react';
 import { Button, Spin } from 'antd';
+import { useNavigate } from 'react-router-dom';
+import { useOrganization } from '../../shared/hooks/organization.hooks';
 import {
   acceptInvitation,
   declineInvitation,
   getMyInvitations,
 } from '../../shared/api/organizations.api';
 import type { MyInvitationResponse } from '../../types/organization';
+import {
+  getNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+  type WorkflowNotification,
+} from '../../shared/api/notifications.api';
 
 function formatInvitationDate(iso: string): string {
   try {
@@ -22,22 +30,33 @@ interface Props {
   open: boolean;
   onAccepted: () => void;
   onInvitationsChanged: () => void;
+  onNotificationsChanged: () => void;
 }
 
 export const NotificationsPanelContent = ({
   open,
   onAccepted,
   onInvitationsChanged,
+  onNotificationsChanged,
 }: Props) => {
+  const navigate = useNavigate();
+  const { setActiveOrganizationId, refreshOrganizations } = useOrganization();
   const [invitations, setInvitations] = useState<MyInvitationResponse[]>([]);
+  const [notifications, setNotifications] = useState<WorkflowNotification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
     try {
-      const data = await getMyInvitations();
-      setInvitations(data);
+      const [invitationRows, notificationRows] = await Promise.all([
+        getMyInvitations(),
+        getNotifications(),
+      ]);
+      setInvitations(invitationRows);
+      setNotifications(notificationRows.items);
+      setUnreadCount(notificationRows.unread_count);
     } catch {
       // silently handled
     } finally {
@@ -76,19 +95,57 @@ export const NotificationsPanelContent = ({
     }
   };
 
+  const handleNotification = async (item: WorkflowNotification) => {
+    if (!item.read_at) {
+      await markNotificationRead(item.id);
+      setNotifications((prev) =>
+        prev.map((row) =>
+          row.id === item.id ? { ...row, read_at: new Date().toISOString() } : row,
+        ),
+      );
+      setUnreadCount((value) => Math.max(0, value - 1));
+      onNotificationsChanged();
+    }
+    if (item.type === 'join_request' && item.organization_id) {
+      setActiveOrganizationId(item.organization_id);
+      navigate('/participants');
+      return;
+    }
+    if (item.type === 'join_request_approved' && item.organization_id) {
+      await refreshOrganizations();
+      setActiveOrganizationId(item.organization_id);
+      navigate('/requests');
+      return;
+    }
+    if (item.request_id) navigate(`/requests/${item.request_id}`);
+  };
+
+  const handleReadAll = async () => {
+    await markAllNotificationsRead();
+    const readAt = new Date().toISOString();
+    setNotifications((prev) => prev.map((row) => ({ ...row, read_at: row.read_at ?? readAt })));
+    setUnreadCount(0);
+    onNotificationsChanged();
+  };
+
   if (!open) return null;
 
   return (
     <div className="app-notifications-panel">
       <h2 className="app-notifications-panel__title">
         Уведомления
-        {invitations.length > 0 ? ` (${invitations.length})` : ''}
+        {invitations.length + unreadCount > 0 ? ` (${invitations.length + unreadCount})` : ''}
+        {unreadCount > 0 ? (
+          <Button type="link" size="small" onClick={() => void handleReadAll()}>
+            Прочитать все
+          </Button>
+        ) : null}
       </h2>
       {loading ? (
         <div className="app-notifications-panel__loading">
           <Spin size="small" />
         </div>
-      ) : invitations.length === 0 ? (
+      ) : invitations.length === 0 && notifications.length === 0 ? (
         <p className="app-notifications-panel__empty">Нет уведомлений</p>
       ) : (
         <div className="app-notifications-panel__list">
@@ -125,6 +182,20 @@ export const NotificationsPanelContent = ({
               </div>
             );
           })}
+          {notifications.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={`app-notifications-panel__item app-notifications-panel__workflow${
+                item.read_at ? '' : ' app-notifications-panel__workflow--unread'
+              }`}
+              onClick={() => void handleNotification(item)}
+            >
+              <span className="app-notifications-panel__org">{item.title}</span>
+              {item.body ? <span className="app-notifications-panel__inviter">{item.body}</span> : null}
+              <span className="app-notifications-panel__date">{formatInvitationDate(item.created_at)}</span>
+            </button>
+          ))}
         </div>
       )}
     </div>

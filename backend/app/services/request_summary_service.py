@@ -1,10 +1,14 @@
 import logging
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.constants import request_execution as C
+from app.constants import request_workflow as W
 from app.models.request import Request
+from app.models.request_execution_event import RequestExecutionEvent
 from app.repositories import request_repository
-from app.services.gigachat_client import summarize_text
+from app.services.openrouter_client import summarize_text
 from app.services.request_ai_common import (
     build_applicant_block,
     build_form_answers_text,
@@ -40,6 +44,18 @@ def _build_prompt(req: Request) -> str:
     return "\n".join(parts)
 
 
+async def _priority_set_manually(session: AsyncSession, request_id: int) -> bool:
+    event_id = await session.scalar(
+        select(RequestExecutionEvent.id)
+        .where(
+            RequestExecutionEvent.request_id == request_id,
+            RequestExecutionEvent.event_type == C.EVENT_PRIORITY_CHANGED,
+        )
+        .limit(1)
+    )
+    return event_id is not None
+
+
 async def generate_summary(session: AsyncSession, request_id: int) -> dict:
     """Generate an AI summary for the given request, persist it, and return the result."""
     req = await request_repository.get_by_id(session, request_id)
@@ -58,6 +74,8 @@ async def generate_summary(session: AsyncSession, request_id: int) -> dict:
     }
 
     req.ai_summary = summary_data
+    if summary_data["priority"] in W.PRIORITIES and not await _priority_set_manually(session, request_id):
+        req.priority = summary_data["priority"]
     await request_repository.update(session, req)
     await session.commit()
 

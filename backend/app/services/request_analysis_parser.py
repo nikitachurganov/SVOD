@@ -6,7 +6,7 @@ import json
 import logging
 from typing import Any
 
-from app.services.gigachat_client import strip_json_fence
+from app.services.openrouter_client import strip_json_fence
 
 logger = logging.getLogger(__name__)
 

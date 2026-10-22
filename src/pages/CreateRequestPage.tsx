@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Button, Card, Form, Input, Select, Spin } from 'antd';
+import { Alert, Button, Form, Input, Select, Spin } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -41,14 +41,11 @@ export const CreateRequestPage = () => {
 
   const formStore = useFormStore();
   const fillRef = useRef<FormFillRendererHandle>(null);
-  const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [metaCollapsed, setMetaCollapsed] = useState(false);
   const [pageIndex, setPageIndex] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const contentRef = useRef<HTMLDivElement | null>(null);
 
   const selectedFormId = Form.useWatch('formId', metaForm);
-  const requestTitle = Form.useWatch('title', metaForm) ?? '';
 
   const [inlineNotification, setInlineNotification] = useState<{
     kind: 'success' | 'error';
@@ -91,12 +88,6 @@ export const CreateRequestPage = () => {
     fillRef.current?.resetFields();
   }, [selectedForm]);
 
-  useEffect(() => {
-    if (step === 3) {
-      setMetaCollapsed(true);
-    }
-  }, [step]);
-
   const scrollToTop = () => {
     if (contentRef.current) {
       contentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
@@ -126,11 +117,6 @@ export const CreateRequestPage = () => {
     } catch {
       return null;
     }
-  };
-
-  const handleProceedToFill = async () => {
-    const meta = await validateMeta();
-    if (meta) setStep(3);
   };
 
   const handleSubmit = async () => {
@@ -216,17 +202,8 @@ export const CreateRequestPage = () => {
   const formOptions = forms.map((f) => ({ value: f.id, label: f.name }));
 
   const fillActions =
-    step === 3 && selectedForm && hasPages && currentPage && currentPage.fields.length > 0 ? (
+    selectedForm && hasPages && currentPage && currentPage.fields.length > 0 ? (
       <>
-        <Button
-          onClick={() => {
-            setStep(2);
-            setMetaCollapsed(false);
-            scrollToTop();
-          }}
-        >
-          Назад к параметрам
-        </Button>
         {!isFirst && <Button onClick={handlePrevPage}>Назад</Button>}
         {!isLast && (
           <Button type="primary" onClick={handleNextPage}>
@@ -290,9 +267,9 @@ export const CreateRequestPage = () => {
       ) : (
         <FormFillWizardLayout
           contentRef={contentRef}
-          pageIndex={step === 3 ? pageIndex : undefined}
-          pageCount={step === 3 ? pageInstances.length : undefined}
-          pageTitle={step === 3 ? currentPage?.title : undefined}
+          pageIndex={selectedForm ? pageIndex : undefined}
+          pageCount={selectedForm ? pageInstances.length : undefined}
+          pageTitle={selectedForm ? currentPage?.title : undefined}
           notification={
             inlineNotification ? (
               <Alert
@@ -308,69 +285,29 @@ export const CreateRequestPage = () => {
           }
           actions={fillActions}
         >
-          {step < 3 || !metaCollapsed ? (
-            <Form
-              form={metaForm}
-              layout="vertical"
-              style={{ marginBottom: 24 }}
-              onValuesChange={(changed) => {
-                if ('title' in changed && step === 1 && selectedFormId) {
-                  setStep(2);
-                }
-                if ('formId' in changed && changed.formId) {
-                  setStep(2);
-                }
-              }}
+          <Form form={metaForm} layout="vertical" style={{ marginBottom: 24 }}>
+            <Form.Item
+              name="title"
+              label="Название заявки"
+              rules={[requiredRule('Введите название заявки')]}
             >
-              <Form.Item
-                name="title"
-                label="Название заявки"
-                rules={[requiredRule('Введите название заявки')]}
-              >
-                <Input placeholder="Например: Заявка на доступ" />
-              </Form.Item>
-              <Form.Item
-                name="formId"
-                label="Форма"
-                rules={[requiredRule('Выберите форму')]}
-              >
-                <Select
-                  showSearch
-                  placeholder="Выберите форму"
-                  optionFilterProp="label"
-                  options={formOptions}
-                />
-              </Form.Item>
-              {step === 2 && (
-                <Button
-                  type="primary"
-                  disabled={!selectedFormId || !requestTitle.trim()}
-                  onClick={() => void handleProceedToFill()}
-                >
-                  Далее
-                </Button>
-              )}
-            </Form>
-          ) : (
-            <Card
-              size="small"
-              style={{ marginBottom: 16 }}
-              extra={
-                <Button type="link" onClick={() => setMetaCollapsed(false)}>
-                  Изменить параметры
-                </Button>
-              }
+              <Input placeholder="Например: Заявка на доступ" />
+            </Form.Item>
+            <Form.Item
+              name="formId"
+              label="Форма"
+              rules={[requiredRule('Выберите форму')]}
             >
-              <p style={{ margin: '0 0 4px' }}>
-                <strong>Название:</strong> {requestTitle}
-              </p>
-              <p style={{ margin: 0 }}>
-                <strong>Форма:</strong> {selectedForm?.name}
-              </p>
-            </Card>
-          )}
+              <Select
+                showSearch
+                placeholder="Выберите форму"
+                optionFilterProp="label"
+                options={formOptions}
+              />
+            </Form.Item>
+          </Form>
 
-          {step === 3 && selectedForm ? (
+          {selectedForm ? (
             hasPages && currentPage && currentPage.fields.length > 0 ? (
               <FormFillRenderer
                 ref={fillRef}
@@ -383,11 +320,11 @@ export const CreateRequestPage = () => {
                 У выбранной формы нет полей.
               </span>
             )
-          ) : step < 3 ? (
+          ) : (
             <span style={{ color: 'var(--app-text-secondary)' }}>
-              Укажите название заявки и выберите форму, чтобы продолжить заполнение.
+              Выберите форму, чтобы перейти к заполнению.
             </span>
-          ) : null}
+          )}
         </FormFillWizardLayout>
       )}
     </div>

@@ -295,3 +295,32 @@ export const updateForm = async (
 export const deleteForm = async (id: string): Promise<void> => {
   await api.delete(`/forms/${id}`);
 };
+
+// ─── AI form builder ──────────────────────────────────────────────────────────
+
+export interface FormAiChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface FormAiBuildPayload {
+  messages: FormAiChatMessage[];
+  title: string;
+  pages: CreateFormPagePayload[];
+}
+
+export interface FormAiBuildResponse {
+  reply: string;
+  title: string | null;
+  /** null — the model did not change the form */
+  pages: Array<{ title: string; fields: CreateFormFieldPayload[] }> | null;
+}
+
+export const buildFormWithAi = async (
+  payload: FormAiBuildPayload,
+): Promise<FormAiBuildResponse> => {
+  const { data } = await api.post<FormAiBuildResponse>('/forms/ai-builder', payload, {
+    timeout: 130_000,
+  });
+  return data;
+};

@@ -11,6 +11,7 @@ from app.constants import request_workflow as W
 from app.models.organization import OrganizationMember
 from app.models.request import Request
 from app.models.request_task import RequestTask
+from app.models.request_stage import RequestStage
 from app.models.user import User
 from app.repositories import organization_repository, request_repository
 
@@ -31,6 +32,11 @@ async def load_request_with_access(
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Request is not linked to an organization",
+            )
+        if req.created_by_user_id != user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access to this request",
             )
         return req, None
 
@@ -59,6 +65,54 @@ def can_edit_request_draft(req: Request, user: User) -> bool:
 
 def can_manage_workflow(member: OrganizationMember | None) -> bool:
     return is_manager(member)
+
+
+def is_responsible(req: Request, user: User) -> bool:
+    return req.responsible_user_id == user.id
+
+
+def can_assign_responsible(member: OrganizationMember | None) -> bool:
+    return is_manager(member)
+
+
+def can_take_request(req: Request, member: OrganizationMember | None) -> bool:
+    """Any organization member can take a new request nobody is responsible for."""
+    return (
+        member is not None
+        and req.workflow_status == W.WF_NEW
+        and req.responsible_user_id is None
+    )
+
+
+def can_release_request(req: Request, user: User) -> bool:
+    return is_responsible(req, user) and req.workflow_status == W.WF_PLANNING
+
+
+def can_manage_request(req: Request, user: User, member: OrganizationMember | None) -> bool:
+    return is_manager(member) or is_responsible(req, user)
+
+
+def can_manage_plan(req: Request, user: User, member: OrganizationMember | None) -> bool:
+    return can_manage_request(req, user, member)
+
+
+def is_internal_stage_assignee(stage: RequestStage | None, user: User) -> bool:
+    return bool(
+        stage is not None
+        and stage.assignee_kind == "internal"
+        and stage.assignee_internal_user_id == user.id
+    )
+
+
+def can_act_on_stage(
+    req: Request,
+    stage: RequestStage | None,
+    user: User,
+    member: OrganizationMember | None,
+) -> bool:
+    if can_manage_request(req, user, member):
+        return True
+    return is_internal_stage_assignee(stage, user)
 
 
 def can_manage_tasks(member: OrganizationMember | None) -> bool:

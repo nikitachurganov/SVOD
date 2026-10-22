@@ -3,11 +3,11 @@
 # Request workflow statuses
 WF_DRAFT = "draft"
 WF_NEW = "new"
-WF_TRIAGE = "triage"
 WF_WAITING_INFO = "waiting_info"
+WF_PLANNING = "planning"
 WF_IN_PROGRESS = "in_progress"
-WF_REVIEW = "review"
 WF_COMPLETED = "completed"
+WF_CLOSED = "closed"
 WF_CANCELLED = "cancelled"
 WF_ARCHIVED = "archived"
 
@@ -15,11 +15,11 @@ WORKFLOW_STATUSES = frozenset(
     {
         WF_DRAFT,
         WF_NEW,
-        WF_TRIAGE,
         WF_WAITING_INFO,
+        WF_PLANNING,
         WF_IN_PROGRESS,
-        WF_REVIEW,
         WF_COMPLETED,
+        WF_CLOSED,
         WF_CANCELLED,
         WF_ARCHIVED,
     }
@@ -27,17 +27,17 @@ WORKFLOW_STATUSES = frozenset(
 
 WORKFLOW_TRANSITIONS: dict[str, frozenset[str]] = {
     WF_DRAFT: frozenset({WF_NEW}),
-    WF_NEW: frozenset({WF_TRIAGE, WF_WAITING_INFO, WF_CANCELLED}),
-    WF_TRIAGE: frozenset({WF_IN_PROGRESS, WF_WAITING_INFO, WF_CANCELLED}),
-    WF_IN_PROGRESS: frozenset({WF_REVIEW, WF_WAITING_INFO, WF_CANCELLED}),
-    WF_REVIEW: frozenset({WF_COMPLETED, WF_CANCELLED}),
-    WF_WAITING_INFO: frozenset({WF_TRIAGE, WF_IN_PROGRESS}),
-    WF_COMPLETED: frozenset({WF_ARCHIVED, WF_TRIAGE}),
+    WF_NEW: frozenset({WF_PLANNING, WF_WAITING_INFO, WF_CANCELLED}),
+    WF_WAITING_INFO: frozenset({WF_NEW, WF_PLANNING, WF_CANCELLED}),
+    WF_PLANNING: frozenset({WF_IN_PROGRESS, WF_WAITING_INFO, WF_CANCELLED}),
+    WF_IN_PROGRESS: frozenset({WF_COMPLETED, WF_WAITING_INFO, WF_CANCELLED}),
+    WF_COMPLETED: frozenset({WF_CLOSED, WF_PLANNING, WF_CANCELLED}),
+    WF_CLOSED: frozenset({WF_ARCHIVED}),
     WF_CANCELLED: frozenset({WF_ARCHIVED}),
     WF_ARCHIVED: frozenset(),
 }
 
-ARCHIVABLE_STATUSES = frozenset({WF_COMPLETED, WF_CANCELLED})
+ARCHIVABLE_STATUSES = frozenset({WF_CLOSED, WF_CANCELLED})
 
 # Task statuses
 TASK_TODO = "todo"

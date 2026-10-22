@@ -38,7 +38,7 @@ export const FormCanvas = ({
         minHeight: 240,
         borderRadius: 4,
         border: `2px dashed ${isOver ? 'var(--app-primary)' : isEmpty ? 'var(--app-border)' : 'transparent'}`,
-        background: isOver ? 'var(--app-highlight)' : 'transparent',
+        background: isOver ? 'var(--app-highlight)' : 'var(--app-surface-elevated)',
         transition: 'border-color 250ms, background 250ms',
         display: 'flex',
         flexDirection: 'column',

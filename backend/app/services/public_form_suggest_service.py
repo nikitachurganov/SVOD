@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.form import Form
 from app.repositories import form_repository, public_link_repository
 from app.schemas.public_link import PublicSuggestedFormCard, PublicSuggestFormsResponse
-from app.services.gigachat_client import post_chat_completion, strip_json_fence
+from app.services.openrouter_client import post_chat_completion, strip_json_fence
 from app.services.request_analysis_parser import extract_first_json_object
 
 logger = logging.getLogger(__name__)
@@ -375,7 +375,14 @@ async def suggest_forms_for_public_token(
             detail="link_inactive",
         )
 
-    forms = await form_repository.get_active_by_org(session, link.organization_id)
+    return await suggest_forms_for_org(session, link.organization_id, text)
+
+
+async def suggest_forms_for_org(
+    session: AsyncSession, organization_id: uuid.UUID, text: str
+) -> PublicSuggestFormsResponse:
+    """Up to three active forms of the organization matching the task description."""
+    forms = await form_repository.get_active_by_org(session, organization_id)
     # Prefer matching specialized templates; universal is a separate fallback in UI.
     candidates = [f for f in forms if not f.is_universal]
     if not candidates:
@@ -442,7 +449,7 @@ async def suggest_forms_for_public_token(
         llm_called = True
         raw = await post_chat_completion(messages, max_tokens=400, temperature=0.15)
     except httpx.HTTPError:
-        logger.exception("GigaChat HTTP error during public form suggestion")
+        logger.exception("OpenRouter HTTP error during public form suggestion")
         fb_cards, fb_hint = _fallback_cards(text, candidates)
         return PublicSuggestFormsResponse(forms=fb_cards, hint=fb_hint, used_llm=True)
     except Exception:

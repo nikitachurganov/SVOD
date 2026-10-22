@@ -11,12 +11,12 @@ const { Text } = Typography;
 
 const TRANSITIONS: Record<WorkflowStatus, WorkflowStatus[]> = {
   draft: ['new'],
-  new: ['triage', 'waiting_info', 'cancelled'],
-  triage: ['in_progress', 'waiting_info', 'cancelled'],
-  in_progress: ['review', 'waiting_info', 'cancelled'],
-  review: ['completed', 'cancelled'],
-  waiting_info: ['triage', 'in_progress'],
-  completed: ['archived', 'triage'],
+  new: ['planning', 'waiting_info', 'cancelled'],
+  waiting_info: ['new', 'planning', 'cancelled'],
+  planning: ['in_progress', 'waiting_info', 'cancelled'],
+  in_progress: ['completed', 'waiting_info', 'cancelled'],
+  completed: ['closed', 'planning', 'cancelled'],
+  closed: ['archived'],
   cancelled: ['archived'],
   archived: [],
 };

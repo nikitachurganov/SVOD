@@ -37,3 +37,6 @@ class RequestExecutionEvent(Base):
     stage: Mapped["RequestStage | None"] = relationship(  # noqa: F821
         foreign_keys=[stage_id],
     )
+    actor: Mapped["User | None"] = relationship(  # noqa: F821
+        foreign_keys=[actor_user_id],
+    )

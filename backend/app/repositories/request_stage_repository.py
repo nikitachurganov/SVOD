@@ -7,6 +7,8 @@ from sqlalchemy.orm import selectinload
 
 from app.models.request_execution_event import RequestExecutionEvent
 from app.models.request_stage import RequestStage
+from app.models.request_stage_handoff import RequestStageHandoff
+from app.models.request_stage_specification import RequestStageSpecification
 
 
 async def list_stages_for_request(session: AsyncSession, request_id: int) -> list[RequestStage]:
@@ -16,6 +18,9 @@ async def list_stages_for_request(session: AsyncSession, request_id: int) -> lis
         .options(
             selectinload(RequestStage.assignee_internal_user),
             selectinload(RequestStage.assignee_external_contractor),
+            selectinload(RequestStage.artifacts),
+            selectinload(RequestStage.specifications),
+            selectinload(RequestStage.handoffs),
         )
         .order_by(RequestStage.sequence)
     )
@@ -30,6 +35,9 @@ async def get_stage(session: AsyncSession, stage_id: uuid.UUID) -> RequestStage 
         .options(
             selectinload(RequestStage.assignee_internal_user),
             selectinload(RequestStage.assignee_external_contractor),
+            selectinload(RequestStage.artifacts),
+            selectinload(RequestStage.specifications),
+            selectinload(RequestStage.handoffs),
         )
     )
     result = await session.execute(stmt)
@@ -59,6 +67,10 @@ async def list_execution_events(
     stmt = (
         select(RequestExecutionEvent)
         .where(RequestExecutionEvent.request_id == request_id)
+        .options(
+            selectinload(RequestExecutionEvent.actor),
+            selectinload(RequestExecutionEvent.stage),
+        )
         .order_by(RequestExecutionEvent.created_at.desc())
         .limit(limit)
     )

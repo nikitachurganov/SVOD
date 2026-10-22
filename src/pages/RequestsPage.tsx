@@ -1,23 +1,23 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Table, Tag, Tooltip, Button, Modal, Card } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { PlusOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, EyeOutlined, UserAddOutlined } from '@ant-design/icons';
 import { Link, useNavigate } from 'react-router-dom';
 import { IconDefaultButton } from '../shared/ui/IconDefaultButton';
 import {
   deleteRequest,
   getRequests,
+  takeRequest,
   type RequestResponse,
 } from '../shared/api/requests.api';
 import { buildDisplayName } from '../shared/utils/userName';
 import { useOrganization } from '../shared/hooks/organization.hooks';
 import { useNotifications } from '../shared/context/notifications.context';
-
-const statusMap: Record<string, { color: string; label: string }> = {
-  open: { color: 'blue', label: 'Открыта' },
-  closed: { color: 'red', label: 'Закрыта' },
-  assigned: { color: 'cyan', label: 'У исполнителя' },
-};
+import {
+  WORKFLOW_STATUS_COLORS,
+  WORKFLOW_STATUS_LABELS,
+  type WorkflowStatus,
+} from '../types/requestWorkflow';
 
 const defaultStatusView = (raw: string) => ({
   color: 'default',
@@ -43,14 +43,19 @@ type RequestRow = {
   created_at: string;
   author: string;
   updated_at: string;
-  status: string;
+  workflow_status: string;
+  responsible: string | null;
+  can_delete: boolean;
+  can_take: boolean;
 };
 
-type RequestsTabKey = 'open' | 'in_progress' | 'closed' | 'archive';
+type RequestsTabKey = 'free' | 'mine' | 'open' | 'in_progress' | 'closed' | 'archive';
 
-const TAB_ORDER: RequestsTabKey[] = ['open', 'in_progress', 'closed', 'archive'];
+const TAB_ORDER: RequestsTabKey[] = ['free', 'mine', 'open', 'in_progress', 'closed', 'archive'];
 
 const EMPTY_MESSAGE: Record<RequestsTabKey, string> = {
+  free: 'Свободных заявок нет — все взяты в работу.',
+  mine: 'Вы пока не ответственный ни за одну заявку.',
   open: 'Нет новых заявок.',
   in_progress: 'Нет заявок в работе.',
   closed: 'Нет закрытых заявок.',
@@ -58,6 +63,8 @@ const EMPTY_MESSAGE: Record<RequestsTabKey, string> = {
 };
 
 const TAB_LABELS: Record<RequestsTabKey, string> = {
+  free: 'Свободные',
+  mine: 'Мои в работе',
   open: 'Новые',
   in_progress: 'В работе',
   closed: 'Закрытые',
@@ -76,7 +83,7 @@ export const RequestsPage = () => {
 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PAGE_SIZES[0]);
-  const [activeTab, setActiveTab] = useState<RequestsTabKey>('open');
+  const [activeTab, setActiveTab] = useState<RequestsTabKey>('free');
 
   const loadRequests = useCallback(
     (tab: RequestsTabKey = activeTab) => {
@@ -86,14 +93,21 @@ export const RequestsPage = () => {
         case 'archive':
           filters.archived = true;
           break;
+        case 'free':
+          filters.free = true;
+          break;
+        case 'mine':
+          filters.mine_responsible = true;
+          filters.workflow_status = ['planning', 'waiting_info', 'in_progress', 'completed'];
+          break;
         case 'open':
-          filters.status = 'open';
+          filters.workflow_status = ['draft', 'new', 'waiting_info', 'planning'];
           break;
         case 'in_progress':
-          filters.status = 'assigned';
+          filters.workflow_status = ['in_progress'];
           break;
         case 'closed':
-          filters.status = 'closed';
+          filters.workflow_status = ['completed', 'closed', 'cancelled'];
           break;
       }
       return getRequests(activeOrganization?.id, filters)
@@ -138,6 +152,29 @@ export const RequestsPage = () => {
     [loadRequests, notifySuccess, notifyError],
   );
 
+  const [takingId, setTakingId] = useState<string | null>(null);
+
+  const handleTake = useCallback(
+    async (id: string) => {
+      setTakingId(id);
+      try {
+        await takeRequest(id);
+        notifySuccess('Вы ответственный за заявку');
+        navigate(`/requests/${id}`);
+      } catch (err) {
+        const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+        notifyError(
+          'Не удалось взять заявку',
+          typeof detail === 'string' ? detail : err instanceof Error ? err.message : undefined,
+        );
+        await loadRequests();
+      } finally {
+        setTakingId(null);
+      }
+    },
+    [loadRequests, navigate, notifySuccess, notifyError],
+  );
+
   const resolveAuthorName = useCallback((r: RequestResponse): string => {
     if (r.author) return buildDisplayName(r.author);
     const authorPerson = r.people?.find((p) => p.role === 'author');
@@ -158,7 +195,10 @@ export const RequestsPage = () => {
           created_at: r.created_at,
           author: resolveAuthorName(r),
           updated_at: r.updated_at,
-          status: r.status,
+          workflow_status: r.workflow_status ?? 'new',
+          responsible: r.responsible_user ? buildDisplayName(r.responsible_user) : null,
+          can_delete: Boolean(r.permissions?.can_delete),
+          can_take: Boolean(r.permissions?.can_take),
         };
       }),
     [requests, resolveAuthorName],
@@ -238,27 +278,49 @@ export const RequestsPage = () => {
       },
       {
         title: 'Статус',
-        dataIndex: 'status',
-        key: 'status',
-        sorter: (a, b) => a.status.localeCompare(b.status, 'ru'),
+        dataIndex: 'workflow_status',
+        key: 'workflow_status',
+        sorter: (a, b) => a.workflow_status.localeCompare(b.workflow_status, 'ru'),
         render: (value: string) => {
-          const view = statusMap[value] ?? defaultStatusView(value);
+          const normalized = value as WorkflowStatus;
+          const view = WORKFLOW_STATUS_LABELS[normalized]
+            ? { color: WORKFLOW_STATUS_COLORS[normalized], label: WORKFLOW_STATUS_LABELS[normalized] }
+            : defaultStatusView(value);
           return <Tag color={view.color}>{view.label}</Tag>;
         },
       },
       {
+        title: 'Ответственный',
+        dataIndex: 'responsible',
+        key: 'responsible',
+        render: (value: string | null) =>
+          value ?? <span style={{ color: 'var(--app-text-secondary)' }}>—</span>,
+      },
+      {
         title: 'Действия',
         key: 'actions',
-        width: 100,
+        width: 150,
         render: (_, record) => (
-          <div style={{ display: 'flex', gap: 4 }}>
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            {!isArchive && record.can_take && (
+              <Button
+                size="small"
+                type="primary"
+                icon={<UserAddOutlined />}
+                loading={takingId === record.id}
+                disabled={takingId !== null && takingId !== record.id}
+                onClick={() => void handleTake(record.id)}
+              >
+                Взять
+              </Button>
+            )}
             <IconDefaultButton
               icon={<EyeOutlined />}
               title="Открыть"
               aria-label="Открыть"
               onClick={() => navigate(`/requests/${record.id}`)}
             />
-            {!isArchive && (
+            {!isArchive && record.can_delete && (
               <Button
                 type="text"
                 size="small"
@@ -273,7 +335,7 @@ export const RequestsPage = () => {
         ),
       },
     ],
-    [deletingId, isArchive, navigate],
+    [deletingId, handleTake, isArchive, navigate, takingId],
   );
 
   return (

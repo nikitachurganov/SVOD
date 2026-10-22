@@ -76,4 +76,41 @@ export interface RequestEntity {
   applicant_company?: string | null;
   applicant_email?: string | null;
   applicant_phone?: string | null;
+  progress?: { completed: number; total: number };
+  permissions?: RequestPermissions;
+  ai_analysis_status?: string | null;
+  ai_stage_plan?: AIStagePlan | null;
+}
+
+export interface RequestPermissions {
+  can_assign_responsible: boolean;
+  can_manage_plan: boolean;
+  can_start: boolean;
+  can_close: boolean;
+  can_cancel: boolean;
+  can_delete: boolean;
+  can_complete_active_stage: boolean;
+  can_block_active_stage: boolean;
+  can_unblock_active_stage: boolean;
+  can_take?: boolean;
+  can_release?: boolean;
+  can_self_execute?: boolean;
+  can_edit_attributes?: boolean;
+}
+
+export interface AIStagePlanItem {
+  title: string;
+  description?: string | null;
+  expected_result?: string | null;
+  role_hint?: string | null;
+  estimated_duration_days?: number | null;
+  technical_spec?: Record<string, unknown> | null;
+  recommended_performers?: Array<Record<string, unknown>>;
+}
+
+export interface AIStagePlan {
+  status: string;
+  source_fingerprint: string;
+  stages: AIStagePlanItem[];
+  generated_at: string;
 }

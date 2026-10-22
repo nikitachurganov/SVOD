@@ -13,6 +13,8 @@ from app.repositories import request_history_repository, request_repository, req
 from app.services import request_execution_service
 from app.services import request_analysis_service, request_summary_service
 from app.services import request_task_service, request_workflow_service
+from app.services import ai_job_service, notification_service
+from app.repositories import organization_repository
 from app.services.request_analysis_parser import normalize_legacy_stored_payload
 from app.schemas.request import (
     AIRequestAnalysisResponse,
@@ -21,10 +23,21 @@ from app.schemas.request import (
     RequestPersonResponse,
     RequestResponse,
     UpdateRequestPayload,
+    RequestPermissionsResponse,
+    RequestProgressResponse,
 )
 from app.schemas.user import PublicAuthorResponse
+from app.models.organization import OrganizationMember
+from app.services import request_permissions as perms
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+_LEGACY_STATUS_FILTERS: dict[str, list[str]] = {
+    "open": [W.WF_DRAFT, W.WF_NEW, W.WF_WAITING_INFO, W.WF_PLANNING],
+    "assigned": [W.WF_IN_PROGRESS],
+    "closed": [W.WF_COMPLETED, W.WF_CLOSED, W.WF_CANCELLED],
+}
 
 
 def _to_author(author: User | None) -> PublicAuthorResponse | None:
@@ -94,6 +107,8 @@ def _to_response(
     include_stages: bool = False,
     execution_events_rows: list | None = None,
     include_workflow: bool = False,
+    current_user: User | None = None,
+    member: OrganizationMember | None = None,
 ) -> RequestResponse:
     stages_out: list = []
     if include_stages and req.stages is not None:
@@ -114,6 +129,87 @@ def _to_response(
         if req.history_events is not None:
             sorted_history = sorted(req.history_events, key=lambda e: e.created_at, reverse=True)
             history_out = [request_workflow_service.history_to_response(e) for e in sorted_history]
+
+    ordered_stages = sorted(req.stages, key=lambda s: s.sequence) if req.stages else []
+    relevant_stages = [stage for stage in ordered_stages if stage.status != C.STAGE_CANCELLED]
+    active_stage = request_execution_service.find_active_stage(relevant_stages)
+    permissions = RequestPermissionsResponse()
+    if current_user is not None:
+        can_manage = perms.can_manage_request(req, current_user, member)
+        can_manage_plan = can_manage and req.workflow_status not in (
+            W.WF_CLOSED,
+            W.WF_CANCELLED,
+            W.WF_ARCHIVED,
+        )
+        can_act = perms.can_act_on_stage(req, active_stage, current_user, member)
+        first_stage = active_stage
+        first_has_assignee = bool(
+            first_stage
+            and (
+                (
+                    first_stage.assignee_kind == "internal"
+                    and first_stage.assignee_internal_user_id is not None
+                )
+                or (
+                    first_stage.assignee_kind == "external"
+                    and first_stage.assignee_external_contractor_id is not None
+                )
+            )
+        )
+        permissions = RequestPermissionsResponse(
+            can_assign_responsible=perms.can_assign_responsible(member)
+            and req.workflow_status not in (W.WF_CLOSED, W.WF_CANCELLED, W.WF_ARCHIVED),
+            can_manage_plan=can_manage_plan,
+            can_start=bool(
+                can_manage
+                and req.workflow_status == W.WF_PLANNING
+                and req.responsible_user_id is not None
+                and first_has_assignee
+            ),
+            can_close=can_manage and req.workflow_status == W.WF_COMPLETED,
+            can_cancel=can_manage and req.workflow_status not in (W.WF_CLOSED, W.WF_CANCELLED, W.WF_ARCHIVED),
+            can_delete=can_manage and req.workflow_status in (W.WF_CLOSED, W.WF_CANCELLED),
+            can_complete_active_stage=bool(
+                can_act
+                and req.workflow_status == W.WF_IN_PROGRESS
+                and active_stage is not None
+                and active_stage.status == C.STAGE_IN_PROGRESS
+            ),
+            can_block_active_stage=bool(
+                can_act
+                and req.workflow_status == W.WF_IN_PROGRESS
+                and active_stage is not None
+                and active_stage.status == C.STAGE_IN_PROGRESS
+            ),
+            can_unblock_active_stage=bool(
+                can_manage
+                and req.workflow_status == W.WF_IN_PROGRESS
+                and active_stage is not None
+                and active_stage.status == C.STAGE_BLOCKED
+            ),
+            can_take=perms.can_take_request(req, member),
+            can_release=perms.can_release_request(req, current_user),
+            can_self_execute=bool(
+                perms.can_take_request(req, member)
+                or (
+                    perms.is_responsible(req, current_user)
+                    and req.workflow_status == W.WF_PLANNING
+                )
+            ),
+            can_edit_attributes=can_manage_plan,
+        )
+
+    ai_stage_plan = None
+    if req.ai_stage_plan is not None:
+        ai_stage_plan = {
+            "status": req.ai_stage_plan.status,
+            "source_fingerprint": req.ai_stage_plan.source_fingerprint,
+            "stages": (req.ai_stage_plan.proposal or {}).get("stages", []),
+            "generated_at": req.ai_stage_plan.generated_at.isoformat(),
+        }
+
+    analysis_jobs = [job for job in getattr(req, "ai_jobs", []) if job.kind == ai_job_service.JOB_ANALYSIS]
+    latest_analysis_job = max(analysis_jobs, key=lambda job: job.created_at) if analysis_jobs else None
 
     return RequestResponse(
         id=str(req.id),
@@ -150,6 +246,17 @@ def _to_response(
         tasks=tasks_out,
         history=history_out,
         ai_tz=req.ai_tz,
+        progress=RequestProgressResponse(
+            completed=sum(1 for stage in relevant_stages if stage.status == C.STAGE_DONE),
+            total=len(relevant_stages),
+        ),
+        permissions=permissions,
+        ai_analysis_status=(
+            latest_analysis_job.status
+            if latest_analysis_job is not None
+            else ("succeeded" if req.ai_analysis else "not_generated")
+        ),
+        ai_stage_plan=ai_stage_plan,
     )
 
 
@@ -159,47 +266,112 @@ def map_request_to_response(
     include_stages: bool = False,
     execution_events_rows: list | None = None,
     include_workflow: bool = False,
+    current_user: User | None = None,
+    member: OrganizationMember | None = None,
 ) -> RequestResponse:
     return _to_response(
         req,
         include_stages=include_stages,
         execution_events_rows=execution_events_rows,
         include_workflow=include_workflow,
+        current_user=current_user,
+        member=member,
     )
 
 
 async def list_requests(
     session: AsyncSession,
+    current_user: User,
     organization_id: uuid.UUID | None = None,
     archived: bool | None = None,
     mine_user_id: uuid.UUID | None = None,
-    status: str | None = None,
+    workflow_statuses: list[str] | None = None,
+    legacy_status: str | None = None,
+    responsible_user_id: uuid.UUID | None = None,
+    without_responsible: bool = False,
 ) -> list[RequestResponse]:
+    selected_statuses = workflow_statuses
+    if selected_statuses:
+        unknown_statuses = set(selected_statuses) - W.WORKFLOW_STATUSES
+        if unknown_statuses:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Invalid workflow status: {sorted(unknown_statuses)[0]}",
+            )
+    elif legacy_status:
+        selected_statuses = _LEGACY_STATUS_FILTERS.get(legacy_status)
+        if selected_statuses is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Unsupported legacy status filter; use workflow_status",
+            )
+
+    if without_responsible and not selected_statuses:
+        # "Free" requests: nobody has taken them into work yet
+        selected_statuses = [W.WF_NEW]
+
+    organization_ids: list[uuid.UUID] | None = None
+    if organization_id is not None:
+        member = await organization_repository.get_member(session, organization_id, current_user.id)
+        if member is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a member of this organization")
+    else:
+        organizations = await organization_repository.get_orgs_for_user(session, current_user.id)
+        organization_ids = [organization.id for organization in organizations]
     requests = await request_repository.get_all_filtered(
         session,
         organization_id=organization_id,
         archived=archived,
         created_by_user_id=mine_user_id,
-        status=status,
+        workflow_statuses=selected_statuses,
+        organization_ids=organization_ids,
+        viewer_user_id=current_user.id,
+        responsible_user_id=responsible_user_id,
+        without_responsible=without_responsible,
     )
-    return [_to_response(r, include_stages=False) for r in requests]
+    member_scope = [organization_id] if organization_id is not None else organization_ids
+    memberships = await organization_repository.get_members_for_user(
+        session, current_user.id, member_scope
+    )
+    members_by_org = {member.organization_id: member for member in memberships}
+    return [
+        _to_response(
+            request,
+            include_stages=False,
+            current_user=current_user,
+            member=members_by_org.get(request.organization_id),
+        )
+        for request in requests
+    ]
 
 
 async def get_counts(
     session: AsyncSession,
     organization_id: uuid.UUID | None,
+    current_user: User,
 ) -> dict[str, int]:
+    organization_ids: list[uuid.UUID] | None = None
+    if organization_id is not None:
+        member = await organization_repository.get_member(session, organization_id, current_user.id)
+        if member is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a member of this organization")
+    else:
+        organizations = await organization_repository.get_orgs_for_user(session, current_user.id)
+        organization_ids = [organization.id for organization in organizations]
     open_count = await request_repository.count_filtered(
-        session, organization_id=organization_id, archived=False, status="open"
+        session, organization_id=organization_id, organization_ids=organization_ids, viewer_user_id=current_user.id,
+        archived=False, workflow_statuses=_LEGACY_STATUS_FILTERS["open"]
     )
     in_progress_count = await request_repository.count_filtered(
-        session, organization_id=organization_id, archived=False, status="assigned"
+        session, organization_id=organization_id, organization_ids=organization_ids, viewer_user_id=current_user.id,
+        archived=False, workflow_statuses=_LEGACY_STATUS_FILTERS["assigned"]
     )
     closed_count = await request_repository.count_filtered(
-        session, organization_id=organization_id, archived=False, status="closed"
+        session, organization_id=organization_id, organization_ids=organization_ids, viewer_user_id=current_user.id,
+        archived=False, workflow_statuses=_LEGACY_STATUS_FILTERS["closed"]
     )
     archived_count = await request_repository.count_filtered(
-        session, organization_id=organization_id, archived=True
+        session, organization_id=organization_id, organization_ids=organization_ids, viewer_user_id=current_user.id, archived=True
     )
     return {
         "open": open_count,
@@ -209,21 +381,26 @@ async def get_counts(
     }
 
 
-async def get_request(session: AsyncSession, request_id: int) -> RequestResponse:
-    req = await request_repository.get_by_id(session, request_id)
-    if not req:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")
+async def get_request(session: AsyncSession, request_id: int, current_user: User) -> RequestResponse:
+    req, member = await perms.load_request_with_access(session, request_id, current_user, require_org=False)
     events = await request_stage_repository.list_execution_events(session, request_id, limit=50)
     return _to_response(
         req,
         include_stages=True,
         execution_events_rows=events,
         include_workflow=True,
+        current_user=current_user,
+        member=member,
     )
 
 
 async def create_request(
-    session: AsyncSession, payload: CreateRequestPayload, current_user: User
+    session: AsyncSession,
+    payload: CreateRequestPayload,
+    current_user: User,
+    *,
+    source: str | None = None,
+    priority: str | None = None,
 ) -> RequestResponse:
     org_id = uuid.UUID(payload.organization_id) if payload.organization_id else None
     req = Request(
@@ -237,57 +414,81 @@ async def create_request(
         deleted=False,
         execution_status=C.EXEC_NEW,
         form_snapshot=payload.form_snapshot,
+        source=source,
+        priority=priority if priority in W.PRIORITIES else W.PRIORITY_MEDIUM,
     )
     req = await request_repository.create(session, req)
     await request_workflow_service.log_request_created(session, req.id, current_user.id)
+    await notification_service.notify_request_created(session, req, actor_user_id=current_user.id)
     await session.commit()
     request_id = req.id
 
-    try:
-        await request_summary_service.generate_summary(session, request_id)
-    except Exception:
-        logger.exception("AI summary generation failed for request %s", request_id)
-        await session.rollback()
-
-    try:
-        await request_analysis_service.generate_analysis(session, request_id)
-    except request_analysis_service.AnalysisGenerationFailed:
-        logger.warning("AI analysis skipped (LLM unavailable) for request %s", request_id)
-        await session.rollback()
-    except Exception:
-        logger.exception("AI analysis generation failed for request %s", request_id)
-        await session.rollback()
+    if settings.AI_JOBS_ENABLED:
+        try:
+            await ai_job_service.enqueue(session, request_id, ai_job_service.JOB_ANALYSIS)
+            await ai_job_service.enqueue(session, request_id, ai_job_service.JOB_STAGE_PLAN)
+        except Exception:
+            logger.exception("Could not enqueue AI analysis for request %s", request_id)
 
     req = await request_repository.get_by_id(session, request_id)
     if req is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")
     events = await request_stage_repository.list_execution_events(session, request_id, limit=50)
-    return _to_response(req, include_stages=True, execution_events_rows=events)
+    member = None
+    if req.organization_id is not None:
+        member = await organization_repository.get_member(session, req.organization_id, current_user.id)
+    return _to_response(
+        req,
+        include_stages=True,
+        execution_events_rows=events,
+        current_user=current_user,
+        member=member,
+    )
 
 
 async def update_request(
-    session: AsyncSession, request_id: int, payload: UpdateRequestPayload
+    session: AsyncSession, request_id: int, payload: UpdateRequestPayload, current_user: User
 ) -> RequestResponse:
-    req = await request_repository.get_by_id(session, request_id)
-    if not req:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")
+    req, member = await perms.load_request_with_access(session, request_id, current_user, require_org=False)
+    if not perms.can_manage_request(req, current_user, member) and not perms.can_edit_request_draft(req, current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+
+    content_changed = False
 
     if payload.title is not None:
         req.title = payload.title
+        content_changed = True
     if payload.data is not None:
         req.data = payload.data
-    if payload.status is not None:
-        req.status = payload.status
+        content_changed = True
     if payload.closedAt is not None:
         req.closed_at = datetime.fromisoformat(payload.closedAt)
+    if payload.priority is not None:
+        if payload.priority not in W.PRIORITIES:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid priority")
+        req.priority = payload.priority
+    if "due_date" in payload.model_fields_set:
+        req.due_date = request_workflow_service._parse_iso_datetime(payload.due_date)
     req.updated_at = datetime.now(timezone.utc)
 
     req = await request_repository.update(session, req)
     await session.commit()
+    if content_changed and settings.AI_JOBS_ENABLED:
+        try:
+            await ai_job_service.enqueue(session, request_id, ai_job_service.JOB_ANALYSIS)
+            await ai_job_service.enqueue(session, request_id, ai_job_service.JOB_STAGE_PLAN)
+        except Exception:
+            logger.exception("Could not enqueue AI analysis for request %s", request_id)
     req = await request_repository.get_by_id(session, request_id)
     assert req is not None
     events = await request_stage_repository.list_execution_events(session, request_id, limit=50)
-    return _to_response(req, include_stages=True, execution_events_rows=events)
+    return _to_response(
+        req,
+        include_stages=True,
+        execution_events_rows=events,
+        current_user=current_user,
+        member=member,
+    )
 
 
 async def patch_status(
@@ -297,21 +498,33 @@ async def patch_status(
     if not req:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")
 
-    req.status = new_status
-    if new_status == "closed":
-        req.closed_at = datetime.now(timezone.utc)
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Direct status updates are deprecated; use request lifecycle actions",
+    )
+
+
+async def delete_request(
+    session: AsyncSession, request_id: int, current_user: User
+) -> None:
+    req, member = await perms.load_request_with_access(session, request_id, current_user, require_org=False)
+    if not perms.can_manage_request(req, current_user, member):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+    if req.workflow_status not in W.ARCHIVABLE_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only closed or cancelled requests can be archived",
+        )
+    old_status = req.workflow_status
+    req.deleted = True
+    req.workflow_status = W.WF_ARCHIVED
     req.updated_at = datetime.now(timezone.utc)
-
-    req = await request_repository.update(session, req)
-    await session.commit()
-    req = await request_repository.get_by_id(session, request_id)
-    assert req is not None
-    events = await request_stage_repository.list_execution_events(session, request_id, limit=50)
-    return _to_response(req, include_stages=True, execution_events_rows=events)
-
-
-async def delete_request(session: AsyncSession, request_id: int) -> None:
-    deleted = await request_repository.remove(session, request_id)
-    if not deleted:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")
+    await request_history_repository.append_history(
+        session,
+        request_id=req.id,
+        actor_id=current_user.id,
+        event_type=W.HISTORY_REQUEST_STATUS_CHANGED,
+        payload={"old_status": old_status, "new_status": W.WF_ARCHIVED},
+    )
+    await request_repository.update(session, req)
     await session.commit()

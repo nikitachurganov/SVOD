@@ -1,10 +1,18 @@
 .auth-page {
+  --auth-hero-overlay: rgba(255, 255, 255, 0.1);
+  --auth-input-bg: transparent;
+  --auth-input-text: var(--app-text);
+  --auth-input-placeholder: var(--app-text-placeholder);
+  --auth-input-icon: var(--app-text-secondary);
+  --auth-social-bg: var(--app-surface);
+  --auth-social-bg-disabled: var(--app-surface-accent);
+  --auth-social-text-disabled: var(--app-text-secondary);
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 20px;
   min-height: 100vh;
   padding: 20px;
-  background: var(--app-surface);
+  background: var(--app-bg);
   overflow: auto;
 }
 
@@ -31,7 +39,7 @@
   position: absolute;
   inset: 0;
   backdrop-filter: blur(26px);
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--auth-hero-overlay);
 }
 
 .auth-page__hero-content {
@@ -143,6 +151,8 @@
   border: none;
   border-bottom: 1px solid var(--app-border);
   border-radius: 0;
+  background: var(--auth-input-bg);
+  color: var(--auth-input-text);
   box-shadow: none;
   font-size: 16px;
   line-height: 24px;
@@ -151,7 +161,20 @@
 
 .auth-page__input.ant-input-affix-wrapper .ant-input {
   border: none;
+  background: transparent;
+  color: var(--auth-input-text);
   box-shadow: none;
+}
+
+.auth-page__input.ant-input::placeholder,
+.auth-page__input.ant-input-affix-wrapper .ant-input::placeholder {
+  color: var(--auth-input-placeholder);
+  opacity: 1;
+}
+
+.auth-page__input.ant-input-affix-wrapper .ant-input-suffix,
+.auth-page__input.ant-input-affix-wrapper .ant-input-password-icon {
+  color: var(--auth-input-icon);
 }
 
 .auth-page__input.ant-input:focus,
@@ -170,7 +193,7 @@
 
 .auth-page__divider {
   margin: 0;
-  color: var(--app-text-helper);
+  color: var(--app-text-secondary);
   font-size: 14px;
 }
 
@@ -197,6 +220,18 @@
   box-shadow: 0 2px 0 rgba(0, 0, 0, 0.02);
 }
 
+.auth-page__social-btn.ant-btn {
+  border-color: var(--app-border);
+  background: var(--auth-social-bg);
+}
+
+.auth-page__social-btn.ant-btn:disabled {
+  border-color: var(--app-border);
+  background: var(--auth-social-bg-disabled);
+  color: var(--auth-social-text-disabled);
+  opacity: 1;
+}
+
 .auth-page__social-icon {
   width: 24px;
   height: 24px;
@@ -208,7 +243,7 @@
   text-align: center;
   font-size: 14px;
   line-height: 22px;
-  color: var(--app-text-helper);
+  color: var(--app-text-secondary);
 }
 
 .auth-page__switch-link {
@@ -223,6 +258,10 @@
 
 .auth-page__switch-link:hover {
   color: var(--app-link-hover);
+}
+
+html[data-theme='dark'] .auth-page {
+  --auth-hero-overlay: rgba(0, 0, 0, 0.24);
 }
 
 @media (max-width: 980px) {

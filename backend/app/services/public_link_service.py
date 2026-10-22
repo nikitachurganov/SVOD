@@ -26,6 +26,7 @@ from app.schemas.public_link import (
     PublicRequestCreatedResponse,
     PublicRequestSubmission,
 )
+from app.services import notification_service
 from app.services.public_form_suggest_service import count_form_fields
 from app.services.public_request_ai_tasks import run_public_request_ai_pipeline
 
@@ -201,6 +202,7 @@ async def submit_public_request(
     form.usage_count = getattr(form, "usage_count", 0) + 1
     link.usage_count = getattr(link, "usage_count", 0) + 1
     await form_repository.update(session, form)
+    await notification_service.notify_request_created(session, req, actor_user_id=None)
     await session.commit()
 
     asyncio.create_task(run_public_request_ai_pipeline(request_id))

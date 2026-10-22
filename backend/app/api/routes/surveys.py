@@ -1,0 +1,177 @@
+import uuid
+from urllib.parse import quote
+
+from fastapi import APIRouter, HTTPException, Query, Request, Response, status
+
+from app.api.deps import CurrentUser, DbSession
+from app.schemas.survey import (
+    CreateSurveyRequest,
+    MethodologyCatalogResponse,
+    MethodologyReportRequest,
+    MethodologyReportResponse,
+    PublicSurveyResponse,
+    SubmitSurveyRequest,
+    SurveyAiBuildRequest,
+    SurveyAiBuildResponse,
+    SurveyDetail,
+    SurveyListItem,
+    SurveyResponsesPage,
+    SurveyResults,
+    SurveysCounts,
+    SurveyStatusRequest,
+    SurveySubmittedResponse,
+    UpdateSurveyRequest,
+)
+from app.services import survey_ai_builder_service, survey_methodology_service, survey_service
+from app.services.public_suggest_rate_limit import check_public_suggest_limit
+
+router = APIRouter()
+public_router = APIRouter()
+methodologies_router = APIRouter()
+
+
+# ─── Methodology catalogue ────────────────────────────────────────────────────
+
+
+@methodologies_router.get("", response_model=MethodologyCatalogResponse)
+async def get_methodologies(_user: CurrentUser) -> MethodologyCatalogResponse:
+    return survey_methodology_service.get_catalog()
+
+
+@methodologies_router.post("/report", response_model=MethodologyReportResponse)
+async def build_methodology_report(
+    payload: MethodologyReportRequest, _user: CurrentUser
+) -> MethodologyReportResponse:
+    """Report for a survey that is not saved yet (builder preview)."""
+    return survey_methodology_service.build_report(
+        payload.name.strip() or "Без названия", payload.methodology_meta, payload.pages
+    )
+
+
+# ─── Surveys (organization members) ───────────────────────────────────────────
+
+
+@router.get("", response_model=list[SurveyListItem])
+async def list_surveys(
+    session: DbSession,
+    user: CurrentUser,
+    organization_id: uuid.UUID = Query(...),
+    status_filter: str | None = Query(default=None, alias="status"),
+    mine: bool = Query(default=False),
+) -> list[SurveyListItem]:
+    return await survey_service.list_surveys(
+        session, user, organization_id, status_filter=status_filter, mine=mine
+    )
+
+
+@router.get("/counts", response_model=SurveysCounts)
+async def surveys_counts(
+    session: DbSession, user: CurrentUser, organization_id: uuid.UUID = Query(...)
+) -> SurveysCounts:
+    return await survey_service.get_counts(session, user, organization_id)
+
+
+@router.post("/ai-builder", response_model=SurveyAiBuildResponse)
+async def build_survey_with_ai(
+    payload: SurveyAiBuildRequest, _user: CurrentUser
+) -> SurveyAiBuildResponse:
+    return await survey_ai_builder_service.build_survey(payload)
+
+
+@router.post("", response_model=SurveyDetail, status_code=201)
+async def create_survey(
+    payload: CreateSurveyRequest, session: DbSession, user: CurrentUser
+) -> SurveyDetail:
+    return await survey_service.create_survey(session, user, payload)
+
+
+@router.get("/{survey_id}", response_model=SurveyDetail)
+async def get_survey(survey_id: str, session: DbSession, user: CurrentUser) -> SurveyDetail:
+    return await survey_service.get_survey(session, user, survey_id)
+
+
+@router.put("/{survey_id}", response_model=SurveyDetail)
+async def update_survey(
+    survey_id: str, payload: UpdateSurveyRequest, session: DbSession, user: CurrentUser
+) -> SurveyDetail:
+    return await survey_service.update_survey(session, user, survey_id, payload)
+
+
+@router.patch("/{survey_id}/status", response_model=SurveyDetail)
+async def set_survey_status(
+    survey_id: str, payload: SurveyStatusRequest, session: DbSession, user: CurrentUser
+) -> SurveyDetail:
+    return await survey_service.set_status(session, user, survey_id, payload.status)
+
+
+@router.delete("/{survey_id}", status_code=204)
+async def archive_survey(survey_id: str, session: DbSession, user: CurrentUser) -> None:
+    await survey_service.archive_survey(session, user, survey_id)
+
+
+@router.get("/{survey_id}/methodology-report", response_model=MethodologyReportResponse)
+async def get_methodology_report(
+    survey_id: str, session: DbSession, user: CurrentUser
+) -> MethodologyReportResponse:
+    return await survey_service.get_methodology_report(session, user, survey_id)
+
+
+@router.get("/{survey_id}/responses", response_model=SurveyResponsesPage)
+async def list_responses(
+    survey_id: str,
+    session: DbSession,
+    user: CurrentUser,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+) -> SurveyResponsesPage:
+    return await survey_service.list_responses(
+        session, user, survey_id, limit=limit, offset=offset
+    )
+
+
+@router.get("/{survey_id}/results", response_model=SurveyResults)
+async def get_results(
+    survey_id: str,
+    session: DbSession,
+    user: CurrentUser,
+    exclude_flagged: bool = Query(default=True),
+) -> SurveyResults:
+    return await survey_service.get_results(
+        session, user, survey_id, exclude_flagged=exclude_flagged
+    )
+
+
+@router.get("/{survey_id}/responses/export.csv")
+async def export_responses_csv(survey_id: str, session: DbSession, user: CurrentUser) -> Response:
+    name, content = await survey_service.export_responses_csv(session, user, survey_id)
+    filename = quote(f"{name[:80]}.csv")
+    return Response(
+        content="﻿" + content,  # BOM so Excel opens UTF-8 correctly
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{filename}"},
+    )
+
+
+# ─── Respondent (public) ──────────────────────────────────────────────────────
+
+
+@public_router.get("/{token}", response_model=PublicSurveyResponse)
+async def get_public_survey(token: str, session: DbSession) -> PublicSurveyResponse:
+    return await survey_service.get_public_survey(session, token)
+
+
+@public_router.post(
+    "/{token}/responses", response_model=SurveySubmittedResponse, status_code=201
+)
+async def submit_public_response(
+    token: str, payload: SubmitSurveyRequest, session: DbSession, request: Request
+) -> SurveySubmittedResponse:
+    ip = request.client.host if request.client else "unknown"
+    if not check_public_suggest_limit(f"survey-submit:{token}:{ip}"):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Слишком много запросов. Подождите минуту и попробуйте снова.",
+        )
+    return await survey_service.submit_public_response(
+        session, token, payload, user_agent=request.headers.get("user-agent")
+    )

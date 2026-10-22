@@ -60,3 +60,43 @@ class LoginRequest(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
+
+class AccountActivationInfo(BaseModel):
+    """Public data shown on the activation page (the token itself is the credential)."""
+    email: str
+    first_name: str
+    last_name: str
+    middle_name: str | None
+    phone_number: str
+    organization_name: str
+    inviter_name: str | None
+    job_title: str | None
+    expires_at: str | None
+
+
+class ActivateAccountRequest(BaseModel):
+    first_name: str = Field(..., min_length=1, max_length=100)
+    last_name: str = Field(..., min_length=1, max_length=100)
+    middle_name: str | None = Field(None, max_length=100)
+    phone_number: str = Field(default="", max_length=20)
+    password: str = Field(..., min_length=8, max_length=64)
+
+    @field_validator("first_name", "last_name", "middle_name", mode="before")
+    @classmethod
+    def normalize_name_values(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return normalize_name_part(value)
+
+    @field_validator("phone_number", mode="before")
+    @classmethod
+    def normalize_phone(cls, value: str | None) -> str:
+        return (value or "").strip()
+
+    @field_validator("password")
+    @classmethod
+    def validate_password_bytes(cls, value: str) -> str:
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("Password must not exceed 72 bytes.")
+        return value

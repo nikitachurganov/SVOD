@@ -8,7 +8,7 @@ import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories import request_repository
-from app.services.gigachat_client import post_chat_completion
+from app.services.openrouter_client import post_chat_completion
 from app.services.request_analysis_parser import build_final_payload, parse_llm_json
 from app.services.request_analysis_prompt_builder import build_messages
 from app.services.request_analysis_rules import run_deterministic_checks
@@ -41,12 +41,12 @@ async def generate_analysis(session: AsyncSession, request_id: int) -> dict:
     try:
         raw = await post_chat_completion(messages, max_tokens=1200, temperature=0.12)
     except httpx.HTTPError as exc:
-        logger.exception("GigaChat HTTP error during analysis for request %s", request_id)
+        logger.exception("OpenRouter HTTP error during analysis for request %s", request_id)
         raise AnalysisGenerationFailed(
             "Сервис ИИ временно недоступен или вернул ошибку. Попробуйте позже."
         ) from exc
     except Exception as exc:
-        logger.exception("Unexpected error calling GigaChat for request %s", request_id)
+        logger.exception("Unexpected error calling OpenRouter for request %s", request_id)
         raise AnalysisGenerationFailed("Не удалось получить ответ от сервиса ИИ.") from exc
 
     llm_part = parse_llm_json(raw)

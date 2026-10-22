@@ -18,9 +18,9 @@
 
   --brand-400: #ff7a45;
 
-  --brand-500: #f5570d;
+  --brand-500: #c2410c;
 
-  --brand-600: #d84a0b;
+  --brand-600: #9a3412;
 
   --brand-700: #b83d09;
 
@@ -78,13 +78,13 @@
 
   --app-link: var(--ant-color-primary, var(--brand-500));
 
-  --app-link-hover: var(--brand-600);
+  --app-link-hover: var(--brand-700);
 
   --app-focus: var(--ant-color-primary, var(--brand-500));
 
   --app-menu-active-bg: #fff2e8;
 
-  --app-menu-active-text: #f5570d;
+  --app-menu-active-text: var(--brand-600);
 
 
 
@@ -136,9 +136,9 @@ html[data-theme='light'] {
 
   --app-text: var(--ant-color-text, rgba(0, 0, 0, 0.88));
 
-  --app-link: var(--brand-500);
+  --app-link: var(--brand-600);
 
-  --app-link-hover: var(--brand-600);
+  --app-link-hover: var(--brand-700);
 
   --app-sidebar-org-link: var(--ant-color-info, #1677ff);
 
@@ -166,3 +166,80 @@ html[data-theme='dark'] {
 
 }
 
+
+/*
+ * App tokens must resolve on <html>: Ant Design CSS variables are scoped to
+ * ConfigProvider and cannot safely be referenced from root custom properties.
+ */
+:root,
+html[data-theme='light'] {
+  --app-bg: #f5f5f5;
+  --app-bg-hover: #f0f0f0;
+  --app-surface: #ffffff;
+  --app-surface-elevated: #ffffff;
+  --app-surface-accent: #fafafa;
+  --app-surface-hover: #f5f5f5;
+  --app-surface-selected: var(--brand-50);
+  --app-surface-selected-hover: var(--brand-100);
+  --app-highlight: var(--brand-50);
+  --app-input-bg: #ffffff;
+  --app-border: #d9d9d9;
+  --app-border-secondary: #e2e5e9;
+  --app-border-strong: #9ca3af;
+  --app-text: #141414;
+  --app-text-secondary: #595959;
+  --app-text-placeholder: #6b7280;
+  --app-text-helper: #6b7280;
+  --app-text-error: #d9363e;
+  --app-text-on-brand: #ffffff;
+  --app-primary: var(--brand-500);
+  --app-link: var(--brand-600);
+  --app-link-hover: var(--brand-700);
+  --app-focus: var(--brand-500);
+  --app-menu-active-bg: var(--brand-50);
+  --app-menu-active-text: var(--brand-600);
+  --app-success: #389e0d;
+  --app-warning: #d48806;
+  --app-info: #1677ff;
+  --app-sidebar-org-link: #1677ff;
+  --app-sidebar-org-link-hover: #4096ff;
+  --app-error: #d9363e;
+  --app-overlay: rgba(0, 0, 0, 0.45);
+  --app-shadow: rgba(0, 0, 0, 0.2);
+}
+
+html[data-theme='dark'] {
+  --app-bg: #121417;
+  --app-bg-hover: #242830;
+  --app-surface: #1b1e23;
+  --app-surface-elevated: #23272e;
+  --app-surface-accent: #23272e;
+  --app-surface-hover: #2b3038;
+  --app-surface-selected: #3b1a0b;
+  --app-surface-selected-hover: #53230e;
+  --app-highlight: #3b1a0b;
+  --app-input-bg: #1b1e23;
+  --app-border: #434343;
+  --app-border-secondary: #3e444d;
+  --app-border-strong: #6b7280;
+  --app-text: #f5f5f5;
+  --app-text-secondary: #bfbfbf;
+  --app-text-placeholder: #a8afb9;
+  --app-text-helper: #a8afb9;
+  --app-text-error: #ff7875;
+  --app-text-on-brand: #ffffff;
+  --app-primary: var(--brand-400);
+  --app-link: var(--brand-300);
+  --app-link-hover: var(--brand-200);
+  --app-focus: var(--brand-300);
+  --app-menu-active-bg: #3b1a0b;
+  --app-menu-active-text: var(--brand-300);
+  --app-success: #95de64;
+  --app-warning: #ffd666;
+  --app-info: #91caff;
+  --app-sidebar-org-link: #91caff;
+  --app-sidebar-org-link-hover: #bae0ff;
+  --app-error: #ff7875;
+  --app-overlay: rgba(0, 0, 0, 0.65);
+  --app-shadow: rgba(0, 0, 0, 0.45);
+}

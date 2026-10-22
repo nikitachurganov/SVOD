@@ -3,10 +3,16 @@ import { getFormById, pagesPayloadToInstances, type FormResponse } from './forms
 import { parseRequestData } from '../utils/parseRequestData';
 import type { FormFieldInstance, FormPageInstance } from '../types/form-builder.types';
 import type { AuthorPreview } from '../../types/author';
-import type { RequestExecutionEventDTO, RequestStageDTO } from '../../types/execution';
+import type {
+  RequestExecutionEventDTO,
+  RequestStageArtifactDTO,
+  RequestStageDTO,
+  RequestTimelineDTO,
+  StageTechnicalSpecDTO,
+} from '../../types/execution';
 import type { AssignPerformerPayload, PerformerRecommendationResponse } from '../../types/performerSelection';
-import type { PatchRequestTZPayload, RequestTechnicalSpecEnvelope } from '../../types/technicalSpec';
-import type { AIRequestAnalysis, AISummary, RequestEntity, RequestPerson } from '../../types/request';
+import type { RequestTechnicalSpecEnvelope } from '../../types/technicalSpec';
+import type { AIRequestAnalysis, AIStagePlan, AIStagePlanItem, AISummary, RequestEntity, RequestPermissions, RequestPerson } from '../../types/request';
 import type {
   RequestHistoryEventDTO,
   RequestTaskDTO,
@@ -54,11 +60,21 @@ export interface RequestResponse {
   tasks?: RequestTaskDTO[];
   history?: RequestHistoryEventDTO[];
   ai_tz?: RequestTechnicalSpecEnvelope | null;
+  progress?: { completed: number; total: number };
+  permissions?: RequestPermissions;
+  ai_analysis_status?: string | null;
+  ai_stage_plan?: AIStagePlan | null;
 }
 
 export interface GetRequestsFilters {
   archived?: boolean;
   mine?: boolean;
+  workflow_status?: WorkflowStatus[];
+  /** New requests nobody has taken into work yet */
+  free?: boolean;
+  /** Requests where the current user is responsible */
+  mine_responsible?: boolean;
+  /** Legacy filter, retained only while old clients are migrated. */
   status?: RequestStatus;
 }
 
@@ -83,6 +99,8 @@ export interface UpdateRequestPayload {
   status?: RequestStatus;
   closedAt?: string | null;
   data?: unknown;
+  priority?: string;
+  due_date?: string | null;
 }
 
 export const getRequests = async (
@@ -101,6 +119,15 @@ export const getRequests = async (
   }
   if (filters.status) {
     params.status = filters.status;
+  }
+  if (filters.workflow_status?.length) {
+    params.workflow_status = filters.workflow_status.join(',');
+  }
+  if (filters.free) {
+    params.free = true;
+  }
+  if (filters.mine_responsible) {
+    params.mine_responsible = true;
   }
 
   const { data } = await api.get<RequestResponse[]>('/requests', { params });
@@ -147,15 +174,15 @@ export const updateRequest = async (
   if (payload.status !== undefined) body.status = payload.status;
   if (payload.data !== undefined) body.data = payload.data;
   if (payload.closedAt !== undefined) body.closedAt = payload.closedAt;
+  if (payload.priority !== undefined) body.priority = payload.priority;
+  if (payload.due_date !== undefined) body.due_date = payload.due_date;
 
   const { data } = await api.put<RequestResponse>(`/requests/${id}`, body);
   return data;
 };
 
 export const closeRequest = async (id: string): Promise<RequestResponse> => {
-  const { data } = await api.patch<RequestResponse>(`/requests/${id}/status`, {
-    status: 'closed',
-  });
+  const { data } = await api.post<RequestResponse>(`/requests/${id}/close`);
   return data;
 };
 
@@ -163,8 +190,24 @@ export const deleteRequest = async (id: string): Promise<void> => {
   await api.delete(`/requests/${id}`);
 };
 
-export const generateRequestAnalysis = async (id: string): Promise<AIRequestAnalysis> => {
-  const { data } = await api.post<AIRequestAnalysis>(`/requests/${id}/analysis`);
+export interface AIJobResponse {
+  id: string;
+  request_id: string;
+  kind: string;
+  status: 'queued' | 'running' | 'succeeded' | 'failed' | string;
+  error?: string | null;
+  result?: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const generateRequestAnalysis = async (id: string): Promise<AIJobResponse> => {
+  const { data } = await api.post<AIJobResponse>(`/requests/${id}/analysis`);
+  return data;
+};
+
+export const getAIJob = async (jobId: string): Promise<AIJobResponse> => {
+  const { data } = await api.get<AIJobResponse>(`/requests/ai-jobs/${jobId}`);
   return data;
 };
 
@@ -173,6 +216,16 @@ export const getRequestPerformers = async (
 ): Promise<PerformerRecommendationResponse> => {
   const { data } = await api.get<PerformerRecommendationResponse>(
     `/requests/${requestId}/performers`,
+  );
+  return data;
+};
+
+export const getStagePerformers = async (
+  requestId: string,
+  stageId: string,
+): Promise<PerformerRecommendationResponse> => {
+  const { data } = await api.get<PerformerRecommendationResponse>(
+    `/requests/${requestId}/stages/${stageId}/performers`,
   );
   return data;
 };
@@ -193,16 +246,23 @@ export const assignRequestPerformer = async (
 export interface AddStagePayload {
   title: string;
   description?: string | null;
+  expected_result?: string | null;
+  recommended_role?: string | null;
+  due_date?: string | null;
   source?: string | null;
 }
 
 export interface PatchStagePayload {
   title?: string;
   description?: string | null;
+  expected_result?: string | null;
+  recommended_role?: string | null;
+  due_date?: string | null;
 }
 
 export interface CompleteStagePayload {
   result_summary?: string | null;
+  artifact_ids?: string[];
 }
 
 export interface BlockStagePayload {
@@ -264,23 +324,178 @@ export const unblockRequestStage = async (
   return data;
 };
 
-export const generateRequestTZ = async (
+export const getRequestTimeline = async (requestId: string): Promise<RequestTimelineDTO> => {
+  const { data } = await api.get<RequestTimelineDTO>(`/requests/${requestId}/timeline`);
+  return data;
+};
+
+export const generateStageSpecification = async (requestId: string, stageId: string) => {
+  const { data } = await api.post(`/requests/${requestId}/stages/${stageId}/specification/generate`);
+  return data;
+};
+
+export const createStageSpecification = async (
   requestId: string,
-): Promise<RequestTechnicalSpecEnvelope> => {
-  const { data } = await api.post<RequestTechnicalSpecEnvelope>(
-    `/requests/${requestId}/tz`,
+  stageId: string,
+): Promise<StageTechnicalSpecDTO> => {
+  const { data } = await api.post<StageTechnicalSpecDTO>(`/requests/${requestId}/stages/${stageId}/specification`);
+  return data;
+};
+
+export const patchStageSpecification = async (
+  requestId: string,
+  stageId: string,
+  specificationId: string,
+  sections: Record<string, unknown>,
+): Promise<StageTechnicalSpecDTO> => {
+  const { data } = await api.patch<StageTechnicalSpecDTO>(
+    `/requests/${requestId}/stages/${stageId}/specification/${specificationId}`,
+    { sections },
   );
   return data;
 };
 
-export const patchRequestTZ = async (
+export const confirmStageSpecification = async (
   requestId: string,
-  payload: PatchRequestTZPayload,
-): Promise<RequestTechnicalSpecEnvelope> => {
-  const { data } = await api.patch<RequestTechnicalSpecEnvelope>(
-    `/requests/${requestId}/tz`,
+  stageId: string,
+  specificationId: string,
+): Promise<StageTechnicalSpecDTO> => {
+  const { data } = await api.post<StageTechnicalSpecDTO>(
+    `/requests/${requestId}/stages/${stageId}/specification/${specificationId}/confirm`,
+  );
+  return data;
+};
+
+export const assignRequestResponsible = async (
+  requestId: string,
+  responsibleUserId: string,
+): Promise<RequestResponse> => {
+  const { data } = await api.patch<RequestResponse>(`/requests/${requestId}/responsible`, {
+    responsible_user_id: responsibleUserId,
+  });
+  return data;
+};
+
+export const takeRequest = async (requestId: string): Promise<RequestResponse> => {
+  const { data } = await api.post<RequestResponse>(`/requests/${requestId}/take`);
+  return data;
+};
+
+export const releaseRequest = async (requestId: string, reason: string): Promise<RequestResponse> => {
+  const { data } = await api.post<RequestResponse>(`/requests/${requestId}/release`, { comment: reason });
+  return data;
+};
+
+export const selfExecuteRequest = async (requestId: string): Promise<RequestResponse> => {
+  const { data } = await api.post<RequestResponse>(`/requests/${requestId}/self-execute`);
+  return data;
+};
+
+export interface RequestAttributesPayload {
+  priority?: string;
+  due_date?: string | null;
+}
+
+export const updateRequestAttributes = async (
+  requestId: string,
+  payload: RequestAttributesPayload,
+): Promise<RequestResponse> => {
+  const { data } = await api.patch<RequestResponse>(`/requests/${requestId}/attributes`, payload);
+  return data;
+};
+
+export const startRequest = async (requestId: string): Promise<RequestResponse> => {
+  const { data } = await api.post<RequestResponse>(`/requests/${requestId}/start`);
+  return data;
+};
+
+export const cancelRequest = async (requestId: string, comment: string): Promise<RequestResponse> => {
+  const { data } = await api.post<RequestResponse>(`/requests/${requestId}/cancel`, { comment });
+  return data;
+};
+
+export const requestMoreInformation = async (requestId: string, comment: string): Promise<RequestResponse> => {
+  const { data } = await api.post<RequestResponse>(`/requests/${requestId}/request-info`, { comment });
+  return data;
+};
+
+export const reorderRequestStages = async (
+  requestId: string,
+  stageIds: string[],
+): Promise<RequestResponse> => {
+  const { data } = await api.put<RequestResponse>(`/requests/${requestId}/stages/order`, {
+    stage_ids: stageIds,
+  });
+  return data;
+};
+
+export const deleteRequestStage = async (
+  requestId: string,
+  stageId: string,
+): Promise<RequestResponse> => {
+  const { data } = await api.delete<RequestResponse>(`/requests/${requestId}/stages/${stageId}`);
+  return data;
+};
+
+export const uploadStageArtifact = async (
+  requestId: string,
+  stageId: string,
+  file: File,
+  purpose: 'input' | 'result' = 'input',
+): Promise<RequestStageArtifactDTO> => {
+  const body = new FormData();
+  body.append('file', file);
+  body.append('purpose', purpose);
+  const { data } = await api.post<RequestStageArtifactDTO>(
+    `/requests/${requestId}/stages/${stageId}/artifacts/files`,
+    body,
+  );
+  return data;
+};
+
+export const addStageArtifactLink = async (
+  requestId: string,
+  stageId: string,
+  payload: { name: string; url: string; purpose?: 'input' | 'result' },
+): Promise<RequestStageArtifactDTO> => {
+  const { data } = await api.post<RequestStageArtifactDTO>(
+    `/requests/${requestId}/stages/${stageId}/artifacts/links`,
     payload,
   );
+  return data;
+};
+
+export const deleteStageArtifact = async (
+  requestId: string,
+  stageId: string,
+  artifactId: string,
+): Promise<void> => {
+  await api.delete(`/requests/${requestId}/stages/${stageId}/artifacts/${artifactId}`);
+};
+
+export const getStageArtifactDownloadUrl = async (
+  requestId: string,
+  stageId: string,
+  artifactId: string,
+): Promise<string> => {
+  const { data } = await api.get<{ url: string }>(
+    `/requests/${requestId}/stages/${stageId}/artifacts/${artifactId}/download-url`,
+  );
+  return data.url;
+};
+
+export const suggestRequestStagePlan = async (requestId: string): Promise<AIJobResponse> => {
+  const { data } = await api.post<AIJobResponse>(`/requests/${requestId}/stage-plan/suggest`);
+  return data;
+};
+
+export const applyRequestStagePlan = async (
+  requestId: string,
+  stages?: AIStagePlanItem[],
+): Promise<RequestResponse> => {
+  const { data } = await api.post<RequestResponse>(`/requests/${requestId}/stage-plan/apply`, {
+    stages: stages ?? null,
+  });
   return data;
 };
 
@@ -490,6 +705,10 @@ export async function getRequestWithForm(id: string): Promise<RequestWithForm> {
       tasks: requestRow.tasks ?? [],
       history: requestRow.history ?? [],
       ai_tz: requestRow.ai_tz ?? null,
+      progress: requestRow.progress ?? { completed: 0, total: 0 },
+      permissions: requestRow.permissions,
+      ai_analysis_status: requestRow.ai_analysis_status ?? null,
+      ai_stage_plan: requestRow.ai_stage_plan ?? null,
     };
 
     return { request, form, parsedData };

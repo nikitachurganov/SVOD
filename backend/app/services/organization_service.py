@@ -1,9 +1,17 @@
 import secrets
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.constants import request_execution as C
+from app.core.config import settings
+from app.core.name_utils import build_display_name
+from app.core.security import PENDING_ACTIVATION_HASH, is_pending_activation
+from app.models.request_stage import RequestStage
+from app.services import email_service
 
 from app.models.external_contractor import ExternalContractor
 from app.models.organization import (
@@ -16,6 +24,7 @@ from app.repositories import external_contractor_repository, organization_reposi
 from app.schemas.external_contractor import (
     CreateExternalContractorPayload,
     ExternalContractorResponse,
+    UpdateExternalContractorPayload,
 )
 from app.schemas.organization import (
     CreateInvitationRequest,
@@ -29,6 +38,10 @@ from app.schemas.organization import (
     UpdateRoleRequest,
 )
 from app.schemas.user import PublicAuthorResponse
+
+
+INVITE_EXISTING_USER = "existing_user"
+INVITE_NEW_ACCOUNT = "new_account"
 
 
 # ---------------------------------------------------------------------------
@@ -66,10 +79,19 @@ def _to_member_response(member: OrganizationMember) -> MemberResponse:
         user=_to_author(member.user),  # type: ignore[arg-type]
         role_tag=member.role_tag,
         joined_at=member.joined_at.isoformat(),
+        job_title=member.job_title,
+        specialization=member.specialization,
     )
 
 
-def _to_invitation_response(inv: OrganizationInvitation) -> InvitationResponse:
+def activation_url(invite_code: str) -> str:
+    return f"{settings.APP_PUBLIC_URL.rstrip('/')}/activate/{invite_code}"
+
+
+def _to_invitation_response(
+    inv: OrganizationInvitation, *, email_sent: bool | None = None
+) -> InvitationResponse:
+    is_account = inv.kind == INVITE_NEW_ACCOUNT
     return InvitationResponse(
         id=str(inv.id),
         organization_id=str(inv.organization_id),
@@ -80,6 +102,12 @@ def _to_invitation_response(inv: OrganizationInvitation) -> InvitationResponse:
         invite_code=inv.invite_code,
         expires_at=inv.expires_at.isoformat() if inv.expires_at else None,
         created_at=inv.created_at.isoformat(),
+        kind=inv.kind,
+        invited_user=_to_author(inv.invited_user),
+        job_title=inv.job_title,
+        specialization=inv.specialization,
+        activation_url=activation_url(inv.invite_code) if is_account and inv.status == "pending" else None,
+        email_sent=email_sent,
     )
 
 
@@ -345,60 +373,152 @@ async def leave_organization(
 # Invitations
 # ---------------------------------------------------------------------------
 
+def _new_invite_code() -> str:
+    return secrets.token_urlsafe(32)
+
+
+def _invite_expiry() -> datetime:
+    return datetime.now(timezone.utc) + timedelta(days=max(1, settings.INVITATION_TTL_DAYS))
+
+
+async def _send_invitation_email(inv: OrganizationInvitation, org: Organization, inviter: User) -> bool:
+    inviter_name = build_display_name(
+        last_name=inviter.last_name, first_name=inviter.first_name, middle_name=inviter.middle_name
+    )
+    if inv.kind == INVITE_NEW_ACCOUNT:
+        invitee = inv.invited_user
+        return await email_service.send_account_invitation(
+            to=inv.email,
+            first_name=invitee.first_name if invitee else "",
+            organization_name=org.name,
+            inviter_name=inviter_name,
+            activation_url=activation_url(inv.invite_code),
+            ttl_days=settings.INVITATION_TTL_DAYS,
+        )
+    return await email_service.send_organization_invitation(
+        to=inv.email,
+        organization_name=org.name,
+        inviter_name=inviter_name,
+        app_url=settings.APP_PUBLIC_URL,
+    )
+
+
 async def create_invitation(
     session: AsyncSession,
     org_id: uuid.UUID,
     payload: CreateInvitationRequest,
     current_user: User,
 ) -> InvitationResponse:
+    """Add a person to the organization by email.
+
+    * registered user: in-app invitation (accepted from notifications);
+    * unknown email: an inactive account is created from the owner's data and the person
+      activates it by the emailed link (sets own password), becoming a member.
+    """
     org = await _get_org_or_404(session, org_id)
     _ensure_owner(org, current_user)
+    email = str(payload.email).strip()
 
-    # Invited user must exist
-    invited_user = await user_repository.get_by_email(session, str(payload.email))
-    if invited_user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-        )
+    invited_user = await user_repository.get_by_email(session, email)
+    if invited_user is not None and invited_user.id == current_user.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot invite yourself")
 
-    # Cannot invite yourself
-    if invited_user.id == current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="You cannot invite yourself",
-        )
+    kind = INVITE_EXISTING_USER
+    if invited_user is None or is_pending_activation(invited_user.password_hash):
+        kind = INVITE_NEW_ACCOUNT
+        if not payload.first_name or not payload.last_name:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Укажите имя и фамилию: для этого адреса будет создан новый аккаунт",
+            )
 
-    # Already a member?
-    existing_member = await organization_repository.get_member(session, org_id, invited_user.id)
-    if existing_member:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="User is already a member of this organization",
-        )
+    if invited_user is not None:
+        if await organization_repository.get_member(session, org_id, invited_user.id):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="User is already a member of this organization",
+            )
+        if await organization_repository.get_pending_invitation_for_user(session, org_id, invited_user.id):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Pending invitation already exists for this user",
+            )
 
-    # Duplicate pending invitation?
-    existing_inv = await organization_repository.get_pending_invitation_for_user(
-        session, org_id, invited_user.id
-    )
-    if existing_inv:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Pending invitation already exists for this user",
-        )
+    if kind == INVITE_NEW_ACCOUNT:
+        if invited_user is None:
+            invited_user = User(
+                full_name=build_display_name(
+                    last_name=payload.last_name or "",
+                    first_name=payload.first_name or "",
+                    middle_name=payload.middle_name,
+                ),
+                first_name=payload.first_name or "",
+                last_name=payload.last_name or "",
+                middle_name=payload.middle_name,
+                email=email,
+                phone_number=payload.phone_number or "",
+                password_hash=PENDING_ACTIVATION_HASH,
+                is_active=False,
+            )
+            invited_user = await user_repository.create(session, invited_user)
+        else:
+            # Re-invite of a never-activated account: refresh the data the owner entered
+            invited_user.first_name = payload.first_name or invited_user.first_name
+            invited_user.last_name = payload.last_name or invited_user.last_name
+            invited_user.middle_name = payload.middle_name
+            invited_user.phone_number = payload.phone_number or invited_user.phone_number
+            invited_user.full_name = build_display_name(
+                last_name=invited_user.last_name,
+                first_name=invited_user.first_name,
+                middle_name=invited_user.middle_name,
+            )
 
     inv = OrganizationInvitation(
         organization_id=org_id,
-        email=str(payload.email),
+        email=email,
         invited_user_id=invited_user.id,
         invited_by_user_id=current_user.id,
         role_tag="member",
-        invite_code=secrets.token_urlsafe(32),
+        kind=kind,
+        job_title=payload.job_title,
+        specialization=payload.specialization,
+        invite_code=_new_invite_code(),
+        expires_at=_invite_expiry(),
     )
     inv = await organization_repository.create_invitation(session, inv)
+    await session.refresh(inv, attribute_names=["invited_user"])
     await session.commit()
 
-    return _to_invitation_response(inv)
+    email_sent = await _send_invitation_email(inv, org, current_user)
+    return _to_invitation_response(inv, email_sent=email_sent)
+
+
+async def resend_invitation(
+    session: AsyncSession,
+    invitation_id: uuid.UUID,
+    current_user: User,
+) -> InvitationResponse:
+    """Issue a fresh link (the old one stops working), extend the expiry and email it again."""
+    inv = await organization_repository.get_invitation_by_id(session, invitation_id)
+    if inv is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invitation not found")
+    org = await _get_org_or_404(session, inv.organization_id)
+    _ensure_owner(org, current_user)
+    if inv.status not in ("pending", "expired"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot resend invitation with status '{inv.status}'",
+        )
+
+    inv.status = "pending"
+    inv.invite_code = _new_invite_code()
+    inv.expires_at = _invite_expiry()
+    await session.flush()
+    await session.refresh(inv, attribute_names=["invited_user", "invited_by"])
+    await session.commit()
+
+    email_sent = await _send_invitation_email(inv, org, current_user)
+    return _to_invitation_response(inv, email_sent=email_sent)
 
 
 async def list_invitations(
@@ -464,6 +584,8 @@ async def accept_invitation(
         organization_id=inv.organization_id,
         user_id=current_user.id,
         role_tag="member",
+        job_title=inv.job_title,
+        specialization=inv.specialization,
     )
     member = await organization_repository.add_member(session, member)
 
@@ -546,7 +668,8 @@ async def create_external_contractor(
     payload: CreateExternalContractorPayload,
     current_user: User,
 ) -> ExternalContractorResponse:
-    await _ensure_membership(session, organization_id, current_user.id)
+    org = await _get_org_or_404(session, organization_id)
+    _ensure_owner(org, current_user)
 
     row = ExternalContractor(
         organization_id=organization_id,
@@ -562,3 +685,70 @@ async def create_external_contractor(
     row = await external_contractor_repository.create(session, row)
     await session.commit()
     return _to_external_contractor_response(row)
+
+
+async def list_external_contractors(
+    session: AsyncSession,
+    organization_id: uuid.UUID,
+    current_user: User,
+) -> list[ExternalContractorResponse]:
+    await _ensure_membership(session, organization_id, current_user.id)
+    rows = await external_contractor_repository.list_by_org(session, organization_id)
+    return [_to_external_contractor_response(row) for row in rows]
+
+
+async def _get_contractor_for_owner(
+    session: AsyncSession,
+    organization_id: uuid.UUID,
+    contractor_id: uuid.UUID,
+    current_user: User,
+) -> ExternalContractor:
+    org = await _get_org_or_404(session, organization_id)
+    _ensure_owner(org, current_user)
+    row = await external_contractor_repository.get_by_id(session, contractor_id, organization_id)
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contractor not found")
+    return row
+
+
+async def update_external_contractor(
+    session: AsyncSession,
+    organization_id: uuid.UUID,
+    contractor_id: uuid.UUID,
+    payload: UpdateExternalContractorPayload,
+    current_user: User,
+) -> ExternalContractorResponse:
+    row = await _get_contractor_for_owner(session, organization_id, contractor_id, current_user)
+    for field in payload.model_fields_set:
+        value = getattr(payload, field)
+        if isinstance(value, str):
+            value = value.strip() or None
+        if field == "full_name" and not value:
+            continue
+        setattr(row, field, value)
+    row.updated_at = datetime.now(timezone.utc)
+    await session.commit()
+    await session.refresh(row)
+    return _to_external_contractor_response(row)
+
+
+async def delete_external_contractor(
+    session: AsyncSession,
+    organization_id: uuid.UUID,
+    contractor_id: uuid.UUID,
+    current_user: User,
+) -> None:
+    row = await _get_contractor_for_owner(session, organization_id, contractor_id, current_user)
+    active_assignments = await session.scalar(
+        select(func.count(RequestStage.id)).where(
+            RequestStage.assignee_external_contractor_id == row.id,
+            RequestStage.status.not_in(tuple(C.STAGE_TERMINAL)),
+        )
+    )
+    if active_assignments:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Подрядчик назначен на незавершённые этапы: сначала назначьте другого исполнителя",
+        )
+    await session.delete(row)
+    await session.commit()

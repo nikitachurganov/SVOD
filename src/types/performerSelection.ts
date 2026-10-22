@@ -25,6 +25,8 @@ export interface PerformerRecommendationResponse {
   recommended_performer_id: string | null;
   performers: RecommendedPerformerDTO[];
   fallback: RecommendationFallback;
+  /** Everyone assignable (members + external contractors), sorted by score */
+  all_performers?: RecommendedPerformerDTO[];
 }
 
 export interface AssignPerformerPayload {

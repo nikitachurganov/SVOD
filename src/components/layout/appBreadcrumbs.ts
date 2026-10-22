@@ -49,5 +49,29 @@ export const getBreadcrumbsForPath = (
     ];
   }
 
+  if (pathname === '/surveys/create') {
+    return [
+      { title: 'Опросы', path: '/surveys' },
+      { title: 'Создание опроса' },
+    ];
+  }
+
+  const surveyEditMatch = pathname.match(/^\/surveys\/([^/]+)\/edit$/);
+  if (surveyEditMatch) {
+    return [
+      { title: 'Опросы', path: '/surveys' },
+      { title: entityTitle?.trim() || LOADING_TITLE, path: `/surveys/${surveyEditMatch[1]}` },
+      { title: 'Редактирование' },
+    ];
+  }
+
+  const surveyDetailMatch = pathname.match(/^\/surveys\/([^/]+)$/);
+  if (surveyDetailMatch && surveyDetailMatch[1] !== 'create') {
+    return [
+      { title: 'Опросы', path: '/surveys' },
+      { title: entityTitle?.trim() || LOADING_TITLE },
+    ];
+  }
+
   return null;
 };

@@ -87,7 +87,7 @@ async def change_workflow_status(
 ) -> Request:
     req, member = await perms.load_request_with_access(session, request_id, user)
 
-    if not perms.can_manage_workflow(member) and not (
+    if not perms.can_manage_request(req, user, member) and not (
         perms.can_edit_request_draft(req, user) and payload.status == W.WF_NEW
     ):
         raise HTTPException(
@@ -103,6 +103,17 @@ async def change_workflow_status(
 
     validate_workflow_transition(old_status, new_status)
 
+    # Transitional compatibility: lifecycle-sensitive legacy calls delegate to
+    # the canonical commands so all start/close/cancel invariants still apply.
+    if new_status in (W.WF_IN_PROGRESS, W.WF_CLOSED, W.WF_CANCELLED):
+        from app.services import request_lifecycle_service
+
+        if new_status == W.WF_IN_PROGRESS:
+            return await request_lifecycle_service.start_request(session, request_id, user)
+        if new_status == W.WF_CLOSED:
+            return await request_lifecycle_service.close_request(session, request_id, user)
+        return await request_lifecycle_service.cancel_request(session, request_id, user, reason=payload.comment or "Legacy cancellation")
+
     if new_status == W.WF_ARCHIVED and old_status not in W.ARCHIVABLE_STATUSES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -110,17 +121,22 @@ async def change_workflow_status(
         )
 
     if new_status == W.WF_COMPLETED:
-        has_incomplete = await _has_incomplete_required_tasks(session, request_id)
-        if has_incomplete and not payload.force_complete:
+        has_incomplete = any(
+            stage.status not in ("done", "cancelled") for stage in req.stages
+        )
+        if has_incomplete:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Required subtasks are not completed. Confirm to force completion.",
+                detail="Request stages are not completed. Complete the active stage first.",
             )
 
     req.workflow_status = new_status
     req.updated_at = datetime.now(timezone.utc)
 
     if new_status == W.WF_COMPLETED:
+        req.status = "assigned"
+        req.closed_at = None
+    elif new_status == W.WF_CLOSED:
         req.status = "closed"
         req.closed_at = datetime.now(timezone.utc)
     elif new_status == W.WF_CANCELLED:
@@ -128,7 +144,7 @@ async def change_workflow_status(
         req.closed_at = datetime.now(timezone.utc)
     elif new_status == W.WF_ARCHIVED:
         req.deleted = True
-    elif new_status in (W.WF_IN_PROGRESS, W.WF_TRIAGE, W.WF_REVIEW):
+    elif new_status in (W.WF_IN_PROGRESS, W.WF_PLANNING, W.WF_COMPLETED):
         if req.status == "open":
             req.status = "assigned"
     elif new_status == W.WF_NEW:
@@ -168,21 +184,21 @@ async def suggest_workflow_status(
     req, _member = await perms.load_request_with_access(session, request_id, user)
     tasks = await request_task_repository.list_tasks_for_request(session, request_id)
     active_with_assignee = [
-        t
-        for t in tasks
-        if t.status in W.TASK_ACTIVE and t.assignee_id is not None
+        stage
+        for stage in req.stages
+        if stage.status not in ("done", "cancelled") and stage.assignee_kind in ("internal", "external")
     ]
-    if req.workflow_status in (W.WF_NEW, W.WF_TRIAGE) and active_with_assignee:
+    if req.workflow_status in (W.WF_NEW, W.WF_PLANNING) and active_with_assignee:
         return WorkflowStatusSuggestion(
             suggested_status=W.WF_IN_PROGRESS,
             reason="Есть активные подзадачи с назначенным исполнителем",
         )
 
-    required_tasks = [t for t in tasks if t.is_required]
-    if required_tasks and all(t.status in W.TASK_TERMINAL for t in required_tasks):
+    relevant_stages = [stage for stage in req.stages if stage.status != "cancelled"]
+    if relevant_stages and all(stage.status == "done" for stage in relevant_stages):
         if req.workflow_status == W.WF_IN_PROGRESS:
             return WorkflowStatusSuggestion(
-                suggested_status=W.WF_REVIEW,
+                suggested_status=W.WF_COMPLETED,
                 reason="Все обязательные подзадачи завершены",
             )
     return None

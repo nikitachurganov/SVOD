@@ -1,11 +1,12 @@
 import uuid
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
 from app.api.deps import CurrentUser, DbSession
 from app.schemas.external_contractor import (
     CreateExternalContractorPayload,
     ExternalContractorResponse,
+    UpdateExternalContractorPayload,
 )
 from app.schemas.organization import (
     CreateInvitationRequest,
@@ -19,7 +20,15 @@ from app.schemas.organization import (
     UpdateRoleRequest,
 )
 from app.schemas.public_link import PublicLinkResponse
-from app.services import organization_service, public_link_service
+from app.schemas.join_request import (
+    ApproveJoinRequest,
+    InviteeLookupResponse,
+    JoinLinkResponse,
+    JoinRequestResponse,
+    RejectJoinRequest,
+    UpdateJoinLinkRequest,
+)
+from app.services import join_request_service, organization_service, public_link_service
 
 router = APIRouter()
 
@@ -144,6 +153,46 @@ async def create_external_contractor(
     )
 
 
+@router.get(
+    "/{organization_id}/external-contractors",
+    response_model=list[ExternalContractorResponse],
+)
+async def list_external_contractors(
+    organization_id: uuid.UUID,
+    session: DbSession,
+    user: CurrentUser,
+) -> list[ExternalContractorResponse]:
+    return await organization_service.list_external_contractors(session, organization_id, user)
+
+
+@router.patch(
+    "/{organization_id}/external-contractors/{contractor_id}",
+    response_model=ExternalContractorResponse,
+)
+async def update_external_contractor(
+    organization_id: uuid.UUID,
+    contractor_id: uuid.UUID,
+    payload: UpdateExternalContractorPayload,
+    session: DbSession,
+    user: CurrentUser,
+) -> ExternalContractorResponse:
+    return await organization_service.update_external_contractor(
+        session, organization_id, contractor_id, payload, user
+    )
+
+
+@router.delete("/{organization_id}/external-contractors/{contractor_id}", status_code=204)
+async def delete_external_contractor(
+    organization_id: uuid.UUID,
+    contractor_id: uuid.UUID,
+    session: DbSession,
+    user: CurrentUser,
+) -> None:
+    await organization_service.delete_external_contractor(
+        session, organization_id, contractor_id, user
+    )
+
+
 @router.post("/{organization_id}/leave", status_code=204)
 async def leave_organization(
     organization_id: uuid.UUID,
@@ -151,6 +200,77 @@ async def leave_organization(
     user: CurrentUser,
 ) -> None:
     await organization_service.leave_organization(session, organization_id, user)
+
+
+# ---------------------------------------------------------------------------
+# Join link + join requests (moderated by the owner)
+# ---------------------------------------------------------------------------
+
+@router.get("/join-requests/my", response_model=list[JoinRequestResponse])
+async def list_my_join_requests(session: DbSession, user: CurrentUser) -> list[JoinRequestResponse]:
+    return await join_request_service.list_my_requests(session, user)
+
+
+@router.post("/join-requests/{request_id}/withdraw", response_model=JoinRequestResponse)
+async def withdraw_join_request(
+    request_id: uuid.UUID, session: DbSession, user: CurrentUser
+) -> JoinRequestResponse:
+    return await join_request_service.withdraw(session, request_id, user)
+
+
+@router.post("/join-requests/{request_id}/approve", response_model=MemberResponse)
+async def approve_join_request(
+    request_id: uuid.UUID, payload: ApproveJoinRequest, session: DbSession, user: CurrentUser
+) -> MemberResponse:
+    return await join_request_service.approve(session, request_id, payload, user)
+
+
+@router.post("/join-requests/{request_id}/reject", response_model=JoinRequestResponse)
+async def reject_join_request(
+    request_id: uuid.UUID, payload: RejectJoinRequest, session: DbSession, user: CurrentUser
+) -> JoinRequestResponse:
+    return await join_request_service.reject(session, request_id, payload, user)
+
+
+@router.get("/{organization_id}/join-requests", response_model=list[JoinRequestResponse])
+async def list_join_requests(
+    organization_id: uuid.UUID,
+    session: DbSession,
+    user: CurrentUser,
+    status_filter: str | None = Query(default="pending", alias="status"),
+) -> list[JoinRequestResponse]:
+    return await join_request_service.list_requests(
+        session, organization_id, user, status_filter=status_filter or None
+    )
+
+
+@router.get("/{organization_id}/join-link", response_model=JoinLinkResponse)
+async def get_join_link(organization_id: uuid.UUID, session: DbSession, user: CurrentUser) -> JoinLinkResponse:
+    return await join_request_service.get_join_link(session, organization_id, user)
+
+
+@router.patch("/{organization_id}/join-link", response_model=JoinLinkResponse)
+async def update_join_link(
+    organization_id: uuid.UUID, payload: UpdateJoinLinkRequest, session: DbSession, user: CurrentUser
+) -> JoinLinkResponse:
+    return await join_request_service.set_join_link_enabled(session, organization_id, payload.enabled, user)
+
+
+@router.post("/{organization_id}/join-link/regenerate", response_model=JoinLinkResponse)
+async def regenerate_join_link(
+    organization_id: uuid.UUID, session: DbSession, user: CurrentUser
+) -> JoinLinkResponse:
+    return await join_request_service.regenerate_join_link(session, organization_id, user)
+
+
+@router.get("/{organization_id}/invitations/lookup", response_model=InviteeLookupResponse)
+async def lookup_invitee(
+    organization_id: uuid.UUID,
+    session: DbSession,
+    user: CurrentUser,
+    email: str = Query(..., min_length=3, max_length=320),
+) -> InviteeLookupResponse:
+    return await join_request_service.lookup_invitee(session, organization_id, email, user)
 
 
 # ---------------------------------------------------------------------------
@@ -177,6 +297,16 @@ async def accept_invitation(
     user: CurrentUser,
 ) -> MemberResponse:
     return await organization_service.accept_invitation(session, invitation_id, user)
+
+
+@router.post("/invitations/{invitation_id}/resend", response_model=InvitationResponse)
+async def resend_invitation(
+    invitation_id: uuid.UUID,
+    session: DbSession,
+    user: CurrentUser,
+) -> InvitationResponse:
+    """Owner: new activation link + email again (the previous link stops working)."""
+    return await organization_service.resend_invitation(session, invitation_id, user)
 
 
 @router.post("/invitations/{invitation_id}/decline", status_code=204)

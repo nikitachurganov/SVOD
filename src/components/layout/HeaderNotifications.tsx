@@ -5,6 +5,7 @@ import { BellOutlined } from '@ant-design/icons';
 import { useRegisterAuxiliaryPanelCloser } from '../../shared/context/appShellPanels.context';
 import { useOrganization } from '../../shared/hooks/organization.hooks';
 import { getMyInvitations } from '../../shared/api/organizations.api';
+import { getNotifications } from '../../shared/api/notifications.api';
 import { NotificationsPanelContent } from '../organization/NotificationsPanel';
 
 interface Props {
@@ -24,8 +25,11 @@ export const HeaderNotifications = ({
 
   const refreshCount = useCallback(async () => {
     try {
-      const data = await getMyInvitations();
-      setPendingCount(data.length);
+      const [invitations, notifications] = await Promise.all([
+        getMyInvitations(),
+        getNotifications(1),
+      ]);
+      setPendingCount(invitations.length + notifications.unread_count);
     } catch {
       // ignore
     }
@@ -33,9 +37,9 @@ export const HeaderNotifications = ({
 
   useEffect(() => {
     let cancelled = false;
-    getMyInvitations()
-      .then((data) => {
-        if (!cancelled) setPendingCount(data.length);
+    Promise.all([getMyInvitations(), getNotifications(1)])
+      .then(([invitations, notifications]) => {
+        if (!cancelled) setPendingCount(invitations.length + notifications.unread_count);
       })
       .catch(() => {});
     return () => {
@@ -45,6 +49,11 @@ export const HeaderNotifications = ({
 
   useRegisterAuxiliaryPanelCloser(() => onOpenChange(false));
 
+  const handleOpenChange = (nextOpen: boolean) => {
+    onOpenChange(nextOpen);
+    if (nextOpen) void refreshCount();
+  };
+
   const label =
     pendingCount > 0
       ? `Уведомления, приглашений: ${pendingCount}`
@@ -52,18 +61,25 @@ export const HeaderNotifications = ({
 
   return (
     <Popover
+      classNames={{ root: 'app-header-notifications-popover' }}
       open={open}
-      onOpenChange={onOpenChange}
+      onOpenChange={handleOpenChange}
       trigger="click"
       placement="bottomRight"
       arrow={false}
       content={
         <div className="app-header-notifications-popover-content">
-          <NotificationsPanelContent
-            open={open}
-            onAccepted={() => void refreshOrganizations()}
-            onInvitationsChanged={() => void refreshCount()}
-          />
+          {/* Scrolling lives on this inner box, not the rounded/shadowed outer one —
+              otherwise the native scrollbar renders as a straight bar cutting across
+              the rounded corners. The outer box's overflow:hidden clips it cleanly. */}
+          <div className="app-header-notifications-popover-scroll">
+            <NotificationsPanelContent
+              open={open}
+              onAccepted={() => void refreshOrganizations()}
+              onInvitationsChanged={() => void refreshCount()}
+              onNotificationsChanged={() => void refreshCount()}
+            />
+          </div>
         </div>
       }
     >
@@ -74,7 +90,7 @@ export const HeaderNotifications = ({
           aria-label={label}
           onClick={() => {
             closeProfile();
-            onOpenChange(!open);
+            handleOpenChange(!open);
           }}
         >
           <BellOutlined style={{ fontSize: 16 }} />

@@ -90,6 +90,19 @@ async def get_member(
     return result.scalar_one_or_none()
 
 
+async def get_members_for_user(
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    organization_ids: list[uuid.UUID] | None = None,
+) -> list[OrganizationMember]:
+    """Return the caller's memberships for accurate list-item permissions."""
+    stmt = select(OrganizationMember).where(OrganizationMember.user_id == user_id)
+    if organization_ids is not None:
+        stmt = stmt.where(OrganizationMember.organization_id.in_(organization_ids))
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+
 async def list_members(
     session: AsyncSession, org_id: uuid.UUID
 ) -> list[OrganizationMember]:

@@ -20,6 +20,10 @@ class PatchWorkflowStatusPayload(BaseModel):
         return value
 
 
+class RequestCommentPayload(BaseModel):
+    comment: str = Field(..., min_length=1, max_length=2000)
+
+
 class RequestTaskAssigneePreview(BaseModel):
     id: str
     first_name: str | None = None

@@ -11,29 +11,31 @@ import {
   Descriptions,
   Drawer,
   FloatButton,
+  Input,
 } from 'antd';
 import { ArrowLeftOutlined, FileTextOutlined, DownloadOutlined, RobotOutlined } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMediaQuery } from '../shared/hooks/useMediaQuery';
 import { RequestAssistantSidebar } from '../components/request/assistant/RequestAssistantSidebar';
-import { RequestExecutionPanel } from '../components/request/RequestExecutionPanel';
-import { RequestHistoryTimeline } from '../components/request/RequestHistoryTimeline';
-import { RequestTasksPanel } from '../components/request/RequestTasksPanel';
+import { RequestFilesPanel } from '../components/request/RequestFilesPanel';
+import { RequestStagePlanner } from '../components/request/RequestStagePlanner';
+import { RequestPassport } from '../components/request/RequestPassport';
+import { RequestPlanningPanel } from '../components/request/RequestPlanningPanel';
+import { RequestTelegramSource } from '../components/request/RequestTelegramSource';
 import { featureFlags } from '../shared/config/featureFlags';
 import { getRequestWithForm, type RequestWithForm } from '../shared/api/requests.api';
-import { closeRequest, deleteRequest } from '../shared/api/requests.api';
-import { useAuth } from '../shared/hooks/auth.hooks';
-import { useOrganization } from '../shared/hooks/organization.hooks';
 import {
-  WORKFLOW_STATUS_COLORS,
-  WORKFLOW_STATUS_LABELS,
-} from '../types/requestWorkflow';
+  cancelRequest,
+  closeRequest,
+  deleteRequest,
+  startRequest,
+  takeRequest,
+} from '../shared/api/requests.api';
 import { formatFieldValue } from '../shared/utils/formatFieldValue';
 import { FieldLabel } from '../shared/ui/form-builder/FieldLabel';
-import { buildDisplayName } from '../shared/utils/userName';
-import type { RequestStageDTO } from '../types/execution';
 import { useBreadcrumbEntity } from '../shared/context/breadcrumb.context';
 import type { Field } from '../types/form';
+import { resolveFileDownloadUrl } from '../shared/api/files.api';
 
 interface StoredFileMeta {
   id?: string;
@@ -43,51 +45,67 @@ interface StoredFileMeta {
   file_url: string;
 }
 
+function useResolvedFileUrl(fileUrl: string): string {
+  const [resolved, setResolved] = useState(fileUrl.startsWith('/files/') ? '' : fileUrl);
+
+  useEffect(() => {
+    let cancelled = false;
+    resolveFileDownloadUrl(fileUrl)
+      .then((url) => {
+        if (!cancelled) setResolved(url);
+      })
+      .catch(() => {
+        if (!cancelled) setResolved('');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [fileUrl]);
+  return resolved;
+}
+
+function StoredFileImage({ file }: { file: StoredFileMeta }) {
+  const src = useResolvedFileUrl(file.file_url);
+  if (!src) {
+    return (
+      <div style={{ padding: 16, textAlign: 'center' }}>
+        <FileTextOutlined style={{ fontSize: 32, color: 'var(--app-text-placeholder)' }} />
+      </div>
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt={file.file_name}
+      style={{ maxWidth: 300, maxHeight: 200, objectFit: 'contain', display: 'block' }}
+    />
+  );
+}
+
+function StoredFileDownload({ file }: { file: StoredFileMeta }) {
+  const href = useResolvedFileUrl(file.file_url);
+  if (!href) return null;
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      style={{ display: 'inline-flex', color: 'var(--app-link)' }}
+    >
+      <DownloadOutlined style={{ fontSize: 16 }} />
+    </a>
+  );
+}
+
 type RequestDetailsState = {
   data: RequestWithForm | null;
   loading: boolean;
   error: string | null;
 };
 
-const pad = (n: number): string => (n < 10 ? `0${n}` : String(n));
-
-const formatDate = (iso: string | undefined): string => {
-  if (!iso) return '—';
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '—';
-  return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()}`;
-};
-
-const formatDateTime = (iso: string | null | undefined): string => {
-  if (!iso) return '—';
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '—';
-  return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
-};
-
-const STAGE_TERMINAL = new Set(['done', 'cancelled']);
-
-const EXEC_HEADER_LABELS: Record<string, string> = {
-  new: 'Процесс не начат',
-  in_progress: 'В работе',
-  waiting: 'Ожидание',
-  blocked: 'Блокировка',
-  completed: 'Процесс завершён',
-};
-
-function findActiveStageHeader(stages: RequestStageDTO[] | undefined): RequestStageDTO | null {
-  if (!stages?.length) return null;
-  const sorted = [...stages].sort((a, b) => a.sequence - b.sequence);
-  return sorted.find((s) => !STAGE_TERMINAL.has(s.status)) ?? null;
-}
-
 export const RequestViewPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const { activeOrganization } = useOrganization();
-  const canManageWorkflow =
-    Boolean(activeOrganization?.owner_user_id && user?.id === activeOrganization.owner_user_id);
   const isWideScreen = useMediaQuery('(min-width: 1100px)');
   const showAssistantPanel = featureFlags.requestAssistant && isWideScreen;
   const showAssistantDrawer = featureFlags.requestAssistant && !isWideScreen;
@@ -102,10 +120,14 @@ export const RequestViewPage = () => {
   });
   const [deleting, setDeleting] = useState(false);
   const [closing, setClosing] = useState(false);
-  const [activeTabKey, setActiveTabKey] = useState('tasks');
+  const [cancelling, setCancelling] = useState(false);
+  const [activeTabKey, setActiveTabKey] = useState<string | null>(null);
+  const [takingOrStarting, setTakingOrStarting] = useState(false);
 
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
   const [inlineNotification, setInlineNotification] = useState<{
     kind: 'success' | 'error';
     title: string;
@@ -145,15 +167,10 @@ export const RequestViewPage = () => {
     }
   }, [id]);
 
-  const goToExecution = useCallback(() => {
-    setActiveTabKey('execution');
-  }, []);
-
   const pageTitle = data?.request ? data.request.title : 'Загрузка заявки…';
-  const formTitle = data?.form?.title ?? '—';
-  const activeStageForHeader = data?.request
-    ? findActiveStageHeader(data.request.stages)
-    : null;
+  const isPlanningPhase = ['new', 'planning'].includes(data?.request?.workflow_status ?? '');
+  // All stage work lives in the «Этапы» tab — it is the default view of a request
+  const currentTabKey = activeTabKey ?? 'stages';
 
   if (!id) {
     return (
@@ -183,21 +200,6 @@ export const RequestViewPage = () => {
 
   const hasDirectMatches = fieldIds.some((fieldId) => fieldId in parsedData);
   const activeDataSource = hasDirectMatches ? parsedData : (nestedValues ?? parsedData);
-  const activeKeys = Object.keys(activeDataSource);
-  const extraDataKeys = activeKeys.filter((key) => !fieldIds.includes(key));
-
-  const isNonEmptyValue = (value: unknown): boolean => {
-    if (value == null) return false;
-    if (Array.isArray(value)) return value.length > 0;
-    if (typeof value === 'string') return value.trim().length > 0;
-    if (typeof value === 'object') return Object.keys(value as Record<string, unknown>).length > 0;
-    return true;
-  };
-
-  const hasMissingFilledFields = extraDataKeys.some((key) =>
-    isNonEmptyValue((activeDataSource as Record<string, unknown>)[key]),
-  );
-
   const normalizeFileValues = (raw: unknown): StoredFileMeta[] => {
     if (raw == null) return [];
 
@@ -239,12 +241,12 @@ export const RequestViewPage = () => {
     setDeleting(true);
     try {
       await deleteRequest(data.request.id);
-      setInlineNotification({ kind: 'success', title: 'Заявка удалена' });
+      setInlineNotification({ kind: 'success', title: 'Заявка перемещена в архив' });
       navigate('/requests');
     } catch (err) {
       setInlineNotification({
         kind: 'error',
-        title: 'Ошибка удаления',
+        title: 'Ошибка архивирования',
         subtitle: err instanceof Error ? err.message : 'Попробуйте ещё раз.',
       });
     } finally {
@@ -254,7 +256,7 @@ export const RequestViewPage = () => {
   };
 
   const handleCloseRequest = async () => {
-    if (!data?.request || data.request.status === 'closed') return;
+    if (!data?.request || data.request.workflow_status === 'closed') return;
 
     setClosing(true);
     try {
@@ -273,47 +275,60 @@ export const RequestViewPage = () => {
     }
   };
 
-  const statusTagColor = (status: string) => {
-    if (status === 'closed') return 'red';
-    if (status === 'open') return 'blue';
-    if (status === 'assigned') return 'cyan';
-    return 'default';
+  const runHeaderAction = async (
+    action: (requestId: string) => Promise<unknown>,
+    successTitle: string,
+    errorTitle: string,
+  ) => {
+    if (!data?.request) return;
+    setTakingOrStarting(true);
+    try {
+      await action(data.request.id);
+      await reloadRequest();
+      setActiveTabKey('stages');
+      setInlineNotification({ kind: 'success', title: successTitle });
+    } catch (err) {
+      const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+      setInlineNotification({
+        kind: 'error',
+        title: errorTitle,
+        subtitle: typeof detail === 'string' ? detail : err instanceof Error ? err.message : 'Попробуйте ещё раз.',
+      });
+    } finally {
+      setTakingOrStarting(false);
+    }
   };
 
-  const statusLabel = (status: string) => {
-    if (status === 'closed') return 'Закрыта';
-    if (status === 'open') return 'Открыта';
-    if (status === 'assigned') return 'У исполнителя';
-    return 'В работе';
+  const handleCancelRequest = async () => {
+    if (!data?.request) return;
+    if (!cancelReason.trim()) {
+      setInlineNotification({ kind: 'error', title: 'Укажите причину отмены заявки' });
+      return;
+    }
+    setCancelling(true);
+    try {
+      await cancelRequest(data.request.id, cancelReason.trim());
+      await reloadRequest();
+      setInlineNotification({ kind: 'success', title: 'Заявка отменена' });
+    } catch (err) {
+      setInlineNotification({
+        kind: 'error',
+        title: 'Не удалось отменить заявку',
+        subtitle: err instanceof Error ? err.message : 'Попробуйте ещё раз.',
+      });
+    } finally {
+      setCancelling(false);
+      setCancelConfirmOpen(false);
+      setCancelReason('');
+    }
   };
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100vh',
-        overflow: 'hidden',
-        background: 'var(--app-bg)',
-      }}
-    >
+    <div className="request-workspace">
       {/* Header */}
-      <div
-        style={{
-          background: 'var(--app-surface)',
-          borderBottom: '1px solid var(--app-border)',
-          padding: '12px 24px 16px',
-          flexShrink: 0,
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <header className="request-workspace__header">
+        <div className="request-workspace__header-top">
+          <div className="request-workspace__title-group">
             <Button
               type="text"
               size="small"
@@ -321,30 +336,65 @@ export const RequestViewPage = () => {
               title="Вернуться к реестру заявок"
               onClick={() => navigate('/requests')}
             />
-            <div>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                <h4 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 600 }}>
+            <div className="request-workspace__title-copy">
+              <div className="request-workspace__title-line">
+                <h4>
                   {pageTitle}
                 </h4>
                 {data?.request && (
-                  <span style={{ fontSize: 13, color: 'var(--app-text-secondary)' }}>
+                  <span className="request-workspace__request-id">
                     № {data.request.id}
                   </span>
                 )}
               </div>
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {data?.request && (
+          <div className="request-workspace__actions">
+            {data?.request?.permissions?.can_take && (
+              <Button
+                type="primary"
+                size="small"
+                loading={takingOrStarting}
+                onClick={() =>
+                  void runHeaderAction(takeRequest, 'Вы ответственный за заявку', 'Не удалось взять заявку')
+                }
+              >
+                Взять в работу
+              </Button>
+            )}
+            {data?.request?.permissions?.can_start && (
+              <Button
+                type="primary"
+                size="small"
+                loading={takingOrStarting}
+                onClick={() =>
+                  void runHeaderAction(startRequest, 'Заявка запущена', 'Не удалось запустить заявку')
+                }
+              >
+                Запустить
+              </Button>
+            )}
+            {data?.request?.permissions?.can_close && (
               <Button
                 size="small"
-                disabled={data.request.status === 'closed' || closing}
+                disabled={closing}
                 onClick={() => setCloseConfirmOpen(true)}
               >
                 {closing ? 'Закрытие…' : 'Закрыть заявку'}
               </Button>
             )}
-            {data?.request && (
+            {data?.request?.permissions?.can_cancel ? (
+              <Button
+                danger
+                type="text"
+                size="small"
+                disabled={cancelling}
+                onClick={() => setCancelConfirmOpen(true)}
+              >
+                {cancelling ? 'Отмена…' : 'Отменить'}
+              </Button>
+            ) : null}
+            {data?.request?.permissions?.can_delete && (
               <Button
                 danger
                 type="primary"
@@ -352,113 +402,21 @@ export const RequestViewPage = () => {
                 disabled={deleting}
                 onClick={() => setDeleteConfirmOpen(true)}
               >
-                {deleting ? 'Удаление…' : 'Удалить'}
+                {deleting ? 'Архивация…' : 'В архив'}
               </Button>
             )}
           </div>
         </div>
 
+        {data?.request && <RequestPassport request={data.request} onUpdated={reloadRequest} />}
+
         {data?.request && (
-          <div style={{ marginTop: 12, fontSize: 13, lineHeight: 1.5 }}>
-            <span style={{ color: 'var(--app-text-secondary)' }}>Процесс: </span>
-            <strong>
-              {data.request.execution_status
-                ? EXEC_HEADER_LABELS[data.request.execution_status] ??
-                  data.request.execution_status
-                : '—'}
-            </strong>
-            {activeStageForHeader ? (
-              <>
-                {' '}
-                — {activeStageForHeader.title}
-                {activeStageForHeader.assignee_preview?.full_name
-                  ? ` · ${activeStageForHeader.assignee_preview.full_name}`
-                  : ''}
-              </>
-            ) : data.request.status === 'closed' ? (
-              <span style={{ color: 'var(--app-text-secondary)' }}> — заявка закрыта</span>
-            ) : (
-              <span style={{ color: 'var(--app-text-secondary)' }}>
-                {' '}
-                — этапы появятся после назначения во вкладке «Исполнение»
-              </span>
-            )}
+          <div className="request-workspace__ai-description">
+            <p>{data.request.ai_summary?.summary ?? 'ИИ формирует краткое описание заявки…'}</p>
           </div>
         )}
 
-        {/* Metadata block (inside header) */}
-        {data?.request && (
-          <div
-            style={{
-              marginTop: 12,
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-              gap: '8px 24px',
-              fontSize: 13,
-            }}
-          >
-            <div>
-              <span style={{ color: 'var(--app-text-secondary)', marginRight: 8 }}>Статус</span>
-              <Tag color={statusTagColor(data.request.status)}>
-                {statusLabel(data.request.status)}
-              </Tag>
-            </div>
-            <div>
-              <span style={{ color: 'var(--app-text-secondary)', marginRight: 8 }}>Workflow</span>
-              <Tag
-                color={
-                  WORKFLOW_STATUS_COLORS[
-                    (data.request.workflow_status as keyof typeof WORKFLOW_STATUS_COLORS) ?? 'new'
-                  ] ?? 'default'
-                }
-              >
-                {WORKFLOW_STATUS_LABELS[
-                  (data.request.workflow_status as keyof typeof WORKFLOW_STATUS_LABELS) ?? 'new'
-                ] ?? data.request.workflow_status}
-              </Tag>
-            </div>
-            <div>
-              <span style={{ color: 'var(--app-text-secondary)', marginRight: 8 }}>Приоритет</span>
-              <Tag>{data.request.priority ?? 'medium'}</Tag>
-            </div>
-            <div>
-              <span style={{ color: 'var(--app-text-secondary)', marginRight: 8 }}>Тип заявки</span>
-              <span style={{ fontSize: 13 }}>
-                {data.request.form_snapshot?.title?.trim() || formTitle || '—'}
-              </span>
-            </div>
-            <div>
-              <span style={{ color: 'var(--app-text-secondary)', marginRight: 8 }}>Автор</span>
-              {(() => {
-                const authorPerson = data.request.people?.find((p) => p.role === 'author');
-                if (data.request.author) {
-                  return (
-                    <span style={{ fontSize: 13 }}>
-                      {buildDisplayName(data.request.author)}
-                    </span>
-                  );
-                }
-                if (authorPerson) {
-                  return <span style={{ fontSize: 13 }}>{authorPerson.name}</span>;
-                }
-                return <span style={{ fontSize: 13 }}>Неизвестный автор</span>;
-              })()}
-            </div>
-            <div>
-              <span style={{ color: 'var(--app-text-secondary)', marginRight: 8 }}>Дата создания</span>
-              <span style={{ fontSize: 13 }}>
-                {formatDate(data.request.created_at)}
-              </span>
-            </div>
-            <div>
-              <span style={{ color: 'var(--app-text-secondary)', marginRight: 8 }}>Дата изменения</span>
-              <span style={{ fontSize: 13 }}>
-                {formatDate(data.request.updated_at ?? data.request.created_at)}
-              </span>
-            </div>
-          </div>
-        )}
-      </div>
+      </header>
 
       {/* Close Confirmation Modal */}
       <Modal
@@ -472,28 +430,39 @@ export const RequestViewPage = () => {
         <p>Вы уверены, что хотите закрыть заявку?</p>
       </Modal>
 
+      <Modal
+        open={cancelConfirmOpen}
+        title="Отменить заявку?"
+        okText="Отменить заявку"
+        cancelText="Назад"
+        okButtonProps={{ danger: true, loading: cancelling }}
+        onOk={() => void handleCancelRequest()}
+        onCancel={() => !cancelling && setCancelConfirmOpen(false)}
+      >
+        <p>Незавершённые этапы будут отменены. Это действие нельзя отменить через интерфейс.</p>
+        <Input.TextArea
+          value={cancelReason}
+          onChange={(event) => setCancelReason(event.target.value)}
+          placeholder="Причина отмены (обязательно)"
+          autoSize={{ minRows: 3, maxRows: 6 }}
+        />
+      </Modal>
+
       {/* Delete Confirmation Modal */}
       <Modal
         open={deleteConfirmOpen}
-        title="Удалить заявку?"
-        okText="Удалить"
+        title="Переместить заявку в архив?"
+        okText="В архив"
         cancelText="Отмена"
         okButtonProps={{ danger: true }}
         onOk={() => void handleDelete()}
         onCancel={() => setDeleteConfirmOpen(false)}
       >
-        <p>Вы уверены, что хотите удалить заявку?</p>
+        <p>Заявка будет перемещена в архив. Её можно будет найти в реестре на вкладке «Архив».</p>
       </Modal>
 
       {/* Content */}
-      <div
-        style={{
-          flex: 1,
-          minHeight: 0,
-          background: 'var(--app-bg)',
-          overflow: 'hidden',
-        }}
-      >
+      <div className="request-workspace__content">
         {loading ? (
           <div
             style={{
@@ -519,32 +488,11 @@ export const RequestViewPage = () => {
             />
           </div>
         ) : (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'flex-start',
-              height: '100%',
-            }}
-          >
+          <div className="request-workspace__body">
             {/* Left: main request content with tabs */}
-            <div
-              style={{
-                flex: 1,
-                minWidth: 0,
-                padding: 0,
-                display: 'flex',
-                flexDirection: 'column',
-                minHeight: 0,
-                height: '100%',
-              }}
-            >
+            <main className="request-workspace__main">
               {inlineNotification && (
-                <div
-                  style={{
-                    flexShrink: 0,
-                    padding: '0 0 1rem 0',
-                  }}
-                >
+                <div className="request-workspace__notification">
                   <Alert
                     type={inlineNotification.kind}
                     message={inlineNotification.title}
@@ -559,18 +507,14 @@ export const RequestViewPage = () => {
               <div className="app-request-view-tabs-wrap">
                 <div
                   className="app-request-view-tabs-bar"
-                  style={{
-                    flexShrink: 0,
-                    borderBottom: '1px solid var(--app-border)',
-                  }}
                 >
                   <Tabs
-                    activeKey={activeTabKey}
+                    activeKey={currentTabKey}
                     onChange={setActiveTabKey}
                     items={[
                       {
                         key: 'info',
-                        label: 'Информация',
+                        label: 'Описание',
                         children: (
                           <div
                             style={{
@@ -581,52 +525,9 @@ export const RequestViewPage = () => {
                               padding: '1rem 0 1.5rem',
                             }}
                           >
-                            {data?.request && (
-                              <Card style={{ marginBottom: 16 }}>
-                                <span style={{ fontWeight: 600, display: 'block', marginBottom: 12 }}>
-                                  Жизненный цикл
-                                </span>
-                                <div
-                                  style={{
-                                    display: 'flex',
-                                    flexWrap: 'wrap',
-                                    gap: 16,
-                                    alignItems: 'center',
-                                    fontSize: 13,
-                                  }}
-                                >
-                                  <div>
-                                    <Tag>Создана</Tag>{' '}
-                                    <span style={{ color: 'var(--app-text-secondary)' }}>
-                                      {formatDateTime(data.request.created_at)}
-                                    </span>
-                                  </div>
-                                  {data.request.status === 'closed' && data.request.closedAt ? (
-                                    <div>
-                                      <Tag color="red">Закрыта</Tag>{' '}
-                                      <span style={{ color: 'var(--app-text-secondary)' }}>
-                                        {formatDateTime(data.request.closedAt)}
-                                      </span>
-                                    </div>
-                                  ) : (
-                                    <div>
-                                      <Tag color="blue">Активна</Tag>
-                                    </div>
-                                  )}
-                                </div>
-                                <p
-                                  style={{
-                                    margin: '12px 0 0',
-                                    fontSize: 12,
-                                    color: 'var(--app-text-secondary)',
-                                    lineHeight: 1.45,
-                                  }}
-                                >
-                                  Этапы и передачи задач — во вкладке «Исполнение». Проверка качества и ТЗ —
-                                  на панели справа.
-                                </p>
-                              </Card>
-                            )}
+                            {data.request.source === 'telegram' ? (
+                              <RequestTelegramSource requestId={data.request.id} />
+                            ) : null}
                             {fields.length > 0 ? (
                               <div
                                 style={{
@@ -635,14 +536,6 @@ export const RequestViewPage = () => {
                                   gap: 16,
                                 }}
                               >
-                                {hasMissingFilledFields && (
-                                  <Alert
-                                    type="warning"
-                                    message="Форма была изменена после создания заявки"
-                                    description="Некоторые поля могут не отображаться."
-                                    showIcon
-                                  />
-                                )}
                                 <Descriptions
                                   column={1}
                                   size="small"
@@ -704,16 +597,7 @@ export const RequestViewPage = () => {
                                                       }}
                                                     >
                                                       {meta.file_url ? (
-                                                        <img
-                                                          src={meta.file_url}
-                                                          alt={meta.file_name}
-                                                          style={{
-                                                            maxWidth: 300,
-                                                            maxHeight: 200,
-                                                            objectFit: 'contain',
-                                                            display: 'block',
-                                                          }}
-                                                        />
+                                                        <StoredFileImage file={meta} />
                                                       ) : (
                                                         <div style={{ padding: 16, textAlign: 'center' }}>
                                                           <FileTextOutlined
@@ -793,17 +677,7 @@ export const RequestViewPage = () => {
                                                       </div>
                                                       {meta.file_url && (
                                                         <Tooltip title="Скачать">
-                                                          <a
-                                                            href={meta.file_url}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            style={{
-                                                              display: 'inline-flex',
-                                                              color: 'var(--app-link)',
-                                                            }}
-                                                          >
-                                                            <DownloadOutlined style={{ fontSize: 16 }} />
-                                                          </a>
+                                                          <StoredFileDownload file={meta} />
                                                         </Tooltip>
                                                       )}
                                                     </div>
@@ -823,70 +697,45 @@ export const RequestViewPage = () => {
                                 У связанной формы нет полей.
                               </span>
                             )}
-                            <Alert
-                              type="info"
-                              message="Исполнение и назначение"
-                              description="Назначить исполнителя и управлять этапами можно только во вкладке «Исполнение». Справа — подсказки ИИ без дублирования действий."
-                              showIcon
-                              style={{ marginTop: 24 }}
-                            />
                           </div>
                         ),
                       },
                       {
-                        key: 'tasks',
-                        label: 'Подзадачи',
+                        key: 'stages',
+                        label: 'Этапы',
                         children: data?.request ? (
-                          <RequestTasksPanel
-                            requestId={data.request.id}
-                            organizationId={data.request.organization_id}
-                            tasks={data.request.tasks ?? []}
-                            workflowStatus={data.request.workflow_status ?? 'new'}
-                            canManage={canManageWorkflow}
-                            currentUserId={user?.id ?? null}
-                            onReload={reloadRequest}
-                          />
-                        ) : null,
-                      },
-                      {
-                        key: 'history',
-                        label: 'История',
-                        children: (
-                          <div style={{ padding: '1rem 0 1.5rem' }}>
-                            <RequestHistoryTimeline events={data.request.history ?? []} />
-                          </div>
-                        ),
-                      },
-                      {
-                        key: 'execution',
-                        label: 'Исполнение',
-                        children: (
                           <div
                             style={{
                               boxSizing: 'border-box',
                               height: '100%',
                               minHeight: 0,
                               overflow: 'auto',
-                              padding: '1rem 0 1.5rem',
+                              paddingTop: '1rem',
                             }}
                           >
-                            {data?.request && (
-                              <RequestExecutionPanel
-                                requestId={data.request.id}
-                                organizationId={data.request.organization_id ?? null}
-                                executionStatus={data.request.execution_status ?? null}
-                                stages={data.request.stages ?? []}
-                                executionEvents={data.request.execution_events ?? []}
-                                requestClosed={data.request.status === 'closed'}
-                                onReload={reloadRequest}
-                              />
-                            )}
+                          {!showAssistantPanel ? (
+                            <RequestPlanningPanel request={data.request} onUpdated={reloadRequest} />
+                          ) : null}
+                          <RequestStagePlanner
+                            requestId={data.request.id}
+                            workflowStatus={data.request.workflow_status ?? 'new'}
+                            stages={data.request.stages ?? []}
+                            permissions={data.request.permissions}
+                            onReload={reloadRequest}
+                          />
                           </div>
-                        ),
+                        ) : null,
+                      },
+                      {
+                        key: 'files',
+                        label: 'Файлы',
+                        children: data?.request ? (
+                          <RequestFilesPanel requestId={data.request.id} requestData={data.request.data} />
+                        ) : null,
                       },
                       {
                         key: 'people',
-                        label: 'Люди',
+                        label: 'Участники',
                         children: (
                           <div
                             style={{
@@ -902,7 +751,7 @@ export const RequestViewPage = () => {
                             <Alert
                               type="info"
                               message="Роли и контакты"
-                              description="Назначение исполнителя на этап выполняется во вкладке «Исполнение»."
+                              description="Назначение исполнителя на этап выполняется во вкладке «Этапы»."
                               showIcon
                             />
                             {data.request.people && data.request.people.length > 0 ? (
@@ -960,48 +809,32 @@ export const RequestViewPage = () => {
                   />
                 </div>
               </div>
-            </div>
+            </main>
 
             {/* Right: assistant panel (readiness, TZ, hints — no duplicate execution actions) */}
             {showAssistantPanel && (
-              <div
-                style={{
-                  width: 360,
-                  flexShrink: 0,
-                  height: '100%',
-                }}
-              >
-                <div
-                  style={{
-                    background: 'var(--app-surface)',
-                    height: '100%',
-                    borderLeft: '1px solid var(--app-border)',
-                    padding: 16,
-                    overflowY: 'auto',
-                  }}
-                >
-                  <p
-                    style={{
-                      margin: '0 0 14px',
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: 'var(--app-text-secondary)',
-                      letterSpacing: '0.02em',
-                      textTransform: 'uppercase',
-                    }}
-                  >
-                    Помощник
-                  </p>
+              <aside className="request-workspace__sidepanel">
+                <div className="request-workspace__assistant">
+                  {isPlanningPhase ? (
+                    <section className="request-workspace__sidepanel-section">
+                      <RequestPlanningPanel
+                        request={data.request}
+                        onUpdated={reloadRequest}
+                        variant="panel"
+                      />
+                    </section>
+                  ) : null}
+                  <section className="request-workspace__sidepanel-section">
                   <RequestAssistantSidebar
                     requestId={data.request.id}
-                    organizationId={data.request.organization_id ?? undefined}
                     aiAnalysis={data.request.ai_analysis}
-                    tz={data.request.ai_tz}
-                    onTzUpdated={reloadRequest}
-                    onGoToExecution={goToExecution}
+                    aiAnalysisStatus={data.request.ai_analysis_status}
+                    canManagePlan={data.request.permissions?.can_manage_plan}
+                    onRequestUpdated={reloadRequest}
                   />
+                  </section>
                 </div>
-              </div>
+              </aside>
             )}
           </div>
         )}
@@ -1025,11 +858,10 @@ export const RequestViewPage = () => {
           >
             <RequestAssistantSidebar
               requestId={data.request.id}
-              organizationId={data.request.organization_id ?? undefined}
               aiAnalysis={data.request.ai_analysis}
-              tz={data.request.ai_tz}
-              onTzUpdated={reloadRequest}
-              onGoToExecution={goToExecution}
+              aiAnalysisStatus={data.request.ai_analysis_status}
+              canManagePlan={data.request.permissions?.can_manage_plan}
+              onRequestUpdated={reloadRequest}
             />
           </Drawer>
         </>

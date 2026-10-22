@@ -13,7 +13,8 @@ import { ConfigProvider, theme as antTheme } from 'antd';
 export type ThemeMode = 'light' | 'dark';
 
 const STORAGE_KEY = 'app-theme-mode';
-const BRAND_PRIMARY = '#f5570d';
+const BRAND_PRIMARY = '#c2410c';
+const DARK_PRIMARY = '#ff8a4c';
 
 const getInitialTheme = (): ThemeMode => {
   const stored = localStorage.getItem(STORAGE_KEY);
@@ -58,15 +59,35 @@ export const ThemeProvider = ({ children }: ThemeProviderProps) => {
     [themeMode, toggleTheme],
   );
 
+  const themeToken = themeMode === 'dark'
+    ? {
+        colorPrimary: DARK_PRIMARY,
+        colorText: '#f5f7fa',
+        colorTextSecondary: '#c7cdd6',
+        colorBgBase: '#121417',
+        colorBgLayout: '#121417',
+        colorBgContainer: '#1b1e23',
+        colorBorder: '#505762',
+        colorSplit: '#3e444d',
+      }
+    : {
+        colorPrimary: BRAND_PRIMARY,
+        colorText: '#171a1f',
+        colorTextSecondary: '#4b5563',
+        colorBgBase: '#ffffff',
+        colorBgLayout: '#f6f7f9',
+        colorBgContainer: '#ffffff',
+        colorBorder: '#cbd1d8',
+        colorSplit: '#e2e5e9',
+      };
+
   return (
     <ThemeContext.Provider value={value}>
       <ConfigProvider
         theme={{
           algorithm:
             themeMode === 'dark' ? antTheme.darkAlgorithm : antTheme.defaultAlgorithm,
-          token: {
-            colorPrimary: BRAND_PRIMARY,
-          },
+          token: themeToken,
           cssVar: { prefix: 'ant' },
         }}
       >

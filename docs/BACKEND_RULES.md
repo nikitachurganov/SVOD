@@ -86,5 +86,6 @@ uvicorn app.main:app --reload --port 8000
 ## Проверки при изменениях
 
 - Импорт приложения: `python -c "from app.main import app"`
+- Тесты: `python -m unittest discover -s tests -t .` (из `backend/`, нужна переменная `OPENROUTER_API_KEY`)
 - Ручная проверка затронутых endpoints
 - Отдельного test script в проекте нет

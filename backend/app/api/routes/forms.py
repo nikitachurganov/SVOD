@@ -4,7 +4,8 @@ from fastapi import APIRouter, Query
 
 from app.api.deps import CurrentUser, DbSession
 from app.schemas.form import CreateFormRequest, FormResponse, UpdateFormRequest
-from app.services import form_service
+from app.schemas.form_ai import FormAiBuildRequest, FormAiBuildResponse
+from app.services import form_ai_builder_service, form_service
 
 router = APIRouter()
 
@@ -34,6 +35,13 @@ async def forms_counts(
     organization_id: uuid.UUID | None = Query(default=None),
 ) -> dict[str, int]:
     return await form_service.get_counts(session, organization_id, user.id)
+
+
+@router.post("/ai-builder", response_model=FormAiBuildResponse)
+async def build_form_with_ai(
+    payload: FormAiBuildRequest, _user: CurrentUser
+) -> FormAiBuildResponse:
+    return await form_ai_builder_service.build_form(payload)
 
 
 @router.get("/{form_id}", response_model=FormResponse)

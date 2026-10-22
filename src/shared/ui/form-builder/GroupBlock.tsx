@@ -107,7 +107,7 @@ export const GroupBlock = ({
             minHeight: 80,
             borderRadius: 4,
             border: `2px dashed ${isOver ? 'var(--app-primary)' : 'var(--app-border)'}`,
-            background: isOver ? 'var(--app-highlight)' : 'var(--app-bg)',
+            background: isOver ? 'var(--app-highlight)' : 'var(--app-surface-accent)',
             transition: 'border-color 250ms, background 250ms',
           }}
         >

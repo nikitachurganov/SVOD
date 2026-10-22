@@ -18,7 +18,7 @@ from app.schemas.request_tz import (
     RequestTZSections,
     RequestTZStored,
 )
-from app.services.gigachat_client import post_chat_completion
+from app.services.openrouter_client import post_chat_completion
 from app.services.request_tz_parser import parse_tz_llm_json
 from app.services.request_tz_prompt_builder import build_tz_messages
 
@@ -140,7 +140,7 @@ async def generate_tz(
     try:
         raw = await post_chat_completion(messages, max_tokens=3072, temperature=0.25)
     except Exception as exc:
-        logger.exception("TZ GigaChat call failed for request %s", request_id)
+        logger.exception("TZ OpenRouter call failed for request %s", request_id)
         raise TZGenerationFailed(str(exc)) from exc
 
     sections = parse_tz_llm_json(raw, req.ai_analysis if isinstance(req.ai_analysis, dict) else None)
@@ -160,6 +160,26 @@ async def generate_tz(
     refreshed = await request_repository.get_by_id(session, request_id)
     assert refreshed is not None and refreshed.ai_tz is not None
     return _to_response(refreshed.ai_tz)
+
+
+async def generate_tz_for_worker(session: AsyncSession, request_id: int) -> dict:
+    """Background equivalent of generation without a user-bound permission check."""
+    req = await request_repository.get_by_id(session, request_id)
+    if req is None:
+        raise ValueError("Request not found")
+    if req.organization_id is None:
+        raise ValueError("Request has no organization")
+    raw = await post_chat_completion(build_tz_messages(req), max_tokens=3072, temperature=0.25)
+    sections = parse_tz_llm_json(raw, req.ai_analysis if isinstance(req.ai_analysis, dict) else None)
+    req.ai_tz = {
+        "status": "draft",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "confirmed_at": None,
+        "sections": sections.model_dump(),
+    }
+    await request_repository.update(session, req)
+    await session.commit()
+    return req.ai_tz
 
 
 async def patch_tz(

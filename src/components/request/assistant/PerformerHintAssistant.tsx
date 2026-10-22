@@ -68,7 +68,7 @@ export function PerformerHintAssistant({
         Рекомендация исполнителя
       </span>
       <p style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--app-text-secondary)', lineHeight: 1.45 }}>
-        Только подсказка. Назначение и передача задачи выполняются во вкладке «Исполнение».
+        Только подсказка. Назначение и передача задачи выполняются во вкладке «Этапы».
       </p>
 
       {loading && (
@@ -102,7 +102,7 @@ export function PerformerHintAssistant({
             </div>
           ) : (
             <p style={{ fontSize: 13, marginBottom: 12 }}>
-              Подходящих кандидатов в списке нет — подберите вручную во вкладке «Исполнение».
+              Подходящих кандидатов в списке нет — подберите вручную во вкладке «Этапы».
             </p>
           )}
           <Button type="primary" size="small" onClick={onGoToExecution}>
