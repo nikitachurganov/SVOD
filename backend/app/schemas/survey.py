@@ -104,6 +104,7 @@ class SurveyListItem(BaseModel):
     methodology_names: list[str] = Field(default_factory=list)
     questions_count: int = 0
     responses_count: int = 0
+    last_response_at: str | None = None
     public_token: str
     created_at: str
     updated_at: str
@@ -209,6 +210,9 @@ class QuestionStat(BaseModel):
     answered: int = 0
     options: list[QuestionOptionStat] = Field(default_factory=list)
     mean: float | None = None
+    median: float | None = None
+    mode: float | None = None
+    std: float | None = None
     distribution: list[ScaleBucket] = Field(default_factory=list)
     samples: list[str] = Field(default_factory=list)
 
@@ -229,5 +233,70 @@ class SurveyResults(BaseModel):
     excluded: int
     exclude_flagged: bool
     median_duration_seconds: int | None = None
+    mean_duration_seconds: int | None = None
+    # Average share of answered questions per response, % (how completely people answer)
+    completion_rate: float | None = None
+    first_response_at: str | None = None
+    last_response_at: str | None = None
     metrics: list[MetricResult] = Field(default_factory=list)
     questions: list[QuestionStat] = Field(default_factory=list)
+
+
+class SurveyAiSummary(BaseModel):
+    bullets: list[str]
+    generated_at: str
+    responses_used: int
+    exclude_flagged: bool
+    # The number of responses changed since the summary was generated
+    stale: bool = False
+
+
+class SurveyAiSummaryRequest(BaseModel):
+    exclude_flagged: bool = True
+    force: bool = False
+
+
+class SurveyAiAnalysisChatRequest(BaseModel):
+    messages: list[SurveyAiChatMessage] = Field(..., min_length=1, max_length=20)
+    exclude_flagged: bool = True
+
+
+class SurveyAiQuote(BaseModel):
+    text: str
+    question: str
+
+
+class CrosstabGroup(BaseModel):
+    label: str
+    n: int
+    mean: float | None = None
+    median: float | None = None
+    std: float | None = None
+
+
+class CrosstabResult(BaseModel):
+    # "table": counts of two categorical questions (+ chi-square);
+    # "means": a numeric question broken down by the groups of a categorical one
+    kind: Literal["table", "means"]
+    row_field_id: str
+    row_label: str
+    col_field_id: str
+    col_label: str
+    n: int = 0
+    row_labels: list[str] = Field(default_factory=list)
+    col_labels: list[str] = Field(default_factory=list)
+    counts: list[list[int]] = Field(default_factory=list)
+    row_percent: list[list[float]] = Field(default_factory=list)
+    chi2: float | None = None
+    dof: int | None = None
+    p_value: float | None = None
+    cramers_v: float | None = None
+    low_expected_share: float | None = None
+    note: str | None = None
+    groups: list[CrosstabGroup] = Field(default_factory=list)
+
+
+class SurveyAiAnalysisChatResponse(BaseModel):
+    reply: str
+    quotes: list[SurveyAiQuote] = Field(default_factory=list)
+    crosstab: CrosstabResult | None = None

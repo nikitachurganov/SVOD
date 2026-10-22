@@ -72,6 +72,7 @@ export interface SurveyListItem {
   methodology_names: string[];
   questions_count: number;
   responses_count: number;
+  last_response_at: string | null;
   public_token: string;
   created_at: string;
   updated_at: string;
@@ -132,6 +133,9 @@ export interface QuestionStat {
   answered: number;
   options: QuestionOptionStat[];
   mean: number | null;
+  median: number | null;
+  mode: number | null;
+  std: number | null;
   distribution: { value: number; count: number }[];
   samples: string[];
 }
@@ -152,8 +156,62 @@ export interface SurveyResults {
   excluded: number;
   exclude_flagged: boolean;
   median_duration_seconds: number | null;
+  mean_duration_seconds: number | null;
+  /** Average share of answered questions per response, % */
+  completion_rate: number | null;
+  first_response_at: string | null;
+  last_response_at: string | null;
   metrics: MetricResult[];
   questions: QuestionStat[];
+}
+
+export interface CrosstabGroup {
+  label: string;
+  n: number;
+  mean: number | null;
+  median: number | null;
+  std: number | null;
+}
+
+export interface CrosstabResult {
+  /** "table": counts of two categorical questions; "means": a numeric question per group */
+  kind: 'table' | 'means';
+  row_field_id: string;
+  row_label: string;
+  col_field_id: string;
+  col_label: string;
+  n: number;
+  row_labels: string[];
+  col_labels: string[];
+  counts: number[][];
+  row_percent: number[][];
+  chi2: number | null;
+  dof: number | null;
+  p_value: number | null;
+  cramers_v: number | null;
+  low_expected_share: number | null;
+  note: string | null;
+  groups: CrosstabGroup[];
+}
+
+export interface SurveyAiSummary {
+  bullets: string[];
+  generated_at: string;
+  responses_used: number;
+  exclude_flagged: boolean;
+  /** Responses arrived after the summary was generated */
+  stale: boolean;
+}
+
+export interface SurveyAiQuote {
+  text: string;
+  question: string;
+}
+
+export interface SurveyAnalysisChatResponse {
+  reply: string;
+  quotes: SurveyAiQuote[];
+  crosstab: CrosstabResult | null;
 }
 
 export interface PublicSurvey {
@@ -243,6 +301,48 @@ export const getSurveyResults = async (
   const { data } = await api.get<SurveyResults>(`/surveys/${id}/results`, {
     params: { exclude_flagged: excludeFlagged },
   });
+  return data;
+};
+
+export const getSurveyCrosstab = async (
+  id: string,
+  row: string,
+  col: string,
+  excludeFlagged = true,
+): Promise<CrosstabResult> => {
+  const { data } = await api.get<CrosstabResult>(`/surveys/${id}/crosstab`, {
+    params: { row, col, exclude_flagged: excludeFlagged },
+  });
+  return data;
+};
+
+export const getSurveyAiSummary = async (id: string): Promise<SurveyAiSummary | null> => {
+  const { data } = await api.get<SurveyAiSummary | null>(`/surveys/${id}/ai-summary`);
+  return data;
+};
+
+export const generateSurveyAiSummary = async (
+  id: string,
+  options: { excludeFlagged?: boolean; force?: boolean } = {},
+): Promise<SurveyAiSummary> => {
+  const { data } = await api.post<SurveyAiSummary>(
+    `/surveys/${id}/ai-summary`,
+    { exclude_flagged: options.excludeFlagged ?? true, force: options.force ?? false },
+    { timeout: 120_000 },
+  );
+  return data;
+};
+
+export const askSurveyAnalysisChat = async (
+  id: string,
+  messages: Array<{ role: 'user' | 'assistant'; content: string }>,
+  excludeFlagged = true,
+): Promise<SurveyAnalysisChatResponse> => {
+  const { data } = await api.post<SurveyAnalysisChatResponse>(
+    `/surveys/${id}/ai-chat`,
+    { messages, exclude_flagged: excludeFlagged },
+    { timeout: 190_000 },
+  );
   return data;
 };
 

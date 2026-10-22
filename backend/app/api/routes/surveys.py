@@ -6,13 +6,18 @@ from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 from app.api.deps import CurrentUser, DbSession
 from app.schemas.survey import (
     CreateSurveyRequest,
+    CrosstabResult,
     MethodologyCatalogResponse,
     MethodologyReportRequest,
     MethodologyReportResponse,
     PublicSurveyResponse,
     SubmitSurveyRequest,
+    SurveyAiAnalysisChatRequest,
+    SurveyAiAnalysisChatResponse,
     SurveyAiBuildRequest,
     SurveyAiBuildResponse,
+    SurveyAiSummary,
+    SurveyAiSummaryRequest,
     SurveyDetail,
     SurveyListItem,
     SurveyResponsesPage,
@@ -139,6 +144,51 @@ async def get_results(
     return await survey_service.get_results(
         session, user, survey_id, exclude_flagged=exclude_flagged
     )
+
+
+@router.get("/{survey_id}/crosstab", response_model=CrosstabResult)
+async def get_crosstab(
+    survey_id: str,
+    session: DbSession,
+    user: CurrentUser,
+    row: str = Query(..., min_length=1, max_length=100),
+    col: str = Query(..., min_length=1, max_length=100),
+    exclude_flagged: bool = Query(default=True),
+) -> CrosstabResult:
+    return await survey_service.get_crosstab(
+        session, user, survey_id, row, col, exclude_flagged=exclude_flagged
+    )
+
+
+def _ai_rate_limit(user_id: uuid.UUID) -> None:
+    if not check_public_suggest_limit(f"survey-ai:{user_id}"):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Слишком много запросов к ИИ. Подождите немного и попробуйте снова.",
+        )
+
+
+@router.get("/{survey_id}/ai-summary", response_model=SurveyAiSummary | None)
+async def get_ai_summary(
+    survey_id: str, session: DbSession, user: CurrentUser
+) -> SurveyAiSummary | None:
+    return await survey_service.get_ai_summary(session, user, survey_id)
+
+
+@router.post("/{survey_id}/ai-summary", response_model=SurveyAiSummary)
+async def generate_ai_summary(
+    survey_id: str, payload: SurveyAiSummaryRequest, session: DbSession, user: CurrentUser
+) -> SurveyAiSummary:
+    _ai_rate_limit(user.id)
+    return await survey_service.generate_ai_summary(session, user, survey_id, payload)
+
+
+@router.post("/{survey_id}/ai-chat", response_model=SurveyAiAnalysisChatResponse)
+async def ai_chat(
+    survey_id: str, payload: SurveyAiAnalysisChatRequest, session: DbSession, user: CurrentUser
+) -> SurveyAiAnalysisChatResponse:
+    _ai_rate_limit(user.id)
+    return await survey_service.ai_chat(session, user, survey_id, payload)
 
 
 @router.get("/{survey_id}/responses/export.csv")

@@ -98,6 +98,20 @@ async def response_counts(
     return {sid: int(count) for sid, count in result.all()}
 
 
+async def last_response_dates(
+    session: AsyncSession, survey_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, datetime]:
+    if not survey_ids:
+        return {}
+    stmt = (
+        select(SurveyResponse.survey_id, func.max(SurveyResponse.submitted_at))
+        .where(SurveyResponse.survey_id.in_(survey_ids))
+        .group_by(SurveyResponse.survey_id)
+    )
+    result = await session.execute(stmt)
+    return {sid: last for sid, last in result.all() if last is not None}
+
+
 async def add_response(session: AsyncSession, response: SurveyResponse) -> SurveyResponse:
     session.add(response)
     await session.flush()

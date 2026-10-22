@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Card, Modal, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { EditOutlined, EyeOutlined, InboxOutlined, PlusOutlined } from '@ant-design/icons';
+import {
+  BarChartOutlined,
+  EditOutlined,
+  EyeOutlined,
+  InboxOutlined,
+  PlusOutlined,
+} from '@ant-design/icons';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { IconDefaultButton } from '../shared/ui/IconDefaultButton';
@@ -177,6 +183,20 @@ export const SurveysPage = () => {
         render: (n: number) => pluralizeResponses(n),
       },
       {
+        title: 'Последний ответ',
+        dataIndex: 'last_response_at',
+        key: 'last_response_at',
+        width: 150,
+        sorter: (a, b) =>
+          new Date(a.last_response_at ?? 0).getTime() - new Date(b.last_response_at ?? 0).getTime(),
+        render: (value: string | null) =>
+          value ? (
+            formatSurveyDate(value)
+          ) : (
+            <span style={{ color: 'var(--app-text-secondary)' }}>—</span>
+          ),
+      },
+      {
         title: 'Автор',
         key: 'author',
         render: (_, record) =>
@@ -192,12 +212,21 @@ export const SurveysPage = () => {
       {
         title: 'Действия',
         key: 'actions',
-        width: 132,
+        width: 190,
         render: (_, record) =>
           record.status === 'archived' ? (
             <span style={{ color: 'var(--app-text-secondary)' }}>—</span>
           ) : (
-            <div style={{ display: 'flex', gap: 4 }}>
+            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+              <Button
+                size="small"
+                icon={<BarChartOutlined />}
+                disabled={record.responses_count === 0}
+                title={record.responses_count === 0 ? 'Ответов пока нет' : 'Анализировать ответы'}
+                onClick={() => navigate(`/surveys/${record.id}`)}
+              >
+                Анализировать
+              </Button>
               <IconDefaultButton
                 icon={<EyeOutlined />}
                 title="Открыть"

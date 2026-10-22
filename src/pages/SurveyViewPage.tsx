@@ -1,23 +1,26 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Button, Card, Input, Modal, Spin, Table, Tag } from 'antd';
+import { Alert, Button, Card, Empty, Input, Modal, Spin, Table, Tabs, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
   ArrowLeftOutlined,
   CopyOutlined,
-  DownloadOutlined,
   EditOutlined,
   InboxOutlined,
 } from '@ant-design/icons';
+import axios from 'axios';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import {
   archiveSurvey,
   buildPublicSurveyUrl,
   downloadSurveyResponsesCsv,
+  generateSurveyAiSummary,
+  getSurveyAiSummary,
   getSurveyById,
   getSurveyResponses,
   getSurveyResults,
   setSurveyStatus,
+  type SurveyAiSummary,
   type SurveyDetail,
   type SurveyResponseItem,
   type SurveyResponsesPage,
@@ -28,12 +31,15 @@ import { useNotifications } from '../shared/context/notifications.context';
 import { buildDisplayName } from '../shared/utils/userName';
 import { MethodologySummaryCard } from '../shared/ui/survey/MethodologySummaryCard';
 import { MethodologyReportModal } from '../shared/ui/survey/MethodologyReportModal';
-import { SurveyResultsCard } from '../shared/ui/survey/SurveyResultsCard';
+import { SurveyAiChatPanel } from '../shared/ui/survey/SurveyAiChatPanel';
+import { SurveyOverviewTab } from '../shared/ui/survey/SurveyOverviewTab';
+import { SurveyQuantTab } from '../shared/ui/survey/SurveyQuantTab';
+import { SurveySummaryBar } from '../shared/ui/survey/SurveySummaryBar';
+import { formatDuration } from '../shared/ui/survey/surveyFormat';
 import {
   SURVEY_STATUS_COLOR,
   SURVEY_STATUS_LABEL,
   formatSurveyDate,
-  pluralizeResponses,
 } from './surveyStatus';
 
 const FLAG_LABEL: Record<string, string> = {
@@ -41,11 +47,16 @@ const FLAG_LABEL: Record<string, string> = {
   too_fast: 'Слишком быстро',
 };
 
-const formatDuration = (seconds: number | null): string => {
-  if (seconds === null) return '—';
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return m > 0 ? `${m} мин ${s} с` : `${s} с`;
+type AnalysisTab = 'overview' | 'quant' | 'responses';
+
+const aiErrorMessage = (err: unknown): string => {
+  if (axios.isAxiosError(err)) {
+    const detail = err.response?.data?.detail;
+    if (detail === 'no_responses') return 'Пока нет ответов для анализа.';
+    if (typeof detail === 'string') return detail;
+    if (err.code === 'ECONNABORTED') return 'ИИ отвечает слишком долго. Попробуйте ещё раз.';
+  }
+  return 'Не удалось получить ответ ИИ. Попробуйте ещё раз.';
 };
 
 export const SurveyViewPage = () => {
@@ -64,18 +75,26 @@ export const SurveyViewPage = () => {
   const [busy, setBusy] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<AnalysisTab>('overview');
+  const [aiSummary, setAiSummary] = useState<SurveyAiSummary | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
     try {
-      const [detail, page, aggregated] = await Promise.all([
+      const [detail, page, aggregated, summary] = await Promise.all([
         getSurveyById(id),
         getSurveyResponses(id, { limit: 50 }),
         getSurveyResults(id, true),
+        // A missing summary is not an error — it just was not generated yet
+        getSurveyAiSummary(id).catch(() => null),
       ]);
       setSurvey(detail);
       setResponses(page);
       setResults(aggregated);
+      setAiSummary(summary);
       setExcludeFlagged(true);
       setError(null);
     } catch (err) {
@@ -97,6 +116,24 @@ export const SurveyViewPage = () => {
     } finally {
       setResultsLoading(false);
     }
+  };
+
+  const generateAiSummary = async (force: boolean) => {
+    if (!survey) return;
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      setAiSummary(await generateSurveyAiSummary(survey.id, { excludeFlagged, force }));
+    } catch (err) {
+      setAiError(aiErrorMessage(err));
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const generateAiReport = () => {
+    setActiveTab('overview');
+    void generateAiSummary(false);
   };
 
   useEffect(() => {
@@ -182,6 +219,7 @@ export const SurveyViewPage = () => {
 
   const isArchived = survey.status === 'archived';
   const link = buildPublicSurveyUrl(survey.public_token);
+  const responsesCount = responses?.total ?? 0;
 
   const columns: ColumnsType<SurveyResponseItem> = [
     {
@@ -217,8 +255,35 @@ export const SurveyViewPage = () => {
     },
   ];
 
+  const responsesContent = (
+    <>
+      {responses && responses.flagged > 0 && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message={`Ответов с замечаниями по качеству: ${responses.flagged}`}
+          description="Проверка внимания или слишком быстрое заполнение. В анализе такие ответы исключены, пока включён переключатель; флаги есть в выгрузке CSV."
+        />
+      )}
+      <Table<SurveyResponseItem>
+        rowKey="id"
+        size="small"
+        columns={columns}
+        dataSource={responses?.items ?? []}
+        locale={{ emptyText: 'Ответов пока нет.' }}
+        pagination={{ pageSize: 10, hideOnSinglePage: true }}
+      />
+      {responses && responses.total > responses.items.length && (
+        <div style={{ marginTop: 8, fontSize: 12, color: 'var(--app-text-secondary)' }}>
+          Показаны последние {responses.items.length} ответов. Все ответы — в выгрузке CSV.
+        </div>
+      )}
+    </>
+  );
+
   return (
-    <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 1040 }}>
+    <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 1180 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <Button
           type="text"
@@ -291,50 +356,73 @@ export const SurveyViewPage = () => {
         />
       )}
 
-      <SurveyResultsCard
+      <SurveySummaryBar
+        survey={survey}
         results={results}
-        loading={resultsLoading}
+        resultsLoading={resultsLoading}
         excludeFlagged={excludeFlagged}
         onExcludeFlaggedChange={(value) => void changeExcludeFlagged(value)}
+        aiLoading={aiLoading}
+        onCopyLink={() => void copyLink()}
+        onDownloadCsv={() => void downloadCsv()}
+        onGenerateAiReport={generateAiReport}
+        onOpenChat={() => setChatOpen(true)}
       />
 
-      <Card
-        size="small"
-        title={`Ответы: ${pluralizeResponses(responses?.total ?? 0)}`}
-        extra={
-          <Button
-            size="small"
-            icon={<DownloadOutlined />}
-            onClick={() => void downloadCsv()}
-            disabled={!responses?.total}
-          >
-            Скачать CSV
-          </Button>
-        }
-      >
-        {responses && responses.flagged > 0 && (
-          <Alert
-            type="warning"
-            showIcon
-            style={{ marginBottom: 12 }}
-            message={`Ответов с замечаниями по качеству: ${responses.flagged}`}
-            description="Проверка внимания или слишком быстрое заполнение. Такие ответы стоит исключить при анализе; флаги есть в выгрузке CSV."
-          />
-        )}
-        <Table<SurveyResponseItem>
-          rowKey="id"
-          size="small"
-          columns={columns}
-          dataSource={responses?.items ?? []}
-          locale={{ emptyText: 'Ответов пока нет.' }}
-          pagination={{ pageSize: 10, hideOnSinglePage: true }}
-        />
-        {responses && responses.total > responses.items.length && (
-          <div style={{ marginTop: 8, fontSize: 12, color: 'var(--app-text-secondary)' }}>
-            Показаны последние {responses.items.length} ответов. Все ответы — в выгрузке CSV.
+      <Card size="small" title="Анализ результатов">
+        {!results ? (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: 16 }}>
+            <Spin />
           </div>
+        ) : results.total === 0 ? (
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Ответов пока нет" />
+        ) : (
+          <Spin spinning={resultsLoading}>
+            <Tabs
+              activeKey={activeTab}
+              onChange={(key) => setActiveTab(key as AnalysisTab)}
+              items={[
+                {
+                  key: 'overview',
+                  label: 'Обзор',
+                  children: (
+                    <SurveyOverviewTab
+                      results={results}
+                      aiSummary={aiSummary}
+                      aiLoading={aiLoading}
+                      aiError={aiError}
+                      onGenerateAiSummary={(force) => void generateAiSummary(force)}
+                    />
+                  ),
+                },
+                {
+                  key: 'quant',
+                  label: 'Количественный анализ',
+                  children: (
+                    <SurveyQuantTab
+                      surveyId={survey.id}
+                      results={results}
+                      excludeFlagged={excludeFlagged}
+                    />
+                  ),
+                },
+                {
+                  key: 'responses',
+                  label: `Ответы (${responsesCount})`,
+                  children: responsesContent,
+                },
+              ]}
+            />
+          </Spin>
         )}
       </Card>
+
+      <SurveyAiChatPanel
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+        surveyId={survey.id}
+        excludeFlagged={excludeFlagged}
+      />
 
       {reportOpen && (
         <MethodologyReportModal

@@ -12,9 +12,14 @@ from app.models.user import User
 from app.repositories import organization_repository, survey_repository
 from app.schemas.survey import (
     CreateSurveyRequest,
+    CrosstabResult,
     MethodologyReportResponse,
     PublicSurveyResponse,
     SubmitSurveyRequest,
+    SurveyAiAnalysisChatRequest,
+    SurveyAiAnalysisChatResponse,
+    SurveyAiSummary,
+    SurveyAiSummaryRequest,
     SurveyDetail,
     SurveyListItem,
     SurveyResponseItem,
@@ -25,7 +30,12 @@ from app.schemas.survey import (
     UpdateSurveyRequest,
 )
 from app.schemas.user import PublicAuthorResponse
-from app.services import survey_answers, survey_methodology_service, survey_results
+from app.services import (
+    survey_ai_analysis_service,
+    survey_answers,
+    survey_methodology_service,
+    survey_results,
+)
 
 MAX_RESULTS_ROWS = 10_000
 
@@ -60,7 +70,9 @@ def _meta_for_list(meta: dict[str, Any] | None) -> tuple[str | None, str | None,
     )
 
 
-def _list_fields(survey: Survey, responses_count: int) -> dict[str, Any]:
+def _list_fields(
+    survey: Survey, responses_count: int, last_response_at: datetime | None = None
+) -> dict[str, Any]:
     category_id, category_name, names = _meta_for_list(survey.methodology_meta)
     return dict(
         id=str(survey.id),
@@ -74,19 +86,24 @@ def _list_fields(survey: Survey, responses_count: int) -> dict[str, Any]:
         methodology_names=names,
         questions_count=survey_methodology_service.count_questions(survey.pages),
         responses_count=responses_count,
+        last_response_at=last_response_at.isoformat() if last_response_at else None,
         public_token=survey.public_token,
         created_at=survey.created_at.isoformat(),
         updated_at=survey.updated_at.isoformat(),
     )
 
 
-def _to_list_item(survey: Survey, responses_count: int) -> SurveyListItem:
-    return SurveyListItem(**_list_fields(survey, responses_count))
+def _to_list_item(
+    survey: Survey, responses_count: int, last_response_at: datetime | None = None
+) -> SurveyListItem:
+    return SurveyListItem(**_list_fields(survey, responses_count, last_response_at))
 
 
-def _to_detail(survey: Survey, responses_count: int) -> SurveyDetail:
+def _to_detail(
+    survey: Survey, responses_count: int, last_response_at: datetime | None = None
+) -> SurveyDetail:
     return SurveyDetail(
-        **_list_fields(survey, responses_count),
+        **_list_fields(survey, responses_count, last_response_at),
         pages=survey.pages if isinstance(survey.pages, list) else [],
         anonymous=survey.anonymous,
         closes_at=survey.closes_at.isoformat() if survey.closes_at else None,
@@ -132,8 +149,10 @@ async def list_surveys(
         status=status_filter,
         created_by_user_id=user.id if mine else None,
     )
-    counts = await survey_repository.response_counts(session, [s.id for s in surveys])
-    return [_to_list_item(s, counts.get(s.id, 0)) for s in surveys]
+    ids = [s.id for s in surveys]
+    counts = await survey_repository.response_counts(session, ids)
+    last_dates = await survey_repository.last_response_dates(session, ids)
+    return [_to_list_item(s, counts.get(s.id, 0), last_dates.get(s.id)) for s in surveys]
 
 
 async def get_counts(
@@ -159,7 +178,8 @@ async def get_counts(
 async def get_survey(session: AsyncSession, user: User, survey_id: str) -> SurveyDetail:
     survey = await _get_for_member(session, survey_id, user)
     counts = await survey_repository.response_counts(session, [survey.id])
-    return _to_detail(survey, counts.get(survey.id, 0))
+    last_dates = await survey_repository.last_response_dates(session, [survey.id])
+    return _to_detail(survey, counts.get(survey.id, 0), last_dates.get(survey.id))
 
 
 async def create_survey(
@@ -266,6 +286,111 @@ async def get_results(
     survey = await _get_for_member(session, survey_id, user)
     rows = await survey_repository.list_responses(session, survey.id, limit=MAX_RESULTS_ROWS)
     return survey_results.build_results(survey.pages, rows, exclude_flagged=exclude_flagged)
+
+
+async def get_crosstab(
+    session: AsyncSession,
+    user: User,
+    survey_id: str,
+    row_id: str,
+    col_id: str,
+    *,
+    exclude_flagged: bool = True,
+) -> CrosstabResult:
+    survey = await _get_for_member(session, survey_id, user)
+    rows = await survey_repository.list_responses(session, survey.id, limit=MAX_RESULTS_ROWS)
+    try:
+        return survey_results.build_crosstab(
+            survey.pages, rows, row_id, col_id, exclude_flagged=exclude_flagged
+        )
+    except survey_results.CrosstabError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc.code
+        ) from exc
+
+
+def _stored_summary(survey: Survey) -> dict[str, Any] | None:
+    stored = survey.ai_summary
+    if (
+        isinstance(stored, dict)
+        and isinstance(stored.get("bullets"), list)
+        and isinstance(stored.get("responses_used"), int)
+    ):
+        return stored
+    return None
+
+
+def _to_ai_summary(stored: dict[str, Any], *, stale: bool) -> SurveyAiSummary:
+    return SurveyAiSummary(
+        bullets=[str(b) for b in stored["bullets"]],
+        generated_at=str(stored.get("generated_at", "")),
+        responses_used=stored["responses_used"],
+        exclude_flagged=bool(stored.get("exclude_flagged", True)),
+        stale=stale,
+    )
+
+
+async def get_ai_summary(
+    session: AsyncSession, user: User, survey_id: str
+) -> SurveyAiSummary | None:
+    """The cached summary (``stale`` when responses arrived since), None if never generated."""
+    survey = await _get_for_member(session, survey_id, user)
+    stored = _stored_summary(survey)
+    if stored is None:
+        return None
+    total = await survey_repository.count_responses(session, survey.id)
+    if stored.get("exclude_flagged", True):
+        total -= await survey_repository.count_responses(session, survey.id, flagged_only=True)
+    return _to_ai_summary(stored, stale=total != stored["responses_used"])
+
+
+async def generate_ai_summary(
+    session: AsyncSession, user: User, survey_id: str, payload: SurveyAiSummaryRequest
+) -> SurveyAiSummary:
+    survey = await _get_for_member(session, survey_id, user)
+    rows = await survey_repository.list_responses(session, survey.id, limit=MAX_RESULTS_ROWS)
+    results = survey_results.build_results(
+        survey.pages, rows, exclude_flagged=payload.exclude_flagged
+    )
+    stored = _stored_summary(survey)
+    if (
+        stored is not None
+        and not payload.force
+        and stored["responses_used"] == results.used
+        and bool(stored.get("exclude_flagged", True)) == payload.exclude_flagged
+    ):
+        return _to_ai_summary(stored, stale=False)
+    comparisons = survey_ai_analysis_service.segment_comparisons(
+        survey.pages, rows, exclude_flagged=payload.exclude_flagged
+    )
+    bullets = await survey_ai_analysis_service.generate_summary(survey.name, results, comparisons)
+    survey.ai_summary = {
+        "bullets": bullets,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "responses_used": results.used,
+        "exclude_flagged": payload.exclude_flagged,
+    }
+    await survey_repository.update(session, survey)
+    await session.commit()
+    return _to_ai_summary(survey.ai_summary, stale=False)
+
+
+async def ai_chat(
+    session: AsyncSession, user: User, survey_id: str, payload: SurveyAiAnalysisChatRequest
+) -> SurveyAiAnalysisChatResponse:
+    survey = await _get_for_member(session, survey_id, user)
+    if payload.messages[-1].role != "user":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="last_message_must_be_user"
+        )
+    rows = await survey_repository.list_responses(session, survey.id, limit=MAX_RESULTS_ROWS)
+    return await survey_ai_analysis_service.chat(
+        survey.name,
+        survey.pages,
+        rows,
+        payload.messages,
+        exclude_flagged=payload.exclude_flagged,
+    )
 
 
 async def export_responses_csv(

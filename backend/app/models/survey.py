@@ -33,6 +33,8 @@ class Survey(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     pages: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     methodology_meta: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # Cached AI summary of the results: {bullets, generated_at, responses_used, exclude_flagged}
+    ai_summary: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True), nullable=True)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="draft", index=True)
     public_token: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
     anonymous: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

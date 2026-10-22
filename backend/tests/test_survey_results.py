@@ -187,5 +187,140 @@ class QuestionStatsAndQualityTests(unittest.TestCase):
         self.assertEqual(all_results.median_duration_seconds, 31)
 
 
+class DescriptiveAndSummaryTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.pages = [
+            {
+                "id": "p1",
+                "fields": [
+                    {"id": "q_num", "type": "number", "label": "Оценка"},
+                    {"id": "q_text", "type": "longText", "label": "Комментарий"},
+                ],
+            }
+        ]
+
+    def test_descriptive_statistics(self):
+        responses = [_resp({"q_num": v}) for v in (2, 4, 4, 4, 5, 5, 7, 9)]
+        stat = survey_results.build_results(self.pages, responses).questions[0]
+        self.assertEqual(stat.mean, 5.0)
+        self.assertEqual(stat.median, 4.5)
+        self.assertEqual(stat.mode, 4.0)
+        self.assertAlmostEqual(stat.std, 2.14, places=2)  # sample std (n - 1)
+
+    def test_std_is_none_for_single_answer(self):
+        stat = survey_results.build_results(self.pages, [_resp({"q_num": 3})]).questions[0]
+        self.assertIsNone(stat.std)
+
+    def test_summary_fields(self):
+        responses = [
+            _resp({"q_num": 1, "q_text": "a"}, duration=40),
+            _resp({"q_num": 2}, duration=80),
+        ]
+        results = survey_results.build_results(self.pages, responses)
+        self.assertEqual(results.mean_duration_seconds, 60)
+        self.assertEqual(results.completion_rate, 75.0)  # (2/2 + 1/2) / 2
+        self.assertIsNotNone(results.first_response_at)
+        self.assertIsNotNone(results.last_response_at)
+
+    def test_summary_fields_empty(self):
+        results = survey_results.build_results(self.pages, [])
+        self.assertIsNone(results.completion_rate)
+        self.assertIsNone(results.mean_duration_seconds)
+        self.assertIsNone(results.last_response_at)
+
+
+class CrosstabTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.pages = [
+            {
+                "id": "p1",
+                "fields": [
+                    {
+                        "id": "course",
+                        "type": "radio",
+                        "label": "Курс",
+                        "options": [{"id": "c1", "label": "1 курс"}, {"id": "c3", "label": "3 курс"}],
+                    },
+                    {
+                        "id": "sex",
+                        "type": "radio",
+                        "label": "Пол",
+                        "options": [{"id": "m", "label": "М"}, {"id": "f", "label": "Ж"}],
+                    },
+                    {"id": "score", "type": "number", "label": "Оценка"},
+                    {"id": "src", "type": "checkbox", "label": "Источник",
+                     "options": [{"id": "s1", "label": "Сайт"}, {"id": "s2", "label": "Друзья"}]},
+                    {"id": "text", "type": "longText", "label": "Комментарий"},
+                ],
+            }
+        ]
+
+    def _responses(self, cells: dict[tuple[str, str], int]):
+        out = []
+        for (course, sex), n in cells.items():
+            out += [_resp({"course": course, "sex": sex, "score": 5 if course == "c1" else 3})] * n
+        return out
+
+    def test_chi_square_on_known_table(self):
+        # [[20, 30], [30, 20]] -> chi2 = 4.0, df = 1, p ≈ 0.0455, V = 0.2
+        responses = self._responses(
+            {("c1", "m"): 20, ("c1", "f"): 30, ("c3", "m"): 30, ("c3", "f"): 20}
+        )
+        result = survey_results.build_crosstab(self.pages, responses, "course", "sex")
+        self.assertEqual(result.kind, "table")
+        self.assertEqual(result.row_labels, ["1 курс", "3 курс"])
+        self.assertEqual(result.counts, [[20, 30], [30, 20]])
+        self.assertEqual(result.row_percent, [[40.0, 60.0], [60.0, 40.0]])
+        self.assertEqual(result.n, 100)
+        self.assertEqual(result.chi2, 4.0)
+        self.assertEqual(result.dof, 1)
+        self.assertAlmostEqual(result.p_value, 0.0455, places=4)
+        self.assertEqual(result.cramers_v, 0.2)
+        self.assertIsNone(result.note)
+
+    def test_small_samples_get_a_warning(self):
+        responses = self._responses(
+            {("c1", "m"): 2, ("c1", "f"): 1, ("c3", "m"): 1, ("c3", "f"): 3}
+        )
+        result = survey_results.build_crosstab(self.pages, responses, "course", "sex")
+        self.assertIn("ненадёжен", result.note or "")
+
+    def test_numeric_by_group_returns_means(self):
+        responses = self._responses({("c1", "m"): 2, ("c3", "m"): 2})
+        # numeric question may be passed as either axis
+        result = survey_results.build_crosstab(self.pages, responses, "course", "score")
+        self.assertEqual(result.kind, "means")
+        self.assertEqual(result.row_field_id, "score")
+        self.assertEqual(result.col_field_id, "course")
+        groups = {g.label: g for g in result.groups}
+        self.assertEqual(groups["1 курс"].mean, 5.0)
+        self.assertEqual(groups["3 курс"].mean, 3.0)
+        self.assertEqual(groups["1 курс"].n, 2)
+
+    def test_multi_select_skips_chi_square(self):
+        responses = [
+            _resp({"course": "c1", "src": ["s1", "s2"]}),
+            _resp({"course": "c3", "src": ["s1"]}),
+        ]
+        result = survey_results.build_crosstab(self.pages, responses, "course", "src")
+        self.assertIsNone(result.chi2)
+        self.assertEqual(result.counts, [[1, 1], [1, 0]])
+        self.assertIn("Множественный выбор", result.note or "")
+
+    def test_flagged_responses_are_skipped(self):
+        responses = self._responses({("c1", "m"): 1, ("c3", "f"): 1})
+        responses.append(_resp({"course": "c1", "sex": "f"}, flags={"too_fast": True}))
+        result = survey_results.build_crosstab(self.pages, responses, "course", "sex")
+        self.assertEqual(result.n, 2)
+
+    def test_errors(self):
+        with self.assertRaises(survey_results.CrosstabError) as ctx:
+            survey_results.build_crosstab(self.pages, [], "course", "missing")
+        self.assertEqual(ctx.exception.code, "question_not_found")
+        with self.assertRaises(survey_results.CrosstabError) as ctx:
+            survey_results.build_crosstab(self.pages, [], "course", "text")
+        self.assertEqual(ctx.exception.code, "unsupported_question_type")
+
+
 if __name__ == "__main__":
     unittest.main()

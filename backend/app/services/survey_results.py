@@ -10,12 +10,15 @@ from __future__ import annotations
 from typing import Any
 
 from app.schemas.survey import (
+    CrosstabGroup,
+    CrosstabResult,
     MetricResult,
     QuestionOptionStat,
     QuestionStat,
     ScaleBucket,
     SurveyResults,
 )
+from app.services import stats_math
 from app.services.survey_answers import answerable_fields, is_empty
 
 OTHER_PREFIX = "__other__:"
@@ -86,6 +89,10 @@ def _number(value: Any) -> float | None:
 
 def _round(value: float, digits: int = 1) -> float:
     return round(value + 0.0, digits)
+
+
+def _round_opt(value: float | None, digits: int = 1) -> float | None:
+    return None if value is None else _round(value, digits)
 
 
 def _config_number(field: dict[str, Any], key: str, default: float) -> float:
@@ -169,6 +176,9 @@ def _scale_stat(field: dict[str, Any], values: list[Any]) -> QuestionStat:
         distribution[n] = distribution.get(n, 0) + 1
     stat = _base_stat(field, "scale", len(numbers))
     stat.mean = _round(sum(numbers) / len(numbers), 2) if numbers else None
+    stat.median = _round_opt(stats_math.median(numbers), 2)
+    stat.mode = _round_opt(stats_math.mode(numbers), 2)
+    stat.std = _round_opt(stats_math.sample_std(numbers), 2)
     stat.distribution = [ScaleBucket(value=v, count=c) for v, c in sorted(distribution.items())]
     return stat
 
@@ -393,17 +403,194 @@ def _median(values: list[int]) -> int | None:
     return round((ordered[mid - 1] + ordered[mid]) / 2)
 
 
+def _completion_rate(fields: list[dict[str, Any]], answers_list: list[dict[str, Any]]) -> float | None:
+    """Average share of answered questions per response, in percent."""
+    if not fields or not answers_list:
+        return None
+    shares = [
+        sum(1 for f in fields if not is_empty(a.get(f["id"]))) / len(fields) for a in answers_list
+    ]
+    return _round(sum(shares) / len(shares) * 100)
+
+
 def build_results(pages: Any, responses: list[Any], *, exclude_flagged: bool = True) -> SurveyResults:
     usable = [r for r in responses if not (exclude_flagged and r.quality_flags)]
     answers_list = [r.answers for r in usable if isinstance(r.answers, dict)]
     fields = answerable_fields(pages)
     durations = [r.duration_seconds for r in usable if r.duration_seconds is not None]
+    dates = [r.submitted_at for r in responses if getattr(r, "submitted_at", None) is not None]
+    mean_duration = stats_math.mean([float(d) for d in durations])
     return SurveyResults(
         total=len(responses),
         used=len(usable),
         excluded=len(responses) - len(usable),
         exclude_flagged=exclude_flagged,
         median_duration_seconds=_median(durations),
+        mean_duration_seconds=None if mean_duration is None else round(mean_duration),
+        completion_rate=_completion_rate(fields, answers_list),
+        first_response_at=min(dates).isoformat() if dates else None,
+        last_response_at=max(dates).isoformat() if dates else None,
         metrics=compute_metrics(fields, answers_list),
         questions=build_question_stats(fields, answers_list),
     )
+
+
+# ─── Cross-tabulation ─────────────────────────────────────────────────────────
+
+MAX_SCALE_CATEGORIES = 12
+
+
+class CrosstabError(ValueError):
+    """Raised for questions that cannot be cross-tabulated; ``code`` is machine-readable."""
+
+    def __init__(self, code: str) -> None:
+        super().__init__(code)
+        self.code = code
+
+
+def _find_field(fields: list[dict[str, Any]], field_id: str) -> dict[str, Any]:
+    for field in fields:
+        if field["id"] == field_id:
+            return field
+    raise CrosstabError("question_not_found")
+
+
+def _number_label(value: float) -> str:
+    return str(int(value)) if float(value).is_integer() else str(value)
+
+
+def _categories(field: dict[str, Any], value: Any) -> list[str]:
+    """Category labels of one answer (several for a multi-select question)."""
+    if field.get("type") in CHOICE_TYPES:
+        return _choice_labels(field, value)
+    number = _number(value)
+    return [] if number is None else [_number_label(number)]
+
+
+def _category_order(field: dict[str, Any], seen: set[str]) -> list[str]:
+    if field.get("type") in CHOICE_TYPES:
+        labels = [
+            str(o.get("label", ""))
+            for o in field.get("options") or []
+            if isinstance(o, dict) and o.get("label")
+        ]
+        labels += sorted(label for label in seen if label not in labels)
+        return labels
+    return sorted(seen, key=float)
+
+
+def _check_type(field: dict[str, Any]) -> str:
+    ftype = field.get("type")
+    if ftype in CHOICE_TYPES:
+        return "choice"
+    if ftype in SCALE_TYPES:
+        return "scale"
+    raise CrosstabError("unsupported_question_type")
+
+
+def build_crosstab(
+    pages: Any,
+    responses: list[Any],
+    row_id: str,
+    col_id: str,
+    *,
+    exclude_flagged: bool = True,
+) -> CrosstabResult:
+    fields = answerable_fields(pages)
+    row_field = _find_field(fields, row_id)
+    col_field = _find_field(fields, col_id)
+    row_kind, col_kind = _check_type(row_field), _check_type(col_field)
+    usable = [r for r in responses if not (exclude_flagged and r.quality_flags)]
+    answers_list = [r.answers for r in usable if isinstance(r.answers, dict)]
+    base = dict(
+        row_field_id=row_id,
+        row_label=str(row_field.get("label") or row_id),
+        col_field_id=col_id,
+        col_label=str(col_field.get("label") or col_id),
+    )
+
+    # One numeric question + one categorical one → mean of the numeric one per group
+    if (row_kind == "scale") != (col_kind == "scale"):
+        numeric, group = (row_field, col_field) if row_kind == "scale" else (col_field, row_field)
+        samples: dict[str, list[float]] = {}
+        respondents = 0
+        for answers in answers_list:
+            number = _number(answers.get(numeric["id"]))
+            if number is None or is_empty(answers.get(group["id"])):
+                continue
+            respondents += 1
+            for label in _categories(group, answers.get(group["id"])):
+                samples.setdefault(label, []).append(number)
+        groups = [
+            CrosstabGroup(
+                label=label,
+                n=len(samples[label]),
+                mean=_round_opt(stats_math.mean(samples[label]), 2),
+                median=_round_opt(stats_math.median(samples[label]), 2),
+                std=_round_opt(stats_math.sample_std(samples[label]), 2),
+            )
+            for label in _category_order(group, set(samples))
+            if label in samples
+        ]
+        # In "means" mode row = numeric question, col = grouping question
+        return CrosstabResult(
+            kind="means",
+            row_field_id=numeric["id"],
+            row_label=str(numeric.get("label") or numeric["id"]),
+            col_field_id=group["id"],
+            col_label=str(group.get("label") or group["id"]),
+            n=respondents,
+            groups=groups,
+        )
+
+    pairs: list[tuple[list[str], list[str]]] = []
+    for answers in answers_list:
+        rv, cv = answers.get(row_id), answers.get(col_id)
+        if is_empty(rv) or is_empty(cv):
+            continue
+        rows, cols = _categories(row_field, rv), _categories(col_field, cv)
+        if rows and cols:
+            pairs.append((rows, cols))
+    row_seen = {label for rows, _ in pairs for label in rows}
+    col_seen = {label for _, cols in pairs for label in cols}
+    if row_kind == "scale" and (
+        len(row_seen) > MAX_SCALE_CATEGORIES or len(col_seen) > MAX_SCALE_CATEGORIES
+    ):
+        raise CrosstabError("too_many_categories")
+    row_labels = _category_order(row_field, row_seen)
+    col_labels = _category_order(col_field, col_seen)
+    row_index = {label: i for i, label in enumerate(row_labels)}
+    col_index = {label: j for j, label in enumerate(col_labels)}
+    counts = [[0] * len(col_labels) for _ in row_labels]
+    for rows, cols in pairs:
+        for r in rows:
+            for c in cols:
+                counts[row_index[r]][col_index[c]] += 1
+    row_percent = [
+        [_round(v / sum(line) * 100) if sum(line) else 0.0 for v in line] for line in counts
+    ]
+    multi = row_field.get("type") == "checkbox" or col_field.get("type") == "checkbox"
+    result = CrosstabResult(
+        kind="table",
+        n=len(pairs),
+        row_labels=row_labels,
+        col_labels=col_labels,
+        counts=counts,
+        row_percent=row_percent,
+        **base,
+    )
+    if multi:
+        result.note = "Множественный выбор: один респондент попадает в несколько ячеек, χ² не считается."
+        return result
+    test = stats_math.chi_square_independence(counts)
+    if test is not None:
+        result.chi2 = _round(test.chi2, 3)
+        result.dof = test.dof
+        result.p_value = round(test.p_value, 4)
+        result.cramers_v = _round(test.cramers_v, 3)
+        result.low_expected_share = _round(test.low_expected_share * 100)
+        if test.low_expected_share > 0.2:
+            result.note = "Слишком мало наблюдений в ячейках (ожидаемая частота < 5): вывод ненадёжен."
+    else:
+        result.note = "Для χ² нужно минимум две непустые строки и два непустых столбца."
+    return result
