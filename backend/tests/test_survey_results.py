@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from app.knowledge import survey_templates as tpl
-from app.services import survey_results
+from app.services import survey_answers, survey_results
 
 
 def _with_ids(fields: list[dict[str, Any]], prefix: str) -> list[dict[str, Any]]:
@@ -320,6 +320,92 @@ class CrosstabTests(unittest.TestCase):
         with self.assertRaises(survey_results.CrosstabError) as ctx:
             survey_results.build_crosstab(self.pages, [], "course", "text")
         self.assertEqual(ctx.exception.code, "unsupported_question_type")
+
+
+class ResponsesByDayTests(unittest.TestCase):
+    def test_counts_per_utc_day_oldest_first(self):
+        pages = _pages([{"id": "q", "type": "number", "label": "Q"}])
+        first = datetime(2026, 10, 20, 23, 59, tzinfo=timezone.utc)
+        responses = [
+            SimpleNamespace(answers={"q": 1}, quality_flags=None, duration_seconds=30, submitted_at=when)
+            for when in (
+                datetime(2026, 10, 22, 9, 0, tzinfo=timezone.utc),
+                first,
+                datetime(2026, 10, 22, 18, 0, tzinfo=timezone.utc),
+            )
+        ]
+        days = survey_results.build_results(pages, responses).responses_by_day
+        self.assertEqual([(d.date, d.count) for d in days], [("2026-10-20", 1), ("2026-10-22", 2)])
+
+
+_FORM = [
+    {
+        "id": "p1",
+        "fields": [
+            {
+                "id": "course",
+                "type": "radio",
+                "label": "Курс",
+                "options": [{"id": "c1", "label": "1 курс"}, {"id": "c3", "label": "3 курс"}],
+            },
+            {"id": "score", "type": "number", "label": "Оценка", "config": {"methodology": "csat"}},
+            {"id": "note", "type": "longText", "label": "Комментарий"},
+        ],
+    }
+]
+
+
+class QuestionDefsAndStructureTests(unittest.TestCase):
+    def test_question_defs_keep_form_order_options_and_methodology(self):
+        defs = survey_answers.question_defs(_FORM)
+        self.assertEqual([d["id"] for d in defs], ["course", "score", "note"])
+        self.assertEqual(defs[0]["options"], [{"id": "c1", "label": "1 курс"}, {"id": "c3", "label": "3 курс"}])
+        self.assertEqual(defs[1]["methodology"], "csat")
+        self.assertIsNone(defs[2]["methodology"])
+
+    def test_safe_edits_are_allowed(self):
+        edited = [
+            {
+                "id": "p1",
+                "fields": [
+                    {
+                        "id": "course",
+                        "type": "radio",
+                        "label": "На каком вы курсе?",  # reworded
+                        "options": [
+                            {"id": "c1", "label": "Первый"},  # relabelled
+                            {"id": "c3", "label": "3 курс"},
+                            {"id": "c5", "label": "5 курс"},  # added
+                        ],
+                    },
+                    {"id": "score", "type": "number", "label": "Оценка"},
+                    {"id": "note", "type": "longText", "label": "Комментарий"},
+                    {"id": "extra", "type": "shortText", "label": "Новый вопрос"},  # added
+                ],
+            }
+        ]
+        self.assertEqual(survey_answers.structure_conflicts(_FORM, edited), [])
+
+    def test_removed_retyped_and_option_removals_are_reported(self):
+        edited = [
+            {
+                "id": "p1",
+                "fields": [
+                    {
+                        "id": "course",
+                        "type": "radio",
+                        "label": "Курс",
+                        "options": [{"id": "c1", "label": "1 курс"}],  # c3 removed
+                    },
+                    {"id": "score", "type": "shortText", "label": "Оценка"},  # retyped
+                ],  # note removed
+            }
+        ]
+        problems = survey_answers.structure_conflicts(_FORM, edited)
+        self.assertEqual(len(problems), 3)
+        self.assertTrue(any("«Курс»" in p and "3 курс" in p for p in problems))
+        self.assertTrue(any("«Оценка»" in p and "тип" in p for p in problems))
+        self.assertTrue(any("«Комментарий»" in p and "удалён" in p for p in problems))
 
 
 if __name__ == "__main__":

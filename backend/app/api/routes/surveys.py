@@ -20,6 +20,7 @@ from app.schemas.survey import (
     SurveyAiSummaryRequest,
     SurveyDetail,
     SurveyListItem,
+    SurveyResponseDetail,
     SurveyResponsesPage,
     SurveyResults,
     SurveysCounts,
@@ -200,6 +201,14 @@ async def export_responses_csv(survey_id: str, session: DbSession, user: Current
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f"attachment; filename*=UTF-8''{filename}"},
     )
+
+
+# Declared after ``responses/export.csv`` so that "export.csv" is not taken for a response id
+@router.get("/{survey_id}/responses/{response_id}", response_model=SurveyResponseDetail)
+async def get_response_detail(
+    survey_id: str, response_id: str, session: DbSession, user: CurrentUser
+) -> SurveyResponseDetail:
+    return await survey_service.get_response_detail(session, user, survey_id, response_id)
 
 
 # ─── Respondent (public) ──────────────────────────────────────────────────────

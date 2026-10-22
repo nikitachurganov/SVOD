@@ -497,7 +497,8 @@ const router = createBrowserRouter([
 
       { path: 'surveys/create', element: <CreateSurveyPage /> },
 
-      { path: 'surveys/:id', element: <SurveyViewPage /> },
+      // One route for the survey page and its tabs (/form, /responses[/:responseId], /analytics)
+      { path: 'surveys/:id/*', element: <SurveyViewPage /> },
 
       { path: 'surveys/:id/edit', element: <EditSurveyPage /> },
 

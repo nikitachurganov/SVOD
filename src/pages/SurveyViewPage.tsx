@@ -1,53 +1,41 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Button, Card, Empty, Input, Modal, Spin, Table, Tabs, Tag } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
+import { Alert, Button, Dropdown, Empty, Modal, Spin, Switch, Tabs, Tag } from 'antd';
+import type { MenuProps } from 'antd';
 import {
   ArrowLeftOutlined,
-  CopyOutlined,
-  EditOutlined,
   InboxOutlined,
+  MessageOutlined,
+  MoreOutlined,
+  ShareAltOutlined,
 } from '@ant-design/icons';
 import axios from 'axios';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 
 import {
   archiveSurvey,
-  buildPublicSurveyUrl,
   downloadSurveyResponsesCsv,
   generateSurveyAiSummary,
   getSurveyAiSummary,
   getSurveyById,
-  getSurveyResponses,
   getSurveyResults,
   setSurveyStatus,
   type SurveyAiSummary,
   type SurveyDetail,
-  type SurveyResponseItem,
-  type SurveyResponsesPage,
   type SurveyResults,
 } from '../shared/api/surveys.api';
 import { useBreadcrumbEntity } from '../shared/context/breadcrumb.context';
 import { useNotifications } from '../shared/context/notifications.context';
 import { buildDisplayName } from '../shared/utils/userName';
-import { MethodologySummaryCard } from '../shared/ui/survey/MethodologySummaryCard';
 import { MethodologyReportModal } from '../shared/ui/survey/MethodologyReportModal';
+import { ShareSurveyModal } from '../shared/ui/survey/ShareSurveyModal';
 import { SurveyAiChatPanel } from '../shared/ui/survey/SurveyAiChatPanel';
-import { SurveyOverviewTab } from '../shared/ui/survey/SurveyOverviewTab';
-import { SurveyQuantTab } from '../shared/ui/survey/SurveyQuantTab';
-import { SurveySummaryBar } from '../shared/ui/survey/SurveySummaryBar';
-import { formatDuration } from '../shared/ui/survey/surveyFormat';
-import {
-  SURVEY_STATUS_COLOR,
-  SURVEY_STATUS_LABEL,
-  formatSurveyDate,
-} from './surveyStatus';
+import { SurveyAnalyticsTab } from '../shared/ui/survey/SurveyAnalyticsTab';
+import { SurveyFormTab } from '../shared/ui/survey/SurveyFormTab';
+import { SurveyOverviewTab, type SurveyTabKey } from '../shared/ui/survey/SurveyOverviewTab';
+import { SurveyResponsesTab } from '../shared/ui/survey/SurveyResponsesTab';
+import { SURVEY_STATUS_COLOR, SURVEY_STATUS_LABEL } from './surveyStatus';
 
-const FLAG_LABEL: Record<string, string> = {
-  failed_attention_check: 'Не прошёл проверку внимания',
-  too_fast: 'Слишком быстро',
-};
-
-type AnalysisTab = 'overview' | 'quant' | 'responses';
+const TAB_SEGMENTS: SurveyTabKey[] = ['form', 'responses', 'analytics'];
 
 const aiErrorMessage = (err: unknown): string => {
   if (axios.isAxiosError(err)) {
@@ -62,11 +50,17 @@ const aiErrorMessage = (err: unknown): string => {
 export const SurveyViewPage = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  const { pathname } = useLocation();
   const { setEntityTitle } = useBreadcrumbEntity();
   const { notifySuccess, notifyError } = useNotifications();
 
+  // /surveys/:id[/form|/responses[/:responseId]|/analytics] — the tab lives in the address
+  const [, , , tabSegment, responseSegment] = pathname.split('/');
+  const tabIsKnown = !tabSegment || (TAB_SEGMENTS as string[]).includes(tabSegment);
+  const activeTab: SurveyTabKey = tabIsKnown && tabSegment ? (tabSegment as SurveyTabKey) : 'overview';
+  const selectedResponseId = activeTab === 'responses' && responseSegment ? responseSegment : null;
+
   const [survey, setSurvey] = useState<SurveyDetail | null>(null);
-  const [responses, setResponses] = useState<SurveyResponsesPage | null>(null);
   const [results, setResults] = useState<SurveyResults | null>(null);
   const [excludeFlagged, setExcludeFlagged] = useState(true);
   const [resultsLoading, setResultsLoading] = useState(false);
@@ -75,7 +69,7 @@ export const SurveyViewPage = () => {
   const [busy, setBusy] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<AnalysisTab>('overview');
+  const [shareOpen, setShareOpen] = useState(false);
   const [aiSummary, setAiSummary] = useState<SurveyAiSummary | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -84,15 +78,13 @@ export const SurveyViewPage = () => {
   const load = useCallback(async () => {
     if (!id) return;
     try {
-      const [detail, page, aggregated, summary] = await Promise.all([
+      const [detail, aggregated, summary] = await Promise.all([
         getSurveyById(id),
-        getSurveyResponses(id, { limit: 50 }),
         getSurveyResults(id, true),
         // A missing summary is not an error — it just was not generated yet
         getSurveyAiSummary(id).catch(() => null),
       ]);
       setSurvey(detail);
-      setResponses(page);
       setResults(aggregated);
       setAiSummary(summary);
       setExcludeFlagged(true);
@@ -129,11 +121,6 @@ export const SurveyViewPage = () => {
     } finally {
       setAiLoading(false);
     }
-  };
-
-  const generateAiReport = () => {
-    setActiveTab('overview');
-    void generateAiSummary(false);
   };
 
   useEffect(() => {
@@ -182,16 +169,6 @@ export const SurveyViewPage = () => {
     }
   };
 
-  const copyLink = async () => {
-    if (!survey) return;
-    try {
-      await navigator.clipboard.writeText(buildPublicSurveyUrl(survey.public_token));
-      notifySuccess('Ссылка скопирована');
-    } catch {
-      notifyError('Не удалось скопировать ссылку');
-    }
-  };
-
   const downloadCsv = async () => {
     if (!survey) return;
     try {
@@ -200,6 +177,8 @@ export const SurveyViewPage = () => {
       notifyError('Не удалось скачать ответы');
     }
   };
+
+  if (!tabIsKnown) return <Navigate to={`/surveys/${id}`} replace />;
 
   if (loading) {
     return (
@@ -218,204 +197,154 @@ export const SurveyViewPage = () => {
   }
 
   const isArchived = survey.status === 'archived';
-  const link = buildPublicSurveyUrl(survey.public_token);
-  const responsesCount = responses?.total ?? 0;
+  const base = `/surveys/${survey.id}`;
+  const tabPath = (tab: SurveyTabKey) => (tab === 'overview' ? base : `${base}/${tab}`);
+  const totalResponses = results?.total ?? survey.responses_count;
 
-  const columns: ColumnsType<SurveyResponseItem> = [
-    {
-      title: 'Получен',
-      dataIndex: 'submitted_at',
-      key: 'submitted_at',
-      render: (value: string) => formatSurveyDate(value),
-    },
-    {
-      title: 'Время заполнения',
-      dataIndex: 'duration_seconds',
-      key: 'duration_seconds',
-      render: (value: number | null) => formatDuration(value),
-    },
-    {
-      title: 'Качество',
-      dataIndex: 'quality_flags',
-      key: 'quality_flags',
-      render: (flags: SurveyResponseItem['quality_flags']) => {
-        const active = Object.entries(flags ?? {}).filter(([, v]) => v);
-        return active.length === 0 ? (
-          <Tag color="green">Без замечаний</Tag>
-        ) : (
-          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-            {active.map(([key]) => (
-              <Tag key={key} color="orange">
-                {FLAG_LABEL[key] ?? key}
-              </Tag>
-            ))}
-          </div>
-        );
-      },
-    },
+  const statusAction: { key: string; label: string; status: 'draft' | 'open' | 'closed' } | null =
+    survey.status === 'open'
+      ? { key: 'close', label: 'Остановить приём', status: 'closed' }
+      : survey.status === 'closed'
+        ? { key: 'reopen', label: 'Открыть снова', status: 'open' }
+        : survey.status === 'draft'
+          ? { key: 'publish', label: 'Опубликовать', status: 'open' }
+          : null;
+
+  const menuItems: MenuProps['items'] = [
+    ...(statusAction ? [{ key: statusAction.key, label: statusAction.label }] : []),
+    { key: 'csv', label: 'Скачать ответы (CSV)', disabled: totalResponses === 0 },
+    ...(isArchived ? [] : [{ type: 'divider' as const }, { key: 'archive', label: 'В архив', danger: true }]),
   ];
 
-  const responsesContent = (
-    <>
-      {responses && responses.flagged > 0 && (
-        <Alert
-          type="warning"
-          showIcon
-          style={{ marginBottom: 12 }}
-          message={`Ответов с замечаниями по качеству: ${responses.flagged}`}
-          description="Проверка внимания или слишком быстрое заполнение. В анализе такие ответы исключены, пока включён переключатель; флаги есть в выгрузке CSV."
-        />
-      )}
-      <Table<SurveyResponseItem>
-        rowKey="id"
+  const onMenuClick: MenuProps['onClick'] = ({ key }) => {
+    if (key === 'archive') setArchiveOpen(true);
+    else if (key === 'csv') void downloadCsv();
+    else if (statusAction && key === statusAction.key) void changeStatus(statusAction.status);
+  };
+
+  const qualityFilter = (
+    <label
+      style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8, fontSize: 13, marginBottom: 12 }}
+    >
+      Исключать ответы с замечаниями
+      <Switch
         size="small"
-        columns={columns}
-        dataSource={responses?.items ?? []}
-        locale={{ emptyText: 'Ответов пока нет.' }}
-        pagination={{ pageSize: 10, hideOnSinglePage: true }}
+        checked={excludeFlagged}
+        onChange={(value) => void changeExcludeFlagged(value)}
+        disabled={resultsLoading}
       />
-      {responses && responses.total > responses.items.length && (
-        <div style={{ marginTop: 8, fontSize: 12, color: 'var(--app-text-secondary)' }}>
-          Показаны последние {responses.items.length} ответов. Все ответы — в выгрузке CSV.
-        </div>
-      )}
-    </>
+    </label>
   );
 
   return (
     <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 1180 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <Button
-          type="text"
-          icon={<ArrowLeftOutlined />}
-          aria-label="Вернуться к списку опросов"
-          onClick={() => navigate('/surveys')}
-        />
-        <h1 style={{ margin: 0, fontSize: 22 }}>{survey.name}</h1>
-        <Tag color={SURVEY_STATUS_COLOR[survey.status]}>{SURVEY_STATUS_LABEL[survey.status]}</Tag>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {!isArchived && (
-            <>
-              <Button
-                icon={<EditOutlined />}
-                onClick={() => navigate(`/surveys/${survey.id}/edit`)}
-                disabled={busy}
-              >
-                Изменить
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <Button
+            type="text"
+            icon={<ArrowLeftOutlined />}
+            aria-label="Вернуться к списку опросов"
+            onClick={() => navigate('/surveys')}
+          />
+          <h1 style={{ margin: 0, fontSize: 22, wordBreak: 'break-word' }}>{survey.name}</h1>
+          <Tag color={SURVEY_STATUS_COLOR[survey.status]} style={{ margin: 0 }}>
+            {SURVEY_STATUS_LABEL[survey.status]}
+          </Tag>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {!isArchived && (
+              <Button type="primary" icon={<ShareAltOutlined />} onClick={() => setShareOpen(true)}>
+                Поделиться
               </Button>
-              {survey.status === 'open' ? (
-                <Button onClick={() => void changeStatus('closed')} loading={busy}>
-                  Остановить приём
-                </Button>
-              ) : (
-                <Button type="primary" onClick={() => void changeStatus('open')} loading={busy}>
-                  {survey.status === 'closed' ? 'Открыть снова' : 'Опубликовать'}
-                </Button>
-              )}
-              <Button
-                icon={<InboxOutlined />}
-                aria-label="В архив"
-                title="Переместить в архив"
-                onClick={() => setArchiveOpen(true)}
-                disabled={busy}
-              />
-            </>
-          )}
+            )}
+            <Button icon={<MessageOutlined />} onClick={() => setChatOpen(true)}>
+              Спросить ИИ
+            </Button>
+            <Dropdown menu={{ items: menuItems, onClick: onMenuClick }} trigger={['click']} placement="bottomRight">
+              <Button icon={<MoreOutlined />} aria-label="Другие действия" loading={busy} />
+            </Dropdown>
+          </div>
+        </div>
+        <div style={{ marginTop: 4, marginLeft: 44, fontSize: 12, color: 'var(--app-text-secondary)' }}>
+          {survey.anonymous ? 'Анонимный опрос' : 'Опрос не анонимный'} · Автор:{' '}
+          {survey.author ? buildDisplayName(survey.author) : 'неизвестен'}
         </div>
       </div>
 
-      <Card size="small" title="Ссылка для респондентов">
-        {survey.status === 'open' ? (
-          <div style={{ display: 'flex', gap: 8 }}>
-            <Input value={link} readOnly aria-label="Ссылка на опрос" />
-            <Button icon={<CopyOutlined />} onClick={() => void copyLink()}>
-              Копировать
-            </Button>
-          </div>
-        ) : (
-          <span style={{ color: 'var(--app-text-secondary)' }}>
-            {survey.status === 'draft'
-              ? 'Опубликуйте опрос, чтобы получить рабочую ссылку.'
-              : survey.status === 'closed'
-                ? 'Приём ответов остановлен — ссылка не принимает новые ответы.'
-                : 'Опрос в архиве.'}
-          </span>
-        )}
-        <div style={{ marginTop: 8, fontSize: 12, color: 'var(--app-text-secondary)' }}>
-          {survey.anonymous
-            ? 'Опрос анонимный: данные о респонденте не сохраняются.'
-            : 'Опрос не анонимный: сохраняются технические данные браузера.'}{' '}
-          Автор: {survey.author ? buildDisplayName(survey.author) : 'неизвестен'}.
-        </div>
-      </Card>
-
-      {survey.methodology_summary && (
-        <MethodologySummaryCard
-          summary={survey.methodology_summary}
-          onOpenReport={() => setReportOpen(true)}
-        />
-      )}
-
-      <SurveySummaryBar
-        survey={survey}
-        results={results}
-        resultsLoading={resultsLoading}
-        excludeFlagged={excludeFlagged}
-        onExcludeFlaggedChange={(value) => void changeExcludeFlagged(value)}
-        aiLoading={aiLoading}
-        onCopyLink={() => void copyLink()}
-        onDownloadCsv={() => void downloadCsv()}
-        onGenerateAiReport={generateAiReport}
-        onOpenChat={() => setChatOpen(true)}
+      <Tabs
+        activeKey={activeTab}
+        onChange={(key) => navigate(tabPath(key as SurveyTabKey))}
+        items={[
+          {
+            key: 'overview',
+            label: 'Обзор',
+            children: results ? (
+              <SurveyOverviewTab
+                survey={survey}
+                results={results}
+                onShare={() => setShareOpen(true)}
+                onOpenTab={(tab) => navigate(tabPath(tab))}
+              />
+            ) : null,
+          },
+          {
+            key: 'form',
+            label: 'Форма',
+            children: (
+              <SurveyFormTab
+                survey={survey}
+                onEdit={() => navigate(`${base}/edit`)}
+                onOpenReport={() => setReportOpen(true)}
+              />
+            ),
+          },
+          {
+            key: 'responses',
+            label: `Ответы (${totalResponses})`,
+            children: (
+              <SurveyResponsesTab
+                surveyId={survey.id}
+                pages={survey.pages}
+                selectedId={selectedResponseId}
+                onOpen={(responseId) => navigate(`${base}/responses/${responseId}`)}
+                onCloseDetail={() => navigate(`${base}/responses`)}
+                onDownloadCsv={() => void downloadCsv()}
+              />
+            ),
+          },
+          {
+            key: 'analytics',
+            label: 'Аналитика',
+            children: !results ? null : results.total === 0 ? (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description="Аналитика появится после первых ответов"
+              />
+            ) : (
+              <Spin spinning={resultsLoading}>
+                {qualityFilter}
+                <SurveyAnalyticsTab
+                  surveyId={survey.id}
+                  results={results}
+                  excludeFlagged={excludeFlagged}
+                  aiSummary={aiSummary}
+                  aiLoading={aiLoading}
+                  aiError={aiError}
+                  onGenerateAiSummary={(force) => void generateAiSummary(force)}
+                />
+              </Spin>
+            ),
+          },
+        ]}
       />
 
-      <Card size="small" title="Анализ результатов">
-        {!results ? (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: 16 }}>
-            <Spin />
-          </div>
-        ) : results.total === 0 ? (
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Ответов пока нет" />
-        ) : (
-          <Spin spinning={resultsLoading}>
-            <Tabs
-              activeKey={activeTab}
-              onChange={(key) => setActiveTab(key as AnalysisTab)}
-              items={[
-                {
-                  key: 'overview',
-                  label: 'Обзор',
-                  children: (
-                    <SurveyOverviewTab
-                      results={results}
-                      aiSummary={aiSummary}
-                      aiLoading={aiLoading}
-                      aiError={aiError}
-                      onGenerateAiSummary={(force) => void generateAiSummary(force)}
-                    />
-                  ),
-                },
-                {
-                  key: 'quant',
-                  label: 'Количественный анализ',
-                  children: (
-                    <SurveyQuantTab
-                      surveyId={survey.id}
-                      results={results}
-                      excludeFlagged={excludeFlagged}
-                    />
-                  ),
-                },
-                {
-                  key: 'responses',
-                  label: `Ответы (${responsesCount})`,
-                  children: responsesContent,
-                },
-              ]}
-            />
-          </Spin>
-        )}
-      </Card>
+      <ShareSurveyModal
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        publicToken={survey.public_token}
+        status={survey.status}
+        onPublish={() => void changeStatus('open')}
+        publishing={busy}
+      />
 
       <SurveyAiChatPanel
         open={chatOpen}
@@ -439,7 +368,7 @@ export const SurveyViewPage = () => {
         title="Переместить в архив?"
         okText="В архив"
         cancelText="Отмена"
-        okButtonProps={{ danger: true, loading: busy }}
+        okButtonProps={{ danger: true, loading: busy, icon: <InboxOutlined /> }}
         onCancel={() => setArchiveOpen(false)}
         onOk={() => void handleArchive()}
       >

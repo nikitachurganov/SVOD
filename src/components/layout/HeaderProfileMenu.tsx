@@ -1,7 +1,5 @@
-import { useState } from 'react';
 import { Popover } from 'antd';
 import { HeaderProfileMenuContent } from './ProfileBlock';
-import { TelegramLinkModal } from './TelegramLinkModal';
 
 interface Props {
   open: boolean;
@@ -22,8 +20,6 @@ export const HeaderProfileMenu = ({
   resolvedEmail,
   onCreateOrg,
 }: Props) => {
-  const [telegramOpen, setTelegramOpen] = useState(false);
-
   const handleOpenChange = (next: boolean) => {
     if (next) {
       closeNotifications();
@@ -50,7 +46,6 @@ export const HeaderProfileMenu = ({
           <HeaderProfileMenuContent
             onClose={() => onOpenChange(false)}
             onCreateOrg={onCreateOrg}
-            onOpenTelegram={() => setTelegramOpen(true)}
           />
         }
       >
@@ -71,8 +66,6 @@ export const HeaderProfileMenu = ({
           </span>
         </button>
       </Popover>
-      {/* Outside the popover: its content is destroyed when the menu closes */}
-      <TelegramLinkModal open={telegramOpen} onClose={() => setTelegramOpen(false)} />
     </div>
   );
 };

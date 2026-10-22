@@ -15,6 +15,7 @@ from app.schemas.survey import (
     MetricResult,
     QuestionOptionStat,
     QuestionStat,
+    ResponsesDay,
     ScaleBucket,
     SurveyResults,
 )
@@ -413,6 +414,15 @@ def _completion_rate(fields: list[dict[str, Any]], answers_list: list[dict[str, 
     return _round(sum(shares) / len(shares) * 100)
 
 
+def _responses_by_day(dates: list[Any]) -> list[ResponsesDay]:
+    """Responses received per calendar day (UTC), oldest day first."""
+    per_day: dict[str, int] = {}
+    for moment in dates:
+        key = moment.date().isoformat()
+        per_day[key] = per_day.get(key, 0) + 1
+    return [ResponsesDay(date=day, count=per_day[day]) for day in sorted(per_day)]
+
+
 def build_results(pages: Any, responses: list[Any], *, exclude_flagged: bool = True) -> SurveyResults:
     usable = [r for r in responses if not (exclude_flagged and r.quality_flags)]
     answers_list = [r.answers for r in usable if isinstance(r.answers, dict)]
@@ -430,6 +440,7 @@ def build_results(pages: Any, responses: list[Any], *, exclude_flagged: bool = T
         completion_rate=_completion_rate(fields, answers_list),
         first_response_at=min(dates).isoformat() if dates else None,
         last_response_at=max(dates).isoformat() if dates else None,
+        responses_by_day=_responses_by_day(dates),
         metrics=compute_metrics(fields, answers_list),
         questions=build_question_stats(fields, answers_list),
     )

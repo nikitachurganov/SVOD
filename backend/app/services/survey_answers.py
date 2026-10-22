@@ -34,6 +34,57 @@ def answerable_fields(pages: Any) -> list[dict[str, Any]]:
     ]
 
 
+def _option_pairs(field: dict[str, Any]) -> list[tuple[str, str]]:
+    return [
+        (o["id"], str(o.get("label", "")))
+        for o in field.get("options") or []
+        if isinstance(o, dict) and isinstance(o.get("id"), str)
+    ]
+
+
+def question_defs(pages: Any) -> list[dict[str, Any]]:
+    """Questions in form order with their options — for showing a response as the respondent saw it."""
+    defs: list[dict[str, Any]] = []
+    for field in answerable_fields(pages):
+        config = field.get("config")
+        methodology = config.get("methodology") if isinstance(config, dict) else None
+        defs.append(
+            {
+                "id": field["id"],
+                "type": str(field.get("type") or ""),
+                "label": str(field.get("label") or field["id"]),
+                "options": [{"id": oid, "label": label} for oid, label in _option_pairs(field)],
+                "methodology": methodology if isinstance(methodology, str) else None,
+            }
+        )
+    return defs
+
+
+def structure_conflicts(old_pages: Any, new_pages: Any) -> list[str]:
+    """Edits that would change the meaning of answers already collected.
+
+    A response stores answers by question id and option id, so once responses exist a question
+    must not disappear, change its type, or lose / replace an option. Rewording, adding questions
+    and adding options stay allowed (every response keeps its own form snapshot).
+    """
+    new_by_id = {f["id"]: f for f in answerable_fields(new_pages)}
+    problems: list[str] = []
+    for old in answerable_fields(old_pages):
+        label = str(old.get("label") or old["id"])
+        new = new_by_id.get(old["id"])
+        if new is None:
+            problems.append(f"Вопрос «{label}» удалён")
+            continue
+        if new.get("type") != old.get("type"):
+            problems.append(f"У вопроса «{label}» изменён тип")
+            continue
+        kept = {oid for oid, _ in _option_pairs(new)}
+        removed = [text for oid, text in _option_pairs(old) if oid not in kept]
+        if removed:
+            problems.append(f"У вопроса «{label}» удалены варианты: {', '.join(removed)}")
+    return problems
+
+
 def strip_private_config(pages: Any) -> list[Any]:
     """Pages for respondents: without the correct answer of attention checks."""
     cleaned = copy.deepcopy(pages) if isinstance(pages, list) else []

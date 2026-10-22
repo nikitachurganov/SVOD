@@ -225,7 +225,7 @@ export const SurveyQuantTab = ({ surveyId, results, excludeFlagged }: SurveyQuan
                 ))}
                 {q.answered > q.samples.length && (
                   <li style={{ listStyle: 'none', marginLeft: -18, color: 'var(--app-text-secondary)' }}>
-                    …и ещё {q.answered - q.samples.length} — в выгрузке CSV
+                    …и ещё {q.answered - q.samples.length} — на вкладке «Ответы»
                   </li>
                 )}
               </ul>

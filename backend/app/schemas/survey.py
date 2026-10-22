@@ -178,6 +178,8 @@ class SurveySubmittedResponse(BaseModel):
 
 class SurveyResponseItem(BaseModel):
     id: str
+    # Ordinal of the response in the order of arrival: "Ответ №12"
+    number: int = 0
     submitted_at: str
     duration_seconds: int | None = None
     quality_flags: dict[str, Any] | None = None
@@ -188,6 +190,36 @@ class SurveyResponsesPage(BaseModel):
     total: int
     flagged: int
     items: list[SurveyResponseItem]
+
+
+class SurveyQuestionOption(BaseModel):
+    id: str
+    label: str
+
+
+class SurveyQuestion(BaseModel):
+    """A question as the respondent saw it (taken from the form snapshot of the response)"""
+
+    id: str
+    type: str
+    label: str
+    options: list[SurveyQuestionOption] = Field(default_factory=list)
+    methodology: str | None = None
+
+
+class SurveyResponseDetail(BaseModel):
+    id: str
+    number: int
+    total: int
+    submitted_at: str
+    duration_seconds: int | None = None
+    quality_flags: dict[str, Any] | None = None
+    answers: dict[str, Any]
+    # Questions in the order of the form the respondent filled in
+    questions: list[SurveyQuestion]
+    # Neighbours by time of arrival: the previous (older) and the next (newer) response
+    prev_id: str | None = None
+    next_id: str | None = None
 
 
 class QuestionOptionStat(BaseModel):
@@ -227,6 +259,11 @@ class MetricResult(BaseModel):
     interpretation: str = ""
 
 
+class ResponsesDay(BaseModel):
+    date: str  # YYYY-MM-DD, UTC
+    count: int
+
+
 class SurveyResults(BaseModel):
     total: int
     used: int
@@ -238,6 +275,7 @@ class SurveyResults(BaseModel):
     completion_rate: float | None = None
     first_response_at: str | None = None
     last_response_at: str | None = None
+    responses_by_day: list[ResponsesDay] = Field(default_factory=list)
     metrics: list[MetricResult] = Field(default_factory=list)
     questions: list[QuestionStat] = Field(default_factory=list)
 

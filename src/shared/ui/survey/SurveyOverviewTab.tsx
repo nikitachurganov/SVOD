@@ -1,165 +1,121 @@
-import { Alert, Button, Card, Statistic, Tag } from 'antd';
-import { ReloadOutlined, RobotOutlined } from '@ant-design/icons';
+import { Button, Card, Empty, Statistic, Tooltip } from 'antd';
+import { InfoCircleOutlined } from '@ant-design/icons';
 
-import type { SurveyAiSummary, SurveyResults } from '../../api/surveys.api';
-import { MetricCard } from './MetricCard';
-import { SegmentPieChart } from './SurveyCharts';
+import type { SurveyDetail, SurveyResults } from '../../api/surveys.api';
+import { DailyResponsesChart } from './SurveyCharts';
 import { formatDateTime, formatDuration, formatNumber } from './surveyFormat';
 
-const MAX_SEGMENT_OPTIONS = 8;
-const MAX_SEGMENT_CHARTS = 4;
+export type SurveyTabKey = 'overview' | 'form' | 'responses' | 'analytics';
+
+const COLLECTION_STATE: Record<SurveyDetail['status'], string> = {
+  draft: 'Черновик: ссылка не работает',
+  open: 'Принимает ответы',
+  closed: 'Приём остановлен, ответы доступны для просмотра',
+  archived: 'В архиве',
+};
 
 interface SurveyOverviewTabProps {
+  survey: SurveyDetail;
   results: SurveyResults;
-  aiSummary: SurveyAiSummary | null;
-  aiLoading: boolean;
-  aiError: string | null;
-  onGenerateAiSummary: (force: boolean) => void;
+  onShare: () => void;
+  onOpenTab: (tab: SurveyTabKey) => void;
 }
 
-const AiSummaryCard = ({
-  aiSummary,
-  aiLoading,
-  aiError,
-  onGenerate,
-}: {
-  aiSummary: SurveyAiSummary | null;
-  aiLoading: boolean;
-  aiError: string | null;
-  onGenerate: (force: boolean) => void;
-}) => (
-  <Card
-    size="small"
-    title={
-      <span>
-        <RobotOutlined style={{ color: 'var(--app-primary)', marginRight: 8 }} />
-        AI-резюме
-      </span>
-    }
-    extra={
-      <Button
-        size="small"
-        icon={aiSummary ? <ReloadOutlined /> : <RobotOutlined />}
-        loading={aiLoading}
-        onClick={() => onGenerate(true)}
-      >
-        {aiSummary ? 'Обновить' : 'Сгенерировать'}
-      </Button>
-    }
-  >
-    {aiError && <Alert type="error" showIcon message={aiError} style={{ marginBottom: 8 }} />}
-    {aiSummary ? (
-      <>
-        <ul style={{ margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {aiSummary.bullets.map((bullet, index) => (
-            <li key={index} style={{ lineHeight: 1.5 }}>
-              {bullet}
-            </li>
-          ))}
-        </ul>
-        <div
-          style={{
-            marginTop: 10,
-            display: 'flex',
-            gap: 8,
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            fontSize: 12,
-            color: 'var(--app-text-secondary)',
-          }}
-        >
-          <span>
-            Сформировано {formatDateTime(aiSummary.generated_at)} по {aiSummary.responses_used}{' '}
-            ответам. Резюме написано ИИ по агрегированным данным — проверяйте выводы.
-          </span>
-          {aiSummary.stale && (
-            <Tag color="orange" style={{ margin: 0 }}>
-              Появились новые ответы — обновите резюме
-            </Tag>
-          )}
-        </div>
-      </>
-    ) : (
-      !aiLoading && (
-        <span style={{ color: 'var(--app-text-secondary)' }}>
-          Нажмите «Сгенерировать», чтобы получить 3–5 главных выводов по результатам опроса.
-        </span>
-      )
-    )}
-  </Card>
+const Fact = ({ label, value }: { label: string; value: string }) => (
+  <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 160 }}>
+    <span style={{ fontSize: 12, color: 'var(--app-text-secondary)' }}>{label}</span>
+    <strong style={{ fontSize: 14 }}>{value}</strong>
+  </div>
 );
 
-export const SurveyOverviewTab = ({
-  results,
-  aiSummary,
-  aiLoading,
-  aiError,
-  onGenerateAiSummary,
-}: SurveyOverviewTabProps) => {
-  // Segmentation questions: closed questions with few options that are not a methodology block
-  const segments = results.questions
-    .filter(
-      (q) =>
-        q.kind === 'choice' &&
-        !q.methodology &&
-        q.answered > 0 &&
-        q.options.length >= 2 &&
-        q.options.length <= MAX_SEGMENT_OPTIONS,
-    )
-    .slice(0, MAX_SEGMENT_CHARTS);
+/** "What is going on with the survey right now?" */
+export const SurveyOverviewTab = ({ survey, results, onShare, onOpenTab }: SurveyOverviewTabProps) => {
+  const hasResponses = results.total > 0;
+  const days = results.responses_by_day;
+  const canShare = survey.status !== 'archived';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-        <Card size="small" style={{ flex: '1 1 180px' }}>
-          <Statistic title="Всего ответов" value={results.total} />
-          <div style={{ fontSize: 12, color: 'var(--app-text-secondary)' }}>
-            В анализе: {results.used}
-          </div>
+      <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+        <Card size="small">
+          <Statistic title="Всего отправок" value={results.total} />
         </Card>
-        <Card size="small" style={{ flex: '1 1 180px' }}>
+        <Card size="small">
           <Statistic
-            title="Полнота ответов"
-            value={results.completion_rate === null ? '—' : formatNumber(results.completion_rate)}
+            title={
+              <span>
+                Полнота ответов{' '}
+                <Tooltip title="Средняя доля вопросов, на которые отвечал респондент">
+                  <InfoCircleOutlined aria-label="Что такое полнота ответов" />
+                </Tooltip>
+              </span>
+            }
+            value={results.completion_rate === null ? 'Нет данных' : formatNumber(results.completion_rate)}
             suffix={results.completion_rate === null ? undefined : '%'}
           />
-          <div style={{ fontSize: 12, color: 'var(--app-text-secondary)' }}>
-            Доля вопросов, на которые отвечал респондент
-          </div>
         </Card>
-        <Card size="small" style={{ flex: '1 1 180px' }}>
-          <Statistic title="Среднее время" value={formatDuration(results.mean_duration_seconds)} />
-          <div style={{ fontSize: 12, color: 'var(--app-text-secondary)' }}>
-            Медиана: {formatDuration(results.median_duration_seconds)}
-          </div>
+        <Card size="small">
+          <Statistic
+            title="Среднее время"
+            value={results.mean_duration_seconds === null ? 'Нет данных' : formatDuration(results.mean_duration_seconds)}
+          />
+        </Card>
+        <Card size="small">
+          <Statistic
+            title="Последний ответ"
+            value={results.last_response_at ? formatDateTime(results.last_response_at) : 'Ответов пока нет'}
+            styles={{ content: { fontSize: 18 } }}
+          />
         </Card>
       </div>
 
-      <AiSummaryCard
-        aiSummary={aiSummary}
-        aiLoading={aiLoading}
-        aiError={aiError}
-        onGenerate={onGenerateAiSummary}
-      />
-
-      {results.metrics.length > 0 && (
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          {results.metrics.map((metric) => (
-            <MetricCard key={metric.id} metric={metric} />
-          ))}
-        </div>
+      {hasResponses ? (
+        <Card size="small" title="Динамика ответов">
+          {days.length >= 2 ? (
+            <DailyResponsesChart days={days} />
+          ) : (
+            <span style={{ color: 'var(--app-text-secondary)' }}>
+              График появится, когда ответы придут минимум за два разных дня.
+            </span>
+          )}
+        </Card>
+      ) : (
+        <Card size="small">
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description="Ответов пока нет. Поделитесь ссылкой и пройдите опрос сами, чтобы проверить, как выглядит форма."
+          >
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+              {canShare && (
+                <Button type="primary" onClick={onShare}>
+                  Поделиться
+                </Button>
+              )}
+              <Button onClick={() => onOpenTab('form')}>Посмотреть форму</Button>
+            </div>
+          </Empty>
+        </Card>
       )}
 
-      {segments.length > 0 && (
-        <div>
-          <h3 style={{ margin: '0 0 8px', fontSize: 15 }}>Демография и сегменты</h3>
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            {segments.map((q) => (
-              <Card key={q.field_id} size="small" title={q.label} style={{ flex: '1 1 320px' }}>
-                <SegmentPieChart options={q.options} />
-              </Card>
-            ))}
-          </div>
+      <Card size="small" title="Об опросе">
+        <p style={{ margin: '0 0 12px', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+          {survey.description?.trim() || (
+            <span style={{ color: 'var(--app-text-secondary)' }}>Описание не добавлено.</span>
+          )}
+        </p>
+        <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+          <Fact label="Сбор ответов" value={COLLECTION_STATE[survey.status]} />
+          <Fact label="Первый ответ" value={results.first_response_at ? formatDateTime(results.first_response_at) : '—'} />
+          <Fact label="Вопросов в форме" value={String(survey.questions_count)} />
+        </div>
+      </Card>
+
+      {hasResponses && (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <Button type="primary" onClick={() => onOpenTab('responses')}>
+            Смотреть ответы
+          </Button>
+          <Button onClick={() => onOpenTab('analytics')}>Открыть аналитику</Button>
         </div>
       )}
     </div>

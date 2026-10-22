@@ -106,6 +106,8 @@ export interface SurveyPayload {
 
 export interface SurveyResponseItem {
   id: string;
+  /** Ordinal in the order of arrival: "Ответ №12" */
+  number: number;
   submitted_at: string;
   duration_seconds: number | null;
   quality_flags: Record<string, boolean> | null;
@@ -116,6 +118,35 @@ export interface SurveyResponsesPage {
   total: number;
   flagged: number;
   items: SurveyResponseItem[];
+}
+
+/** A question as the respondent saw it (from the form snapshot stored with the response) */
+export interface SurveyQuestion {
+  id: string;
+  type: string;
+  label: string;
+  options: Array<{ id: string; label: string }>;
+  methodology: string | null;
+}
+
+export interface SurveyResponseDetail {
+  id: string;
+  number: number;
+  total: number;
+  submitted_at: string;
+  duration_seconds: number | null;
+  quality_flags: Record<string, boolean> | null;
+  answers: Record<string, unknown>;
+  questions: SurveyQuestion[];
+  /** Received just before / just after this one */
+  prev_id: string | null;
+  next_id: string | null;
+}
+
+export interface ResponsesDay {
+  /** YYYY-MM-DD, UTC */
+  date: string;
+  count: number;
 }
 
 export interface QuestionOptionStat {
@@ -161,6 +192,7 @@ export interface SurveyResults {
   completion_rate: number | null;
   first_response_at: string | null;
   last_response_at: string | null;
+  responses_by_day: ResponsesDay[];
   metrics: MetricResult[];
   questions: QuestionStat[];
 }
@@ -291,6 +323,14 @@ export const getSurveyResponses = async (
   params: { limit?: number; offset?: number } = {},
 ): Promise<SurveyResponsesPage> => {
   const { data } = await api.get<SurveyResponsesPage>(`/surveys/${id}/responses`, { params });
+  return data;
+};
+
+export const getSurveyResponseDetail = async (
+  id: string,
+  responseId: string,
+): Promise<SurveyResponseDetail> => {
+  const { data } = await api.get<SurveyResponseDetail>(`/surveys/${id}/responses/${responseId}`);
   return data;
 };
 

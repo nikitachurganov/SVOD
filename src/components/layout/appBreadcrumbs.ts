@@ -65,7 +65,9 @@ export const getBreadcrumbsForPath = (
     ];
   }
 
-  const surveyDetailMatch = pathname.match(/^\/surveys\/([^/]+)$/);
+  const surveyDetailMatch = pathname.match(
+    /^\/surveys\/([^/]+)(?:\/(?:form|analytics|responses(?:\/[^/]+)?))?$/,
+  );
   if (surveyDetailMatch && surveyDetailMatch[1] !== 'create') {
     return [
       { title: 'Опросы', path: '/surveys' },

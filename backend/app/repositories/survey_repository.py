@@ -149,6 +149,48 @@ async def count_responses(
     return int(result.scalar_one() or 0)
 
 
+async def get_response(
+    session: AsyncSession, survey_id: uuid.UUID, response_id: uuid.UUID
+) -> SurveyResponse | None:
+    result = await session.execute(
+        select(SurveyResponse).where(
+            SurveyResponse.id == response_id, SurveyResponse.survey_id == survey_id
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def response_number(
+    session: AsyncSession, survey_id: uuid.UUID, submitted_at: datetime
+) -> int:
+    """Ordinal of a response in the order of arrival (the first received one is 1)."""
+    result = await session.execute(
+        select(func.count(SurveyResponse.id)).where(
+            SurveyResponse.survey_id == survey_id, SurveyResponse.submitted_at <= submitted_at
+        )
+    )
+    return int(result.scalar_one() or 0)
+
+
+async def neighbour_response_ids(
+    session: AsyncSession, survey_id: uuid.UUID, submitted_at: datetime
+) -> tuple[uuid.UUID | None, uuid.UUID | None]:
+    """(previous = received just before, next = received just after)."""
+    older = await session.execute(
+        select(SurveyResponse.id)
+        .where(SurveyResponse.survey_id == survey_id, SurveyResponse.submitted_at < submitted_at)
+        .order_by(SurveyResponse.submitted_at.desc())
+        .limit(1)
+    )
+    newer = await session.execute(
+        select(SurveyResponse.id)
+        .where(SurveyResponse.survey_id == survey_id, SurveyResponse.submitted_at > submitted_at)
+        .order_by(SurveyResponse.submitted_at.asc())
+        .limit(1)
+    )
+    return older.scalar_one_or_none(), newer.scalar_one_or_none()
+
+
 async def last_response_at(session: AsyncSession, survey_id: uuid.UUID) -> datetime | None:
     result = await session.execute(
         select(func.max(SurveyResponse.submitted_at)).where(SurveyResponse.survey_id == survey_id)

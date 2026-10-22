@@ -6,13 +6,11 @@ import { useThemeMode } from '../../shared/context/theme.context';
 export interface HeaderProfileMenuContentProps {
   onClose: () => void;
   onCreateOrg: () => void;
-  onOpenTelegram: () => void;
 }
 
 export const HeaderProfileMenuContent = ({
   onClose,
   onCreateOrg,
-  onOpenTelegram,
 }: HeaderProfileMenuContentProps) => {
   const { signOut } = useAuth();
   const { themeMode, toggleTheme } = useThemeMode();
@@ -32,11 +30,6 @@ export const HeaderProfileMenuContent = ({
     onCreateOrg();
   };
 
-  const handleOpenTelegram = () => {
-    onClose();
-    onOpenTelegram();
-  };
-
   const handleLogout = () => {
     onClose();
     void handleSignOut();
@@ -50,14 +43,6 @@ export const HeaderProfileMenuContent = ({
         onClick={handleCreateOrg}
       >
         Создать организацию
-      </button>
-
-      <button
-        type="button"
-        className="app-profile-dropdown__item"
-        onClick={handleOpenTelegram}
-      >
-        Telegram
       </button>
 
       <div className="app-profile-dropdown__item app-profile-dropdown__item--switch">

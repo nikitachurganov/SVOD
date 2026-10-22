@@ -22,6 +22,8 @@ from app.schemas.survey import (
     SurveyAiSummaryRequest,
     SurveyDetail,
     SurveyListItem,
+    SurveyQuestion,
+    SurveyResponseDetail,
     SurveyResponseItem,
     SurveyResponsesPage,
     SurveyResults,
@@ -207,6 +209,13 @@ async def update_survey(
     session: AsyncSession, user: User, survey_id: str, payload: UpdateSurveyRequest
 ) -> SurveyDetail:
     survey = await _get_for_member(session, survey_id, user)
+    if await survey_repository.count_responses(session, survey.id) > 0:
+        problems = survey_answers.structure_conflicts(survey.pages, payload.pages)
+        if problems:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={"code": "survey_structure_locked", "problems": problems},
+            )
     survey.name = payload.name.strip()
     survey.description = payload.description
     survey.pages = payload.pages
@@ -264,19 +273,52 @@ async def list_responses(
 ) -> SurveyResponsesPage:
     survey = await _get_for_member(session, survey_id, user)
     rows = await survey_repository.list_responses(session, survey.id, limit=limit, offset=offset)
+    total = await survey_repository.count_responses(session, survey.id)
     return SurveyResponsesPage(
-        total=await survey_repository.count_responses(session, survey.id),
+        total=total,
         flagged=await survey_repository.count_responses(session, survey.id, flagged_only=True),
         items=[
             SurveyResponseItem(
                 id=str(r.id),
+                # The list is newest first, so the number counts down from the total
+                number=total - offset - index,
                 submitted_at=r.submitted_at.isoformat(),
                 duration_seconds=r.duration_seconds,
                 quality_flags=r.quality_flags,
                 answers=r.answers if isinstance(r.answers, dict) else {},
             )
-            for r in rows
+            for index, r in enumerate(rows)
         ],
+    )
+
+
+async def get_response_detail(
+    session: AsyncSession, user: User, survey_id: str, response_id: str
+) -> SurveyResponseDetail:
+    survey = await _get_for_member(session, survey_id, user)
+    response = await survey_repository.get_response(
+        session, survey.id, _parse_uuid(response_id, "Response not found")
+    )
+    if response is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Response not found")
+    # The form as the respondent saw it; the survey may have been edited since
+    questions = survey_answers.question_defs(response.schema_snapshot)
+    if not questions:
+        questions = survey_answers.question_defs(survey.pages)
+    older, newer = await survey_repository.neighbour_response_ids(
+        session, survey.id, response.submitted_at
+    )
+    return SurveyResponseDetail(
+        id=str(response.id),
+        number=await survey_repository.response_number(session, survey.id, response.submitted_at),
+        total=await survey_repository.count_responses(session, survey.id),
+        submitted_at=response.submitted_at.isoformat(),
+        duration_seconds=response.duration_seconds,
+        quality_flags=response.quality_flags,
+        answers=response.answers if isinstance(response.answers, dict) else {},
+        questions=[SurveyQuestion(**q) for q in questions],
+        prev_id=str(older) if older else None,
+        next_id=str(newer) if newer else None,
     )
 
 

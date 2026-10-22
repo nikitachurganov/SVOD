@@ -1,6 +1,6 @@
 import { Bar, Column, Pie } from '@ant-design/charts';
 
-import type { QuestionOptionStat, QuestionStat } from '../../api/surveys.api';
+import type { QuestionOptionStat, QuestionStat, ResponsesDay } from '../../api/surveys.api';
 import { useThemeMode } from '../../context/theme.context';
 
 const CHART_HEIGHT = 220;
@@ -62,6 +62,32 @@ export const SegmentPieChart = ({ options }: { options: QuestionOptionStat[] }) 
       height={CHART_HEIGHT}
       label={{ text: 'count', position: 'inside' }}
       legend={{ color: { position: 'bottom', layout: { justifyContent: 'center' } } }}
+    />
+  );
+};
+
+/** Responses received per day */
+export const DailyResponsesChart = ({ days }: { days: ResponsesDay[] }) => {
+  const theme = useChartTheme();
+  const data = days.map((d) => ({
+    day: new Date(`${d.date}T00:00:00Z`).toLocaleDateString('ru-RU', {
+      day: '2-digit',
+      month: '2-digit',
+      timeZone: 'UTC',
+    }),
+    count: d.count,
+  }));
+  return (
+    <Column
+      theme={theme}
+      data={data}
+      xField="day"
+      yField="count"
+      height={CHART_HEIGHT}
+      axis={{ x: { title: false }, y: { title: false, tickMinStep: 1 } }}
+      label={{ text: 'count', position: 'top' }}
+      tooltip={{ items: [{ channel: 'y', name: 'Ответов' }] }}
+      legend={false}
     />
   );
 };
