@@ -112,7 +112,7 @@ cd /opt/svod
 ### Корневой `.env` (Compose + PostgreSQL)
 
 ```bash
-cp .env.production.example .env
+cp frontend.env.production.example .env
 nano .env
 ```
 
@@ -177,7 +177,7 @@ cd /opt/svod
 docker compose -f docker-compose.production.yml up -d --build
 ```
 
-Миграции применяются автоматически при старте контейнера `api` (`alembic upgrade head`).
+Миграции применяет сервис `migrate` (`alembic upgrade head`): `api`, `worker` и `telegram-bot` стартуют только после его успешного завершения.
 
 Проверка:
 
@@ -399,6 +399,8 @@ docker compose -f docker-compose.production.yml build
 | `VITE_FORMILY_RUNTIME` | `true` | `true` |
 
 ### Backend
+
+Неполная сводка основных переменных; полный справочник с значениями по умолчанию — в [ENV.md](./ENV.md). Операционные действия после установки — в [RUNBOOK.md](./RUNBOOK.md).
 
 | Переменная | Обязательна | Пример |
 |------------|-------------|--------|

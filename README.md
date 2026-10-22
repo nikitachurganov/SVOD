@@ -1,5 +1,13 @@
 # my-app frontend
 
+## Документация
+
+- [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) — запуск окружения, команды, тесты, чек-лист перед PR
+- [docs/ENV.md](docs/ENV.md) — справочник переменных окружения
+- [docs/RUNBOOK.md](docs/RUNBOOK.md) — деплой, мониторинг, диагностика, откат
+- [docs/DEPLOYMENT_VPS.md](docs/DEPLOYMENT_VPS.md) — первичная установка на VPS
+- [docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md) — обзор продукта и стека
+
 ## Routing and refresh (404 fix)
 
 The app uses browser history routing (`createBrowserRouter`), so production hosting must rewrite unknown frontend paths to `index.html`.
