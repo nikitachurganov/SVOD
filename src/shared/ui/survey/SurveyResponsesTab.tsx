@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Button, Card, Grid, Pagination, Segmented, Select, Spin, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { DownloadOutlined } from '@ant-design/icons';
@@ -8,63 +8,27 @@ import {
   type SurveyResponseItem,
   type SurveyResponsesPage,
 } from '../../api/surveys.api';
-import type { CreateFormFieldPayload, CreateFormPagePayload } from '../../api/forms.api';
 import { SurveyResponseDrawer } from './SurveyResponseDrawer';
-import { formatAnswer, formatDateTime, formatDuration } from './surveyFormat';
+import {
+  QUALITY_STATUS_COLOR,
+  QUALITY_STATUS_LABEL,
+  formatDateTime,
+  formatDuration,
+} from './surveyFormat';
 
 const PAGE_SIZES = [20, 50, 100];
-const PREVIEW_ANSWERS = 3;
-const FILE_TYPES = new Set(['file_vector', 'file_image', 'file_document']);
-/** Items of SUS / UEQ are 10–26 near-identical columns; they are read in the response view */
-const BULKY_METHODOLOGIES = new Set(['sus', 'ueq']);
-
-const FLAG_LABEL: Record<string, string> = {
-  failed_attention_check: 'Не прошёл проверку внимания',
-  too_fast: 'Слишком быстро',
-};
 
 type FlagFilter = 'all' | 'flagged' | 'clean';
 type Order = 'newest' | 'oldest';
 
-const flattenFields = (pages: CreateFormPagePayload[]): CreateFormFieldPayload[] => {
-  const result: CreateFormFieldPayload[] = [];
-  const walk = (fields: CreateFormFieldPayload[]) => {
-    for (const field of fields) {
-      if (field.children?.length) walk(field.children);
-      else if (field.id && !FILE_TYPES.has(field.type)) result.push(field);
-    }
-  };
-  pages.forEach((page) => walk(page.fields));
-  return result;
-};
-
-const optionLabels = (field: CreateFormFieldPayload): Map<string, string> => {
-  const map = new Map<string, string>();
-  for (const option of field.options ?? []) {
-    if (typeof option !== 'string') map.set(option.id, option.label);
-  }
-  return map;
-};
-
-const Skipped = () => <span style={{ color: 'var(--app-text-secondary)' }}>—</span>;
-
-const QualityTags = ({ flags }: { flags: SurveyResponseItem['quality_flags'] }) => {
-  const active = Object.entries(flags ?? {}).filter(([, v]) => v);
-  if (active.length === 0) return <Skipped />;
-  return (
-    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-      {active.map(([key]) => (
-        <Tag key={key} color="orange">
-          {FLAG_LABEL[key] ?? key}
-        </Tag>
-      ))}
-    </div>
-  );
-};
+const QualityTag = ({ status }: { status: SurveyResponseItem['quality_status'] }) => (
+  <Tag color={QUALITY_STATUS_COLOR[status]} style={{ margin: 0 }}>
+    {QUALITY_STATUS_LABEL[status]}
+  </Tag>
+);
 
 interface SurveyResponsesTabProps {
   surveyId: string;
-  pages: CreateFormPagePayload[];
   /** Response opened in the side view (kept in the address bar) */
   selectedId: string | null;
   onOpen: (responseId: string) => void;
@@ -72,28 +36,15 @@ interface SurveyResponsesTabProps {
   onDownloadCsv: () => void;
 }
 
+/** The list holds only what describes a submission; every answer is read in the side view */
 export const SurveyResponsesTab = ({
   surveyId,
-  pages,
   selectedId,
   onOpen,
   onCloseDetail,
   onDownloadCsv,
 }: SurveyResponsesTabProps) => {
   const isMobile = Grid.useBreakpoint().md === false;
-  const fields = useMemo(() => flattenFields(pages), [pages]);
-  const labelsById = useMemo(
-    () => new Map(fields.map((field) => [field.id as string, optionLabels(field)])),
-    [fields],
-  );
-  const columnFields = useMemo(
-    () =>
-      fields.filter((field) => {
-        const methodology = field.config?.methodology;
-        return !(typeof methodology === 'string' && BULKY_METHODOLOGIES.has(methodology));
-      }),
-    [fields],
-  );
 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PAGE_SIZES[0]);
@@ -132,75 +83,49 @@ export const SurveyResponsesTab = ({
   const loading = current === null;
   const failed = current !== null && current.data === null;
 
-  const textOf = (fieldId: string, record: SurveyResponseItem): string | null =>
-    formatAnswer(labelsById.get(fieldId) ?? new Map(), record.answers[fieldId]);
-
-  const renderCell = (fieldId: string, record: SurveyResponseItem): ReactNode => {
-    const text = textOf(fieldId, record);
-    return text === null ? <Skipped /> : text;
-  };
-
-  const answeredCount = (record: SurveyResponseItem): number =>
-    fields.filter((field) => formatAnswer(new Map(), record.answers[field.id as string]) !== null).length;
-
-  const filledText = (record: SurveyResponseItem): string =>
-    fields.length === 0 ? '—' : `${answeredCount(record)} из ${fields.length}`;
-
   const columns: ColumnsType<SurveyResponseItem> = [
     {
       title: 'Ответ',
       dataIndex: 'number',
       key: 'number',
-      fixed: 'left',
-      width: 100,
-      render: (value: number, record) => (
-        <Button
-          type="link"
-          size="small"
-          style={{ padding: 0 }}
-          aria-label={`Открыть ответ №${value}`}
-          onClick={(event) => {
-            event.stopPropagation();
-            onOpen(record.id);
-          }}
-        >
-          №{value}
-        </Button>
-      ),
+      width: 110,
+      render: (value: number) => <strong>№{value}</strong>,
     },
     {
       title: 'Получен',
       dataIndex: 'submitted_at',
       key: 'submitted_at',
-      width: 150,
       render: (value: string) => formatDateTime(value),
     },
-    ...columnFields.map((field) => ({
-      title: field.label,
-      key: field.id as string,
-      width: 200,
-      ellipsis: true,
-      render: (_: unknown, record: SurveyResponseItem) => renderCell(field.id as string, record),
-    })),
     {
-      title: 'Заполнено',
-      key: 'filled',
-      width: 110,
-      render: (_: unknown, record: SurveyResponseItem) => filledText(record),
-    },
-    {
-      title: 'Время',
+      title: 'Время заполнения',
       dataIndex: 'duration_seconds',
       key: 'duration_seconds',
-      width: 110,
       render: (value: number | null) => formatDuration(value),
     },
     {
-      title: 'Замечания',
-      dataIndex: 'quality_flags',
-      key: 'quality_flags',
-      width: 190,
-      render: (flags: SurveyResponseItem['quality_flags']) => <QualityTags flags={flags} />,
+      title: 'Качество',
+      dataIndex: 'quality_status',
+      key: 'quality_status',
+      render: (status: SurveyResponseItem['quality_status']) => <QualityTag status={status} />,
+    },
+    {
+      title: '',
+      key: 'actions',
+      width: 130,
+      align: 'right',
+      render: (_: unknown, record) => (
+        <Button
+          size="small"
+          aria-label={`Посмотреть ответ №${record.number}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpen(record.id);
+          }}
+        >
+          Посмотреть
+        </Button>
+      ),
     },
   ];
 
@@ -223,18 +148,21 @@ export const SurveyResponsesTab = ({
     />
   );
 
+  const emptyText = filter === 'all' ? 'Ответов пока нет.' : 'Нет ответов под этот фильтр.';
+
   return (
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <Segmented<FlagFilter>
+            className="survey-filter"
             value={filter}
             onChange={(value) => {
               setFilter(value);
               setPage(1);
             }}
             options={[
-              { label: 'Все', value: 'all' },
+              { label: 'Все ответы', value: 'all' },
               { label: 'С замечаниями', value: 'flagged' },
               { label: 'Без замечаний', value: 'clean' },
             ]}
@@ -260,11 +188,11 @@ export const SurveyResponsesTab = ({
       </div>
       {shown && shown.flagged > 0 && filter === 'all' && (
         <Alert
-          type="warning"
+          type="info"
           showIcon
           style={{ marginBottom: 12 }}
-          message={`Ответов с замечаниями по качеству: ${shown.flagged}`}
-          description="Проверка внимания или слишком быстрое заполнение. В аналитике такие ответы исключены, пока включён переключатель."
+          message={`Ответов с замечаниями: ${shown.flagged}`}
+          description="Не пройденная проверка внимания и слишком быстрое заполнение исключают ответ из аналитики по умолчанию; однообразные ответы в шкале только отмечают ответ для проверки. Причины видны в карточке ответа, сами ответы не удаляются."
         />
       )}
       {failed && <Alert type="error" showIcon style={{ marginBottom: 12 }} message="Не удалось загрузить ответы" />}
@@ -273,42 +201,27 @@ export const SurveyResponsesTab = ({
         <Spin spinning={loading}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {shown?.items.length === 0 && (
-              <span style={{ color: 'var(--app-text-secondary)' }}>
-                {filter === 'all' ? 'Ответов пока нет.' : 'Нет ответов под этот фильтр.'}
-              </span>
+              <span style={{ color: 'var(--app-text-secondary)' }}>{emptyText}</span>
             )}
             {shown?.items.map((record) => (
-              <Card key={record.id} size="small" hoverable onClick={() => onOpen(record.id)}>
+              <Card key={record.id} size="small">
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
                   <strong>Ответ №{record.number}</strong>
                   <span style={{ color: 'var(--app-text-secondary)', fontSize: 12 }}>
                     {formatDateTime(record.submitted_at)}
                   </span>
                 </div>
-                <div style={{ margin: '8px 0', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  {columnFields.slice(0, PREVIEW_ANSWERS).map((field) => (
-                    <div key={field.id} style={{ fontSize: 13, wordBreak: 'break-word' }}>
-                      <span style={{ color: 'var(--app-text-secondary)' }}>{field.label}: </span>
-                      {renderCell(field.id as string, record)}
-                    </div>
-                  ))}
-                </div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 12 }}>
-                  <span>Заполнено: {filledText(record)}</span>
-                  <span>· {formatDuration(record.duration_seconds)}</span>
-                  <QualityTags flags={record.quality_flags} />
+                <div style={{ margin: '8px 0 10px', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 13 }}>
+                  <span>{formatDuration(record.duration_seconds)}</span>
+                  <QualityTag status={record.quality_status} />
                 </div>
                 <Button
                   block
                   size="large"
-                  style={{ marginTop: 10 }}
-                  aria-label={`Открыть ответ №${record.number}`}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onOpen(record.id);
-                  }}
+                  aria-label={`Посмотреть ответ №${record.number}`}
+                  onClick={() => onOpen(record.id)}
                 >
-                  Открыть ответ
+                  Посмотреть
                 </Button>
               </Card>
             ))}
@@ -323,13 +236,12 @@ export const SurveyResponsesTab = ({
             columns={columns}
             dataSource={shown?.items ?? []}
             loading={loading}
-            scroll={{ x: 'max-content' }}
             onRow={(record) => ({
               onClick: () => onOpen(record.id),
               style: { cursor: 'pointer' },
             })}
             rowClassName={(record) => (record.id === selectedId ? 'ant-table-row-selected' : '')}
-            locale={{ emptyText: filter === 'all' ? 'Ответов пока нет.' : 'Нет ответов под этот фильтр.' }}
+            locale={{ emptyText }}
             pagination={false}
           />
           {pagination}

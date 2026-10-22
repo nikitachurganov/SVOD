@@ -176,6 +176,20 @@ class SurveySubmittedResponse(BaseModel):
 # ─── Responses (results) ──────────────────────────────────────────────────────
 
 
+QualityStatus = Literal["ok", "review", "flagged"]
+
+
+class QualityReasonOut(BaseModel):
+    """Why a response got a remark: a machine code plus words for the researcher"""
+
+    code: str
+    severity: Literal["strong", "weak"]
+    title: str
+    explanation: str
+    # Questions the reason is about (empty when it concerns the response as a whole)
+    field_ids: list[str] = Field(default_factory=list)
+
+
 class SurveyResponseItem(BaseModel):
     id: str
     # Ordinal of the response in the order of arrival: "Ответ №12"
@@ -183,6 +197,8 @@ class SurveyResponseItem(BaseModel):
     submitted_at: str
     duration_seconds: int | None = None
     quality_flags: dict[str, Any] | None = None
+    # ok — no remarks; review — only weak signals; flagged — a strong signal (left out of analytics)
+    quality_status: QualityStatus = "ok"
     answers: dict[str, Any]
 
 
@@ -214,6 +230,8 @@ class SurveyResponseDetail(BaseModel):
     submitted_at: str
     duration_seconds: int | None = None
     quality_flags: dict[str, Any] | None = None
+    quality_status: QualityStatus = "ok"
+    quality_reasons: list[QualityReasonOut] = Field(default_factory=list)
     answers: dict[str, Any]
     # Questions in the order of the form the respondent filled in
     questions: list[SurveyQuestion]

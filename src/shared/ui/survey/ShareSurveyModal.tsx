@@ -60,12 +60,30 @@ export const ShareSurveyModal = ({
       open={open}
       onCancel={onClose}
       title="Поделиться опросом"
-      footer={<Button onClick={onClose}>Закрыть</Button>}
+      footer={
+        // Both actions sit on one line and share the control height; on a narrow screen they wrap
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+          {status === 'open' ? (
+            <Button
+              icon={<ExportOutlined />}
+              href={link}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Открыть как респондент
+            </Button>
+          ) : (
+            <span />
+          )}
+          <Button onClick={onClose}>Закрыть</Button>
+        </div>
+      }
       destroyOnHidden
     >
-      <p style={{ marginTop: 0 }}>Отправьте эту ссылку респондентам — регистрация не нужна.</p>
-      <div style={{ display: 'flex', gap: 8 }}>
+      <p style={{ margin: '0 0 12px' }}>Отправьте эту ссылку респондентам — регистрация не нужна.</p>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <Input
+          style={{ flex: '1 1 220px', minWidth: 0 }}
           ref={inputRef}
           value={link}
           readOnly
@@ -74,13 +92,14 @@ export const ShareSurveyModal = ({
         />
         <Button
           type="primary"
+          style={{ flex: '0 0 auto' }}
           icon={copied === 'done' ? <CheckOutlined /> : <CopyOutlined />}
           onClick={() => void copy()}
         >
           {copied === 'done' ? 'Скопировано' : 'Скопировать ссылку'}
         </Button>
       </div>
-      <div role="status" style={{ minHeight: 22, marginTop: 6, fontSize: 13 }}>
+      <div role="status" style={{ minHeight: 22, margin: '8px 0 12px', fontSize: 13 }}>
         {copied === 'done' && <span style={{ color: 'var(--app-success, #389e0d)' }}>Ссылка скопирована</span>}
         {copied === 'failed' && (
           <span style={{ color: 'var(--app-text-error, #cf1322)' }}>
@@ -104,18 +123,6 @@ export const ShareSurveyModal = ({
         />
       )}
 
-      {status === 'open' && (
-        <Button
-          type="link"
-          icon={<ExportOutlined />}
-          href={link}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{ paddingLeft: 0 }}
-        >
-          Открыть как респондент
-        </Button>
-      )}
     </Modal>
   );
 };

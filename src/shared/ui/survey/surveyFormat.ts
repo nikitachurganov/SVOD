@@ -24,6 +24,18 @@ export const formatDateTime = (iso: string | null): string => {
 
 export const formatP = (p: number): string => (p < 0.0001 ? '< 0,0001' : formatNumber(p));
 
+export const QUALITY_STATUS_LABEL = {
+  ok: 'Без замечаний',
+  review: 'Требует проверки',
+  flagged: 'Есть замечания',
+} as const;
+
+export const QUALITY_STATUS_COLOR = {
+  ok: 'green',
+  review: 'gold',
+  flagged: 'orange',
+} as const;
+
 const OTHER_PREFIX = '__other__:';
 
 /** Human-readable answer; null when the respondent skipped the question */

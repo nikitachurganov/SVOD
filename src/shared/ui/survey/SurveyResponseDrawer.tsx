@@ -3,15 +3,30 @@ import { Alert, Button, Drawer, Grid, Spin, Tag } from 'antd';
 import { LeftOutlined, RightOutlined } from '@ant-design/icons';
 import axios from 'axios';
 
-import { getSurveyResponseDetail, type SurveyResponseDetail } from '../../api/surveys.api';
-import { QUESTION_TYPE_LABEL, formatAnswer, formatDateTime, formatDuration } from './surveyFormat';
-
-const FLAG_LABEL: Record<string, string> = {
-  failed_attention_check: 'Не прошёл проверку внимания',
-  too_fast: 'Слишком быстро',
-};
+import {
+  getSurveyResponseDetail,
+  type SurveyQuestion,
+  type SurveyResponseDetail,
+} from '../../api/surveys.api';
+import {
+  QUALITY_STATUS_COLOR,
+  QUALITY_STATUS_LABEL,
+  QUESTION_TYPE_LABEL,
+  formatAnswer,
+  formatDateTime,
+  formatDuration,
+} from './surveyFormat';
 
 type Loaded = { key: string; data: SurveyResponseDetail | null; notFound: boolean };
+
+/** The answer as separate items: a multiple choice is a list, anything else one text */
+const answerItems = (question: SurveyQuestion, value: unknown): string[] => {
+  const labels = new Map(question.options.map((option) => [option.id, option.label]));
+  const values = Array.isArray(value) ? value : [value];
+  return values
+    .map((item) => formatAnswer(labels, item))
+    .filter((text): text is string => text !== null);
+};
 
 interface SurveyResponseDrawerProps {
   surveyId: string;
@@ -51,7 +66,27 @@ export const SurveyResponseDrawer = ({
 
   const current = loaded && loaded.key === key ? loaded : null;
   const detail = current?.data ?? null;
-  const flags = Object.entries(detail?.quality_flags ?? {}).filter(([, value]) => value);
+  // Questions a remark is about get a marker, so the reason can be matched with the answer
+  const remarked = new Set(detail?.quality_reasons.flatMap((reason) => reason.field_ids) ?? []);
+
+  const title = detail ? (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <span>
+        Ответ №{detail.number} из {detail.total}
+      </span>
+      <span style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 12, fontWeight: 400 }}>
+        <span>{formatDateTime(detail.submitted_at)}</span>
+        <span style={{ color: 'var(--app-text-secondary)' }}>
+          · заполнение {formatDuration(detail.duration_seconds)}
+        </span>
+        <Tag color={QUALITY_STATUS_COLOR[detail.quality_status]} style={{ margin: 0 }}>
+          {QUALITY_STATUS_LABEL[detail.quality_status]}
+        </Tag>
+      </span>
+    </div>
+  ) : (
+    'Ответ респондента'
+  );
 
   return (
     <Drawer
@@ -59,7 +94,7 @@ export const SurveyResponseDrawer = ({
       onClose={onClose}
       size={isMobile ? '100%' : 640}
       destroyOnHidden
-      title={detail ? `Ответ №${detail.number} из ${detail.total}` : 'Ответ респондента'}
+      title={title}
       extra={
         <div style={{ display: 'flex', gap: 4 }}>
           <Button
@@ -102,39 +137,63 @@ export const SurveyResponseDrawer = ({
 
       {detail && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-            <span>Получен {formatDateTime(detail.submitted_at)}</span>
-            <span style={{ color: 'var(--app-text-secondary)' }}>
-              · Время заполнения: {formatDuration(detail.duration_seconds)}
-            </span>
-            {flags.map(([flag]) => (
-              <Tag key={flag} color="orange" style={{ margin: 0 }}>
-                {FLAG_LABEL[flag] ?? flag}
-              </Tag>
-            ))}
-          </div>
+          {detail.quality_reasons.length > 0 && (
+            <Alert
+              type={detail.quality_status === 'flagged' ? 'warning' : 'info'}
+              showIcon
+              message={
+                detail.quality_status === 'flagged'
+                  ? 'По ответу есть замечания'
+                  : 'Ответ стоит проверить'
+              }
+              description={
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {detail.quality_reasons.map((reason) => (
+                    <div key={reason.code}>
+                      <strong>{reason.title}.</strong> {reason.explanation}
+                    </div>
+                  ))}
+                  <span style={{ fontSize: 12, color: 'var(--app-text-secondary)' }}>
+                    Ответ сохранён полностью и показан ниже, он не удалён.
+                  </span>
+                </div>
+              }
+            />
+          )}
 
           <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column' }}>
             {detail.questions.map((question, index) => {
-              const labels = new Map(question.options.map((option) => [option.id, option.label]));
-              const text = formatAnswer(labels, detail.answers[question.id]);
+              const items = answerItems(question, detail.answers[question.id]);
               return (
                 <li
                   key={question.id}
-                  style={{ padding: '12px 0', borderTop: index === 0 ? undefined : '1px solid var(--app-border)' }}
+                  style={{
+                    padding: '12px 0 12px 10px',
+                    borderTop: index === 0 ? undefined : '1px solid var(--app-border)',
+                    borderLeft: remarked.has(question.id) ? '3px solid var(--app-warning, #d48806)' : '3px solid transparent',
+                  }}
                 >
                   <div style={{ fontSize: 12, color: 'var(--app-text-secondary)' }}>
                     {index + 1}. {QUESTION_TYPE_LABEL[question.type] ?? question.type}
+                    {remarked.has(question.id) && ' · см. замечание выше'}
                   </div>
                   <div style={{ fontWeight: 600, margin: '2px 0 4px', wordBreak: 'break-word' }}>
                     {question.label}
                   </div>
-                  {text === null ? (
+                  {items.length === 0 ? (
                     <div style={{ color: 'var(--app-text-secondary)', fontStyle: 'italic' }}>
                       Вопрос пропущен
                     </div>
+                  ) : items.length > 1 ? (
+                    <ul style={{ margin: 0, paddingLeft: 18 }}>
+                      {items.map((item, itemIndex) => (
+                        <li key={itemIndex} style={{ wordBreak: 'break-word' }}>
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
                   ) : (
-                    <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{text}</div>
+                    <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{items[0]}</div>
                   )}
                 </li>
               );

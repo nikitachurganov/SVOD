@@ -2019,6 +2019,130 @@ html[data-theme] body {
   }
 }
 
+/* Filter on the grey work area: visible border, inactive items, and a clearly chosen one */
+.survey-filter.ant-segmented {
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  padding: 2px;
+}
+
+.survey-filter .ant-segmented-item {
+  color: var(--app-text);
+}
+
+.survey-filter .ant-segmented-item:hover:not(.ant-segmented-item-selected) {
+  background: var(--app-bg);
+}
+
+.survey-filter .ant-segmented-thumb,
+.survey-filter .ant-segmented-item-selected {
+  background: var(--app-primary);
+  box-shadow: none;
+}
+
+.survey-filter .ant-segmented-item-selected,
+.survey-filter .ant-segmented-item-selected .ant-segmented-item-label {
+  color: #fff;
+}
+
+/* Type of a question in the form tab; with options it is a button that opens the list */
+.survey-type-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 12px;
+  line-height: 20px;
+  white-space: nowrap;
+  color: var(--app-text);
+  background: var(--app-bg);
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+}
+
+button.survey-type-tag {
+  cursor: pointer;
+}
+
+button.survey-type-tag:hover,
+button.survey-type-tag:focus-visible {
+  color: var(--app-primary);
+  border-color: var(--app-primary);
+  outline: none;
+}
+
+button.survey-type-tag:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--app-primary) 25%, transparent);
+}
+
+.survey-options-list {
+  max-width: min(360px, 80vw);
+  max-height: 260px;
+  margin: 0;
+  padding: 0 4px 0 20px;
+  overflow-y: auto;
+}
+
+.survey-options-list li {
+  padding: 2px 0;
+  overflow-wrap: anywhere;
+}
+
+/* Analytics: two columns on a wide screen, one on a narrow one */
+.survey-chart-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 1100px) {
+  .survey-chart-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.survey-chart-grid__wide {
+  grid-column: 1 / -1;
+}
+
+/* HTML legend of a donut chart: long labels wrap instead of being clipped */
+.survey-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+
+.survey-chart-legend li {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.survey-chart-legend__dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.survey-chart-legend__text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.survey-chart-legend__count {
+  flex: none;
+  color: var(--app-text-secondary);
+}
+
 /* Survey preview: the respondent form with a bar that says nothing is saved */
 .survey-preview-bar {
   flex-shrink: 0;

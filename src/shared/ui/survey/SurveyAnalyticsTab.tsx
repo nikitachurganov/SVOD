@@ -170,9 +170,14 @@ export const SurveyAnalyticsTab = ({
           {segments.length > 0 && (
             <div>
               <h3 style={{ margin: '0 0 8px', fontSize: 15 }}>Демография и сегменты</h3>
-              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <div className="survey-chart-grid">
                 {segments.map((q) => (
-                  <Card key={q.field_id} size="small" title={q.label} style={{ flex: '1 1 320px' }}>
+                  <Card
+                    key={q.field_id}
+                    size="small"
+                    title={<span style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>{q.label}</span>}
+                    style={{ minWidth: 0 }}
+                  >
                     <SegmentPieChart options={q.options} />
                   </Card>
                 ))}

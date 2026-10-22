@@ -104,6 +104,18 @@ export interface SurveyPayload {
   closes_at?: string | null;
 }
 
+/** ok — no remarks; review — only weak signals; flagged — a strong signal (left out of analytics) */
+export type QualityStatus = 'ok' | 'review' | 'flagged';
+
+export interface QualityReason {
+  code: string;
+  severity: 'strong' | 'weak';
+  title: string;
+  explanation: string;
+  /** Questions the reason is about; empty when it concerns the response as a whole */
+  field_ids: string[];
+}
+
 export interface SurveyResponseItem {
   id: string;
   /** Ordinal in the order of arrival: "Ответ №12" */
@@ -111,6 +123,7 @@ export interface SurveyResponseItem {
   submitted_at: string;
   duration_seconds: number | null;
   quality_flags: Record<string, boolean> | null;
+  quality_status: QualityStatus;
   answers: Record<string, unknown>;
 }
 
@@ -136,6 +149,8 @@ export interface SurveyResponseDetail {
   submitted_at: string;
   duration_seconds: number | null;
   quality_flags: Record<string, boolean> | null;
+  quality_status: QualityStatus;
+  quality_reasons: QualityReason[];
   answers: Record<string, unknown>;
   questions: SurveyQuestion[];
   /** Received just before / just after this one */

@@ -21,6 +21,7 @@ from app.schemas.survey import (
 )
 from app.services import stats_math
 from app.services.survey_answers import answerable_fields, is_empty
+from app.services.survey_quality import excludes_from_analysis
 
 OTHER_PREFIX = "__other__:"
 MAX_TEXT_SAMPLES = 10
@@ -434,7 +435,7 @@ def _responses_by_day(dates: list[Any]) -> list[ResponsesDay]:
 
 
 def build_results(pages: Any, responses: list[Any], *, exclude_flagged: bool = True) -> SurveyResults:
-    usable = [r for r in responses if not (exclude_flagged and r.quality_flags)]
+    usable = [r for r in responses if not (exclude_flagged and excludes_from_analysis(r.quality_flags))]
     answers_list = [r.answers for r in usable if isinstance(r.answers, dict)]
     fields = answerable_fields(pages)
     durations = [d for d in (r.duration_seconds for r in usable) if is_valid_duration(d)]
@@ -521,7 +522,7 @@ def build_crosstab(
     row_field = _find_field(fields, row_id)
     col_field = _find_field(fields, col_id)
     row_kind, col_kind = _check_type(row_field), _check_type(col_field)
-    usable = [r for r in responses if not (exclude_flagged and r.quality_flags)]
+    usable = [r for r in responses if not (exclude_flagged and excludes_from_analysis(r.quality_flags))]
     answers_list = [r.answers for r in usable if isinstance(r.answers, dict)]
     base = dict(
         row_field_id=row_id,

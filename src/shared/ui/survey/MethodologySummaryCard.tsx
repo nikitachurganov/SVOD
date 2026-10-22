@@ -15,6 +15,8 @@ export interface MethodologySummaryCardProps {
   onOpenReport: () => void;
   onEditSet?: () => void;
   disabled?: boolean;
+  /** "white" — on the survey page (a white block on the grey work area); "grey" — in the builder panel */
+  surface?: 'grey' | 'white';
 }
 
 export const MethodologySummaryCard = ({
@@ -22,6 +24,7 @@ export const MethodologySummaryCard = ({
   onOpenReport,
   onEditSet,
   disabled,
+  surface = 'grey',
 }: MethodologySummaryCardProps) => {
   const [showWarnings, setShowWarnings] = useState(false);
 
@@ -30,8 +33,8 @@ export const MethodologySummaryCard = ({
       style={{
         border: '1px solid var(--app-border)',
         borderRadius: 12,
-        padding: 12,
-        background: 'var(--app-bg)',
+        padding: surface === 'white' ? 16 : 12,
+        background: surface === 'white' ? 'var(--app-surface)' : 'var(--app-bg)',
         display: 'flex',
         flexDirection: 'column',
         gap: 8,

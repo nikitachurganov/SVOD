@@ -1,5 +1,6 @@
 import secrets
 import uuid
+from dataclasses import asdict
 from datetime import datetime, timezone
 from typing import Any
 
@@ -15,6 +16,7 @@ from app.schemas.survey import (
     CrosstabResult,
     MethodologyReportResponse,
     PublicSurveyResponse,
+    QualityReasonOut,
     QuestionAnswerItem,
     QuestionAnswersPage,
     SubmitSurveyRequest,
@@ -38,6 +40,7 @@ from app.services import (
     survey_ai_analysis_service,
     survey_answers,
     survey_methodology_service,
+    survey_quality,
     survey_results,
 )
 
@@ -300,6 +303,7 @@ async def list_responses(
                 submitted_at=r.submitted_at.isoformat(),
                 duration_seconds=r.duration_seconds,
                 quality_flags=r.quality_flags,
+                quality_status=survey_quality.status_of(r.quality_flags),
                 answers=r.answers if isinstance(r.answers, dict) else {},
             )
             for r, number in rows
@@ -318,6 +322,7 @@ async def get_response_detail(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Response not found")
     # The form as the respondent saw it; the survey may have been edited since
     questions = survey_answers.question_defs(response.schema_snapshot)
+    questions_from_snapshot = bool(questions)
     if not questions:
         questions = survey_answers.question_defs(survey.pages)
     older, newer = await survey_repository.neighbour_response_ids(session, survey.id, response)
@@ -328,6 +333,16 @@ async def get_response_detail(
         submitted_at=response.submitted_at.isoformat(),
         duration_seconds=response.duration_seconds,
         quality_flags=response.quality_flags,
+        quality_status=survey_quality.status_of(response.quality_flags),
+        quality_reasons=[
+            QualityReasonOut(**asdict(reason))
+            for reason in survey_quality.explain(
+                response.schema_snapshot if questions_from_snapshot else survey.pages,
+                response.answers if isinstance(response.answers, dict) else {},
+                response.duration_seconds,
+                response.quality_flags,
+            )
+        ],
         answers=response.answers if isinstance(response.answers, dict) else {},
         questions=[SurveyQuestion(**q) for q in questions],
         prev_id=str(older) if older else None,
@@ -359,7 +374,7 @@ async def get_question_answers(
     total_rows = len(rows)
     items: list[QuestionAnswerItem] = []
     for index, row in enumerate(rows):
-        if exclude_flagged and row.quality_flags:
+        if exclude_flagged and survey_quality.excludes_from_analysis(row.quality_flags):
             continue
         value = row.answers.get(field_id) if isinstance(row.answers, dict) else None
         if isinstance(value, str) and value.strip():
@@ -550,7 +565,7 @@ async def submit_public_response(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"code": "empty_answers", "missing": []},
         )
-    flags = survey_answers.quality_flags(survey.pages, answers, payload.duration_seconds)
+    flags = survey_quality.detect_flags(survey.pages, answers, payload.duration_seconds)
     response = SurveyResponse(
         survey_id=survey.id,
         answers=answers,

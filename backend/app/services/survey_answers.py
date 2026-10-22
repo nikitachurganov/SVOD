@@ -171,10 +171,14 @@ def quality_flags(
         if is_empty(value) or not _option_matches(field, value, correct):
             flags["failed_attention_check"] = True
     if duration_seconds is not None and fields:
-        # Less than ~1.5 s per question is faster than reading the questions
-        if duration_seconds < max(5.0, len(fields) * 1.5):
+        if duration_seconds < too_fast_threshold(len(fields)):
             flags["too_fast"] = True
     return flags or None
+
+
+def too_fast_threshold(questions: int) -> float:
+    """Seconds below which a form is filled in faster than its questions can be read (~1.5 s each)."""
+    return max(5.0, questions * 1.5)
 
 
 # ─── CSV ──────────────────────────────────────────────────────────────────────

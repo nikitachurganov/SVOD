@@ -33,6 +33,7 @@ from app.services import survey_results
 from app.services.form_ai_builder_service import _parse_payload, _str
 from app.services.survey_ai_builder_service import _call_llm
 from app.services.survey_answers import answerable_fields, is_empty
+from app.services.survey_quality import excludes_from_analysis
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +134,7 @@ def _usable_answers(responses: list[Any], exclude_flagged: bool) -> list[dict[st
     return [
         r.answers
         for r in responses
-        if not (exclude_flagged and r.quality_flags) and isinstance(r.answers, dict)
+        if not (exclude_flagged and excludes_from_analysis(r.quality_flags)) and isinstance(r.answers, dict)
     ]
 
 

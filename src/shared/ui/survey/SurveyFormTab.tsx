@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Button, Card, Empty, Modal, Tag } from 'antd';
-import { EditOutlined, EyeOutlined } from '@ant-design/icons';
+import { Button, Card, Empty, Modal, Popover } from 'antd';
+import { DownOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 
 import type { SurveyDetail } from '../../api/surveys.api';
 import type { CreateFormFieldPayload } from '../../api/forms.api';
@@ -23,44 +23,71 @@ const pluralizeQuestions = (n: number): string => {
   return `${n} вопросов`;
 };
 
-const QuestionRow = ({
-  field,
-  number,
-  nested,
-}: {
-  field: CreateFormFieldPayload;
-  number: string;
-  nested?: boolean;
-}) => {
+const optionLabel = (option: NonNullable<CreateFormFieldPayload['options']>[number]): string =>
+  typeof option === 'string' ? option : option.label;
+
+/**
+ * The type of the answer. For a question with options it opens the list of them (hover, click,
+ * Enter or a tap) — so they can be read without going to the editor.
+ */
+const TypeTag = ({ field }: { field: CreateFormFieldPayload }) => {
+  const label = answerKindLabel(field.type, field.config);
+  const options = (field.options ?? []).map(optionLabel);
+  if (options.length === 0) return <span className="survey-type-tag">{label}</span>;
+  return (
+    <Popover
+      trigger={['hover', 'click']}
+      placement="bottomRight"
+      title={`Варианты ответа (${options.length})`}
+      content={
+        <ol className="survey-options-list">
+          {options.map((option, index) => (
+            <li key={index}>{option}</li>
+          ))}
+        </ol>
+      }
+    >
+      <button
+        type="button"
+        className="survey-type-tag"
+        aria-haspopup="dialog"
+        aria-label={`${label}: показать варианты ответа (${options.length})`}
+      >
+        {label} · {options.length}
+        <DownOutlined style={{ fontSize: 9 }} />
+      </button>
+    </Popover>
+  );
+};
+
+const ROW_STYLE = {
+  display: 'grid',
+  gridTemplateColumns: '32px minmax(0, 1fr) auto',
+  gap: 12,
+  alignItems: 'start',
+  padding: '14px 0',
+  borderTop: '1px solid var(--app-border-secondary)',
+} as const;
+
+const QuestionRow = ({ field, number }: { field: CreateFormFieldPayload; number: string }) => {
   if (field.children?.length) {
     return (
       <>
-        <li style={{ padding: '12px 0 4px', fontWeight: 600, wordBreak: 'break-word' }}>
-          {number} {field.label}
+        <li style={{ ...ROW_STYLE, gridTemplateColumns: '32px minmax(0, 1fr)' }}>
+          <span style={{ color: 'var(--app-text-secondary)', textAlign: 'right' }}>{number}</span>
+          <strong style={{ wordBreak: 'break-word' }}>{field.label}</strong>
         </li>
         {field.children.map((child, index) => (
-          <QuestionRow key={child.id ?? index} field={child} number={`${number}${index + 1}.`} nested />
+          <QuestionRow key={child.id ?? index} field={child} number={`${number}${index + 1}.`} />
         ))}
       </>
     );
   }
   return (
-    <li
-      style={{
-        display: 'flex',
-        gap: 12,
-        alignItems: 'baseline',
-        justifyContent: 'space-between',
-        padding: '10px 0',
-        paddingLeft: nested ? 24 : 0,
-        borderTop: '1px solid var(--app-border-secondary)',
-      }}
-    >
-      <span style={{ wordBreak: 'break-word' }}>
-        <span style={{ color: 'var(--app-text-secondary)', marginRight: 8 }}>{number}</span>
-        {field.label}
-      </span>
-      <Tag style={{ margin: 0, flexShrink: 0 }}>{answerKindLabel(field.type, field.config)}</Tag>
+    <li style={ROW_STYLE}>
+      <span style={{ color: 'var(--app-text-secondary)', textAlign: 'right' }}>{number}</span>
+      <span style={{ wordBreak: 'break-word', lineHeight: 1.5 }}>{field.label}</span>
+      <TypeTag field={field} />
     </li>
   );
 };
@@ -89,8 +116,8 @@ export const SurveyFormTab = ({ survey, onEdit, onPreview, onOpenReport }: Surve
   ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <Card size="small">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <Card styles={{ body: { padding: '20px 24px' } }}>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', gap: 10, alignItems: 'baseline', flexWrap: 'wrap' }}>
             <h2 style={{ margin: 0, fontSize: 18 }}>Форма опроса</h2>
@@ -108,17 +135,17 @@ export const SurveyFormTab = ({ survey, onEdit, onPreview, onOpenReport }: Surve
           </div>
         </div>
 
-        <div style={{ marginTop: 6, fontSize: 13, color: 'var(--app-text-secondary)' }}>
+        <div style={{ marginTop: 8, fontSize: 13, color: 'var(--app-text-secondary)' }}>
           {params.join(' · ')}
         </div>
 
         {hasQuestions ? (
-          <ol style={{ listStyle: 'none', margin: '12px 0 0', padding: 0 }}>
+          <ol style={{ listStyle: 'none', margin: '16px 0 0', padding: 0 }}>
             {survey.pages.flatMap((page, pageIndex) => [
               survey.pages.length > 1 && page.fields.length > 0 ? (
                 <li
                   key={`page-${page.id ?? pageIndex}`}
-                  style={{ padding: '14px 0 4px', fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.4, color: 'var(--app-text-secondary)' }}
+                  style={{ padding: '18px 0 6px', fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.4, color: 'var(--app-text-secondary)' }}
                 >
                   {page.title || `Страница ${pageIndex + 1}`}
                 </li>
@@ -144,7 +171,7 @@ export const SurveyFormTab = ({ survey, onEdit, onPreview, onOpenReport }: Surve
       </Card>
 
       {survey.methodology_summary && (
-        <MethodologySummaryCard summary={survey.methodology_summary} onOpenReport={onOpenReport} />
+        <MethodologySummaryCard summary={survey.methodology_summary} onOpenReport={onOpenReport} surface="white" />
       )}
 
       <Modal

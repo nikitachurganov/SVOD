@@ -152,7 +152,8 @@ const QuestionCard = ({ question, used, surveyId, excludeFlagged, onOpenResponse
     <Card
       id={`question-${question.field_id}`}
       size="small"
-      style={{ scrollMarginTop: 16, gridColumn: question.kind === 'text' ? '1 / -1' : undefined }}
+      className={question.kind === 'text' ? 'survey-chart-grid__wide' : undefined}
+      style={{ scrollMarginTop: 16, minWidth: 0 }}
       title={<span style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>{question.label}</span>}
       extra={
         <span style={{ fontSize: 12, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
@@ -324,7 +325,7 @@ export const SurveyQuantTab = ({ surveyId, results, excludeFlagged, onOpenRespon
       )}
 
       {shown.length > 0 && (
-        <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fill, minmax(min(420px, 100%), 1fr))' }}>
+        <div className="survey-chart-grid">
           {shown.map((q) => (
             <QuestionCard
               key={q.field_id}

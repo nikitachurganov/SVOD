@@ -271,7 +271,7 @@ export const SurveyViewPage = () => {
     <label
       style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8, fontSize: 13, marginBottom: 12 }}
     >
-      Исключать ответы с замечаниями
+      Исключать ответы с серьёзными замечаниями
       <Switch
         size="small"
         checked={excludeFlagged}
@@ -308,7 +308,6 @@ export const SurveyViewPage = () => {
     responses: (
       <SurveyResponsesTab
         surveyId={survey.id}
-        pages={survey.pages}
         selectedId={selectedResponseId}
         onOpen={(responseId) => navigate(`${base}/responses/${responseId}`)}
         onCloseDetail={() => navigate(`${base}/responses`)}
