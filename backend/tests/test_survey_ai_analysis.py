@@ -54,10 +54,34 @@ class ParsingTests(unittest.TestCase):
     def setUp(self) -> None:
         self.fields = answerable_fields(PAGES)
 
-    def test_parse_bullets_trims_and_limits(self):
+    def test_parse_summary_trims_and_limits(self):
         raw = '```json\n{"bullets": ["  а ", "", 5, "б", "в", "г", "д", "е"]}\n```'
-        self.assertEqual(svc.parse_bullets(raw), ["а", "б", "в", "г", "д"])
-        self.assertEqual(svc.parse_bullets("not json"), [])
+        bullets, evidence = svc.parse_summary(raw, set())
+        self.assertEqual(bullets, ["а", "б", "в", "г", "д"])
+        self.assertEqual(evidence, [[], [], [], [], []])
+        self.assertEqual(svc.parse_summary("not json", set()), ([], []))
+
+    def test_parse_summary_keeps_only_real_question_ids(self):
+        raw = json.dumps(
+            {
+                "bullets": [
+                    {"text": "Оценка у 3 курса ниже", "question_ids": ["score", "ghost", "score", "course"]},
+                    {"text": "Общий вывод", "question_ids": "oops"},
+                ]
+            }
+        )
+        bullets, evidence = svc.parse_summary(raw, {"score", "course"})
+        self.assertEqual(bullets, ["Оценка у 3 курса ниже", "Общий вывод"])
+        self.assertEqual(evidence, [["score", "course"], []])
+
+    def test_mask_pii_hides_emails_and_phones_only(self):
+        text = "Пишите на ivan.petrov@example.com или звоните +7 (999) 123-45-67, мне 22 года, ждал 14 дней"
+        masked = svc.mask_pii(text)
+        self.assertNotIn("ivan.petrov", masked)
+        self.assertNotIn("123-45-67", masked)
+        self.assertIn("[e-mail]", masked)
+        self.assertIn("[телефон]", masked)
+        self.assertIn("мне 22 года, ждал 14 дней", masked)
 
     def test_plan_drops_unknown_ids_and_options(self):
         raw = json.dumps(
@@ -192,8 +216,9 @@ class SummaryTests(unittest.TestCase):
         results = survey_results.build_results(PAGES, _responses())
         llm = AsyncMock(return_value='{"bullets": ["Средняя оценка 3,3.", "3 курс недоволен."]}')
         with patch.object(svc, "_call_llm", llm):
-            bullets = asyncio.run(svc.generate_summary("Опрос", results))
+            bullets, evidence = asyncio.run(svc.generate_summary("Опрос", results))
         self.assertEqual(len(bullets), 2)
+        self.assertEqual(len(evidence), 2)
         prompt_data = llm.await_args.args[0][1]["content"]
         self.assertIn('"responses_used": 3', prompt_data)
 

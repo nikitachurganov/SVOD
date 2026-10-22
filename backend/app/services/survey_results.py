@@ -414,6 +414,16 @@ def _completion_rate(fields: list[dict[str, Any]], answers_list: list[dict[str, 
     return _round(sum(shares) / len(shares) * 100)
 
 
+# A duration is measured by the respondent's browser: an unknown value, zero, or hours with the
+# tab left open say nothing about how long the survey takes, so such values are left out of the
+# average and the median.
+MAX_VALID_DURATION_SECONDS = 2 * 60 * 60
+
+
+def is_valid_duration(seconds: int | None) -> bool:
+    return seconds is not None and 0 < seconds <= MAX_VALID_DURATION_SECONDS
+
+
 def _responses_by_day(dates: list[Any]) -> list[ResponsesDay]:
     """Responses received per calendar day (UTC), oldest day first."""
     per_day: dict[str, int] = {}
@@ -427,7 +437,7 @@ def build_results(pages: Any, responses: list[Any], *, exclude_flagged: bool = T
     usable = [r for r in responses if not (exclude_flagged and r.quality_flags)]
     answers_list = [r.answers for r in usable if isinstance(r.answers, dict)]
     fields = answerable_fields(pages)
-    durations = [r.duration_seconds for r in usable if r.duration_seconds is not None]
+    durations = [d for d in (r.duration_seconds for r in usable) if is_valid_duration(d)]
     dates = [r.submitted_at for r in responses if getattr(r, "submitted_at", None) is not None]
     mean_duration = stats_math.mean([float(d) for d in durations])
     return SurveyResults(

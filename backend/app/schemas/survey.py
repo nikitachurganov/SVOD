@@ -280,8 +280,26 @@ class SurveyResults(BaseModel):
     questions: list[QuestionStat] = Field(default_factory=list)
 
 
+class QuestionAnswerItem(BaseModel):
+    response_id: str
+    number: int
+    submitted_at: str
+    text: str
+
+
+class QuestionAnswersPage(BaseModel):
+    """Every answer given to one open question, newest first"""
+
+    field_id: str
+    label: str
+    total: int
+    items: list[QuestionAnswerItem]
+
+
 class SurveyAiSummary(BaseModel):
     bullets: list[str]
+    # Per bullet: ids of the questions whose figures it rests on (to jump to the data)
+    evidence: list[list[str]] = Field(default_factory=list)
     generated_at: str
     responses_used: int
     exclude_flagged: bool

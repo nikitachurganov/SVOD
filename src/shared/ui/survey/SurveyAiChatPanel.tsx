@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button, Drawer, Input } from 'antd';
+import { Button, Drawer, Grid, Input, Tag } from 'antd';
 import { RobotOutlined, SendOutlined } from '@ant-design/icons';
 import axios from 'axios';
 
@@ -34,11 +34,44 @@ const getErrorMessage = (error: unknown): string => {
   return 'Не удалось получить ответ ИИ. Попробуйте ещё раз.';
 };
 
+const SECTION_RE = /^(Факты|Интерпретация|Что можно сделать)(?:\s*\([^)]*\))?:\s*(.*)$/;
+const SECTION_COLOR: Record<string, string> = {
+  Факты: 'blue',
+  Интерпретация: 'gold',
+  'Что можно сделать': 'green',
+};
+
+/** The model separates facts from guesses and advice; show each part under its own label */
+const ReplyText = ({ text }: { text: string }) => (
+  <>
+    {text
+      .split(/\n+/)
+      .filter((line) => line.trim())
+      .map((line, index) => {
+        const match = SECTION_RE.exec(line.trim());
+        return match ? (
+          <p key={index} style={{ margin: '0 0 6px' }}>
+            <Tag color={SECTION_COLOR[match[1]]} style={{ marginInlineEnd: 6 }}>
+              {match[1]}
+            </Tag>
+            {match[2]}
+          </p>
+        ) : (
+          <p key={index} style={{ margin: '0 0 6px' }}>
+            {line}
+          </p>
+        );
+      })}
+  </>
+);
+
 interface SurveyAiChatPanelProps {
   open: boolean;
   onClose: () => void;
   surveyId: string;
   excludeFlagged: boolean;
+  /** Starter questions that fit the tab the user is on */
+  suggestions?: string[];
 }
 
 export const SurveyAiChatPanel = ({
@@ -46,7 +79,9 @@ export const SurveyAiChatPanel = ({
   onClose,
   surveyId,
   excludeFlagged,
+  suggestions,
 }: SurveyAiChatPanelProps) => {
+  const isMobile = Grid.useBreakpoint().md === false;
   const [entries, setEntries] = useState<ChatEntry[]>([]);
   const [draft, setDraft] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -94,7 +129,7 @@ export const SurveyAiChatPanel = ({
     <Drawer
       open={open}
       onClose={onClose}
-      size={460}
+      size={isMobile ? '100%' : 460}
       title={
         <span>
           <RobotOutlined style={{ color: 'var(--app-primary)', marginRight: 8 }} />
@@ -123,7 +158,7 @@ export const SurveyAiChatPanel = ({
               открытых ответах именно этой группы.
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {EXAMPLE_PROMPTS.map((prompt) => (
+              {(suggestions ?? EXAMPLE_PROMPTS).map((prompt) => (
                 <button
                   key={prompt}
                   type="button"
@@ -165,7 +200,7 @@ export const SurveyAiChatPanel = ({
                   borderRadius: 12,
                   fontSize: 13,
                   lineHeight: 1.5,
-                  whiteSpace: 'pre-wrap',
+                  whiteSpace: isUser ? 'pre-wrap' : 'normal',
                   wordBreak: 'break-word',
                   alignSelf: isUser ? 'flex-end' : 'flex-start',
                   background: isUser
@@ -180,7 +215,7 @@ export const SurveyAiChatPanel = ({
                       : 'var(--app-text)',
                 }}
               >
-                {entry.content}
+                {isUser || entry.isError ? entry.content : <ReplyText text={entry.content} />}
               </div>
               {entry.crosstab && (
                 <div

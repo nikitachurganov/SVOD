@@ -43,6 +43,38 @@ export const formatAnswer = (labels: Map<string, string>, value: unknown): strin
   return labels.get(text) ?? text;
 };
 
+const RATING_VARIANT_LABEL: Record<string, string> = {
+  stars: 'Оценка звёздами',
+  numeric_scale: 'Числовая шкала',
+  slider: 'Ползунок',
+  nps: 'Шкала от 0 до 10',
+};
+
+const ANSWER_KIND_LABEL: Record<string, string> = {
+  shortText: 'Краткий ответ',
+  longText: 'Развёрнутый ответ',
+  fullName: 'ФИО',
+  email: 'E-mail',
+  phone: 'Телефон',
+  radio: 'Один вариант',
+  checkbox: 'Несколько вариантов',
+  dropdown: 'Выбор из списка',
+  yesNo: 'Да / Нет',
+  number: 'Число',
+  date: 'Дата',
+  dateTime: 'Дата и время',
+  time: 'Время',
+};
+
+/** How the respondent answers, in plain words (for the list of questions of the form) */
+export const answerKindLabel = (type: string, config?: Record<string, unknown>): string => {
+  if (type === 'rating') {
+    const variant = config?.ratingVariant;
+    return (typeof variant === 'string' && RATING_VARIANT_LABEL[variant]) || 'Оценка';
+  }
+  return ANSWER_KIND_LABEL[type] ?? type;
+};
+
 export const QUESTION_TYPE_LABEL: Record<string, string> = {
   shortText: 'Короткий текст',
   longText: 'Длинный текст',

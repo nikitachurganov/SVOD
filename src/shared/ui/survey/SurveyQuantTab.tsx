@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Card, Select, Spin, Table } from 'antd';
+import { Alert, Card, Segmented, Select, Spin, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import axios from 'axios';
 
@@ -10,6 +10,7 @@ import {
   type SurveyResults,
 } from '../../api/surveys.api';
 import { CrosstabView } from './CrosstabView';
+import { QuestionTextAnswers } from './QuestionTextAnswers';
 import { OptionsBarChart, ScaleHistogram } from './SurveyCharts';
 import { formatNumber } from './surveyFormat';
 
@@ -36,42 +37,163 @@ const KIND_LABEL: Record<QuestionStat['kind'], string> = {
   text: 'текст',
 };
 
-const QuestionCard = ({ question }: { question: QuestionStat }) => (
-  <Card
+type View = 'chart' | 'table';
+
+const ViewSwitch = ({ value, onChange }: { value: View; onChange: (v: View) => void }) => (
+  <Segmented<View>
     size="small"
-    title={question.label}
-    extra={<span style={{ fontSize: 12 }}>ответов: {question.answered}</span>}
-  >
-    {question.answered === 0 && (
-      <span style={{ color: 'var(--app-text-secondary)' }}>Нет ответов</span>
-    )}
-    {question.answered > 0 && question.kind === 'choice' && (
-      <OptionsBarChart options={question.options} />
-    )}
-    {question.answered > 0 && question.kind === 'scale' && (
-      <>
-        <div style={{ fontSize: 13, marginBottom: 4 }}>
-          Среднее: <strong>{question.mean === null ? '—' : formatNumber(question.mean)}</strong>
-        </div>
-        <ScaleHistogram distribution={question.distribution} />
-      </>
-    )}
-  </Card>
+    value={value}
+    onChange={onChange}
+    options={[
+      { label: 'График', value: 'chart' },
+      { label: 'Таблица', value: 'table' },
+    ]}
+    aria-label="Вид представления"
+  />
 );
+
+const ChoiceBody = ({ question }: { question: QuestionStat }) => {
+  const [view, setView] = useState<View>('chart');
+  const marks = question.options.reduce((sum, o) => sum + o.count, 0);
+  const multiple = question.type === 'checkbox';
+  return (
+    <>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+        <ViewSwitch value={view} onChange={setView} />
+      </div>
+      {view === 'chart' ? (
+        <OptionsBarChart options={question.options} />
+      ) : (
+        <Table
+          size="small"
+          pagination={false}
+          rowKey="label"
+          dataSource={question.options}
+          columns={[
+            { title: 'Вариант', dataIndex: 'label', key: 'label' },
+            { title: 'Ответов', dataIndex: 'count', key: 'count', align: 'right' },
+            {
+              title: 'Доля',
+              dataIndex: 'percent',
+              key: 'percent',
+              align: 'right',
+              render: (v: number) => `${formatNumber(v)}%`,
+            },
+          ]}
+        />
+      )}
+      {multiple && (
+        <div style={{ marginTop: 8, fontSize: 12, color: 'var(--app-text-secondary)' }}>
+          Можно выбрать несколько вариантов: доля — это часть ответивших на вопрос, поэтому сумма
+          долей может превышать 100%. Всего отметок: {marks}.
+        </div>
+      )}
+    </>
+  );
+};
+
+const ScaleBody = ({ question }: { question: QuestionStat }) => {
+  const [view, setView] = useState<View>('chart');
+  const stats: Array<[string, number | null]> = [
+    ['Среднее', question.mean],
+    ['Медиана', question.median],
+    ['Мода', question.mode],
+    ['σ', question.std],
+  ];
+  return (
+    <>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 13 }}>
+          {stats.map(([label, value]) => (
+            <span key={label}>
+              {label}: <strong>{value === null ? '—' : formatNumber(value)}</strong>
+            </span>
+          ))}
+        </div>
+        <ViewSwitch value={view} onChange={setView} />
+      </div>
+      {view === 'chart' ? (
+        <ScaleHistogram distribution={question.distribution} />
+      ) : (
+        <Table
+          size="small"
+          pagination={false}
+          rowKey="value"
+          dataSource={question.distribution}
+          columns={[
+            { title: 'Значение', dataIndex: 'value', key: 'value', render: (v: number) => formatNumber(v) },
+            { title: 'Ответов', dataIndex: 'count', key: 'count', align: 'right' },
+            {
+              title: 'Доля',
+              key: 'share',
+              align: 'right',
+              render: (_, bucket) =>
+                `${formatNumber(question.answered ? (bucket.count / question.answered) * 100 : 0)}%`,
+            },
+          ]}
+        />
+      )}
+    </>
+  );
+};
+
+interface QuestionCardProps {
+  question: QuestionStat;
+  used: number;
+  surveyId: string;
+  excludeFlagged: boolean;
+  onOpenResponse: (responseId: string) => void;
+}
+
+/** One question: how many answered, how many skipped, and the answers themselves */
+const QuestionCard = ({ question, used, surveyId, excludeFlagged, onOpenResponse }: QuestionCardProps) => {
+  const skipped = Math.max(0, used - question.answered);
+  return (
+    <Card
+      id={`question-${question.field_id}`}
+      size="small"
+      style={{ scrollMarginTop: 16, gridColumn: question.kind === 'text' ? '1 / -1' : undefined }}
+      title={<span style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>{question.label}</span>}
+      extra={
+        <span style={{ fontSize: 12, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <span>
+            ответили: {question.answered} из {used}
+          </span>
+          {skipped > 0 && <Tag style={{ margin: 0 }}>пропустили: {skipped}</Tag>}
+        </span>
+      }
+    >
+      {question.answered === 0 && question.kind !== 'text' && (
+        <span style={{ color: 'var(--app-text-secondary)' }}>Нет ответов</span>
+      )}
+      {question.answered > 0 && question.kind === 'choice' && <ChoiceBody question={question} />}
+      {question.answered > 0 && question.kind === 'scale' && <ScaleBody question={question} />}
+      {question.kind === 'text' && (
+        <QuestionTextAnswers
+          surveyId={surveyId}
+          fieldId={question.field_id}
+          excludeFlagged={excludeFlagged}
+          onOpenResponse={onOpenResponse}
+        />
+      )}
+    </Card>
+  );
+};
 
 interface SurveyQuantTabProps {
   surveyId: string;
   results: SurveyResults;
   excludeFlagged: boolean;
+  onOpenResponse: (responseId: string) => void;
 }
 
-export const SurveyQuantTab = ({ surveyId, results, excludeFlagged }: SurveyQuantTabProps) => {
-  const questions = useMemo(
-    () => results.questions.filter((q) => q.kind !== 'text' && q.answered > 0 && !isNoise(q)),
-    [results.questions],
+export const SurveyQuantTab = ({ surveyId, results, excludeFlagged, onOpenResponse }: SurveyQuantTabProps) => {
+  const shown = useMemo(() => results.questions.filter((q) => !isNoise(q)), [results.questions]);
+  const comparable = useMemo(
+    () => shown.filter((q) => q.kind !== 'text' && q.answered > 0),
+    [shown],
   );
-  const scaleQuestions = questions.filter((q) => q.kind === 'scale');
-  const textQuestions = results.questions.filter((q) => q.kind === 'text' && q.samples.length > 0);
+  const scaleQuestions = comparable.filter((q) => q.kind === 'scale');
 
   const [rowId, setRowId] = useState<string | undefined>();
   const [colId, setColId] = useState<string | undefined>();
@@ -105,7 +227,7 @@ export const SurveyQuantTab = ({ surveyId, results, excludeFlagged }: SurveyQuan
   const crosstabErr = current?.error ?? null;
   const crosstabLoading = requestKey !== null && current === null;
 
-  const options = questions.map((q) => ({
+  const options = comparable.map((q) => ({
     value: q.field_id,
     label: `${q.label} (${KIND_LABEL[q.kind]})`,
   }));
@@ -158,7 +280,7 @@ export const SurveyQuantTab = ({ surveyId, results, excludeFlagged }: SurveyQuan
         </Card>
       )}
 
-      {questions.length >= 2 && (
+      {comparable.length >= 2 && (
         <Card size="small" title="Кросстабуляция">
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             <Select
@@ -201,37 +323,19 @@ export const SurveyQuantTab = ({ surveyId, results, excludeFlagged }: SurveyQuan
         </Card>
       )}
 
-      {questions.length > 0 && (
-        <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))' }}>
-          {questions.map((q) => (
-            <QuestionCard key={q.field_id} question={q} />
+      {shown.length > 0 && (
+        <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fill, minmax(min(420px, 100%), 1fr))' }}>
+          {shown.map((q) => (
+            <QuestionCard
+              key={q.field_id}
+              question={q}
+              used={results.used}
+              surveyId={surveyId}
+              excludeFlagged={excludeFlagged}
+              onOpenResponse={onOpenResponse}
+            />
           ))}
         </div>
-      )}
-
-      {textQuestions.length > 0 && (
-        <Card size="small" title="Открытые ответы">
-          {textQuestions.map((q) => (
-            <div key={q.field_id} style={{ padding: '8px 0', borderTop: '1px solid var(--app-border)' }}>
-              <strong>{q.label}</strong>{' '}
-              <span style={{ fontSize: 12, color: 'var(--app-text-secondary)' }}>
-                ответов: {q.answered}
-              </span>
-              <ul style={{ margin: '6px 0 0', paddingLeft: 18, fontSize: 13 }}>
-                {q.samples.map((sample, index) => (
-                  <li key={index} style={{ whiteSpace: 'pre-wrap' }}>
-                    {sample}
-                  </li>
-                ))}
-                {q.answered > q.samples.length && (
-                  <li style={{ listStyle: 'none', marginLeft: -18, color: 'var(--app-text-secondary)' }}>
-                    …и ещё {q.answered - q.samples.length} — на вкладке «Ответы»
-                  </li>
-                )}
-              </ul>
-            </div>
-          ))}
-        </Card>
       )}
     </div>
   );

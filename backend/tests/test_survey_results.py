@@ -322,6 +322,76 @@ class CrosstabTests(unittest.TestCase):
         self.assertEqual(ctx.exception.code, "unsupported_question_type")
 
 
+class DurationRuleTests(unittest.TestCase):
+    def test_unknown_zero_and_absurd_durations_are_left_out(self):
+        pages = _pages([{"id": "q", "type": "number", "label": "Q"}])
+        durations = [30, 90, None, 0, 99_999]  # the last one: a tab left open for a day
+        responses = [_resp({"q": 1}, duration=d) for d in durations]
+        results = survey_results.build_results(pages, responses)
+        self.assertEqual(results.mean_duration_seconds, 60)
+        self.assertEqual(results.median_duration_seconds, 60)
+
+    def test_no_valid_durations_means_no_figure(self):
+        pages = _pages([{"id": "q", "type": "number", "label": "Q"}])
+        results = survey_results.build_results(pages, [_resp({"q": 1}, duration=None)])
+        self.assertIsNone(results.mean_duration_seconds)
+        self.assertIsNone(results.median_duration_seconds)
+
+
+class CsvExportTests(unittest.TestCase):
+    PAGES = [
+        {
+            "id": "p1",
+            "fields": [
+                {
+                    "id": "course",
+                    "type": "radio",
+                    "label": "Курс, на котором учитесь",
+                    "options": [{"id": "c1", "label": "1 курс"}, {"id": "c3", "label": "3 курс"}],
+                },
+                {
+                    "id": "src",
+                    "type": "checkbox",
+                    "label": "Источники",
+                    "options": [{"id": "s1", "label": "Сайт"}, {"id": "s2", "label": "Друзья"}],
+                },
+                {"id": "note", "type": "longText", "label": 'Комментарий "как есть"'},
+            ],
+        }
+    ]
+
+    def _rows(self, responses):
+        import csv
+        import io
+
+        text = survey_answers.build_csv(self.PAGES, responses)
+        return list(csv.reader(io.StringIO(text, newline=""), delimiter=";"))
+
+    def test_header_uses_question_labels_and_values_are_readable(self):
+        rows = self._rows([_resp({"course": "c3", "src": ["s1", "s2"], "note": "ок"}, duration=75)])
+        self.assertEqual(
+            rows[0],
+            ["Дата и время (UTC)", "Длительность, с", "Флаги качества", "Курс, на котором учитесь", "Источники", 'Комментарий "как есть"'],
+        )
+        self.assertEqual(rows[1][1], "75")
+        self.assertEqual(rows[1][3:], ["3 курс", "Сайт; Друзья", "ок"])
+
+    def test_commas_quotes_semicolons_and_line_breaks_survive_a_round_trip(self):
+        nasty = 'Строка 1, с запятой; и точкой с запятой\nСтрока 2 с "кавычками"'
+        rows = self._rows([_resp({"note": nasty})])
+        self.assertEqual(len(rows), 2)  # the line break stayed inside one cell
+        self.assertEqual(rows[1][5], nasty)
+
+    def test_formula_like_text_is_neutralised(self):
+        rows = self._rows([_resp({"note": "=HYPERLINK(\"http://evil\")"})])
+        self.assertTrue(rows[1][5].startswith("'="))
+
+    def test_flags_and_skipped_answers(self):
+        rows = self._rows([_resp({"course": "c1"}, flags={"too_fast": True}, duration=2)])
+        self.assertEqual(rows[1][2], "too_fast")
+        self.assertEqual(rows[1][4:], ["", ""])
+
+
 class ResponsesByDayTests(unittest.TestCase):
     def test_counts_per_utc_day_oldest_first(self):
         pages = _pages([{"id": "q", "type": "number", "label": "Q"}])

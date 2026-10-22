@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Button, Result, Spin } from 'antd';
+import { Alert, Button, Result, Spin, Tag } from 'antd';
 import { CheckCircleFilled } from '@ant-design/icons';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 
 import {
   PublicSurveyError,
   getPublicSurvey,
+  getSurveyById,
   submitPublicSurvey,
   type PublicSurvey,
 } from '../shared/api/surveys.api';
@@ -24,8 +25,18 @@ type LoadState =
   | { status: 'ready'; survey: PublicSurvey }
   | { status: 'error'; error: PublicSurveyError };
 
-export const PublicSurveyPage = () => {
-  const { token } = useParams<{ token: string }>();
+interface PublicSurveyPageProps {
+  /**
+   * Preview for the survey's author: the form is taken from the survey itself (open, stopped or
+   * draft alike) and nothing is ever sent — no response is created, the statistics stay as is.
+   */
+  preview?: boolean;
+}
+
+export const PublicSurveyPage = ({ preview = false }: PublicSurveyPageProps) => {
+  const { token, id: surveyId } = useParams<{ token: string; id: string }>();
+  const navigate = useNavigate();
+  const source = preview ? surveyId : token;
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   const [pageIndex, setPageIndex] = useState(0);
   const [submitting, setSubmitting] = useState(false);
@@ -38,10 +49,19 @@ export const PublicSurveyPage = () => {
   const startedAtRef = useRef<number>(Date.now());
 
   useEffect(() => {
-    if (!token) return;
+    if (!source) return;
     let cancelled = false;
     setState({ status: 'loading' });
-    getPublicSurvey(token)
+    const load: Promise<PublicSurvey> = preview
+      ? getSurveyById(source).then((detail) => ({
+          name: detail.name,
+          description: detail.description,
+          pages: detail.pages,
+          organization_name: null,
+          anonymous: detail.anonymous,
+        }))
+      : getPublicSurvey(source);
+    load
       .then((survey) => {
         if (cancelled) return;
         startedAtRef.current = Date.now();
@@ -60,7 +80,7 @@ export const PublicSurveyPage = () => {
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [source, preview]);
 
   const survey = state.status === 'ready' ? state.survey : null;
 
@@ -101,7 +121,7 @@ export const PublicSurveyPage = () => {
   };
 
   const handleSubmit = useCallback(async () => {
-    if (!token) return;
+    if (!token && !preview) return;
     setSubmitError(null);
     try {
       await fillRef.current?.validateFields();
@@ -109,6 +129,13 @@ export const PublicSurveyPage = () => {
       scrollToTop();
       return;
     }
+
+    if (preview) {
+      // The author only looks at the form: validation ran, but nothing is sent or stored
+      setSubmitted(true);
+      return;
+    }
+    if (!token) return;
 
     setSubmitting(true);
     try {
@@ -127,7 +154,19 @@ export const PublicSurveyPage = () => {
     } finally {
       setSubmitting(false);
     }
-  }, [token, pages]);
+  }, [token, preview, pages]);
+
+  const previewBar = preview ? (
+    <div className="survey-preview-bar" role="status">
+      <span>
+        <Tag color="blue" style={{ marginInlineEnd: 8 }}>
+          Предпросмотр
+        </Tag>
+        Так форму увидит респондент. Ответы не сохраняются и не попадают в статистику.
+      </span>
+      <Button onClick={() => navigate(`/surveys/${surveyId}/form`)}>Вернуться к опросу</Button>
+    </div>
+  ) : null;
 
   if (state.status === 'loading') {
     return (
@@ -144,6 +183,11 @@ export const PublicSurveyPage = () => {
           status={state.error.code === 'closed' ? 'info' : 'warning'}
           title={state.error.code === 'closed' ? 'Опрос завершён' : 'Опрос недоступен'}
           subTitle={state.error.message}
+          extra={
+            preview ? (
+              <Button onClick={() => navigate(`/surveys/${surveyId}/form`)}>Вернуться к опросу</Button>
+            ) : undefined
+          }
         />
       </div>
     );
@@ -151,12 +195,28 @@ export const PublicSurveyPage = () => {
 
   if (submitted) {
     return (
-      <div className="public-form-flow public-form-flow--centered public-form-flow--fade-in">
-        <Result
-          icon={<CheckCircleFilled style={{ color: 'var(--app-success)', fontSize: 64 }} />}
-          title="Спасибо за участие!"
-          subTitle="Ваши ответы сохранены. Это окно можно закрыть."
-        />
+      <div className="public-form-flow">
+        {previewBar}
+        <div className="public-form-flow--centered public-form-flow--fade-in" style={{ flex: 1 }}>
+          {preview ? (
+            <Result
+              icon={<CheckCircleFilled style={{ color: 'var(--app-success)', fontSize: 64 }} />}
+              title="Так выглядит завершение опроса"
+              subTitle="Это предпросмотр: ответ не сохранён, статистика не изменилась."
+              extra={
+                <Button type="primary" onClick={() => navigate(`/surveys/${surveyId}/form`)}>
+                  Вернуться к опросу
+                </Button>
+              }
+            />
+          ) : (
+            <Result
+              icon={<CheckCircleFilled style={{ color: 'var(--app-success)', fontSize: 64 }} />}
+              title="Спасибо за участие!"
+              subTitle="Ваши ответы сохранены. Это окно можно закрыть."
+            />
+          )}
+        </div>
       </div>
     );
   }
@@ -178,6 +238,7 @@ export const PublicSurveyPage = () => {
 
   return (
     <div className="public-form-flow public-form-flow--fill">
+      {previewBar}
       <div className="public-form-flow__fill-main">
         <FormFillWizardLayout
           contentRef={contentRef}

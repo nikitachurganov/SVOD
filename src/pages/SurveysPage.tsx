@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Card, Modal, Table, Tag } from 'antd';
+import { Button, Card, Empty, Grid, Input, Modal, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { EditOutlined, InboxOutlined, PlusOutlined } from '@ant-design/icons';
+import { EditOutlined, InboxOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons';
 import { Link, useNavigate } from 'react-router-dom';
 
 import {
@@ -67,6 +67,13 @@ export const SurveysPage = () => {
   const [counts, setCounts] = useState<SurveysCounts>(DEFAULT_COUNTS);
   const [confirmArchiveId, setConfirmArchiveId] = useState<string | null>(null);
   const [archiving, setArchiving] = useState(false);
+  const [search, setSearch] = useState('');
+  const isMobile = Grid.useBreakpoint().md === false;
+
+  const visibleSurveys = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    return needle ? surveys.filter((s) => s.name.toLowerCase().includes(needle)) : surveys;
+  }, [surveys, search]);
 
   const loadCounts = useCallback(() => {
     if (!organizationId) return;
@@ -265,23 +272,77 @@ export const SurveysPage = () => {
       </div>
 
       <div className="registry-page__content">
-        <Card className="registry-page__card">
-          <Table<SurveyListItem>
-            rowKey="id"
-            columns={columns}
-            dataSource={surveys}
-            loading={loading}
-            locale={{ emptyText: EMPTY_MESSAGE[activeTab] }}
-            pagination={{
-              defaultPageSize: PAGE_SIZES[0],
-              pageSizeOptions: PAGE_SIZES,
-              showSizeChanger: true,
-              showTotal: (total, [min, max]) => `${min}–${max} из ${total}`,
-            }}
-            size="middle"
-            scroll={{ x: 'max-content' }}
-          />
-        </Card>
+        <Input
+          allowClear
+          prefix={<SearchOutlined />}
+          placeholder="Поиск по названию"
+          aria-label="Поиск опроса по названию"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          size={isMobile ? 'large' : 'middle'}
+          style={{ maxWidth: isMobile ? undefined : 360, marginBottom: 12 }}
+        />
+        {isMobile ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {!loading && visibleSurveys.length === 0 && (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={search.trim() ? 'Ничего не найдено' : EMPTY_MESSAGE[activeTab]}
+              />
+            )}
+            {visibleSurveys.map((survey) => (
+              <Card key={survey.id} size="small" loading={loading}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start' }}>
+                  <Link to={`/surveys/${survey.id}`} style={{ fontWeight: 600, wordBreak: 'break-word' }}>
+                    {survey.name}
+                  </Link>
+                  <Tag color={SURVEY_STATUS_COLOR[survey.status]} style={{ margin: 0 }}>
+                    {SURVEY_STATUS_LABEL[survey.status]}
+                  </Tag>
+                </div>
+                <div style={{ margin: '6px 0 10px', fontSize: 13, color: 'var(--app-text-secondary)' }}>
+                  {pluralizeResponses(survey.responses_count)}
+                  {survey.last_response_at && ` · последний ${formatSurveyDate(survey.last_response_at)}`}
+                </div>
+                {survey.status !== 'archived' && (
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <Button
+                      size="large"
+                      icon={<EditOutlined />}
+                      onClick={() => navigate(`/surveys/${survey.id}/edit`)}
+                    >
+                      Изменить
+                    </Button>
+                    <Button
+                      size="large"
+                      icon={<InboxOutlined />}
+                      aria-label="Переместить в архив"
+                      onClick={() => setConfirmArchiveId(survey.id)}
+                    />
+                  </div>
+                )}
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <Card className="registry-page__card">
+            <Table<SurveyListItem>
+              rowKey="id"
+              columns={columns}
+              dataSource={visibleSurveys}
+              loading={loading}
+              locale={{ emptyText: search.trim() ? 'Ничего не найдено' : EMPTY_MESSAGE[activeTab] }}
+              pagination={{
+                defaultPageSize: PAGE_SIZES[0],
+                pageSizeOptions: PAGE_SIZES,
+                showSizeChanger: true,
+                showTotal: (total, [min, max]) => `${min}–${max} из ${total}`,
+              }}
+              size="middle"
+              scroll={{ x: 'max-content' }}
+            />
+          </Card>
+        )}
       </div>
 
       <Modal

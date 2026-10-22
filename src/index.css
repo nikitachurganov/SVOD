@@ -1956,6 +1956,82 @@ html[data-theme] body {
   min-height: 200px;
 }
 
+/* ── Survey page: white header (like the registry pages) + own scroll area ───────── */
+
+.survey-page {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+/* The header stays in place while the body scrolls beneath it */
+.survey-page__header {
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
+  background: var(--app-surface);
+  border-bottom: 1px solid var(--app-border-secondary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  padding-top: 16px;
+}
+
+.survey-page__body {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: var(--app-bg);
+  padding: 24px 0 32px;
+}
+
+/* Centred in the working area (the sidebar is outside it); never wider than 1480px */
+.survey-page__container {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: 0 32px;
+}
+
+.survey-page__tabs.ant-tabs > .ant-tabs-nav {
+  margin: 0;
+}
+
+.survey-page__tabs.ant-tabs > .ant-tabs-nav::before {
+  border-bottom: 0;
+}
+
+@media (max-width: 1023px) {
+  .survey-page__container {
+    padding: 0 24px;
+  }
+}
+
+@media (max-width: 767px) {
+  .survey-page__container {
+    padding: 0 12px;
+  }
+
+  .survey-page__body {
+    padding: 16px 0 24px;
+  }
+}
+
+/* Survey preview: the respondent form with a bar that says nothing is saved */
+.survey-preview-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 8px 24px;
+  background: var(--app-surface);
+  border-bottom: 1px solid var(--app-border-secondary);
+}
+
 /* ── Form fill wizard ── */
 .app-form-fill {
   display: flex;

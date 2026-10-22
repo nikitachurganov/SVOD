@@ -60,9 +60,12 @@ _SUMMARY_PROMPT = f"""Ты — аналитик опросов в сервисе
 это различия в данных, а не доказанная причина), затем перекосы в закрытых вопросах и темы из открытых ответов.
 - Если ответов меньше {SMALL_SAMPLE}, одним из пунктов предупреди, что выборка мала и выводы предварительные.
 - Не утверждай причин, которых нет в ответах.
+- Для каждого пункта перечисли id вопросов (поле id в questions и *_question_id в segment_comparisons), \
+на цифрах которых он основан. Используй только id из данных; если пункт общий — пустой список.
 - {_DATA_RULE}
 
-Отвечай ТОЛЬКО валидным JSON без markdown: {{"bullets": ["...", "..."]}}
+Отвечай ТОЛЬКО валидным JSON без markdown:
+{{"bullets": [{{"text": "...", "question_ids": ["<id>"]}}, ...]}}
 """
 
 _PLAN_PROMPT = f"""Ты — планировщик анализа опроса. Тебе дан список вопросов опроса и вопрос исследователя. \
@@ -95,6 +98,9 @@ _ANSWER_PROMPT = f"""Ты — аналитик опросов в сервисе 
 - Цитаты: выбери от 0 до {MAX_QUOTES_IN_REPLY} самых показательных цитат из списка quotes и верни ТОЛЬКО их id \
 (например "r3"). Не придумывай и не пересказывай цитаты как дословные.
 - Отвечай по-русски, кратко и по делу, без вступлений.
+- Различай три вещи и подписывай их отдельными абзацами, пропуская пустые: «Факты:» — только то, что \
+прямо видно в данных (с числами и n); «Интерпретация:» — твои предположения, помечай их как предположения; \
+«Что можно сделать:» — советы исследователю. Если вопрос про формулировки анкеты, используй список questions.
 - {_DATA_RULE}
 
 Отвечай ТОЛЬКО валидным JSON без markdown: {{"reply": "<ответ>", "quote_ids": ["r3", "r7"]}}
@@ -108,6 +114,15 @@ def _clean_text(text: str, limit: int) -> str:
     """Single-line respondent text without the data-block markers."""
     collapsed = re.sub(r"\s+", " ", text).strip()
     return collapsed.replace("<<<", "").replace(">>>", "")[:limit]
+
+
+_EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
+_PHONE_RE = re.compile(r"(?<!\w)\+?\d[\d\-\s()]{8,}\d(?!\w)")
+
+
+def mask_pii(text: str) -> str:
+    """E-mails and phone numbers of respondents never leave for the external model."""
+    return _PHONE_RE.sub("[телефон]", _EMAIL_RE.sub("[e-mail]", text))
 
 
 def _data_block(payload: dict[str, Any]) -> str:
@@ -128,7 +143,12 @@ def _is_text_field(field_: dict[str, Any]) -> bool:
 
 
 def _compact_question(stat: Any, *, texts: bool) -> dict[str, Any]:
-    item: dict[str, Any] = {"question": stat.label, "kind": stat.kind, "answered": stat.answered}
+    item: dict[str, Any] = {
+        "id": stat.field_id,
+        "question": stat.label,
+        "kind": stat.kind,
+        "answered": stat.answered,
+    }
     if stat.kind == "choice":
         item["options"] = [
             {"label": o.label, "percent": o.percent} for o in stat.options if o.count
@@ -136,7 +156,7 @@ def _compact_question(stat: Any, *, texts: bool) -> dict[str, Any]:
     elif stat.kind == "scale":
         item.update(mean=stat.mean, median=stat.median, std=stat.std)
     elif texts and stat.samples:
-        item["samples"] = [_clean_text(s, 200) for s in stat.samples[:5]]
+        item["samples"] = [mask_pii(_clean_text(s, 200)) for s in stat.samples[:5]]
     return item
 
 
@@ -236,7 +256,9 @@ def segment_comparisons(
                 (
                     max(means) - min(means),
                     {
+                        "segment_question_id": segment["id"],
                         "segment_question": _clean_text(str(segment.get("label") or segment["id"]), 200),
+                        "numeric_question_id": numeric["id"],
                         "numeric_question": _clean_text(str(numeric.get("label") or numeric["id"]), 200),
                         "groups": [{"group": g.label, "n": g.n, "mean": g.mean} for g in groups],
                     },
@@ -246,20 +268,32 @@ def segment_comparisons(
     return [item for _, item in found[:MAX_SEGMENT_COMPARISONS]]
 
 
-def parse_bullets(raw: str) -> list[str]:
+def parse_summary(raw: str, valid_ids: set[str]) -> tuple[list[str], list[list[str]]]:
+    """(bullets, evidence): the model may cite only questions that really exist."""
     parsed = _parse_payload(raw) or {}
-    bullets = parsed.get("bullets")
-    if not isinstance(bullets, list):
-        return []
-    cleaned = [_str(b, 400) for b in bullets if isinstance(b, str) and b.strip()]
-    return cleaned[:MAX_SUMMARY_BULLETS]
+    items = parsed.get("bullets")
+    if not isinstance(items, list):
+        return [], []
+    bullets: list[str] = []
+    evidence: list[list[str]] = []
+    for item in items:
+        text, ids = (item, []) if isinstance(item, str) else (
+            item.get("text") if isinstance(item, dict) else None,
+            item.get("question_ids") if isinstance(item, dict) else [],
+        )
+        if not isinstance(text, str) or not text.strip():
+            continue
+        cited = [i for i in (ids if isinstance(ids, list) else []) if isinstance(i, str) and i in valid_ids]
+        bullets.append(_str(text, 400))
+        evidence.append(list(dict.fromkeys(cited))[:4])
+    return bullets[:MAX_SUMMARY_BULLETS], evidence[:MAX_SUMMARY_BULLETS]
 
 
 async def generate_summary(
     survey_name: str,
     results: SurveyResults,
     comparisons: list[dict[str, Any]] | None = None,
-) -> list[str]:
+) -> tuple[list[str], list[list[str]]]:
     if results.used == 0:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="no_responses")
     digest = results_digest(survey_name, results)
@@ -273,14 +307,14 @@ async def generate_summary(
         max_tokens=1200,
         timeout=90.0,
     )
-    bullets = parse_bullets(raw)
+    bullets, evidence = parse_summary(raw, {q.field_id for q in results.questions})
     if not bullets:
         logger.warning("AI survey summary: unparseable LLM output: %s", raw[:500])
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Не удалось разобрать ответ ИИ. Попробуйте ещё раз.",
         )
-    return bullets
+    return bullets, evidence
 
 
 # ─── Chat ─────────────────────────────────────────────────────────────────────
@@ -490,7 +524,11 @@ async def chat(
     quotes = collect_quotes(fields, inside, plan)
     data: dict[str, Any] = {
         "overall": results_digest(survey_name, results),
-        "quotes": {qid: {"question": q.question, "text": q.text} for qid, q in quotes.items()},
+        # The researcher sees the original quote; the model gets it without e-mails and phones
+        "quotes": {
+            qid: {"question": q.question, "text": mask_pii(q.text)} for qid, q in quotes.items()
+        },
+        "questions": question_catalog(fields),
     }
     if crosstab is not None:
         data["crosstab"] = _crosstab_digest(crosstab)

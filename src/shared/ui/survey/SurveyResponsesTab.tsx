@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Alert, Button, Table, Tag } from 'antd';
+import { Alert, Button, Card, Grid, Pagination, Segmented, Select, Spin, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { DownloadOutlined } from '@ant-design/icons';
 
@@ -13,6 +13,7 @@ import { SurveyResponseDrawer } from './SurveyResponseDrawer';
 import { formatAnswer, formatDateTime, formatDuration } from './surveyFormat';
 
 const PAGE_SIZES = [20, 50, 100];
+const PREVIEW_ANSWERS = 3;
 const FILE_TYPES = new Set(['file_vector', 'file_image', 'file_document']);
 /** Items of SUS / UEQ are 10–26 near-identical columns; they are read in the response view */
 const BULKY_METHODOLOGIES = new Set(['sus', 'ueq']);
@@ -21,6 +22,9 @@ const FLAG_LABEL: Record<string, string> = {
   failed_attention_check: 'Не прошёл проверку внимания',
   too_fast: 'Слишком быстро',
 };
+
+type FlagFilter = 'all' | 'flagged' | 'clean';
+type Order = 'newest' | 'oldest';
 
 const flattenFields = (pages: CreateFormPagePayload[]): CreateFormFieldPayload[] => {
   const result: CreateFormFieldPayload[] = [];
@@ -76,6 +80,7 @@ export const SurveyResponsesTab = ({
   onCloseDetail,
   onDownloadCsv,
 }: SurveyResponsesTabProps) => {
+  const isMobile = Grid.useBreakpoint().md === false;
   const fields = useMemo(() => flattenFields(pages), [pages]);
   const labelsById = useMemo(
     () => new Map(fields.map((field) => [field.id as string, optionLabels(field)])),
@@ -92,7 +97,9 @@ export const SurveyResponsesTab = ({
 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PAGE_SIZES[0]);
-  const requestKey = `${surveyId}|${page}|${pageSize}`;
+  const [filter, setFilter] = useState<FlagFilter>('all');
+  const [order, setOrder] = useState<Order>('newest');
+  const requestKey = `${surveyId}|${page}|${pageSize}|${filter}|${order}`;
   const [answer, setAnswer] = useState<{
     key: string;
     data: SurveyResponsesPage | null;
@@ -102,7 +109,12 @@ export const SurveyResponsesTab = ({
 
   useEffect(() => {
     let cancelled = false;
-    getSurveyResponses(surveyId, { limit: pageSize, offset: (page - 1) * pageSize })
+    getSurveyResponses(surveyId, {
+      limit: pageSize,
+      offset: (page - 1) * pageSize,
+      flagged: filter === 'all' ? undefined : filter === 'flagged',
+      order,
+    })
       .then((data) => {
         if (cancelled) return;
         setAnswer({ key: requestKey, data });
@@ -114,19 +126,25 @@ export const SurveyResponsesTab = ({
     return () => {
       cancelled = true;
     };
-  }, [requestKey, surveyId, page, pageSize]);
+  }, [requestKey, surveyId, page, pageSize, filter, order]);
 
   const current = answer?.key === requestKey ? answer : null;
   const loading = current === null;
   const failed = current !== null && current.data === null;
 
+  const textOf = (fieldId: string, record: SurveyResponseItem): string | null =>
+    formatAnswer(labelsById.get(fieldId) ?? new Map(), record.answers[fieldId]);
+
   const renderCell = (fieldId: string, record: SurveyResponseItem): ReactNode => {
-    const text = formatAnswer(labelsById.get(fieldId) ?? new Map(), record.answers[fieldId]);
+    const text = textOf(fieldId, record);
     return text === null ? <Skipped /> : text;
   };
 
   const answeredCount = (record: SurveyResponseItem): number =>
     fields.filter((field) => formatAnswer(new Map(), record.answers[field.id as string]) !== null).length;
+
+  const filledText = (record: SurveyResponseItem): string =>
+    fields.length === 0 ? '—' : `${answeredCount(record)} из ${fields.length}`;
 
   const columns: ColumnsType<SurveyResponseItem> = [
     {
@@ -168,8 +186,7 @@ export const SurveyResponsesTab = ({
       title: 'Заполнено',
       key: 'filled',
       width: 110,
-      render: (_: unknown, record: SurveyResponseItem) =>
-        fields.length === 0 ? <Skipped /> : `${answeredCount(record)} из ${fields.length}`,
+      render: (_: unknown, record: SurveyResponseItem) => filledText(record),
     },
     {
       title: 'Время',
@@ -187,17 +204,61 @@ export const SurveyResponsesTab = ({
     },
   ];
 
+  const changePaging = (nextPage: number, nextSize: number) => {
+    setPage(nextSize !== pageSize ? 1 : nextPage);
+    setPageSize(nextSize);
+  };
+
+  const pagination = (
+    <Pagination
+      current={page}
+      pageSize={pageSize}
+      total={shown?.total ?? 0}
+      pageSizeOptions={PAGE_SIZES}
+      showSizeChanger
+      hideOnSinglePage
+      showTotal={(total, [min, max]) => `${min}–${max} из ${total}`}
+      onChange={changePaging}
+      style={{ marginTop: 12, textAlign: 'right' }}
+    />
+  );
+
   return (
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-        <span style={{ color: 'var(--app-text-secondary)', fontSize: 13 }}>
-          Нажмите на строку, чтобы прочитать все ответы респондента.
-        </span>
-        <Button icon={<DownloadOutlined />} onClick={onDownloadCsv} disabled={!shown?.total}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <Segmented<FlagFilter>
+            value={filter}
+            onChange={(value) => {
+              setFilter(value);
+              setPage(1);
+            }}
+            options={[
+              { label: 'Все', value: 'all' },
+              { label: 'С замечаниями', value: 'flagged' },
+              { label: 'Без замечаний', value: 'clean' },
+            ]}
+            aria-label="Фильтр по замечаниям качества"
+          />
+          <Select<Order>
+            value={order}
+            onChange={(value) => {
+              setOrder(value);
+              setPage(1);
+            }}
+            style={{ minWidth: 170 }}
+            aria-label="Порядок ответов"
+            options={[
+              { label: 'Сначала новые', value: 'newest' },
+              { label: 'Сначала старые', value: 'oldest' },
+            ]}
+          />
+        </div>
+        <Button icon={<DownloadOutlined />} onClick={onDownloadCsv} disabled={!shown?.total && filter === 'all'}>
           Скачать CSV
         </Button>
       </div>
-      {shown && shown.flagged > 0 && (
+      {shown && shown.flagged > 0 && filter === 'all' && (
         <Alert
           type="warning"
           showIcon
@@ -207,33 +268,74 @@ export const SurveyResponsesTab = ({
         />
       )}
       {failed && <Alert type="error" showIcon style={{ marginBottom: 12 }} message="Не удалось загрузить ответы" />}
-      <Table<SurveyResponseItem>
-        rowKey="id"
-        size="small"
-        columns={columns}
-        dataSource={shown?.items ?? []}
-        loading={loading}
-        scroll={{ x: 'max-content' }}
-        onRow={(record) => ({
-          onClick: () => onOpen(record.id),
-          style: { cursor: 'pointer' },
-        })}
-        rowClassName={(record) => (record.id === selectedId ? 'ant-table-row-selected' : '')}
-        locale={{ emptyText: 'Ответов пока нет.' }}
-        pagination={{
-          current: page,
-          pageSize,
-          total: shown?.total ?? 0,
-          pageSizeOptions: PAGE_SIZES,
-          showSizeChanger: true,
-          hideOnSinglePage: true,
-          showTotal: (total, [min, max]) => `${min}–${max} из ${total}`,
-          onChange: (nextPage, nextSize) => {
-            setPage(nextSize !== pageSize ? 1 : nextPage);
-            setPageSize(nextSize);
-          },
-        }}
-      />
+
+      {isMobile ? (
+        <Spin spinning={loading}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {shown?.items.length === 0 && (
+              <span style={{ color: 'var(--app-text-secondary)' }}>
+                {filter === 'all' ? 'Ответов пока нет.' : 'Нет ответов под этот фильтр.'}
+              </span>
+            )}
+            {shown?.items.map((record) => (
+              <Card key={record.id} size="small" hoverable onClick={() => onOpen(record.id)}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                  <strong>Ответ №{record.number}</strong>
+                  <span style={{ color: 'var(--app-text-secondary)', fontSize: 12 }}>
+                    {formatDateTime(record.submitted_at)}
+                  </span>
+                </div>
+                <div style={{ margin: '8px 0', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {columnFields.slice(0, PREVIEW_ANSWERS).map((field) => (
+                    <div key={field.id} style={{ fontSize: 13, wordBreak: 'break-word' }}>
+                      <span style={{ color: 'var(--app-text-secondary)' }}>{field.label}: </span>
+                      {renderCell(field.id as string, record)}
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 12 }}>
+                  <span>Заполнено: {filledText(record)}</span>
+                  <span>· {formatDuration(record.duration_seconds)}</span>
+                  <QualityTags flags={record.quality_flags} />
+                </div>
+                <Button
+                  block
+                  size="large"
+                  style={{ marginTop: 10 }}
+                  aria-label={`Открыть ответ №${record.number}`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onOpen(record.id);
+                  }}
+                >
+                  Открыть ответ
+                </Button>
+              </Card>
+            ))}
+          </div>
+          {pagination}
+        </Spin>
+      ) : (
+        <>
+          <Table<SurveyResponseItem>
+            rowKey="id"
+            size="small"
+            columns={columns}
+            dataSource={shown?.items ?? []}
+            loading={loading}
+            scroll={{ x: 'max-content' }}
+            onRow={(record) => ({
+              onClick: () => onOpen(record.id),
+              style: { cursor: 'pointer' },
+            })}
+            rowClassName={(record) => (record.id === selectedId ? 'ant-table-row-selected' : '')}
+            locale={{ emptyText: filter === 'all' ? 'Ответов пока нет.' : 'Нет ответов под этот фильтр.' }}
+            pagination={false}
+          />
+          {pagination}
+        </>
+      )}
+
       <SurveyResponseDrawer
         surveyId={surveyId}
         responseId={selectedId}

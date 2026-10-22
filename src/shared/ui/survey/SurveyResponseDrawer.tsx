@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, Button, Drawer, Spin, Tag } from 'antd';
+import { Alert, Button, Drawer, Grid, Spin, Tag } from 'antd';
 import { LeftOutlined, RightOutlined } from '@ant-design/icons';
 import axios from 'axios';
 
@@ -28,6 +28,7 @@ export const SurveyResponseDrawer = ({
   onClose,
   onNavigate,
 }: SurveyResponseDrawerProps) => {
+  const isMobile = Grid.useBreakpoint().md === false;
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const key = responseId ? `${surveyId}|${responseId}` : null;
 
@@ -56,13 +57,14 @@ export const SurveyResponseDrawer = ({
     <Drawer
       open={responseId !== null}
       onClose={onClose}
-      size={640}
+      size={isMobile ? '100%' : 640}
       destroyOnHidden
       title={detail ? `Ответ №${detail.number} из ${detail.total}` : 'Ответ респондента'}
       extra={
         <div style={{ display: 'flex', gap: 4 }}>
           <Button
             icon={<LeftOutlined />}
+            size={isMobile ? 'large' : 'middle'}
             aria-label="Предыдущий ответ"
             title="Предыдущий (получен раньше)"
             disabled={!detail?.prev_id}
@@ -70,6 +72,7 @@ export const SurveyResponseDrawer = ({
           />
           <Button
             icon={<RightOutlined />}
+            size={isMobile ? 'large' : 'middle'}
             aria-label="Следующий ответ"
             title="Следующий (получен позже)"
             disabled={!detail?.next_id}

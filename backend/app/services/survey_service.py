@@ -15,6 +15,8 @@ from app.schemas.survey import (
     CrosstabResult,
     MethodologyReportResponse,
     PublicSurveyResponse,
+    QuestionAnswerItem,
+    QuestionAnswersPage,
     SubmitSurveyRequest,
     SurveyAiAnalysisChatRequest,
     SurveyAiAnalysisChatResponse,
@@ -269,25 +271,38 @@ async def get_methodology_report(
 
 
 async def list_responses(
-    session: AsyncSession, user: User, survey_id: str, *, limit: int, offset: int
+    session: AsyncSession,
+    user: User,
+    survey_id: str,
+    *,
+    limit: int,
+    offset: int,
+    flagged: bool | None = None,
+    newest_first: bool = True,
 ) -> SurveyResponsesPage:
+    """``total`` counts the responses under the filter; ``flagged`` is always the overall count."""
     survey = await _get_for_member(session, survey_id, user)
-    rows = await survey_repository.list_responses(session, survey.id, limit=limit, offset=offset)
-    total = await survey_repository.count_responses(session, survey.id)
+    rows, total = await survey_repository.list_numbered_responses(
+        session,
+        survey.id,
+        limit=limit,
+        offset=offset,
+        flagged=flagged,
+        newest_first=newest_first,
+    )
     return SurveyResponsesPage(
         total=total,
         flagged=await survey_repository.count_responses(session, survey.id, flagged_only=True),
         items=[
             SurveyResponseItem(
                 id=str(r.id),
-                # The list is newest first, so the number counts down from the total
-                number=total - offset - index,
+                number=number,
                 submitted_at=r.submitted_at.isoformat(),
                 duration_seconds=r.duration_seconds,
                 quality_flags=r.quality_flags,
                 answers=r.answers if isinstance(r.answers, dict) else {},
             )
-            for index, r in enumerate(rows)
+            for r, number in rows
         ],
     )
 
@@ -305,12 +320,10 @@ async def get_response_detail(
     questions = survey_answers.question_defs(response.schema_snapshot)
     if not questions:
         questions = survey_answers.question_defs(survey.pages)
-    older, newer = await survey_repository.neighbour_response_ids(
-        session, survey.id, response.submitted_at
-    )
+    older, newer = await survey_repository.neighbour_response_ids(session, survey.id, response)
     return SurveyResponseDetail(
         id=str(response.id),
-        number=await survey_repository.response_number(session, survey.id, response.submitted_at),
+        number=await survey_repository.response_number(session, survey.id, response.id),
         total=await survey_repository.count_responses(session, survey.id),
         submitted_at=response.submitted_at.isoformat(),
         duration_seconds=response.duration_seconds,
@@ -319,6 +332,50 @@ async def get_response_detail(
         questions=[SurveyQuestion(**q) for q in questions],
         prev_id=str(older) if older else None,
         next_id=str(newer) if newer else None,
+    )
+
+
+async def get_question_answers(
+    session: AsyncSession,
+    user: User,
+    survey_id: str,
+    field_id: str,
+    *,
+    limit: int,
+    offset: int,
+    exclude_flagged: bool = True,
+) -> QuestionAnswersPage:
+    """All answers to one open question, each linked to the response it came from."""
+    survey = await _get_for_member(session, survey_id, user)
+    field = next((f for f in survey_answers.answerable_fields(survey.pages) if f["id"] == field_id), None)
+    if field is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="question_not_found")
+    if field.get("type") in survey_results.CHOICE_TYPES or field.get("type") in survey_results.SCALE_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="not_an_open_question"
+        )
+    rows = await survey_repository.list_responses(session, survey.id, limit=MAX_RESULTS_ROWS)
+    # ``rows`` is newest first; the arrival number counts from the oldest response
+    total_rows = len(rows)
+    items: list[QuestionAnswerItem] = []
+    for index, row in enumerate(rows):
+        if exclude_flagged and row.quality_flags:
+            continue
+        value = row.answers.get(field_id) if isinstance(row.answers, dict) else None
+        if isinstance(value, str) and value.strip():
+            items.append(
+                QuestionAnswerItem(
+                    response_id=str(row.id),
+                    number=total_rows - index,
+                    submitted_at=row.submitted_at.isoformat(),
+                    text=value.strip(),
+                )
+            )
+    return QuestionAnswersPage(
+        field_id=field_id,
+        label=str(field.get("label") or field_id),
+        total=len(items),
+        items=items[offset : offset + limit],
     )
 
 
@@ -363,8 +420,10 @@ def _stored_summary(survey: Survey) -> dict[str, Any] | None:
 
 
 def _to_ai_summary(stored: dict[str, Any], *, stale: bool) -> SurveyAiSummary:
+    evidence = stored.get("evidence")
     return SurveyAiSummary(
         bullets=[str(b) for b in stored["bullets"]],
+        evidence=[[str(i) for i in ids] for ids in evidence] if isinstance(evidence, list) else [],
         generated_at=str(stored.get("generated_at", "")),
         responses_used=stored["responses_used"],
         exclude_flagged=bool(stored.get("exclude_flagged", True)),
@@ -405,9 +464,12 @@ async def generate_ai_summary(
     comparisons = survey_ai_analysis_service.segment_comparisons(
         survey.pages, rows, exclude_flagged=payload.exclude_flagged
     )
-    bullets = await survey_ai_analysis_service.generate_summary(survey.name, results, comparisons)
+    bullets, evidence = await survey_ai_analysis_service.generate_summary(
+        survey.name, results, comparisons
+    )
     survey.ai_summary = {
         "bullets": bullets,
+        "evidence": evidence,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "responses_used": results.used,
         "exclude_flagged": payload.exclude_flagged,

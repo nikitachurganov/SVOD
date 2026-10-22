@@ -228,6 +228,8 @@ export interface CrosstabResult {
 
 export interface SurveyAiSummary {
   bullets: string[];
+  /** Per bullet: ids of the questions it rests on */
+  evidence: string[][];
   generated_at: string;
   responses_used: number;
   exclude_flagged: boolean;
@@ -318,11 +320,49 @@ export const archiveSurvey = async (id: string): Promise<void> => {
   await api.delete(`/surveys/${id}`);
 };
 
+export interface SurveyResponsesParams {
+  limit?: number;
+  offset?: number;
+  /** true — only responses with quality flags, false — only without */
+  flagged?: boolean;
+  order?: 'newest' | 'oldest';
+}
+
 export const getSurveyResponses = async (
   id: string,
-  params: { limit?: number; offset?: number } = {},
+  params: SurveyResponsesParams = {},
 ): Promise<SurveyResponsesPage> => {
   const { data } = await api.get<SurveyResponsesPage>(`/surveys/${id}/responses`, { params });
+  return data;
+};
+
+export interface QuestionAnswerItem {
+  response_id: string;
+  number: number;
+  submitted_at: string;
+  text: string;
+}
+
+export interface QuestionAnswersPage {
+  field_id: string;
+  label: string;
+  total: number;
+  items: QuestionAnswerItem[];
+}
+
+/** Every answer given to one open question, each linked to its response */
+export const getQuestionAnswers = async (
+  id: string,
+  fieldId: string,
+  params: { limit?: number; offset?: number; excludeFlagged?: boolean } = {},
+): Promise<QuestionAnswersPage> => {
+  const { data } = await api.get<QuestionAnswersPage>(`/surveys/${id}/questions/${fieldId}/answers`, {
+    params: {
+      limit: params.limit,
+      offset: params.offset,
+      exclude_flagged: params.excludeFlagged ?? true,
+    },
+  });
   return data;
 };
 

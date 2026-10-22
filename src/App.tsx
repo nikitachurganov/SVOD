@@ -469,6 +469,9 @@ const router = createBrowserRouter([
   // Public: respondent page of a survey
   { path: '/survey/:token', element: <PublicSurveyPage /> },
 
+  // Author's preview of a survey: the same respondent form, nothing is saved
+  { path: '/surveys/:id/preview', element: <PublicSurveyPage preview /> },
+
   {
 
     path: '/',

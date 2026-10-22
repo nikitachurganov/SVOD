@@ -1,4 +1,5 @@
 import uuid
+from typing import Literal
 from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response, status
@@ -11,6 +12,7 @@ from app.schemas.survey import (
     MethodologyReportRequest,
     MethodologyReportResponse,
     PublicSurveyResponse,
+    QuestionAnswersPage,
     SubmitSurveyRequest,
     SurveyAiAnalysisChatRequest,
     SurveyAiAnalysisChatResponse,
@@ -129,9 +131,38 @@ async def list_responses(
     user: CurrentUser,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    flagged: bool | None = Query(default=None, description="true — only with quality flags, false — only without"),
+    order: Literal["newest", "oldest"] = Query(default="newest"),
 ) -> SurveyResponsesPage:
     return await survey_service.list_responses(
-        session, user, survey_id, limit=limit, offset=offset
+        session,
+        user,
+        survey_id,
+        limit=limit,
+        offset=offset,
+        flagged=flagged,
+        newest_first=order == "newest",
+    )
+
+
+@router.get("/{survey_id}/questions/{field_id}/answers", response_model=QuestionAnswersPage)
+async def get_question_answers(
+    survey_id: str,
+    field_id: str,
+    session: DbSession,
+    user: CurrentUser,
+    limit: int = Query(default=20, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    exclude_flagged: bool = Query(default=True),
+) -> QuestionAnswersPage:
+    return await survey_service.get_question_answers(
+        session,
+        user,
+        survey_id,
+        field_id,
+        limit=limit,
+        offset=offset,
+        exclude_flagged=exclude_flagged,
     )
 
 

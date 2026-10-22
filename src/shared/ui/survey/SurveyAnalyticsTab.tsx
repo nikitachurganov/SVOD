@@ -15,9 +15,14 @@ interface AiSummaryCardProps {
   aiLoading: boolean;
   aiError: string | null;
   onGenerate: (force: boolean) => void;
+  /** question id -> its text, for the "see the data" links under every conclusion */
+  questionLabels: Map<string, string>;
 }
 
-const AiSummaryCard = ({ aiSummary, aiLoading, aiError, onGenerate }: AiSummaryCardProps) => (
+const showQuestion = (id: string) =>
+  document.getElementById(`question-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+const AiSummaryCard = ({ aiSummary, aiLoading, aiError, onGenerate, questionLabels }: AiSummaryCardProps) => (
   <Card
     size="small"
     title={
@@ -44,6 +49,22 @@ const AiSummaryCard = ({ aiSummary, aiLoading, aiError, onGenerate }: AiSummaryC
           {aiSummary.bullets.map((bullet, index) => (
             <li key={index} style={{ lineHeight: 1.5 }}>
               {bullet}
+              {(aiSummary.evidence[index] ?? []).length > 0 && (
+                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center', marginTop: 2 }}>
+                  <span style={{ fontSize: 12, color: 'var(--app-text-secondary)' }}>Данные:</span>
+                  {(aiSummary.evidence[index] ?? []).map((id) => (
+                    <Button
+                      key={id}
+                      type="link"
+                      size="small"
+                      style={{ padding: 0, height: 'auto', fontSize: 12 }}
+                      onClick={() => showQuestion(id)}
+                    >
+                      {questionLabels.get(id) ?? id}
+                    </Button>
+                  ))}
+                </div>
+              )}
             </li>
           ))}
         </ul>
@@ -88,6 +109,7 @@ interface SurveyAnalyticsTabProps {
   aiLoading: boolean;
   aiError: string | null;
   onGenerateAiSummary: (force: boolean) => void;
+  onOpenResponse: (responseId: string) => void;
 }
 
 export const SurveyAnalyticsTab = ({
@@ -98,7 +120,9 @@ export const SurveyAnalyticsTab = ({
   aiLoading,
   aiError,
   onGenerateAiSummary,
+  onOpenResponse,
 }: SurveyAnalyticsTabProps) => {
+  const questionLabels = new Map(results.questions.map((q) => [q.field_id, q.label]));
   // Segmentation questions: closed questions with few options that are not a methodology block
   const segments = results.questions
     .filter(
@@ -132,6 +156,7 @@ export const SurveyAnalyticsTab = ({
             aiLoading={aiLoading}
             aiError={aiError}
             onGenerate={onGenerateAiSummary}
+            questionLabels={questionLabels}
           />
 
           {results.metrics.length > 0 && (
@@ -155,7 +180,12 @@ export const SurveyAnalyticsTab = ({
             </div>
           )}
 
-          <SurveyQuantTab surveyId={surveyId} results={results} excludeFlagged={excludeFlagged} />
+          <SurveyQuantTab
+            surveyId={surveyId}
+            results={results}
+            excludeFlagged={excludeFlagged}
+            onOpenResponse={onOpenResponse}
+          />
         </>
       )}
     </div>

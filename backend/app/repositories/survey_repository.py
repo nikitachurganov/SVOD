@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.survey import Survey, SurveyResponse
@@ -129,7 +129,7 @@ async def list_responses(
     stmt = (
         select(SurveyResponse)
         .where(SurveyResponse.survey_id == survey_id)
-        .order_by(SurveyResponse.submitted_at.desc())
+        .order_by(SurveyResponse.submitted_at.desc(), SurveyResponse.id.desc())
         .offset(offset)
     )
     if limit is not None:
@@ -160,32 +160,82 @@ async def get_response(
     return result.scalar_one_or_none()
 
 
-async def response_number(
-    session: AsyncSession, survey_id: uuid.UUID, submitted_at: datetime
-) -> int:
-    """Ordinal of a response in the order of arrival (the first received one is 1)."""
-    result = await session.execute(
-        select(func.count(SurveyResponse.id)).where(
-            SurveyResponse.survey_id == survey_id, SurveyResponse.submitted_at <= submitted_at
+def _numbered(survey_id: uuid.UUID):
+    """Every response of the survey with its ordinal in the order of arrival (first = 1)."""
+    return (
+        select(
+            SurveyResponse.id.label("rid"),
+            func.row_number()
+            .over(order_by=(SurveyResponse.submitted_at, SurveyResponse.id))
+            .label("n"),
         )
+        .where(SurveyResponse.survey_id == survey_id)
+        .subquery()
     )
-    return int(result.scalar_one() or 0)
+
+
+def _flagged_condition(flagged: bool):
+    # JSONB may hold SQL NULL or JSON null for "no flags"; only an object means flagged
+    is_flagged = func.coalesce(func.jsonb_typeof(SurveyResponse.quality_flags), "null") == "object"
+    return is_flagged if flagged else ~is_flagged
+
+
+async def list_numbered_responses(
+    session: AsyncSession,
+    survey_id: uuid.UUID,
+    *,
+    limit: int,
+    offset: int,
+    flagged: bool | None = None,
+    newest_first: bool = True,
+) -> tuple[list[tuple[SurveyResponse, int]], int]:
+    """A page of responses with their arrival numbers, and the total under the filter.
+
+    The number is the ordinal among *all* responses, so it does not change with the filter.
+    """
+    ranked = _numbered(survey_id)
+    stmt = (
+        select(SurveyResponse, ranked.c.n)
+        .join(ranked, ranked.c.rid == SurveyResponse.id)
+        .where(SurveyResponse.survey_id == survey_id)
+    )
+    count_stmt = select(func.count(SurveyResponse.id)).where(SurveyResponse.survey_id == survey_id)
+    if flagged is not None:
+        stmt = stmt.where(_flagged_condition(flagged))
+        count_stmt = count_stmt.where(_flagged_condition(flagged))
+    if newest_first:
+        stmt = stmt.order_by(SurveyResponse.submitted_at.desc(), SurveyResponse.id.desc())
+    else:
+        stmt = stmt.order_by(SurveyResponse.submitted_at.asc(), SurveyResponse.id.asc())
+    result = await session.execute(stmt.offset(offset).limit(limit))
+    total = int((await session.execute(count_stmt)).scalar_one() or 0)
+    return [(row[0], int(row[1])) for row in result.all()], total
+
+
+async def response_number(
+    session: AsyncSession, survey_id: uuid.UUID, response_id: uuid.UUID
+) -> int:
+    ranked = _numbered(survey_id)
+    result = await session.execute(select(ranked.c.n).where(ranked.c.rid == response_id))
+    return int(result.scalar_one_or_none() or 0)
 
 
 async def neighbour_response_ids(
-    session: AsyncSession, survey_id: uuid.UUID, submitted_at: datetime
+    session: AsyncSession, survey_id: uuid.UUID, response: SurveyResponse
 ) -> tuple[uuid.UUID | None, uuid.UUID | None]:
     """(previous = received just before, next = received just after)."""
+    key = tuple_(SurveyResponse.submitted_at, SurveyResponse.id)
+    here = tuple_(response.submitted_at, response.id)
     older = await session.execute(
         select(SurveyResponse.id)
-        .where(SurveyResponse.survey_id == survey_id, SurveyResponse.submitted_at < submitted_at)
-        .order_by(SurveyResponse.submitted_at.desc())
+        .where(SurveyResponse.survey_id == survey_id, key < here)
+        .order_by(SurveyResponse.submitted_at.desc(), SurveyResponse.id.desc())
         .limit(1)
     )
     newer = await session.execute(
         select(SurveyResponse.id)
-        .where(SurveyResponse.survey_id == survey_id, SurveyResponse.submitted_at > submitted_at)
-        .order_by(SurveyResponse.submitted_at.asc())
+        .where(SurveyResponse.survey_id == survey_id, key > here)
+        .order_by(SurveyResponse.submitted_at.asc(), SurveyResponse.id.asc())
         .limit(1)
     )
     return older.scalar_one_or_none(), newer.scalar_one_or_none()
