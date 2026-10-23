@@ -10,6 +10,8 @@ export interface DraggableFieldItemProps {
   iconColor?: string;
   iconBackground?: string;
   onDoubleClickAdd?: (fieldKey: string) => void;
+  /** Touch screens: a tap adds the field, there is no dragging out of the panel */
+  tapToAdd?: boolean;
 }
 
 export const DraggableFieldItem = ({
@@ -19,6 +21,7 @@ export const DraggableFieldItem = ({
   iconColor,
   iconBackground,
   onDoubleClickAdd,
+  tapToAdd = false,
 }: DraggableFieldItemProps) => {
   const [hovered, setHovered] = useState(false);
 
@@ -32,14 +35,25 @@ export const DraggableFieldItem = ({
   return (
     <div
       ref={setNodeRef}
-      {...listeners}
-      {...attributes}
+      {...(tapToAdd ? { role: 'button', tabIndex: 0 } : { ...listeners, ...attributes })}
+      onClick={tapToAdd ? () => onDoubleClickAdd?.(fieldKey) : undefined}
+      onKeyDown={
+        tapToAdd
+          ? (event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                onDoubleClickAdd?.(fieldKey);
+              }
+            }
+          : undefined
+      }
       style={{
         display: 'flex',
         alignItems: 'center',
         gap: 8,
-        padding: '6px 4px',
-        cursor: isDragging ? 'grabbing' : 'grab',
+        padding: tapToAdd ? '10px 8px' : '6px 4px',
+        minHeight: tapToAdd ? 44 : undefined,
+        cursor: tapToAdd ? 'pointer' : isDragging ? 'grabbing' : 'grab',
         borderRadius: 4,
         background: isDragging
           ? 'var(--app-highlight)'
@@ -49,12 +63,12 @@ export const DraggableFieldItem = ({
         transition: 'background 150ms',
         userSelect: 'none',
         opacity: isDragging ? 0.35 : 1,
-        touchAction: 'none',
+        touchAction: tapToAdd ? 'manipulation' : 'none',
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      onDoubleClick={() => onDoubleClickAdd?.(fieldKey)}
-      title="Перетащите или дважды кликните, чтобы добавить"
+      onDoubleClick={tapToAdd ? undefined : () => onDoubleClickAdd?.(fieldKey)}
+      title={tapToAdd ? 'Нажмите, чтобы добавить' : 'Перетащите или дважды кликните, чтобы добавить'}
     >
       <span
         style={{

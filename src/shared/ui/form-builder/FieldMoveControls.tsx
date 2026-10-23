@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Button, Modal, Select } from 'antd';
 import { ArrowDownOutlined, ArrowUpOutlined, SwapOutlined } from '@ant-design/icons';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import type { FieldSiblingPosition } from '../../utils/fieldMove.utils';
 
 interface FieldMoveControlsProps {
@@ -21,6 +22,8 @@ export const FieldMoveControls = ({
   onMoveBefore,
 }: FieldMoveControlsProps) => {
   const [moveModalOpen, setMoveModalOpen] = useState(false);
+  // Bigger tap targets on a phone
+  const buttonSize = useMediaQuery('(max-width: 1055px)') ? 'middle' : 'small';
   const [selectedTargetId, setSelectedTargetId] = useState<string | undefined>();
 
   const handleMoveConfirm = () => {
@@ -37,10 +40,10 @@ export const FieldMoveControls = ({
 
   return (
     <>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
         <Button
           type="text"
-          size="small"
+          size={buttonSize}
           icon={<ArrowUpOutlined />}
           aria-label="Переместить вверх"
           disabled={!canMoveUp}
@@ -48,7 +51,7 @@ export const FieldMoveControls = ({
         />
         <Button
           type="text"
-          size="small"
+          size={buttonSize}
           icon={<ArrowDownOutlined />}
           aria-label="Переместить вниз"
           disabled={!canMoveDown}
@@ -56,7 +59,7 @@ export const FieldMoveControls = ({
         />
         <Button
           type="text"
-          size="small"
+          size={buttonSize}
           icon={<SwapOutlined />}
           aria-label="Переместить в выбранное место"
           disabled={siblingPositions.length === 0}

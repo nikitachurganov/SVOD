@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Button, Modal, Switch } from 'antd';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { DragHandle } from './DragHandle';
+import { AutoGrowInput } from './AutoGrowInput';
 import { FieldPreview } from './FieldPreview';
 import { FieldTypeSettings } from './FieldTypeSettings';
 import { FieldMoveControls } from './FieldMoveControls';
@@ -35,6 +37,7 @@ export const FieldBlock = ({
   onMoveBefore,
 }: FieldBlockProps) => {
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const isMobile = useMediaQuery('(max-width: 1055px)');
 
   const handleOptionsChange = (options: FieldOption[]) => {
     onChange({ options });
@@ -53,10 +56,10 @@ export const FieldBlock = ({
       <DragHandle dragProps={dragHandleProps} />
 
       <div style={{ padding: '0px 16px 12px' }}>
-        <input
+        <AutoGrowInput
           placeholder="Напишите название"
           value={field.label}
-          onChange={(e) => onChange({ label: e.target.value })}
+          onChange={(next) => onChange({ label: next })}
           style={{
             padding: '0 4px',
             fontSize: '1rem',
@@ -70,10 +73,10 @@ export const FieldBlock = ({
           }}
         />
 
-        <input
+        <AutoGrowInput
           placeholder="Напишите описание"
           value={field.description}
-          onChange={(e) => onChange({ description: e.target.value })}
+          onChange={(next) => onChange({ description: next })}
           style={{
             padding: '0 4px',
             fontSize: '0.75rem',
@@ -102,17 +105,22 @@ export const FieldBlock = ({
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
+            flexWrap: 'wrap',
             gap: 8,
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center' }}>
+          <label
+            htmlFor={`required-${field.id}`}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}
+          >
             <Switch
               id={`required-${field.id}`}
               size="small"
               checked={field.required}
               onChange={(checked) => onChange({ required: checked })}
             />
-          </div>
+            {isMobile && 'Обязательный'}
+          </label>
 
           {onMoveUp && onMoveDown && onMoveBefore && (
             <FieldMoveControls
@@ -128,7 +136,7 @@ export const FieldBlock = ({
           <Button
             type="text"
             danger
-            size="small"
+            size={isMobile ? 'middle' : 'small'}
             onClick={() => setConfirmDelete(true)}
           >
             Удалить поле

@@ -3,6 +3,7 @@ import { Button, Tag, Modal } from 'antd';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { DragHandle } from './DragHandle';
+import { AutoGrowInput } from './AutoGrowInput';
 import { DroppedFieldCard } from './DroppedFieldCard';
 import {
   GROUP_CANVAS_PREFIX,
@@ -25,6 +26,8 @@ interface GroupBlockProps {
   canMoveUp?: boolean;
   canMoveDown?: boolean;
   siblingPositions?: FieldSiblingPosition[];
+  /** Touch layout: there is no dragging into a group, so a button adds a child instead */
+  onAddChild?: () => void;
 }
 
 export const GroupBlock = ({
@@ -41,6 +44,7 @@ export const GroupBlock = ({
   canMoveUp = false,
   canMoveDown = false,
   siblingPositions = [],
+  onAddChild,
 }: GroupBlockProps) => {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const children = field.children ?? [];
@@ -68,10 +72,10 @@ export const GroupBlock = ({
           </Tag>
         </div>
 
-        <input
+        <AutoGrowInput
           placeholder="Название группы"
           value={field.label}
-          onChange={(e) => onChange({ label: e.target.value })}
+          onChange={(next) => onChange({ label: next })}
           style={{
             padding: '0 4px',
             fontSize: '1rem',
@@ -85,10 +89,10 @@ export const GroupBlock = ({
           }}
         />
 
-        <input
+        <AutoGrowInput
           placeholder="Напишите описание"
           value={field.description}
-          onChange={(e) => onChange({ description: e.target.value })}
+          onChange={(next) => onChange({ description: next })}
           style={{
             padding: '0 4px',
             fontSize: '0.75rem',
@@ -121,7 +125,7 @@ export const GroupBlock = ({
               }}
             >
               <span style={{ color: 'var(--app-text-secondary)', fontSize: 12 }}>
-                Перетащите поле в группу
+                {onAddChild ? 'В группе пока нет полей' : 'Перетащите поле в группу'}
               </span>
             </div>
           ) : (
@@ -155,11 +159,19 @@ export const GroupBlock = ({
           )}
         </div>
 
+        {onAddChild && (
+          <Button block style={{ marginTop: 8 }} onClick={onAddChild}>
+            Добавить поле в группу
+          </Button>
+        )}
+
         <div
           style={{
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: 8,
             marginTop: 10,
           }}
         >

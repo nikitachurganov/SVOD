@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Alert, Button, Modal, notification } from 'antd';
+import { Alert, Button, Drawer, Modal, notification } from 'antd';
 import {
   ArrowLeftOutlined,
   DeleteOutlined,
   EyeOutlined,
+  PlusOutlined,
   RobotOutlined,
 } from '@ant-design/icons';
 import {
@@ -20,9 +21,11 @@ import { arrayMove } from '@dnd-kit/sortable';
 import { ToolPanel } from '../ToolPanel';
 import { IconDefaultButton } from '../IconDefaultButton';
 import { FormCanvas } from './FormCanvas';
+import { AutoGrowInput } from './AutoGrowInput';
 import { AiFormBuilderPanel, type MethodologyState } from './AiFormBuilderPanel';
 import { CanvasFieldOverlay } from './DroppedFieldCard';
 import { useFormStore } from '../../hooks/useFormStore';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { collectFieldIds } from '../../formily/collectFieldIds';
 import {
   FormFillRenderer,
@@ -78,10 +81,10 @@ const FormTitleInput = ({
 }: FormTitleInputProps) => {
   return (
     <div>
-      <input
+      <AutoGrowInput
         placeholder={placeholder}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={onChange}
         aria-invalid={error ? true : undefined}
         style={{
           padding: 0,
@@ -157,6 +160,12 @@ interface PendingDeletion {
 export const TOOL_PANEL_DROP_ID = 'tool-panel';
 
 const DELETION_NOTIFICATION_KEY = 'form-editor-deletion-undo';
+
+/** Where the app shell collapses its sidebar the builder also goes single-column (bottom sheet + drawer) */
+const MOBILE_QUERY = '(max-width: 1055px)';
+
+/** The AI chat opens by default only where there is room for it next to the toolbox and canvas */
+const AI_PANEL_DEFAULT_QUERY = '(min-width: 1280px)';
 
 interface ToolPanelDropZoneProps {
   isCanvasDragging: boolean;
@@ -298,9 +307,10 @@ const findFieldLocation = (
 interface InlinePreviewProps {
   formTitle: string;
   pages: FormPageInstance[];
+  compact?: boolean;
 }
 
-const InlinePreview = ({ formTitle, pages }: InlinePreviewProps) => {
+const InlinePreview = ({ formTitle, pages, compact = false }: InlinePreviewProps) => {
   const store = useFormStore();
   const fillRef = useRef<FormFillRendererHandle>(null);
   const [pageIndex, setPageIndex] = useState(0);
@@ -358,7 +368,7 @@ const InlinePreview = ({ formTitle, pages }: InlinePreviewProps) => {
         minHeight: 0,
         overflowY: 'auto',
         background: 'var(--app-bg)',
-        padding: 24,
+        padding: compact ? 16 : 24,
       }}
     >
       <div style={{ maxWidth: 680, margin: '0 auto' }}>
@@ -460,7 +470,13 @@ export const FormEditor = ({
   const [deletePageId, setDeletePageId] = useState<string | null>(null);
   const [pendingDeletion, setPendingDeletion] = useState<PendingDeletion | null>(null);
   const [undoNow, setUndoNow] = useState(() => Date.now());
-  const [isAiPanelOpen, setIsAiPanelOpen] = useState(true);
+  const isMobile = useMediaQuery(MOBILE_QUERY);
+  // Narrow screens get the AI chat as a full-screen drawer that starts closed
+  const [isAiPanelOpen, setIsAiPanelOpen] = useState(() => window.matchMedia(AI_PANEL_DEFAULT_QUERY).matches);
+  const [isToolboxOpen, setIsToolboxOpen] = useState(false);
+  // Set while the bottom sheet is adding a child into a group instead of a page-level field
+  const [toolboxGroupId, setToolboxGroupId] = useState<string | null>(null);
+  const canvasRef = useRef<HTMLDivElement | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -696,9 +712,29 @@ export const FormEditor = ({
       const fieldType = PANEL_KEY_TO_FIELD_TYPE[fieldKey];
       if (!fieldType) return;
       const newField = createField(fieldType);
-      setActivePageFields((prev) => [...prev, newField]);
+      if (isMobile && toolboxGroupId) {
+        if (fieldType === 'group') return; // groups do not nest
+        setActivePageFields((prev) =>
+          prev.map((f) =>
+            f.id === toolboxGroupId ? { ...f, children: [...(f.children ?? []), newField] } : f,
+          ),
+        );
+      } else {
+        setActivePageFields((prev) => [...prev, newField]);
+      }
+      if (isMobile) {
+        // Close the sheet; a page-level field lands at the end, so scroll down to it
+        const toGroup = Boolean(toolboxGroupId);
+        setIsToolboxOpen(false);
+        setToolboxGroupId(null);
+        if (!toGroup) {
+          window.setTimeout(() => {
+            canvasRef.current?.scrollTo({ top: canvasRef.current.scrollHeight, behavior: 'smooth' });
+          }, 150);
+        }
+      }
     },
-    [setActivePageFields],
+    [setActivePageFields, isMobile, toolboxGroupId],
   );
 
   const handleFieldMoveUp = useCallback(
@@ -977,7 +1013,7 @@ export const FormEditor = ({
           style={{
             background: 'var(--app-surface)',
             borderBottom: '1px solid var(--app-border)',
-            padding: '12px 24px 16px',
+            padding: isMobile ? '8px 12px' : '12px 24px 16px',
             flexShrink: 0,
           }}
         >
@@ -986,28 +1022,42 @@ export const FormEditor = ({
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
+              gap: 8,
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div
+              style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 4 : 12, minWidth: 0 }}
+            >
               <Button
                 type="text"
                 icon={<ArrowLeftOutlined />}
                 aria-label={isSurvey ? 'Вернуться к списку опросов' : 'Вернуться к списку форм'}
                 onClick={onBack}
               />
-              <h4 style={{ margin: 0 }}>{pageTitle}</h4>
+              <h4
+                style={{
+                  margin: 0,
+                  minWidth: 0,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {pageTitle}
+              </h4>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
               {!isPreviewMode && (
                 <Button
                   icon={<RobotOutlined />}
                   aria-pressed={isAiPanelOpen}
-                  type={isAiPanelOpen ? 'default' : 'text'}
+                  aria-label="ИИ-конструктор"
+                  type={isAiPanelOpen && !isMobile ? 'default' : 'text'}
                   onClick={() => setIsAiPanelOpen((prev) => !prev)}
                   disabled={isSaving}
                 >
-                  ИИ-конструктор
+                  {isMobile ? null : 'ИИ-конструктор'}
                 </Button>
               )}
               <IconDefaultButton
@@ -1018,7 +1068,7 @@ export const FormEditor = ({
                 onClick={() => setIsPreviewMode((prev) => !prev)}
                 disabled={isSaving}
               />
-              {pendingDeletion && (
+              {pendingDeletion && !isMobile && (
                 <Button
                   type="text"
                   onClick={handleUndoDelete}
@@ -1049,27 +1099,39 @@ export const FormEditor = ({
         )}
 
         {/* ── Content area: builder or inline preview ── */}
-        <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: isMobile ? 'column' : 'row',
+            flex: 1,
+            minHeight: 0,
+            overflow: 'hidden',
+          }}
+        >
           {isPreviewMode ? (
-            <InlinePreview formTitle={formTitle} pages={pages} />
+            <InlinePreview formTitle={formTitle} pages={pages} compact={isMobile} />
           ) : (
             <>
-              {/* Left — Tool Panel (also a drop zone) */}
-              <ToolPanelDropZone
-                isCanvasDragging={isCanvasDragging}
-                width={toolboxWidth}
-                onResizeStart={handleToolboxResizeStart}
-              >
-                <ToolPanel isCompact={toolboxWidth < 320} onFieldAdd={addFieldFromPanel} />
-              </ToolPanelDropZone>
+              {/* Left — Tool Panel (also a drop zone); on a phone it is a bottom sheet instead */}
+              {!isMobile && (
+                <ToolPanelDropZone
+                  isCanvasDragging={isCanvasDragging}
+                  width={toolboxWidth}
+                  onResizeStart={handleToolboxResizeStart}
+                >
+                  <ToolPanel isCompact={toolboxWidth < 320} onFieldAdd={addFieldFromPanel} />
+                </ToolPanelDropZone>
+              )}
 
               {/* Right — Form Builder canvas */}
               <div
+                ref={canvasRef}
                 style={{
                   flex: 1,
                   minHeight: 0,
+                  minWidth: 0,
                   height: '100%',
-                  padding: 20,
+                  padding: isMobile ? 12 : 20,
                   overflowY: 'auto',
                   overflowX: 'hidden',
                   display: 'flex',
@@ -1093,12 +1155,17 @@ export const FormEditor = ({
 
                 {/* ── Custom page tabs ── */}
                 <div
+                  className="form-editor__pages"
                   style={{
                     display: 'flex',
                     alignItems: 'center',
                     borderBottom: '2px solid var(--app-border)',
                     gap: 0,
-                    flexWrap: 'wrap',
+                    flexWrap: isMobile ? 'nowrap' : 'wrap',
+                    // Many pages scroll sideways on a phone instead of stacking in rows
+                    overflowX: isMobile ? 'auto' : undefined,
+                    overflowY: isMobile ? 'hidden' : undefined,
+                    flexShrink: 0,
                   }}
                 >
                   {pages.map((page, index) => {
@@ -1111,7 +1178,9 @@ export const FormEditor = ({
                           display: 'flex',
                           alignItems: 'center',
                           gap: 8,
-                          padding: '8px 16px',
+                          padding: isMobile ? '10px 12px' : '8px 16px',
+                          flexShrink: 0,
+                          whiteSpace: 'nowrap',
                           cursor: 'pointer',
                           borderBottom: isActive
                             ? '2px solid var(--app-primary)'
@@ -1137,8 +1206,8 @@ export const FormEditor = ({
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              width: 20,
-                              height: 20,
+                              width: isMobile ? 28 : 20,
+                              height: isMobile ? 28 : 20,
                               padding: 0,
                               border: 'none',
                               borderRadius: '50%',
@@ -1164,7 +1233,9 @@ export const FormEditor = ({
                       marginLeft: 8,
                       userSelect: 'none',
                       fontSize: 12,
-                      padding: '8px 4px',
+                      padding: isMobile ? '10px 8px' : '8px 4px',
+                      flexShrink: 0,
+                      whiteSpace: 'nowrap',
                     }}
                   >
                     Добавить страницу
@@ -1181,11 +1252,44 @@ export const FormEditor = ({
                   onFieldMoveUp={handleFieldMoveUp}
                   onFieldMoveDown={handleFieldMoveDown}
                   onFieldMoveBefore={handleFieldMoveBefore}
+                  onAddToGroup={
+                    isMobile
+                      ? (groupId) => {
+                          setToolboxGroupId(groupId);
+                          setIsToolboxOpen(true);
+                        }
+                      : undefined
+                  }
                 />
               </div>
 
+              {/* Phone: the toolbox lives in a bottom sheet opened from this bar */}
+              {isMobile && (
+                <div
+                  style={{
+                    flexShrink: 0,
+                    padding: '8px 12px calc(8px + env(safe-area-inset-bottom))',
+                    background: 'var(--app-surface)',
+                    borderTop: '1px solid var(--app-border)',
+                  }}
+                >
+                  <Button
+                    block
+                    size="large"
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={() => {
+                      setToolboxGroupId(null);
+                      setIsToolboxOpen(true);
+                    }}
+                  >
+                    Добавить {isSurvey ? 'вопрос' : 'поле'}
+                  </Button>
+                </div>
+              )}
+
               {/* Far right — AI builder chat */}
-              {isAiPanelOpen && (
+              {isAiPanelOpen && !isMobile && (
                 <AiFormBuilderPanel
                   formTitle={formTitle}
                   pages={pages}
@@ -1206,6 +1310,54 @@ export const FormEditor = ({
       </div>
 
       <DragOverlay dropAnimation={null}>{renderOverlay()}</DragOverlay>
+
+      {isMobile && (
+        <>
+          <Drawer
+            open={isToolboxOpen}
+            placement="bottom"
+            height="80%"
+            title={
+              toolboxGroupId
+                ? 'Добавить в группу'
+                : isSurvey
+                  ? 'Добавить вопрос'
+                  : 'Добавить поле'
+            }
+            onClose={() => {
+              setIsToolboxOpen(false);
+              setToolboxGroupId(null);
+            }}
+            styles={{ body: { padding: 0 } }}
+          >
+            <ToolPanel tapToAdd onFieldAdd={addFieldFromPanel} />
+          </Drawer>
+
+          <Drawer
+            open={isAiPanelOpen && !isPreviewMode}
+            placement="right"
+            width="100%"
+            closable={false}
+            onClose={() => setIsAiPanelOpen(false)}
+            styles={{ body: { padding: 0 } }}
+          >
+            <AiFormBuilderPanel
+              width="100%"
+              formTitle={formTitle}
+              pages={pages}
+              onApply={replaceFormState}
+              onRestore={(title, restoredPages, restoredMethodology) => {
+                replaceFormState(title, restoredPages);
+                if (isSurvey && restoredMethodology) setMethodology(restoredMethodology);
+              }}
+              onClose={() => setIsAiPanelOpen(false)}
+              mode={mode}
+              methodology={methodology}
+              onMethodologyChange={setMethodology}
+            />
+          </Drawer>
+        </>
+      )}
 
       {/* ── Delete page confirmation modal ── */}
       <Modal

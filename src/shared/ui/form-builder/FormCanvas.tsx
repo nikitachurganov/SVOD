@@ -14,6 +14,8 @@ interface FormCanvasProps {
   onFieldMoveUp: (fieldId: string) => void;
   onFieldMoveDown: (fieldId: string) => void;
   onFieldMoveBefore: (fieldId: string, beforeFieldId: string | null) => void;
+  /** Touch layout: lets a group offer an "add field" button instead of drag-and-drop */
+  onAddToGroup?: (groupId: string) => void;
 }
 
 export const FormCanvas = ({
@@ -25,8 +27,10 @@ export const FormCanvas = ({
   onFieldMoveUp,
   onFieldMoveDown,
   onFieldMoveBefore,
+  onAddToGroup,
 }: FormCanvasProps) => {
   const { setNodeRef, isOver } = useDroppable({ id: CANVAS_DROPPABLE_ID });
+  const isTouchLayout = Boolean(onAddToGroup);
 
   const isEmpty = fields.length === 0;
 
@@ -53,8 +57,17 @@ export const FormCanvas = ({
             justifyContent: 'center',
           }}
         >
-          <span style={{ color: 'var(--app-text-secondary)', fontSize: 13 }}>
-            Перетащите поле из панели или дважды кликните по элементу
+          <span
+            style={{
+              color: 'var(--app-text-secondary)',
+              fontSize: 13,
+              padding: 16,
+              textAlign: 'center',
+            }}
+          >
+            {isTouchLayout
+              ? 'Пока пусто. Нажмите «Добавить», чтобы создать первое поле'
+              : 'Перетащите поле из панели или дважды кликните по элементу'}
           </span>
         </div>
       ) : (
@@ -77,6 +90,7 @@ export const FormCanvas = ({
                 onMoveUp={onFieldMoveUp}
                 onMoveDown={onFieldMoveDown}
                 onMoveBefore={onFieldMoveBefore}
+                onAddChild={onAddToGroup ? () => onAddToGroup(field.id) : undefined}
               />
             ))}
           </SortableContext>

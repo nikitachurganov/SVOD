@@ -1,4 +1,5 @@
 import { Button } from 'antd';
+import { AutoGrowInput } from './AutoGrowInput';
 
 import { PlusOutlined, CloseOutlined } from '@ant-design/icons';
 
@@ -226,7 +227,7 @@ export const FieldOptionsEditor = ({ fieldType, options, onChange }: FieldOption
 
 
 
-          <input
+          <AutoGrowInput
 
             value={opt.label}
 
@@ -234,11 +235,13 @@ export const FieldOptionsEditor = ({ fieldType, options, onChange }: FieldOption
 
             disabled={opt.isOther}
 
-            onChange={(e) => handleLabelChange(opt.id, e.target.value)}
+            onChange={(next) => handleLabelChange(opt.id, next)}
 
             style={{
 
               flex: 1,
+
+              minWidth: 0,
 
               padding: '1px 4px',
 

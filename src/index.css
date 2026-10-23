@@ -3591,3 +3591,99 @@ html[data-theme='dark'] .org-settings__integration-icon--red { background: #481b
 .app-form-editor .ant-upload-wrapper .ant-upload-drag p {
   color: var(--app-text-secondary) !important;
 }
+
+/* ── Phones: registry lists (survey catalog / project) ───────────────────── */
+
+@media (max-width: 767px) {
+  .registry-page__header {
+    padding: 12px 16px 0;
+  }
+
+  .registry-page__content {
+    padding: 12px 16px 16px;
+  }
+
+  /* The status tabs scroll sideways instead of being cut off at the screen edge */
+  .registry-page__tabs {
+    gap: 20px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+  }
+
+  .registry-page__tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .registry-page__tab {
+    flex: none;
+    padding-bottom: 10px;
+  }
+
+  .registry-page__tab--active::after {
+    bottom: 0;
+  }
+
+  /* 16px keeps iOS from zooming the page when a field is focused */
+  .registry-page .ant-input,
+  .registry-page .ant-input-affix-wrapper input,
+  .app-form-editor input,
+  .app-form-editor textarea,
+  .app-form-editor .ant-input,
+  .app-form-editor .ant-select-selection-search-input {
+    font-size: 16px;
+  }
+}
+
+/* ── Phones: survey page ─────────────────────────────────────────────────────
+   The whole page scrolls: the title and action buttons move away with the content, and only the
+   tab bar stays pinned, so the answers and charts get the full height of the screen. */
+@media (max-width: 767px) {
+  .survey-page {
+    display: block;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .survey-page__header {
+    display: contents;
+  }
+
+  .survey-page__header > .survey-page__container:first-child {
+    padding-top: 12px;
+    padding-bottom: 4px;
+    background: var(--app-surface);
+  }
+
+  .survey-page__header > .survey-page__container:last-child {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: var(--app-surface);
+    border-bottom: 1px solid var(--app-border-secondary);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  }
+
+  .survey-page__body {
+    overflow: visible;
+    min-height: 0;
+  }
+}
+
+/* The page tabs of the form builder scroll sideways without a visible scrollbar */
+.form-editor__pages {
+  scrollbar-width: none;
+}
+
+.form-editor__pages::-webkit-scrollbar {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .project-card__menu {
+    width: 40px;
+    height: 40px;
+    margin: -8px -10px 0 0;
+  }
+}

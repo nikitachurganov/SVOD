@@ -107,7 +107,8 @@ interface ChatEntry extends FormAiChatMessage {
 export interface AiFormBuilderPanelProps {
   formTitle: string;
   pages: FormPageInstance[];
-  width?: number;
+  /** A number is a fixed side column; a string ('100%') fills the container (mobile drawer) */
+  width?: number | string;
   onApply: (title: string | null, pages: FormPageInstance[]) => void;
   onRestore: (title: string, pages: FormPageInstance[], methodology?: MethodologyState) => void;
   onClose: () => void;
@@ -247,12 +248,12 @@ export const AiFormBuilderPanel = ({
     <div
       style={{
         width,
-        minWidth: width,
+        minWidth: typeof width === 'number' ? width : 0,
         height: '100%',
         flexShrink: 0,
         display: 'flex',
         flexDirection: 'column',
-        borderLeft: '1px solid var(--app-border)',
+        borderLeft: typeof width === 'number' ? '1px solid var(--app-border)' : 'none',
         background: 'var(--app-surface)',
       }}
     >

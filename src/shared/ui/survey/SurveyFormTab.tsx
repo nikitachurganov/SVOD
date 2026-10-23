@@ -4,6 +4,7 @@ import { EditOutlined, EyeOutlined, QuestionCircleOutlined } from '@ant-design/i
 
 import type { SurveyDetail } from '../../api/surveys.api';
 import type { CreateFormFieldPayload } from '../../api/forms.api';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { MethodologySummaryCard } from './MethodologySummaryCard';
 import { answerKindLabel } from './surveyFormat';
 
@@ -70,10 +71,13 @@ const ROW_STYLE = {
 } as const;
 
 const QuestionRow = ({ field, number }: { field: CreateFormFieldPayload; number: string }) => {
+  const isMobile = useMediaQuery('(max-width: 767px)');
+  // A phone is too narrow for a third column: the type tag goes under the question text
+  const numberColumn = isMobile ? '28px' : '32px';
   if (field.children?.length) {
     return (
       <>
-        <li style={{ ...ROW_STYLE, gridTemplateColumns: '32px minmax(0, 1fr)' }}>
+        <li style={{ ...ROW_STYLE, gridTemplateColumns: `${numberColumn} minmax(0, 1fr)` }}>
           <span style={{ color: 'var(--app-text-secondary)', textAlign: 'right' }}>{number}</span>
           <strong style={{ wordBreak: 'break-word' }}>{field.label}</strong>
         </li>
@@ -84,10 +88,16 @@ const QuestionRow = ({ field, number }: { field: CreateFormFieldPayload; number:
     );
   }
   return (
-    <li style={ROW_STYLE}>
+    <li
+      style={
+        isMobile ? { ...ROW_STYLE, gridTemplateColumns: `${numberColumn} minmax(0, 1fr)`, rowGap: 8 } : ROW_STYLE
+      }
+    >
       <span style={{ color: 'var(--app-text-secondary)', textAlign: 'right' }}>{number}</span>
       <span style={{ wordBreak: 'break-word', lineHeight: 1.5 }}>{field.label}</span>
-      <TypeTag field={field} />
+      <div style={isMobile ? { gridColumn: 2 } : undefined}>
+        <TypeTag field={field} />
+      </div>
     </li>
   );
 };
@@ -102,6 +112,7 @@ interface SurveyFormTabProps {
 /** What the respondent is asked: the questions of the form, plus the way to change or preview them */
 export const SurveyFormTab = ({ survey, onEdit, onPreview, onOpenReport }: SurveyFormTabProps) => {
   const [warningOpen, setWarningOpen] = useState(false);
+  const isMobile = useMediaQuery('(max-width: 767px)');
   const archived = survey.status === 'archived';
   const hasQuestions = survey.questions_count > 0 && survey.pages.some((page) => page.fields.length > 0);
   const hasResponses = survey.responses_count > 0;
@@ -117,7 +128,7 @@ export const SurveyFormTab = ({ survey, onEdit, onPreview, onOpenReport }: Surve
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <Card styles={{ body: { padding: '20px 24px' } }}>
+      <Card styles={{ body: { padding: isMobile ? '16px' : '20px 24px' } }}>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', gap: 10, alignItems: 'baseline', flexWrap: 'wrap' }}>
             <h2 style={{ margin: 0, fontSize: 18 }}>Форма опроса</h2>

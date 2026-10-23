@@ -25,6 +25,8 @@ interface DroppedFieldCardProps {
   onMoveUp?: (fieldId: string) => void;
   onMoveDown?: (fieldId: string) => void;
   onMoveBefore?: (fieldId: string, beforeFieldId: string | null) => void;
+  /** Groups only, touch layout: open the toolbox to add a child to this group */
+  onAddChild?: () => void;
 }
 
 export const DroppedFieldCard = ({
@@ -38,6 +40,7 @@ export const DroppedFieldCard = ({
   onMoveUp,
   onMoveDown,
   onMoveBefore,
+  onAddChild,
 }: DroppedFieldCardProps) => {
   const dragData: CanvasDragData = { source: 'canvas' };
 
@@ -64,7 +67,7 @@ export const DroppedFieldCard = ({
         transform: CSS.Transform.toString(transform),
         transition,
         opacity: isDragging ? 0 : 1,
-        touchAction: 'none',
+        // Only the drag handle blocks touch scrolling (it sets touch-action itself)
       }}
     >
       {field.type === 'group' ? (
@@ -82,6 +85,7 @@ export const DroppedFieldCard = ({
           canMoveUp={canMoveUp}
           canMoveDown={canMoveDown}
           siblingPositions={siblingPositions}
+          onAddChild={onAddChild}
         />
       ) : (
         <FieldBlock

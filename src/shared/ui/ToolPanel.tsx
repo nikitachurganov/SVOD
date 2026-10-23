@@ -88,9 +88,11 @@ const CATEGORIES = [...new Set(ALL_FIELDS.map((f) => f.category))];
 interface ToolPanelProps {
   isCompact?: boolean;
   onFieldAdd?: (fieldKey: string) => void;
+  /** Touch layout: tap a field to add it (no drag), tighter padding */
+  tapToAdd?: boolean;
 }
 
-export const ToolPanel = ({ isCompact = false, onFieldAdd }: ToolPanelProps) => {
+export const ToolPanel = ({ isCompact = false, onFieldAdd, tapToAdd = false }: ToolPanelProps) => {
   const [search, setSearch] = useState('');
 
   const groupedByCategory = useMemo(() => {
@@ -115,7 +117,7 @@ export const ToolPanel = ({ isCompact = false, onFieldAdd }: ToolPanelProps) => 
     <div
       style={{
         display: 'flex',
-        padding: 20,
+        padding: tapToAdd ? 16 : 20,
         flexDirection: 'column',
         alignItems: 'flex-start',
         gap: 16,
@@ -185,6 +187,7 @@ export const ToolPanel = ({ isCompact = false, onFieldAdd }: ToolPanelProps) => 
                       iconColor={meta?.iconColor}
                       iconBackground={meta?.iconBg}
                       onDoubleClickAdd={onFieldAdd}
+                      tapToAdd={tapToAdd}
                     />
                   );
                 })}
