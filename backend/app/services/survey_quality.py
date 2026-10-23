@@ -111,6 +111,8 @@ def straight_lining_blocks(pages: Any, answers: dict[str, Any]) -> list[list[dic
 def _chosen_key(f: dict[str, Any], value: Any) -> str:
     """What was chosen, comparable between questions: options have a separate id in every question,
     so the chosen option is compared by its label."""
+    if isinstance(value, dict) and "value" in value:
+        value = value["value"]  # a rating answer: {"value": 5, "min": 1, "max": 5}
     text = str(value).strip().lower()
     for option in f.get("options") or []:
         if isinstance(option, dict) and str(option.get("id", "")).strip().lower() == text:

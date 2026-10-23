@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.user import PublicAuthorResponse
 
@@ -67,11 +67,58 @@ class MethodologyReportResponse(BaseModel):
     has_unverified_sources: bool = False
 
 
+# ─── Projects ─────────────────────────────────────────────────────────────────
+
+
+class _ProjectFields(BaseModel):
+    name: str = Field(..., max_length=200)
+    description: str | None = Field(default=None, max_length=1000)
+
+    @field_validator("name")
+    @classmethod
+    def _name_not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Укажите название проекта")
+        return value
+
+    @field_validator("description")
+    @classmethod
+    def _description_blank_is_none(cls, value: str | None) -> str | None:
+        value = (value or "").strip()
+        return value or None
+
+
+class CreateProjectRequest(_ProjectFields):
+    organization_id: str
+
+
+class UpdateProjectRequest(_ProjectFields):
+    pass
+
+
+class SurveyProjectItem(BaseModel):
+    id: str
+    organization_id: str
+    name: str
+    description: str | None = None
+    # Without archived surveys — the same set the project's table shows by default
+    surveys_count: int = 0
+    created_at: str
+    updated_at: str
+
+
+class MoveSurveyRequest(BaseModel):
+    project_id: str
+
+
 # ─── Survey CRUD ──────────────────────────────────────────────────────────────
 
 
 class CreateSurveyRequest(BaseModel):
     organization_id: str
+    # Without it the survey goes to the organization's default project
+    project_id: str | None = None
     name: str = Field(..., min_length=1, max_length=500)
     description: str | None = None
     pages: list[Any] = Field(default_factory=list)
@@ -98,6 +145,8 @@ class SurveyListItem(BaseModel):
     description: str
     status: SurveyStatus
     organization_id: str
+    project_id: str
+    project_name: str
     author: PublicAuthorResponse | None
     category_id: str | None = None
     category_name: str | None = None
@@ -190,6 +239,14 @@ class QualityReasonOut(BaseModel):
     field_ids: list[str] = Field(default_factory=list)
 
 
+class ResponsePreview(BaseModel):
+    """A short piece of a response for the list: a quote from a text answer or one short answer"""
+
+    label: str
+    text: str
+    kind: Literal["text", "value"]
+
+
 class SurveyResponseItem(BaseModel):
     id: str
     # Ordinal of the response in the order of arrival: "Ответ №12"
@@ -200,6 +257,7 @@ class SurveyResponseItem(BaseModel):
     # ok — no remarks; review — only weak signals; flagged — a strong signal (left out of analytics)
     quality_status: QualityStatus = "ok"
     answers: dict[str, Any]
+    preview: list[ResponsePreview] = Field(default_factory=list)
 
 
 class SurveyResponsesPage(BaseModel):

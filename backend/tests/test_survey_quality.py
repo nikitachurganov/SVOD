@@ -135,5 +135,70 @@ class AnalyticsExclusionTests(unittest.TestCase):
         self.assertEqual((results.total, results.used, results.excluded), (3, 2, 1))
 
 
+class RatingObjectAnswerTests(unittest.TestCase):
+    """The rating field stores its answer as {"value": 5, "min": 1, "max": 5}"""
+
+    def test_rating_object_counts_as_a_number_in_the_results(self):
+        self.assertEqual(survey_results._number({"value": 4, "min": 1, "max": 5}), 4.0)
+        self.assertIsNone(survey_results._number({"min": 1, "max": 5}))
+        self.assertIsNone(survey_results._number({"value": True}))
+
+    def test_export_writes_the_score_not_the_object(self):
+        from app.services import survey_answers
+
+        self.assertEqual(survey_answers._format_value({"value": 5, "min": 1, "max": 5}, {}), "5")
+        self.assertEqual(survey_answers._format_value({"other": 1}, {}), '{"other": 1}')
+
+
+class PreviewTests(unittest.TestCase):
+    PAGES = [
+        {
+            "id": "p",
+            "fields": [
+                {"id": "name", "type": "fullName", "label": "Имя"},
+                {"id": "course", "type": "radio", "label": "Курс",
+                 "options": [{"id": "c1", "label": "1 курс"}, {"id": "c2", "label": "2 курс"}]},
+                {"id": "score", "type": "rating", "label": "Оценка"},
+                {"id": "topics", "type": "checkbox", "label": "Разделы",
+                 "options": [{"id": "t1", "label": "Заявки"}, {"id": "t2", "label": "Опросы"}]},
+                {"id": "comment", "type": "longText", "label": "Что улучшить?"},
+            ],
+        }
+    ]
+
+    def test_quote_first_then_short_answers_with_labels(self):
+        from app.services import survey_answers
+
+        items = survey_answers.preview_items(
+            self.PAGES,
+            {
+                "name": "Иван Петров",
+                "course": "c2",
+                "score": {"value": 4, "min": 1, "max": 5},
+                "topics": ["t1", "t2"],
+                "comment": "Хотелось бы быстрее",
+            },
+        )
+        self.assertEqual(items[0], {"label": "Что улучшить?", "text": "Хотелось бы быстрее", "kind": "text"})
+        self.assertEqual(
+            [(i["label"], i["text"]) for i in items[1:]],
+            [("Курс", "2 курс"), ("Оценка", "4 из 5"), ("Разделы", "Заявки; Опросы")],
+        )
+
+    def test_personal_fields_and_skipped_questions_are_left_out(self):
+        from app.services import survey_answers
+
+        items = survey_answers.preview_items(self.PAGES, {"name": "Иван Петров", "course": "c1"})
+        self.assertEqual([i["label"] for i in items], ["Курс"])
+        self.assertEqual(survey_answers.preview_items(self.PAGES, {}), [])
+
+    def test_long_text_is_clipped(self):
+        from app.services import survey_answers
+
+        items = survey_answers.preview_items(self.PAGES, {"comment": "а" * 500}, max_text=50)
+        self.assertEqual(len(items[0]["text"]), 50)
+        self.assertTrue(items[0]["text"].endswith("…"))
+
+
 if __name__ == "__main__":
     unittest.main()

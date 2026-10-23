@@ -25,7 +25,6 @@ import {
 } from '../shared/api/surveys.api';
 import { useBreadcrumbEntity } from '../shared/context/breadcrumb.context';
 import { useNotifications } from '../shared/context/notifications.context';
-import { buildDisplayName } from '../shared/utils/userName';
 import { AiConsentModal } from '../shared/ui/survey/AiConsentModal';
 import { hasAiConsent, rememberAiConsent } from '../shared/ui/survey/aiConsent';
 import { MethodologyReportModal } from '../shared/ui/survey/MethodologyReportModal';
@@ -78,7 +77,7 @@ export const SurveyViewPage = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const { pathname } = useLocation();
-  const { setEntityTitle } = useBreadcrumbEntity();
+  const { setEntityTitle, setEntityParent } = useBreadcrumbEntity();
   const { notifySuccess, notifyError } = useNotifications();
 
   // /surveys/:id[/form|/responses[/:responseId]|/analytics] — the tab lives in the address
@@ -177,6 +176,16 @@ export const SurveyViewPage = () => {
     setEntityTitle(survey?.name ?? null);
   }, [survey?.name, setEntityTitle]);
 
+  const projectId = survey?.project_id;
+  const projectName = survey?.project_name;
+  useEffect(() => {
+    setEntityParent(
+      projectId && projectName
+        ? { title: projectName, path: `/surveys/projects/${projectId}` }
+        : null,
+    );
+  }, [projectId, projectName, setEntityParent]);
+
   const changeStatus = async (status: 'draft' | 'open' | 'closed') => {
     if (!survey) return;
     setBusy(true);
@@ -207,7 +216,7 @@ export const SurveyViewPage = () => {
     try {
       await archiveSurvey(survey.id);
       notifySuccess('Опрос перемещён в архив');
-      navigate('/surveys');
+      navigate(`/surveys/projects/${survey.project_id}`);
     } catch {
       notifyError('Не удалось переместить опрос в архив');
       setBusy(false);
@@ -268,9 +277,7 @@ export const SurveyViewPage = () => {
   };
 
   const qualityFilter = (
-    <label
-      style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8, fontSize: 13, marginBottom: 12 }}
-    >
+    <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
       Исключать ответы с серьёзными замечаниями
       <Switch
         size="small"
@@ -283,7 +290,7 @@ export const SurveyViewPage = () => {
 
   const tabItems = [
     { key: 'overview', label: 'Обзор' },
-    { key: 'form', label: 'Форма' },
+    { key: 'form', label: 'Вопросы' },
     { key: 'responses', label: `Ответы (${totalResponses})` },
     { key: 'analytics', label: 'Аналитика' },
   ];
@@ -308,6 +315,7 @@ export const SurveyViewPage = () => {
     responses: (
       <SurveyResponsesTab
         surveyId={survey.id}
+        totalCount={totalResponses}
         selectedId={selectedResponseId}
         onOpen={(responseId) => navigate(`${base}/responses/${responseId}`)}
         onCloseDetail={() => navigate(`${base}/responses`)}
@@ -318,8 +326,8 @@ export const SurveyViewPage = () => {
       <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Аналитика появится после первых ответов" />
     ) : (
       <Spin spinning={resultsLoading}>
-        {qualityFilter}
         <SurveyAnalyticsTab
+          qualityControl={qualityFilter}
           surveyId={survey.id}
           results={results}
           excludeFlagged={excludeFlagged}
@@ -341,13 +349,18 @@ export const SurveyViewPage = () => {
           <Button
             type="text"
             icon={<ArrowLeftOutlined />}
-            aria-label="Вернуться к списку опросов"
-            onClick={() => navigate('/surveys')}
+            aria-label="Вернуться к проекту"
+            onClick={() => navigate(`/surveys/projects/${survey.project_id}`)}
           />
-          <h1 style={{ margin: 0, fontSize: 22, wordBreak: 'break-word' }}>{survey.name}</h1>
-          <Tag color={SURVEY_STATUS_COLOR[survey.status]} style={{ margin: 0 }}>
-            {SURVEY_STATUS_LABEL[survey.status]}
-          </Tag>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: '0 1 auto' }}>
+            <h1 style={{ margin: 0, fontSize: 22, lineHeight: 1.3, wordBreak: 'break-word', color: 'var(--app-text)' }}>{survey.name}</h1>
+            <Tag
+              color={SURVEY_STATUS_COLOR[survey.status]}
+              style={{ margin: 0, flex: 'none', lineHeight: '22px' }}
+            >
+              {SURVEY_STATUS_LABEL[survey.status]}
+            </Tag>
+          </div>
           <div
             style={{
               marginLeft: isMobile ? 0 : 'auto',
@@ -378,10 +391,6 @@ export const SurveyViewPage = () => {
               <Button size={controlSize} icon={<MoreOutlined />} aria-label="Другие действия" loading={busy} />
             </Dropdown>
           </div>
-        </div>
-        <div style={{ marginTop: 4, marginLeft: isMobile ? 0 : 44, fontSize: 12, color: 'var(--app-text-secondary)' }}>
-          {survey.anonymous ? 'Анонимный опрос' : 'Опрос не анонимный'} · Автор:{' '}
-          {survey.author ? buildDisplayName(survey.author) : 'неизвестен'}
         </div>
         </div>
 

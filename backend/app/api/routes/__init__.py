@@ -12,6 +12,7 @@ from app.api.routes.join import router as join_router
 from app.api.routes.telegram import router as telegram_router
 from app.api.routes.surveys import (
     methodologies_router,
+    projects_router as survey_projects_router,
     public_router as public_surveys_router,
     router as surveys_router,
 )
@@ -28,6 +29,9 @@ api_router.include_router(notifications_router, prefix="/notifications", tags=["
 api_router.include_router(join_router, prefix="/join", tags=["join"])
 api_router.include_router(telegram_router, prefix="/telegram", tags=["telegram"])
 api_router.include_router(surveys_router, prefix="/surveys", tags=["surveys"])
+api_router.include_router(
+    survey_projects_router, prefix="/survey-projects", tags=["surveys"]
+)
 api_router.include_router(
     methodologies_router, prefix="/methodologies", tags=["surveys"]
 )

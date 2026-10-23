@@ -60,6 +60,63 @@ def question_defs(pages: Any) -> list[dict[str, Any]]:
     return defs
 
 
+_PREVIEW_SKIP_TYPES = {"fullName", "email", "phone"}
+_PREVIEW_NOISE = {"sus", "ueq"}
+_OTHER_PREFIX = "__other__:"
+
+
+def _preview_text(value: Any, labels: dict[str, str]) -> str:
+    """One answer as plain words for the list: option ids become their labels"""
+    if isinstance(value, list):
+        return "; ".join(t for t in (_preview_text(v, labels) for v in value) if t)
+    if isinstance(value, dict):
+        score = value.get("value")
+        if isinstance(score, (int, float)) and not isinstance(score, bool):
+            top = value.get("max")
+            shown = int(score) if float(score).is_integer() else score
+            if isinstance(top, (int, float)) and not isinstance(top, bool):
+                return f"{shown} из {int(top)}"
+            return str(shown)
+        return ""
+    if isinstance(value, bool):
+        return "да" if value else "нет"
+    text = str(value).strip()
+    if text.startswith(_OTHER_PREFIX):
+        return f"Другое: {text[len(_OTHER_PREFIX):].strip()}"
+    return labels.get(text, text)
+
+
+def preview_items(
+    pages: Any,
+    answers: dict[str, Any],
+    *,
+    max_text: int = 180,
+    max_values: int = 3,
+) -> list[dict[str, str]]:
+    """What a response says in a glance: one text answer as a quote, then a few short answers.
+
+    Personal fields (name, e-mail, phone) are never shown in the list.
+    """
+    quote: dict[str, str] | None = None
+    values: list[dict[str, str]] = []
+    for q in question_defs(pages):
+        if q["type"] in _PREVIEW_SKIP_TYPES or q.get("methodology") in _PREVIEW_NOISE:
+            continue
+        value = answers.get(q["id"])
+        if is_empty(value):
+            continue
+        text = _preview_text(value, {o["id"]: o["label"] for o in q["options"]})
+        if not text:
+            continue
+        if q["type"] in {"shortText", "longText"}:
+            if quote is None:
+                clipped = text if len(text) <= max_text else text[: max_text - 1].rstrip() + "…"
+                quote = {"label": q["label"], "text": clipped, "kind": "text"}
+        elif len(values) < max_values:
+            values.append({"label": q["label"], "text": text[:120], "kind": "value"})
+    return ([quote] if quote else []) + values
+
+
 def structure_conflicts(old_pages: Any, new_pages: Any) -> list[str]:
     """Edits that would change the meaning of answers already collected.
 
@@ -203,6 +260,9 @@ def _format_value(value: Any, labels: dict[str, str]) -> str:
     if isinstance(value, list):
         return "; ".join(_format_value(v, labels) for v in value)
     if isinstance(value, dict):
+        # A rating answer is {"value": 5, "min": 1, "max": 5}: the export wants the score itself
+        if isinstance(value.get("value"), (int, float)) and not isinstance(value.get("value"), bool):
+            return str(value["value"])
         return json.dumps(value, ensure_ascii=False)
     if isinstance(value, bool):
         return "да" if value else "нет"

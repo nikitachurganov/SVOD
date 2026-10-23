@@ -77,6 +77,9 @@ def _methodology(field: dict[str, Any]) -> str | None:
 
 
 def _number(value: Any) -> float | None:
+    if isinstance(value, dict):
+        # The rating field stores its answer as {"value": 5, "min": 1, "max": 5}
+        return _number(value.get("value"))
     if isinstance(value, bool):
         return None
     if isinstance(value, (int, float)):

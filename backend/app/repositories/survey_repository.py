@@ -4,7 +4,7 @@ from datetime import datetime
 from sqlalchemy import func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.survey import Survey, SurveyResponse
+from app.models.survey import Survey, SurveyProject, SurveyResponse
 
 
 def _apply_filters(
@@ -14,8 +14,11 @@ def _apply_filters(
     status: str | None = None,
     created_by_user_id: uuid.UUID | None = None,
     include_archived: bool = False,
+    project_id: uuid.UUID | None = None,
 ):
     stmt = stmt.where(Survey.organization_id == organization_id)
+    if project_id is not None:
+        stmt = stmt.where(Survey.project_id == project_id)
     if status is not None:
         stmt = stmt.where(Survey.status == status)
     elif not include_archived:
@@ -31,12 +34,14 @@ async def list_filtered(
     organization_id: uuid.UUID,
     status: str | None = None,
     created_by_user_id: uuid.UUID | None = None,
+    project_id: uuid.UUID | None = None,
 ) -> list[Survey]:
     stmt = _apply_filters(
         select(Survey),
         organization_id=organization_id,
         status=status,
         created_by_user_id=created_by_user_id,
+        project_id=project_id,
     ).order_by(Survey.created_at.desc())
     result = await session.execute(stmt)
     return list(result.scalars().all())
@@ -49,6 +54,7 @@ async def count_filtered(
     status: str | None = None,
     created_by_user_id: uuid.UUID | None = None,
     include_archived: bool = False,
+    project_id: uuid.UUID | None = None,
 ) -> int:
     stmt = _apply_filters(
         select(func.count(Survey.id)),
@@ -56,8 +62,81 @@ async def count_filtered(
         status=status,
         created_by_user_id=created_by_user_id,
         include_archived=include_archived,
+        project_id=project_id,
     )
     result = await session.execute(stmt)
+    return int(result.scalar_one() or 0)
+
+
+# ─── Projects ─────────────────────────────────────────────────────────────────
+
+
+async def list_projects(
+    session: AsyncSession, organization_id: uuid.UUID
+) -> list[SurveyProject]:
+    result = await session.execute(
+        select(SurveyProject)
+        .where(SurveyProject.organization_id == organization_id)
+        .order_by(SurveyProject.created_at.desc(), SurveyProject.id)
+    )
+    return list(result.scalars().all())
+
+
+async def get_project(session: AsyncSession, project_id: uuid.UUID) -> SurveyProject | None:
+    result = await session.execute(select(SurveyProject).where(SurveyProject.id == project_id))
+    return result.scalar_one_or_none()
+
+
+async def get_default_project(
+    session: AsyncSession, organization_id: uuid.UUID
+) -> SurveyProject | None:
+    """The oldest project of the organization — the target for a survey created without one."""
+    result = await session.execute(
+        select(SurveyProject)
+        .where(SurveyProject.organization_id == organization_id)
+        .order_by(SurveyProject.created_at, SurveyProject.id)
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+async def create_project(session: AsyncSession, project: SurveyProject) -> SurveyProject:
+    session.add(project)
+    await session.flush()
+    await session.refresh(project)
+    return project
+
+
+async def update_project(session: AsyncSession, project: SurveyProject) -> SurveyProject:
+    await session.flush()
+    await session.refresh(project)
+    return project
+
+
+async def delete_project(session: AsyncSession, project: SurveyProject) -> None:
+    await session.delete(project)
+    await session.flush()
+
+
+async def survey_counts_by_project(
+    session: AsyncSession, project_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, int]:
+    """Surveys per project, archived ones not counted (as in the project's table)."""
+    if not project_ids:
+        return {}
+    result = await session.execute(
+        select(Survey.project_id, func.count(Survey.id))
+        .where(Survey.project_id.in_(project_ids), Survey.status != "archived")
+        .group_by(Survey.project_id)
+    )
+    return {pid: int(count) for pid, count in result.all()}
+
+
+async def count_all_in_project(session: AsyncSession, project_id: uuid.UUID) -> int:
+    """Every survey of the project, archived included — they still hold collected answers."""
+    result = await session.execute(
+        select(func.count(Survey.id)).where(Survey.project_id == project_id)
+    )
     return int(result.scalar_one() or 0)
 
 

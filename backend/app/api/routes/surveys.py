@@ -6,11 +6,13 @@ from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 
 from app.api.deps import CurrentUser, DbSession
 from app.schemas.survey import (
+    CreateProjectRequest,
     CreateSurveyRequest,
     CrosstabResult,
     MethodologyCatalogResponse,
     MethodologyReportRequest,
     MethodologyReportResponse,
+    MoveSurveyRequest,
     PublicSurveyResponse,
     QuestionAnswersPage,
     SubmitSurveyRequest,
@@ -22,12 +24,14 @@ from app.schemas.survey import (
     SurveyAiSummaryRequest,
     SurveyDetail,
     SurveyListItem,
+    SurveyProjectItem,
     SurveyResponseDetail,
     SurveyResponsesPage,
     SurveyResults,
     SurveysCounts,
     SurveyStatusRequest,
     SurveySubmittedResponse,
+    UpdateProjectRequest,
     UpdateSurveyRequest,
 )
 from app.services import survey_ai_builder_service, survey_methodology_service, survey_service
@@ -36,6 +40,7 @@ from app.services.public_suggest_rate_limit import check_public_suggest_limit
 router = APIRouter()
 public_router = APIRouter()
 methodologies_router = APIRouter()
+projects_router = APIRouter()
 
 
 # ─── Methodology catalogue ────────────────────────────────────────────────────
@@ -56,6 +61,42 @@ async def build_methodology_report(
     )
 
 
+# ─── Projects (folders of surveys) ────────────────────────────────────────────
+
+
+@projects_router.get("", response_model=list[SurveyProjectItem])
+async def list_projects(
+    session: DbSession, user: CurrentUser, organization_id: uuid.UUID = Query(...)
+) -> list[SurveyProjectItem]:
+    return await survey_service.list_projects(session, user, organization_id)
+
+
+@projects_router.post("", response_model=SurveyProjectItem, status_code=201)
+async def create_project(
+    payload: CreateProjectRequest, session: DbSession, user: CurrentUser
+) -> SurveyProjectItem:
+    return await survey_service.create_project(session, user, payload)
+
+
+@projects_router.get("/{project_id}", response_model=SurveyProjectItem)
+async def get_project(
+    project_id: str, session: DbSession, user: CurrentUser
+) -> SurveyProjectItem:
+    return await survey_service.get_project(session, user, project_id)
+
+
+@projects_router.put("/{project_id}", response_model=SurveyProjectItem)
+async def update_project(
+    project_id: str, payload: UpdateProjectRequest, session: DbSession, user: CurrentUser
+) -> SurveyProjectItem:
+    return await survey_service.update_project(session, user, project_id, payload)
+
+
+@projects_router.delete("/{project_id}", status_code=204)
+async def delete_project(project_id: str, session: DbSession, user: CurrentUser) -> None:
+    await survey_service.delete_project(session, user, project_id)
+
+
 # ─── Surveys (organization members) ───────────────────────────────────────────
 
 
@@ -66,17 +107,26 @@ async def list_surveys(
     organization_id: uuid.UUID = Query(...),
     status_filter: str | None = Query(default=None, alias="status"),
     mine: bool = Query(default=False),
+    project_id: str | None = Query(default=None),
 ) -> list[SurveyListItem]:
     return await survey_service.list_surveys(
-        session, user, organization_id, status_filter=status_filter, mine=mine
+        session,
+        user,
+        organization_id,
+        status_filter=status_filter,
+        mine=mine,
+        project_id=project_id,
     )
 
 
 @router.get("/counts", response_model=SurveysCounts)
 async def surveys_counts(
-    session: DbSession, user: CurrentUser, organization_id: uuid.UUID = Query(...)
+    session: DbSession,
+    user: CurrentUser,
+    organization_id: uuid.UUID = Query(...),
+    project_id: str | None = Query(default=None),
 ) -> SurveysCounts:
-    return await survey_service.get_counts(session, user, organization_id)
+    return await survey_service.get_counts(session, user, organization_id, project_id)
 
 
 @router.post("/ai-builder", response_model=SurveyAiBuildResponse)
@@ -103,6 +153,13 @@ async def update_survey(
     survey_id: str, payload: UpdateSurveyRequest, session: DbSession, user: CurrentUser
 ) -> SurveyDetail:
     return await survey_service.update_survey(session, user, survey_id, payload)
+
+
+@router.patch("/{survey_id}/project", response_model=SurveyDetail)
+async def move_survey(
+    survey_id: str, payload: MoveSurveyRequest, session: DbSession, user: CurrentUser
+) -> SurveyDetail:
+    return await survey_service.move_survey(session, user, survey_id, payload.project_id)
 
 
 @router.patch("/{survey_id}/status", response_model=SurveyDetail)

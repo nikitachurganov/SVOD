@@ -8,10 +8,11 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.knowledge.methodologies import CATEGORIES, METHODOLOGIES
-from app.models.survey import Survey, SurveyResponse
+from app.models.survey import Survey, SurveyProject, SurveyResponse
 from app.models.user import User
 from app.repositories import organization_repository, survey_repository
 from app.schemas.survey import (
+    CreateProjectRequest,
     CreateSurveyRequest,
     CrosstabResult,
     MethodologyReportResponse,
@@ -26,13 +27,16 @@ from app.schemas.survey import (
     SurveyAiSummaryRequest,
     SurveyDetail,
     SurveyListItem,
+    SurveyProjectItem,
     SurveyQuestion,
     SurveyResponseDetail,
+    ResponsePreview,
     SurveyResponseItem,
     SurveyResponsesPage,
     SurveyResults,
     SurveysCounts,
     SurveySubmittedResponse,
+    UpdateProjectRequest,
     UpdateSurveyRequest,
 )
 from app.schemas.user import PublicAuthorResponse
@@ -45,6 +49,7 @@ from app.services import (
 )
 
 MAX_RESULTS_ROWS = 10_000
+DEFAULT_PROJECT_NAME = "Мои опросы"
 
 
 def _parse_uuid(value: str, detail: str = "Survey not found") -> uuid.UUID:
@@ -87,6 +92,8 @@ def _list_fields(
         description=survey.description or "",
         status=survey.status,
         organization_id=str(survey.organization_id),
+        project_id=str(survey.project_id),
+        project_name=survey.project.name,
         author=_to_author(survey.author),
         category_id=category_id,
         category_name=category_name,
@@ -138,6 +145,119 @@ async def _get_for_member(session: AsyncSession, survey_id: str, user: User) -> 
     return survey
 
 
+def _to_project_item(project: SurveyProject, surveys_count: int) -> SurveyProjectItem:
+    return SurveyProjectItem(
+        id=str(project.id),
+        organization_id=str(project.organization_id),
+        name=project.name,
+        description=project.description,
+        surveys_count=surveys_count,
+        created_at=project.created_at.isoformat(),
+        updated_at=project.updated_at.isoformat(),
+    )
+
+
+async def _get_project_for_member(
+    session: AsyncSession, project_id: str, user: User
+) -> SurveyProject:
+    project = await survey_repository.get_project(
+        session, _parse_uuid(project_id, "Project not found")
+    )
+    if project is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    await _ensure_member(session, project.organization_id, user)
+    return project
+
+
+async def _project_in_organization(
+    session: AsyncSession, project_id: str, organization_id: uuid.UUID
+) -> SurveyProject:
+    """A project of this very organization — a foreign or unknown one is "not found"."""
+    project = await survey_repository.get_project(
+        session, _parse_uuid(project_id, "Project not found")
+    )
+    if project is None or project.organization_id != organization_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    return project
+
+
+# ─── Projects ─────────────────────────────────────────────────────────────────
+
+
+async def list_projects(
+    session: AsyncSession, user: User, organization_id: uuid.UUID
+) -> list[SurveyProjectItem]:
+    await _ensure_member(session, organization_id, user)
+    projects = await survey_repository.list_projects(session, organization_id)
+    counts = await survey_repository.survey_counts_by_project(session, [p.id for p in projects])
+    return [_to_project_item(p, counts.get(p.id, 0)) for p in projects]
+
+
+async def get_project(session: AsyncSession, user: User, project_id: str) -> SurveyProjectItem:
+    project = await _get_project_for_member(session, project_id, user)
+    counts = await survey_repository.survey_counts_by_project(session, [project.id])
+    return _to_project_item(project, counts.get(project.id, 0))
+
+
+async def create_project(
+    session: AsyncSession, user: User, payload: CreateProjectRequest
+) -> SurveyProjectItem:
+    org_id = _parse_uuid(payload.organization_id, "Organization not found")
+    await _ensure_member(session, org_id, user)
+    project = await survey_repository.create_project(
+        session,
+        SurveyProject(
+            organization_id=org_id,
+            created_by_user_id=user.id,
+            name=payload.name,
+            description=payload.description,
+        ),
+    )
+    await session.commit()
+    return _to_project_item(project, 0)
+
+
+async def update_project(
+    session: AsyncSession, user: User, project_id: str, payload: UpdateProjectRequest
+) -> SurveyProjectItem:
+    """Rename / re-describe: the surveys of the project and their ids are not touched."""
+    project = await _get_project_for_member(session, project_id, user)
+    project.name = payload.name
+    project.description = payload.description
+    project.updated_at = datetime.now(timezone.utc)
+    project = await survey_repository.update_project(session, project)
+    await session.commit()
+    counts = await survey_repository.survey_counts_by_project(session, [project.id])
+    return _to_project_item(project, counts.get(project.id, 0))
+
+
+async def delete_project(session: AsyncSession, user: User, project_id: str) -> None:
+    """Only an empty project can go: surveys (and their answers) are never deleted with it."""
+    project = await _get_project_for_member(session, project_id, user)
+    if await survey_repository.count_all_in_project(session, project.id) > 0:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="project_not_empty")
+    await survey_repository.delete_project(session, project)
+    await session.commit()
+
+
+async def _resolve_project_for_new_survey(
+    session: AsyncSession, user: User, organization_id: uuid.UUID, project_id: str | None
+) -> SurveyProject:
+    if project_id:
+        return await _project_in_organization(session, project_id, organization_id)
+    project = await survey_repository.get_default_project(session, organization_id)
+    if project is None:
+        project = await survey_repository.create_project(
+            session,
+            SurveyProject(
+                organization_id=organization_id,
+                created_by_user_id=user.id,
+                name=DEFAULT_PROJECT_NAME,
+            ),
+        )
+    return project
+
+
 # ─── CRUD ─────────────────────────────────────────────────────────────────────
 
 
@@ -148,13 +268,20 @@ async def list_surveys(
     *,
     status_filter: str | None = None,
     mine: bool = False,
+    project_id: str | None = None,
 ) -> list[SurveyListItem]:
     await _ensure_member(session, organization_id, user)
+    project = (
+        await _project_in_organization(session, project_id, organization_id)
+        if project_id
+        else None
+    )
     surveys = await survey_repository.list_filtered(
         session,
         organization_id=organization_id,
         status=status_filter,
         created_by_user_id=user.id if mine else None,
+        project_id=project.id if project else None,
     )
     ids = [s.id for s in surveys]
     counts = await survey_repository.response_counts(session, ids)
@@ -163,13 +290,24 @@ async def list_surveys(
 
 
 async def get_counts(
-    session: AsyncSession, user: User, organization_id: uuid.UUID
+    session: AsyncSession,
+    user: User,
+    organization_id: uuid.UUID,
+    project_id: str | None = None,
 ) -> SurveysCounts:
     await _ensure_member(session, organization_id, user)
+    project = (
+        await _project_in_organization(session, project_id, organization_id)
+        if project_id
+        else None
+    )
 
     async def count(**kwargs: Any) -> int:
         return await survey_repository.count_filtered(
-            session, organization_id=organization_id, **kwargs
+            session,
+            organization_id=organization_id,
+            project_id=project.id if project else None,
+            **kwargs,
         )
 
     return SurveysCounts(
@@ -194,8 +332,10 @@ async def create_survey(
 ) -> SurveyDetail:
     org_id = _parse_uuid(payload.organization_id, "Organization not found")
     await _ensure_member(session, org_id, user)
+    project = await _resolve_project_for_new_survey(session, user, org_id, payload.project_id)
     survey = Survey(
         organization_id=org_id,
+        project=project,
         created_by_user_id=user.id,
         name=payload.name.strip(),
         description=payload.description,
@@ -232,6 +372,21 @@ async def update_survey(
     await session.commit()
     counts = await survey_repository.response_counts(session, [survey.id])
     return _to_detail(survey, counts.get(survey.id, 0))
+
+
+async def move_survey(
+    session: AsyncSession, user: User, survey_id: str, project_id: str
+) -> SurveyDetail:
+    """Only ``project_id`` changes: the id, public link, answers and analytics stay as they were."""
+    survey = await _get_for_member(session, survey_id, user)
+    target = await _project_in_organization(session, project_id, survey.organization_id)
+    if survey.project_id != target.id:
+        survey.project = target
+        survey = await survey_repository.update(session, survey)
+        await session.commit()
+    counts = await survey_repository.response_counts(session, [survey.id])
+    last_dates = await survey_repository.last_response_dates(session, [survey.id])
+    return _to_detail(survey, counts.get(survey.id, 0), last_dates.get(survey.id))
 
 
 async def set_status(
@@ -305,6 +460,13 @@ async def list_responses(
                 quality_flags=r.quality_flags,
                 quality_status=survey_quality.status_of(r.quality_flags),
                 answers=r.answers if isinstance(r.answers, dict) else {},
+                preview=[
+                    ResponsePreview(**item)
+                    for item in survey_answers.preview_items(
+                        r.schema_snapshot if survey_answers.question_defs(r.schema_snapshot) else survey.pages,
+                        r.answers if isinstance(r.answers, dict) else {},
+                    )
+                ],
             )
             for r, number in rows
         ],

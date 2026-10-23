@@ -1,7 +1,9 @@
+import type { ReactNode } from 'react';
 import { Alert, Button, Card, Tag } from 'antd';
 import { ReloadOutlined, RobotOutlined } from '@ant-design/icons';
 
 import type { SurveyAiSummary, SurveyResults } from '../../api/surveys.api';
+import { AnalyticsCard } from './AnalyticsCard';
 import { MetricCard } from './MetricCard';
 import { SegmentPieChart } from './SurveyCharts';
 import { SurveyQuantTab } from './SurveyQuantTab';
@@ -110,6 +112,8 @@ interface SurveyAnalyticsTabProps {
   aiError: string | null;
   onGenerateAiSummary: (force: boolean) => void;
   onOpenResponse: (responseId: string) => void;
+  /** The switch that decides whether answers with serious remarks are counted */
+  qualityControl: ReactNode;
 }
 
 export const SurveyAnalyticsTab = ({
@@ -121,6 +125,7 @@ export const SurveyAnalyticsTab = ({
   aiError,
   onGenerateAiSummary,
   onOpenResponse,
+  qualityControl,
 }: SurveyAnalyticsTabProps) => {
   const questionLabels = new Map(results.questions.map((q) => [q.field_id, q.label]));
   // Segmentation questions: closed questions with few options that are not a methodology block
@@ -136,10 +141,21 @@ export const SurveyAnalyticsTab = ({
     .slice(0, MAX_SEGMENT_CHARTS);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div style={{ fontSize: 13, color: 'var(--app-text-secondary)' }}>
-        В расчёт включено ответов: {results.used} из {results.total}
-        {excludeFlagged && results.excluded > 0 && ` (исключено по замечаниям качества: ${results.excluded})`}.
+    <div className="survey-analytics">
+      <div className="survey-basis">
+        <div>
+          <div className="survey-basis__main">
+            В расчёт включено ответов: <strong>{results.used}</strong> из {results.total}
+          </div>
+          <div className="survey-basis__note">
+            {!excludeFlagged
+              ? 'Показаны все ответы, в том числе с серьёзными замечаниями'
+              : results.excluded > 0
+                ? `Исключено по замечаниям качества: ${results.excluded}`
+                : 'Ответов с серьёзными замечаниями нет'}
+          </div>
+        </div>
+        {qualityControl}
       </div>
 
       {results.used === 0 ? (
@@ -160,26 +176,32 @@ export const SurveyAnalyticsTab = ({
           />
 
           {results.metrics.length > 0 && (
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-              {results.metrics.map((metric) => (
-                <MetricCard key={metric.id} metric={metric} />
-              ))}
+            <div>
+              <h3 className="survey-section-title">Метрики</h3>
+              <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                {results.metrics.map((metric) => (
+                  <MetricCard key={metric.id} metric={metric} />
+                ))}
+              </div>
             </div>
           )}
 
           {segments.length > 0 && (
             <div>
-              <h3 style={{ margin: '0 0 8px', fontSize: 15 }}>Демография и сегменты</h3>
+              <h3 className="survey-section-title">Демография и сегменты</h3>
               <div className="survey-chart-grid">
                 {segments.map((q) => (
-                  <Card
+                  <AnalyticsCard
                     key={q.field_id}
-                    size="small"
-                    title={<span style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>{q.label}</span>}
-                    style={{ minWidth: 0 }}
+                    title={q.label}
+                    meta={
+                      <span>
+                        Ответили: <strong>{q.answered}</strong> из {results.used}
+                      </span>
+                    }
                   >
                     <SegmentPieChart options={q.options} />
-                  </Card>
+                  </AnalyticsCard>
                 ))}
               </div>
             </div>

@@ -1,245 +1,216 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Card, Empty, Grid, Input, Modal, Table, Tag } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
-import { EditOutlined, InboxOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons';
-import { Link, useNavigate } from 'react-router-dom';
+import { Alert, Button, Card, Dropdown, Empty, Grid, Input, Modal, Skeleton } from 'antd';
+import type { MenuProps } from 'antd';
+import { FolderOutlined, MoreOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons';
+import axios from 'axios';
+import { Link } from 'react-router-dom';
 
 import {
-  archiveSurvey,
-  getSurveys,
-  getSurveysCounts,
-  type SurveyListItem,
-  type SurveysCounts,
-  type SurveyStatus,
+  createSurveyProject,
+  deleteSurveyProject,
+  getSurveyProjects,
+  updateSurveyProject,
+  type SurveyProject,
+  type SurveyProjectPayload,
 } from '../shared/api/surveys.api';
 import { useOrganization } from '../shared/hooks/organization.hooks';
 import { useNotifications } from '../shared/context/notifications.context';
-import { buildDisplayName } from '../shared/utils/userName';
-import {
-  SURVEY_STATUS_COLOR,
-  SURVEY_STATUS_LABEL,
-  formatSurveyDate,
-  pluralizeResponses,
-} from './surveyStatus';
+import { ProjectFormModal } from '../shared/ui/survey/ProjectFormModal';
+import { pluralizeSurveys } from './surveyStatus';
 
-type TabKey = 'all' | 'mine' | 'open' | 'draft' | 'closed' | 'archived';
-
-const TAB_ORDER: TabKey[] = ['all', 'mine', 'open', 'draft', 'closed', 'archived'];
-
-const TAB_LABELS: Record<TabKey, string> = {
-  all: 'Все',
-  mine: 'Мои',
-  open: 'Открытые',
-  draft: 'Черновики',
-  closed: 'Закрытые',
-  archived: 'Архив',
-};
-
-const EMPTY_MESSAGE: Record<TabKey, string> = {
-  all: 'Опросов пока нет. Создайте первый — ИИ подберёт методики и соберёт анкету.',
-  mine: 'Вы ещё не создавали опросов.',
-  open: 'Нет опросов, которые принимают ответы.',
-  draft: 'Нет черновиков.',
-  closed: 'Нет закрытых опросов.',
-  archived: 'Архив пуст.',
-};
-
-const DEFAULT_COUNTS: SurveysCounts = {
-  all: 0,
-  mine: 0,
-  open: 0,
-  draft: 0,
-  closed: 0,
-  archived: 0,
-};
-
-const PAGE_SIZES = [20, 50, 100];
+/** The search box is only worth its space once the catalog is long enough to scan */
+const SEARCH_FROM = 6;
+const SKELETON_CARDS = 6;
 
 export const SurveysPage = () => {
-  const navigate = useNavigate();
   const { activeOrganization } = useOrganization();
   const { notifySuccess, notifyError } = useNotifications();
   const organizationId = activeOrganization?.id ?? null;
 
-  const [surveys, setSurveys] = useState<SurveyListItem[]>([]);
+  const [projects, setProjects] = useState<SurveyProject[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<TabKey>('all');
-  const [counts, setCounts] = useState<SurveysCounts>(DEFAULT_COUNTS);
-  const [confirmArchiveId, setConfirmArchiveId] = useState<string | null>(null);
-  const [archiving, setArchiving] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [search, setSearch] = useState('');
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<SurveyProject | null>(null);
+  const [deleting, setDeleting] = useState<SurveyProject | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const isMobile = Grid.useBreakpoint().md === false;
 
-  const visibleSurveys = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    return needle ? surveys.filter((s) => s.name.toLowerCase().includes(needle)) : surveys;
-  }, [surveys, search]);
-
-  const loadCounts = useCallback(() => {
-    if (!organizationId) return;
-    getSurveysCounts(organizationId)
-      .then(setCounts)
-      .catch(() => {
-        // Counters are not critical
-      });
+  const load = useCallback(() => {
+    if (!organizationId) {
+      setProjects([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setLoadFailed(false);
+    getSurveyProjects(organizationId)
+      .then(setProjects)
+      .catch(() => setLoadFailed(true))
+      .finally(() => setLoading(false));
   }, [organizationId]);
 
-  const loadSurveys = useCallback(
-    (tab: TabKey = activeTab) => {
-      if (!organizationId) {
-        setSurveys([]);
-        setLoading(false);
-        return Promise.resolve();
-      }
-      setLoading(true);
-      const status: SurveyStatus | undefined =
-        tab === 'open' || tab === 'draft' || tab === 'closed' || tab === 'archived'
-          ? tab
-          : undefined;
-      return getSurveys(organizationId, { status, mine: tab === 'mine' })
-        .then(setSurveys)
-        .catch((err: unknown) =>
-          notifyError(
-            'Не удалось загрузить опросы',
-            err instanceof Error ? err.message : undefined,
-          ),
-        )
-        .finally(() => setLoading(false));
-    },
-    [organizationId, activeTab, notifyError],
-  );
-
   useEffect(() => {
-    void loadSurveys();
-    loadCounts();
-  }, [loadSurveys, loadCounts]);
+    load();
+  }, [load]);
 
-  const handleArchive = async (id: string) => {
-    setArchiving(true);
+  const visibleProjects = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    return needle ? projects.filter((p) => p.name.toLowerCase().includes(needle)) : projects;
+  }, [projects, search]);
+
+  const openForm = (project: SurveyProject | null) => {
+    setEditing(project);
+    setFormOpen(true);
+  };
+
+  const closeForm = () => {
+    setFormOpen(false);
+    setEditing(null);
+  };
+
+  const handleSubmit = async (payload: SurveyProjectPayload) => {
+    if (editing) {
+      const updated = await updateSurveyProject(editing.id, payload);
+      setProjects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+      notifySuccess('Проект сохранён');
+    } else if (organizationId) {
+      const created = await createSurveyProject(organizationId, payload);
+      setProjects((prev) => [created, ...prev]);
+      notifySuccess('Проект создан', `«${created.name}»`);
+    }
+    closeForm();
+  };
+
+  const handleDelete = async () => {
+    if (!deleting) return;
+    setDeleteBusy(true);
     try {
-      await archiveSurvey(id);
-      notifySuccess('Опрос перемещён в архив');
-      await loadSurveys();
-      loadCounts();
+      await deleteSurveyProject(deleting.id);
+      setProjects((prev) => prev.filter((p) => p.id !== deleting.id));
+      notifySuccess('Проект удалён');
     } catch (err) {
+      const notEmpty = axios.isAxiosError(err) && err.response?.data?.detail === 'project_not_empty';
       notifyError(
-        'Не удалось переместить опрос в архив',
-        err instanceof Error ? err.message : undefined,
+        'Не удалось удалить проект',
+        notEmpty
+          ? 'В проекте есть опросы (возможно, в архиве). Сначала переместите их в другой проект.'
+          : undefined,
       );
+      if (notEmpty) load();
     } finally {
-      setArchiving(false);
-      setConfirmArchiveId(null);
+      setDeleteBusy(false);
+      setDeleting(null);
     }
   };
 
-  const columns = useMemo<ColumnsType<SurveyListItem>>(
-    () => [
-      {
-        title: 'Название',
-        dataIndex: 'name',
-        key: 'name',
-        sorter: (a, b) => a.name.localeCompare(b.name, 'ru'),
-        render: (name: string, record) => (
-          <div>
-            <Link to={`/surveys/${record.id}`} style={{ fontWeight: 500 }}>
-              {name}
-            </Link>
-            <div style={{ fontSize: 12, color: 'var(--app-text-secondary)' }}>
-              {record.questions_count} вопр.
-            </div>
-          </div>
-        ),
-      },
-      {
-        title: 'Методики',
-        key: 'methodologies',
-        render: (_, record) =>
-          record.methodology_names.length === 0 ? (
-            <span style={{ color: 'var(--app-text-secondary)' }}>—</span>
-          ) : (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-              {record.category_name && <Tag color="blue">{record.category_name}</Tag>}
-              {record.methodology_names.map((name) => (
-                <Tag key={name}>{name.replace(/\s*\(.*\)$/, '')}</Tag>
-              ))}
-            </div>
-          ),
-      },
-      {
-        title: 'Статус',
-        dataIndex: 'status',
-        key: 'status',
-        width: 120,
-        render: (status: SurveyStatus) => (
-          <Tag color={SURVEY_STATUS_COLOR[status]}>{SURVEY_STATUS_LABEL[status]}</Tag>
-        ),
-      },
-      {
-        title: 'Ответы',
-        dataIndex: 'responses_count',
-        key: 'responses_count',
-        width: 110,
-        sorter: (a, b) => a.responses_count - b.responses_count,
-        render: (n: number) => pluralizeResponses(n),
-      },
-      {
-        title: 'Последний ответ',
-        dataIndex: 'last_response_at',
-        key: 'last_response_at',
-        width: 150,
-        sorter: (a, b) =>
-          new Date(a.last_response_at ?? 0).getTime() - new Date(b.last_response_at ?? 0).getTime(),
-        render: (value: string | null) =>
-          value ? (
-            formatSurveyDate(value)
-          ) : (
-            <span style={{ color: 'var(--app-text-secondary)' }}>—</span>
-          ),
-      },
-      {
-        title: 'Автор',
-        key: 'author',
-        render: (_, record) =>
-          record.author ? buildDisplayName(record.author) : 'Неизвестный автор',
-      },
-      {
-        title: 'Создан',
-        dataIndex: 'created_at',
-        key: 'created_at',
-        sorter: (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
-        render: (value: string) => formatSurveyDate(value),
-      },
-      {
-        title: 'Действия',
-        key: 'actions',
-        width: 96,
-        render: (_, record) =>
-          record.status === 'archived' ? (
-            <span style={{ color: 'var(--app-text-secondary)' }}>—</span>
-          ) : (
-            <div style={{ display: 'flex', gap: 4 }}>
-              <Button
-                type="text"
-                size="small"
-                icon={<EditOutlined />}
-                title="Изменить"
-                onClick={() => navigate(`/surveys/${record.id}/edit`)}
-              />
-              <Button
-                type="text"
-                size="small"
-                icon={<InboxOutlined />}
-                title="Переместить в архив"
-                onClick={() => setConfirmArchiveId(record.id)}
-              />
-            </div>
-          ),
-      },
+  const menuFor = (project: SurveyProject): MenuProps => ({
+    items: [
+      { key: 'rename', label: 'Переименовать' },
+      { key: 'delete', label: 'Удалить', danger: true },
     ],
-    [navigate],
-  );
+    onClick: ({ key }) => {
+      if (key === 'rename') openForm(project);
+      if (key === 'delete') setDeleting(project);
+    },
+  });
 
-  const tabCount = (key: TabKey): number => (key === 'archived' ? counts.archived : counts[key]);
+  const deleteBlocked = !!deleting && deleting.surveys_count > 0;
+
+  const renderBody = () => {
+    if (!organizationId) {
+      return (
+        <Empty
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description="Выберите организацию, чтобы увидеть проекты."
+        />
+      );
+    }
+    if (loadFailed) {
+      return (
+        <Alert
+          type="error"
+          showIcon
+          message="Не удалось загрузить проекты"
+          action={
+            <Button size="small" onClick={load}>
+              Повторить
+            </Button>
+          }
+        />
+      );
+    }
+    if (loading) {
+      return (
+        <div className="project-grid" aria-busy="true">
+          {Array.from({ length: SKELETON_CARDS }, (_, index) => (
+            <Card key={index} className="project-card project-card--skeleton">
+              <Skeleton active title paragraph={{ rows: 1 }} />
+            </Card>
+          ))}
+        </div>
+      );
+    }
+    if (projects.length === 0) {
+      return (
+        <Empty
+          className="registry-page__empty"
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description="Пока нет проектов. Создайте проект, чтобы объединять опросы по темам исследований."
+        >
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => openForm(null)}>
+            Создать проект
+          </Button>
+        </Empty>
+      );
+    }
+    return (
+      <>
+        {projects.length > SEARCH_FROM && (
+          <Input
+            allowClear
+            prefix={<SearchOutlined />}
+            placeholder="Поиск по названию проекта"
+            aria-label="Поиск проекта по названию"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            size={isMobile ? 'large' : 'middle'}
+            style={{ maxWidth: isMobile ? undefined : 360, marginBottom: 16 }}
+          />
+        )}
+        {visibleProjects.length === 0 ? (
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Ничего не найдено" />
+        ) : (
+          <ul className="project-grid" aria-label="Проекты">
+            {visibleProjects.map((project) => (
+              <li key={project.id} className="project-card">
+                <FolderOutlined className="project-card__icon" aria-hidden />
+                <div className="project-card__body">
+                  {/* The link is stretched over the whole card; the menu button sits above it */}
+                  <Link to={`/surveys/projects/${project.id}`} className="project-card__link">
+                    {project.name}
+                  </Link>
+                  {project.description && (
+                    <p className="project-card__description">{project.description}</p>
+                  )}
+                  <div className="project-card__meta">{pluralizeSurveys(project.surveys_count)}</div>
+                </div>
+                <Dropdown menu={menuFor(project)} trigger={['click']} placement="bottomRight">
+                  <Button
+                    type="text"
+                    className="project-card__menu"
+                    icon={<MoreOutlined />}
+                    aria-label={`Действия с проектом «${project.name}»`}
+                  />
+                </Dropdown>
+              </li>
+            ))}
+          </ul>
+        )}
+      </>
+    );
+  };
 
   return (
     <div className="registry-page">
@@ -250,114 +221,44 @@ export const SurveysPage = () => {
             type="primary"
             className="registry-page__create-btn"
             icon={<PlusOutlined />}
-            onClick={() => navigate('/surveys/create')}
+            onClick={() => openForm(null)}
+            disabled={!organizationId}
           >
-            Создать опрос
+            Создать проект
           </Button>
         </div>
-        <div className="registry-page__tabs" role="tablist" aria-label="Фильтр опросов">
-          {TAB_ORDER.map((key) => (
-            <button
-              key={key}
-              type="button"
-              role="tab"
-              aria-selected={activeTab === key}
-              className={`registry-page__tab${activeTab === key ? ' registry-page__tab--active' : ''}`}
-              onClick={() => setActiveTab(key)}
-            >
-              {TAB_LABELS[key]} ({tabCount(key)})
-            </button>
-          ))}
-        </div>
       </div>
 
-      <div className="registry-page__content">
-        <Input
-          allowClear
-          prefix={<SearchOutlined />}
-          placeholder="Поиск по названию"
-          aria-label="Поиск опроса по названию"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          size={isMobile ? 'large' : 'middle'}
-          style={{ maxWidth: isMobile ? undefined : 360, marginBottom: 12 }}
-        />
-        {isMobile ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {!loading && visibleSurveys.length === 0 && (
-              <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description={search.trim() ? 'Ничего не найдено' : EMPTY_MESSAGE[activeTab]}
-              />
-            )}
-            {visibleSurveys.map((survey) => (
-              <Card key={survey.id} size="small" loading={loading}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start' }}>
-                  <Link to={`/surveys/${survey.id}`} style={{ fontWeight: 600, wordBreak: 'break-word' }}>
-                    {survey.name}
-                  </Link>
-                  <Tag color={SURVEY_STATUS_COLOR[survey.status]} style={{ margin: 0 }}>
-                    {SURVEY_STATUS_LABEL[survey.status]}
-                  </Tag>
-                </div>
-                <div style={{ margin: '6px 0 10px', fontSize: 13, color: 'var(--app-text-secondary)' }}>
-                  {pluralizeResponses(survey.responses_count)}
-                  {survey.last_response_at && ` · последний ${formatSurveyDate(survey.last_response_at)}`}
-                </div>
-                {survey.status !== 'archived' && (
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <Button
-                      size="large"
-                      icon={<EditOutlined />}
-                      onClick={() => navigate(`/surveys/${survey.id}/edit`)}
-                    >
-                      Изменить
-                    </Button>
-                    <Button
-                      size="large"
-                      icon={<InboxOutlined />}
-                      aria-label="Переместить в архив"
-                      onClick={() => setConfirmArchiveId(survey.id)}
-                    />
-                  </div>
-                )}
-              </Card>
-            ))}
-          </div>
-        ) : (
-          <Card className="registry-page__card">
-            <Table<SurveyListItem>
-              rowKey="id"
-              columns={columns}
-              dataSource={visibleSurveys}
-              loading={loading}
-              locale={{ emptyText: search.trim() ? 'Ничего не найдено' : EMPTY_MESSAGE[activeTab] }}
-              pagination={{
-                defaultPageSize: PAGE_SIZES[0],
-                pageSizeOptions: PAGE_SIZES,
-                showSizeChanger: true,
-                showTotal: (total, [min, max]) => `${min}–${max} из ${total}`,
-              }}
-              size="middle"
-              scroll={{ x: 'max-content' }}
-            />
-          </Card>
-        )}
-      </div>
+      <div className="registry-page__content">{renderBody()}</div>
+
+      <ProjectFormModal
+        open={formOpen}
+        project={editing}
+        onSubmit={handleSubmit}
+        onClose={closeForm}
+      />
 
       <Modal
-        open={!!confirmArchiveId}
-        title="Переместить в архив?"
-        okText="В архив"
+        open={!!deleting}
+        title={deleteBlocked ? 'Нельзя удалить проект' : 'Удалить проект?'}
+        okText={deleteBlocked ? 'Понятно' : 'Удалить'}
         cancelText="Отмена"
-        okButtonProps={{ danger: true, loading: archiving }}
-        onCancel={() => setConfirmArchiveId(null)}
-        onOk={() => confirmArchiveId && void handleArchive(confirmArchiveId)}
+        cancelButtonProps={{ style: deleteBlocked ? { display: 'none' } : undefined }}
+        okButtonProps={{ danger: !deleteBlocked, loading: deleteBusy }}
+        onCancel={() => setDeleting(null)}
+        onOk={() => (deleteBlocked ? setDeleting(null) : void handleDelete())}
       >
-        <p>
-          Опрос перестанет принимать ответы, ссылка для респондентов перестанет работать.
-          Собранные ответы сохранятся.
-        </p>
+        {deleteBlocked ? (
+          <p>
+            В проекте «{deleting?.name}» есть опросы ({pluralizeSurveys(deleting?.surveys_count ?? 0)}).
+            Чтобы не потерять ответы, сначала переместите их в другой проект.
+          </p>
+        ) : (
+          <p>
+            Проект «{deleting?.name}» пуст и будет удалён. Если в нём остались опросы из архива,
+            удаление не выполнится.
+          </p>
+        )}
       </Modal>
     </div>
   );

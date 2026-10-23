@@ -66,6 +66,8 @@ export interface SurveyListItem {
   description: string;
   status: SurveyStatus;
   organization_id: string;
+  project_id: string;
+  project_name: string;
   author: AuthorPreview | null;
   category_id: string | null;
   category_name: string | null;
@@ -95,6 +97,22 @@ export interface SurveysCounts {
   archived: number;
 }
 
+export interface SurveyProject {
+  id: string;
+  organization_id: string;
+  name: string;
+  description: string | null;
+  /** Without archived surveys */
+  surveys_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SurveyProjectPayload {
+  name: string;
+  description?: string | null;
+}
+
 export interface SurveyPayload {
   name: string;
   description?: string | null;
@@ -116,6 +134,13 @@ export interface QualityReason {
   field_ids: string[];
 }
 
+/** A short piece of a response for the list: a quote from a text answer or one short answer */
+export interface ResponsePreview {
+  label: string;
+  text: string;
+  kind: 'text' | 'value';
+}
+
 export interface SurveyResponseItem {
   id: string;
   /** Ordinal in the order of arrival: "Ответ №12" */
@@ -125,6 +150,7 @@ export interface SurveyResponseItem {
   quality_flags: Record<string, boolean> | null;
   quality_status: QualityStatus;
   answers: Record<string, unknown>;
+  preview: ResponsePreview[];
 }
 
 export interface SurveyResponsesPage {
@@ -275,18 +301,74 @@ export interface PublicSurvey {
 
 export const getSurveys = async (
   organizationId: string,
-  filters: { status?: SurveyStatus; mine?: boolean } = {},
+  filters: { status?: SurveyStatus; mine?: boolean; projectId?: string } = {},
 ): Promise<SurveyListItem[]> => {
   const params: Record<string, string | boolean> = { organization_id: organizationId };
   if (filters.status) params.status = filters.status;
   if (filters.mine) params.mine = true;
+  if (filters.projectId) params.project_id = filters.projectId;
   const { data } = await api.get<SurveyListItem[]>('/surveys', { params });
   return data;
 };
 
-export const getSurveysCounts = async (organizationId: string): Promise<SurveysCounts> => {
+export const getSurveysCounts = async (
+  organizationId: string,
+  projectId?: string,
+): Promise<SurveysCounts> => {
   const { data } = await api.get<SurveysCounts>('/surveys/counts', {
+    params: { organization_id: organizationId, ...(projectId ? { project_id: projectId } : {}) },
+  });
+  return data;
+};
+
+// ─── Projects ─────────────────────────────────────────────────────────────────
+
+export const getSurveyProjects = async (organizationId: string): Promise<SurveyProject[]> => {
+  const { data } = await api.get<SurveyProject[]>('/survey-projects', {
     params: { organization_id: organizationId },
+  });
+  return data;
+};
+
+export const getSurveyProject = async (id: string): Promise<SurveyProject> => {
+  const { data } = await api.get<SurveyProject>(`/survey-projects/${id}`);
+  return data;
+};
+
+export const createSurveyProject = async (
+  organizationId: string,
+  payload: SurveyProjectPayload,
+): Promise<SurveyProject> => {
+  const { data } = await api.post<SurveyProject>('/survey-projects', {
+    organization_id: organizationId,
+    name: payload.name,
+    description: payload.description ?? null,
+  });
+  return data;
+};
+
+export const updateSurveyProject = async (
+  id: string,
+  payload: SurveyProjectPayload,
+): Promise<SurveyProject> => {
+  const { data } = await api.put<SurveyProject>(`/survey-projects/${id}`, {
+    name: payload.name,
+    description: payload.description ?? null,
+  });
+  return data;
+};
+
+/** Only an empty project can be deleted; otherwise the server answers 409 `project_not_empty` */
+export const deleteSurveyProject = async (id: string): Promise<void> => {
+  await api.delete(`/survey-projects/${id}`);
+};
+
+export const moveSurveyToProject = async (
+  surveyId: string,
+  projectId: string,
+): Promise<SurveyDetail> => {
+  const { data } = await api.patch<SurveyDetail>(`/surveys/${surveyId}/project`, {
+    project_id: projectId,
   });
   return data;
 };
@@ -299,9 +381,11 @@ export const getSurveyById = async (id: string): Promise<SurveyDetail> => {
 export const createSurvey = async (
   organizationId: string,
   payload: SurveyPayload,
+  projectId?: string | null,
 ): Promise<SurveyDetail> => {
   const { data } = await api.post<SurveyDetail>('/surveys', {
     organization_id: organizationId,
+    project_id: projectId ?? null,
     name: payload.name,
     description: payload.description ?? null,
     pages: payload.pages,

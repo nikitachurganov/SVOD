@@ -27,19 +27,20 @@ export const MethodologySummaryCard = ({
   surface = 'grey',
 }: MethodologySummaryCardProps) => {
   const [showWarnings, setShowWarnings] = useState(false);
+  const white = surface === 'white';
 
   return (
     <div
       style={{
         border: '1px solid var(--app-border)',
         borderRadius: 12,
-        padding: surface === 'white' ? 16 : 12,
-        background: surface === 'white' ? 'var(--app-surface)' : 'var(--app-bg)',
+        padding: white ? '20px 24px' : 12,
+        background: white ? 'var(--app-surface)' : 'var(--app-bg)',
         display: 'flex',
         flexDirection: 'column',
-        gap: 8,
-        fontSize: 13,
-        lineHeight: 1.5,
+        gap: white ? 14 : 8,
+        fontSize: white ? 14 : 13,
+        lineHeight: white ? 1.6 : 1.5,
       }}
     >
       <div style={{ fontWeight: 600 }}>Использованные методики</div>
@@ -55,7 +56,7 @@ export const MethodologySummaryCard = ({
         </div>
       )}
 
-      <ul style={{ margin: 0, paddingLeft: 18 }}>
+      <ul style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: white ? 10 : 0 }}>
         {summary.methodologies.map((item) => (
           <li key={item.id}>
             <span style={{ fontWeight: 500 }}>{item.name}</span>
@@ -69,7 +70,7 @@ export const MethodologySummaryCard = ({
       </ul>
 
       {summary.standards_note && (
-        <div style={{ color: 'var(--app-text-secondary)', fontSize: 12 }}>
+        <div style={{ color: 'var(--app-text-secondary)', fontSize: white ? 13 : 12 }}>
           {summary.standards_note}
         </div>
       )}

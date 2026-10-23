@@ -22,7 +22,7 @@ const structureLockMessage = (err: unknown): string | null => {
 export const EditSurveyPage = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const { setEntityTitle } = useBreadcrumbEntity();
+  const { setEntityTitle, setEntityParent } = useBreadcrumbEntity();
 
   const [survey, setSurvey] = useState<SurveyDetail | null>(null);
   const [fetchedId, setFetchedId] = useState<string | null>(null);
@@ -52,6 +52,16 @@ export const EditSurveyPage = () => {
   useEffect(() => {
     setEntityTitle(survey?.name ?? null);
   }, [survey?.name, setEntityTitle]);
+
+  const projectId = survey?.project_id;
+  const projectName = survey?.project_name;
+  useEffect(() => {
+    setEntityParent(
+      projectId && projectName
+        ? { title: projectName, path: `/surveys/projects/${projectId}` }
+        : null,
+    );
+  }, [projectId, projectName, setEntityParent]);
 
   const initialPages = useMemo<FormPageInstance[]>(
     () => (survey?.pages ? pagesPayloadToInstances(survey.pages) : []),

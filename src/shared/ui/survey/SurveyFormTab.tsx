@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button, Card, Empty, Modal, Popover } from 'antd';
-import { DownOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
+import { EditOutlined, EyeOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 
 import type { SurveyDetail } from '../../api/surveys.api';
 import type { CreateFormFieldPayload } from '../../api/forms.api';
@@ -37,7 +37,7 @@ const TypeTag = ({ field }: { field: CreateFormFieldPayload }) => {
   return (
     <Popover
       trigger={['hover', 'click']}
-      placement="bottomRight"
+      placement="left"
       title={`Варианты ответа (${options.length})`}
       content={
         <ol className="survey-options-list">
@@ -53,8 +53,8 @@ const TypeTag = ({ field }: { field: CreateFormFieldPayload }) => {
         aria-haspopup="dialog"
         aria-label={`${label}: показать варианты ответа (${options.length})`}
       >
-        {label} · {options.length}
-        <DownOutlined style={{ fontSize: 9 }} />
+        {label}
+        <QuestionCircleOutlined style={{ fontSize: 12 }} aria-hidden="true" />
       </button>
     </Popover>
   );

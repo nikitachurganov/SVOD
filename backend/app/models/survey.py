@@ -14,6 +14,33 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+class SurveyProject(Base):
+    """A folder that groups surveys of one topic; a survey belongs to exactly one project."""
+
+    __tablename__ = "survey_projects"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_now, onupdate=_now
+    )
+
+
 class Survey(Base):
     __tablename__ = "surveys"
 
@@ -23,6 +50,13 @@ class Survey(Base):
     organization_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    # RESTRICT: a project is never deleted together with its surveys
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("survey_projects.id", ondelete="RESTRICT"),
         nullable=False,
         index=True,
     )
@@ -48,6 +82,7 @@ class Survey(Base):
 
     author: Mapped["User | None"] = relationship(lazy="selectin")  # noqa: F821
     organization: Mapped["Organization"] = relationship(lazy="selectin")  # noqa: F821
+    project: Mapped["SurveyProject"] = relationship(lazy="selectin")
 
 
 class SurveyResponse(Base):

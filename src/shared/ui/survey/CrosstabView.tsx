@@ -5,8 +5,9 @@ import type { CrosstabGroup, CrosstabResult } from '../../api/surveys.api';
 import { GroupMeansChart } from './SurveyCharts';
 import { formatNumber, formatP } from './surveyFormat';
 
-const heat = (percent: number): string =>
-  `color-mix(in srgb, var(--app-primary) ${Math.round(percent * 0.35)}%, transparent)`;
+/** Five steps like a contribution graph: 0 is an empty tile, 1-4 are growing shares of the row */
+const heatLevel = (percent: number): 0 | 1 | 2 | 3 | 4 =>
+  percent <= 0 ? 0 : percent <= 25 ? 1 : percent <= 50 ? 2 : percent <= 75 ? 3 : 4;
 
 const MeansTable = ({ result }: { result: CrosstabResult }) => {
   const columns: ColumnsType<CrosstabGroup> = [
@@ -63,40 +64,56 @@ const CountsTable = ({ result }: { result: CrosstabResult }) => {
     cells: result.counts[i] ?? [],
     percents: result.row_percent[i] ?? [],
   }));
+  const share = `${70 / Math.max(1, result.col_labels.length)}%`;
   const columns: ColumnsType<Row> = [
     {
-      title: `${result.row_label} ↓ / ${result.col_label} →`,
+      title: result.row_label,
       dataIndex: 'label',
       key: 'label',
       fixed: 'left',
+      width: '30%',
+      className: 'survey-crosstab__label',
     },
-    ...result.col_labels.map((colLabel, j) => ({
-      title: colLabel,
-      key: colLabel,
-      align: 'center' as const,
-      onCell: (row: Row) => ({ style: { background: heat(row.percents[j] ?? 0) } }),
-      render: (_: unknown, row: Row) => (
-        <>
-          <strong>{row.cells[j] ?? 0}</strong>{' '}
-          <span style={{ color: 'var(--app-text-secondary)', fontSize: 12 }}>
-            ({formatNumber(row.percents[j] ?? 0)}%)
-          </span>
-        </>
-      ),
-    })),
+    {
+      title: result.col_label,
+      key: 'cols',
+      align: 'left',
+      className: 'survey-crosstab__group',
+      children: result.col_labels.map((colLabel, j) => ({
+        title: colLabel,
+        key: colLabel,
+        width: share,
+        align: 'left' as const,
+        className: 'survey-heat-cell',
+        render: (_: unknown, row: Row) => {
+          const count = row.cells[j] ?? 0;
+          const percent = row.percents[j] ?? 0;
+          return (
+            <div
+              className={`survey-heat survey-heat--${heatLevel(percent)}`}
+              title={`Ответов: ${count} (${formatNumber(percent)}% строки)`}
+            >
+              <strong>{count}</strong>
+              <span>{formatNumber(percent)}%</span>
+            </div>
+          );
+        },
+      })),
+    },
   ];
   return (
     <>
-      <div style={{ marginBottom: 8, fontSize: 13 }}>
-        Респондентов: {result.n}. В скобках — доля внутри строки.
-      </div>
+      {/* Fixed layout: the label column is 30% and the answer columns share the other 70%, whatever
+          the length of the texts; with many columns the table scrolls instead of squeezing them */}
       <Table<Row>
+        className="survey-crosstab"
         rowKey="key"
         size="small"
+        tableLayout="fixed"
         columns={columns}
         dataSource={rows}
         pagination={false}
-        scroll={{ x: 'max-content' }}
+        scroll={{ x: `calc(260px + ${result.col_labels.length} * 110px)` }}
       />
       {result.chi2 !== null && result.p_value !== null && (
         <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>

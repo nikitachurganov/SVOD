@@ -53,6 +53,7 @@ import { FormViewPage } from './pages/FormViewPage';
 
 import { FormsPage } from './pages/FormsPage';
 import { SurveysPage } from './pages/SurveysPage';
+import { ProjectSurveysPage } from './pages/ProjectSurveysPage';
 import { CreateSurveyPage } from './pages/CreateSurveyPage';
 import { EditSurveyPage } from './pages/EditSurveyPage';
 import { SurveyViewPage } from './pages/SurveyViewPage';
@@ -105,7 +106,7 @@ const AppLayoutContent = () => {
 
   const isDesktop = useMediaQuery('(min-width: 1056px)');
 
-  const { entityTitle } = useBreadcrumbEntity();
+  const { entityTitle, entityParent } = useBreadcrumbEntity();
 
   const selectedKey = getSelectedMenuKey(location.pathname);
 
@@ -313,7 +314,7 @@ const AppLayoutContent = () => {
 
           <AppContentHeader
 
-            breadcrumbs={getBreadcrumbsForPath(location.pathname, entityTitle)}
+            breadcrumbs={getBreadcrumbsForPath(location.pathname, entityTitle, entityParent)}
 
             notificationsOpen={headerNotificationsOpen}
 
@@ -499,6 +500,8 @@ const router = createBrowserRouter([
       { path: 'surveys', element: <SurveysPage /> },
 
       { path: 'surveys/create', element: <CreateSurveyPage /> },
+
+      { path: 'surveys/projects/:projectId', element: <ProjectSurveysPage /> },
 
       // One route for the survey page and its tabs (/form, /responses[/:responseId], /analytics)
       { path: 'surveys/:id/*', element: <SurveyViewPage /> },

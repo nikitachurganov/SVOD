@@ -8,6 +8,7 @@ const LOADING_TITLE = 'Загрузка...';
 export const getBreadcrumbsForPath = (
   pathname: string,
   entityTitle?: string | null,
+  entityParent?: AppBreadcrumbItem | null,
 ): AppBreadcrumbItem[] | null => {
   if (pathname === '/requests/create') {
     return [
@@ -49,17 +50,23 @@ export const getBreadcrumbsForPath = (
     ];
   }
 
+  const surveysRoot: AppBreadcrumbItem = { title: 'Опросы', path: '/surveys' };
+  // Survey pages know their project; without it the crumb is simply left out
+  const projectCrumb: AppBreadcrumbItem[] = entityParent ? [entityParent] : [];
+
+  if (/^\/surveys\/projects\/[^/]+$/.test(pathname)) {
+    return [surveysRoot, { title: entityTitle?.trim() || LOADING_TITLE }];
+  }
+
   if (pathname === '/surveys/create') {
-    return [
-      { title: 'Опросы', path: '/surveys' },
-      { title: 'Создание опроса' },
-    ];
+    return [surveysRoot, ...projectCrumb, { title: 'Создание опроса' }];
   }
 
   const surveyEditMatch = pathname.match(/^\/surveys\/([^/]+)\/edit$/);
   if (surveyEditMatch) {
     return [
-      { title: 'Опросы', path: '/surveys' },
+      surveysRoot,
+      ...projectCrumb,
       { title: entityTitle?.trim() || LOADING_TITLE, path: `/surveys/${surveyEditMatch[1]}` },
       { title: 'Редактирование' },
     ];
@@ -69,10 +76,7 @@ export const getBreadcrumbsForPath = (
     /^\/surveys\/([^/]+)(?:\/(?:form|analytics|responses(?:\/[^/]+)?))?$/,
   );
   if (surveyDetailMatch && surveyDetailMatch[1] !== 'create') {
-    return [
-      { title: 'Опросы', path: '/surveys' },
-      { title: entityTitle?.trim() || LOADING_TITLE },
-    ];
+    return [surveysRoot, ...projectCrumb, { title: entityTitle?.trim() || LOADING_TITLE }];
   }
 
   return null;

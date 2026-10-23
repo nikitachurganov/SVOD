@@ -1956,6 +1956,147 @@ html[data-theme] body {
   min-height: 200px;
 }
 
+/* ── Survey projects: catalog of folder cards + project page heading ───────── */
+
+.project-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.project-card {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border-secondary);
+  border-radius: 8px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.project-card:not(.project-card--skeleton):hover,
+.project-card:not(.project-card--skeleton):focus-within {
+  border-color: var(--app-menu-active-text);
+  box-shadow: 0 2px 8px var(--app-shadow);
+}
+
+.project-card--skeleton {
+  display: block;
+}
+
+.project-card__icon {
+  flex: none;
+  font-size: 24px;
+  line-height: 1.4;
+  color: var(--app-menu-active-text);
+}
+
+.project-card__body {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Stretched link: the whole card opens the project, the menu button stays clickable above it */
+.project-card__link {
+  display: block;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--app-text);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.project-card__link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+}
+
+.project-card__link:hover {
+  color: var(--app-menu-active-text);
+}
+
+.project-card__link:focus-visible {
+  outline: none;
+}
+
+.project-card__link:focus-visible::after {
+  outline: 2px solid var(--app-focus);
+  outline-offset: 2px;
+}
+
+.project-card__description {
+  display: -webkit-box;
+  margin: 4px 0 0;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--app-text-secondary);
+  overflow-wrap: anywhere;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.project-card__meta {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--app-text-helper);
+}
+
+.project-card__menu {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  margin: -4px -8px 0 0;
+}
+
+.project-page__title-row {
+  align-items: flex-start;
+}
+
+.project-page__heading {
+  min-width: 0;
+}
+
+.project-page__title-line {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.project-page__title {
+  overflow-wrap: anywhere;
+}
+
+.project-page__description {
+  max-width: 720px;
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--app-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 767px) {
+  .project-page__title-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .project-page__title-row .registry-page__create-btn {
+    height: 40px;
+  }
+}
+
 /* ── Survey page: white header (like the registry pages) + own scroll area ───────── */
 
 .survey-page {
@@ -2019,30 +2160,398 @@ html[data-theme] body {
   }
 }
 
-/* Filter on the grey work area: visible border, inactive items, and a clearly chosen one */
+/* Filter on the grey work area: a light grey track, a white chosen item, dark text.
+   The chosen item is painted white itself; while the thumb is travelling to a new item the
+   item stays transparent, so there are never two white blocks at once. */
 .survey-filter.ant-segmented {
-  background: var(--app-surface);
-  border: 1px solid var(--app-border);
   padding: 2px;
+  background: color-mix(in srgb, var(--app-text) 10%, var(--app-surface));
+  border: 1px solid var(--app-border);
 }
 
-.survey-filter .ant-segmented-item {
+.survey-filter .ant-segmented-item,
+.survey-filter .ant-segmented-item-label {
   color: var(--app-text);
 }
 
 .survey-filter .ant-segmented-item:hover:not(.ant-segmented-item-selected) {
-  background: var(--app-bg);
+  background: color-mix(in srgb, var(--app-text) 6%, transparent);
 }
 
-.survey-filter .ant-segmented-thumb,
 .survey-filter .ant-segmented-item-selected {
-  background: var(--app-primary);
+  background: var(--app-surface);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--app-text) 18%, transparent);
+}
+
+.survey-filter .ant-segmented-thumb {
+  background: var(--app-surface);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--app-text) 18%, transparent);
+}
+
+.survey-filter:has(.ant-segmented-thumb) .ant-segmented-item-selected {
+  background: transparent;
   box-shadow: none;
 }
 
-.survey-filter .ant-segmented-item-selected,
-.survey-filter .ant-segmented-item-selected .ant-segmented-item-label {
-  color: #fff;
+/* In the dark theme the chosen item is the lighter one, not the darker */
+html[data-theme='dark'] .survey-filter .ant-segmented-thumb,
+html[data-theme='dark'] .survey-filter .ant-segmented-item-selected {
+  background: color-mix(in srgb, var(--app-text) 18%, var(--app-surface));
+}
+
+html[data-theme='dark'] .survey-filter:has(.ant-segmented-thumb) .ant-segmented-item-selected {
+  background: transparent;
+}
+
+/* Responses on a desktop: a table that reads like a list of people */
+.survey-status {
+  --status: var(--app-primary);
+}
+
+.survey-status--review {
+  --status: #d97706;
+}
+
+.survey-status--flagged {
+  --status: #dc2626;
+}
+
+.survey-resp-who {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.survey-resp-who__meta {
+  font-size: 12px;
+  color: var(--app-text-secondary);
+}
+
+.survey-resp-answer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.survey-resp-answer__quote {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.survey-resp-empty {
+  font-size: 13px;
+  color: var(--app-text-secondary);
+}
+
+.survey-resp-table .ant-table-tbody > tr.survey-resp-row > td {
+  padding-top: 14px;
+  padding-bottom: 14px;
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+.survey-resp-table .ant-table-tbody > tr.survey-resp-row:focus-visible {
+  outline: 2px solid var(--app-text-secondary);
+  outline-offset: -2px;
+}
+
+.survey-resp-table .ant-table-tbody > tr.survey-resp-row--flagged > td:first-child {
+  box-shadow: inset 3px 0 0 #dc2626;
+}
+
+.survey-resp-table .ant-table-tbody > tr.survey-resp-row--review > td:first-child {
+  box-shadow: inset 3px 0 0 #d97706;
+}
+
+.survey-resp-table .ant-table-tbody > tr.survey-resp-row.is-selected > td {
+  background: color-mix(in srgb, var(--app-primary) 8%, var(--app-surface));
+}
+
+.survey-resp-chevron {
+  font-size: 12px;
+  color: var(--app-text-secondary);
+}
+
+.survey-resp-row:hover .survey-resp-chevron {
+  color: var(--app-text);
+}
+
+/* Responses: a feed of respondent cards grouped by day */
+.survey-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.survey-feed__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.survey-feed__tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.survey-filter__count {
+  margin-left: 6px;
+  font-size: 12px;
+  color: var(--app-text-secondary);
+}
+
+/* On a phone the counter goes under the label, so none of the three labels is cut */
+@media (max-width: 767px) {
+  .survey-filter .ant-segmented-item-label {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  .survey-filter__label {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-size: 13px;
+    line-height: 1.3;
+  }
+
+  .survey-filter__count {
+    margin-left: 0;
+  }
+}
+
+.survey-feed__note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0;
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--app-text-secondary);
+  background: color-mix(in srgb, var(--app-text) 5%, var(--app-surface));
+  border-radius: 10px;
+}
+
+.survey-feed__note .anticon {
+  margin-top: 3px;
+}
+
+.survey-feed__days {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: opacity 0.15s ease;
+}
+
+.survey-feed__days.is-loading {
+  opacity: 0.55;
+}
+
+.survey-feed__day {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 8px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--app-text);
+}
+
+.survey-feed__day span {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--app-text-secondary);
+}
+
+.survey-feed__grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 1100px) {
+  .survey-feed__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.survey-feed__pager {
+  display: flex;
+  justify-content: center;
+}
+
+.survey-response {
+  --status: var(--app-primary);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px 20px;
+  color: var(--app-text);
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: 14px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.survey-response--review {
+  --status: #d97706;
+}
+
+.survey-response--flagged {
+  --status: #dc2626;
+}
+
+.survey-response--review::before,
+.survey-response--flagged::before {
+  content: '';
+  position: absolute;
+  top: 14px;
+  bottom: 14px;
+  left: 0;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--status);
+}
+
+.survey-response:hover {
+  border-color: var(--app-border-strong);
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--app-text) 8%, transparent);
+}
+
+.survey-response:focus-visible {
+  outline: 2px solid var(--app-text-secondary);
+  outline-offset: 2px;
+}
+
+.survey-response.is-selected {
+  border-color: var(--app-primary);
+}
+
+.survey-response--skeleton {
+  cursor: default;
+}
+
+.survey-response__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.survey-response__avatar {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--status);
+  background: color-mix(in srgb, var(--status) 14%, var(--app-surface));
+  border-radius: 50%;
+  font-variant-numeric: tabular-nums;
+}
+
+.survey-response__who {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.survey-response__who span {
+  font-size: 12px;
+  color: var(--app-text-secondary);
+}
+
+.survey-response__quote {
+  margin: 0;
+  padding-left: 14px;
+  border-left: 2px solid var(--app-border);
+}
+
+.survey-response__quote p {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  font-size: 15px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.survey-response__quote cite {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  font-style: normal;
+  color: var(--app-text-secondary);
+}
+
+.survey-response__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.survey-response__chips li {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  max-width: 100%;
+  padding: 3px 10px;
+  font-size: 12px;
+  background: color-mix(in srgb, var(--app-text) 6%, var(--app-surface));
+  border-radius: 999px;
+}
+
+.survey-response__chips li span {
+  color: var(--app-text-secondary);
+}
+
+.survey-response__chips li strong {
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.survey-response__empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--app-text-secondary);
+}
+
+.survey-response__more {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: auto;
+  font-size: 13px;
+  color: var(--app-text-secondary);
+  transition: color 0.15s ease;
+}
+
+.survey-response:hover .survey-response__more {
+  color: var(--app-text);
 }
 
 /* Type of a question in the form tab; with options it is a button that opens the list */
@@ -2066,15 +2575,22 @@ button.survey-type-tag {
   cursor: pointer;
 }
 
-button.survey-type-tag:hover,
+.survey-type-tag .anticon {
+  color: var(--app-text-secondary);
+}
+
+/* A neutral hover: the grey fill gets a little darker, the text stays as it is */
+button.survey-type-tag:hover {
+  background: color-mix(in srgb, var(--app-text) 8%, var(--app-bg));
+}
+
 button.survey-type-tag:focus-visible {
-  color: var(--app-primary);
-  border-color: var(--app-primary);
   outline: none;
 }
 
 button.survey-type-tag:focus-visible {
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--app-primary) 25%, transparent);
+  border-color: var(--app-text-secondary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--app-text) 28%, transparent);
 }
 
 .survey-options-list {
@@ -2105,6 +2621,304 @@ button.survey-type-tag:focus-visible {
 
 .survey-chart-grid__wide {
   grid-column: 1 / -1;
+}
+
+/* Analytics tab: sections, the card template, distribution bars, key figures */
+.survey-analytics {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.survey-analytics .ant-card {
+  border-radius: 12px;
+}
+
+.survey-section-title {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.survey-analytics-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  padding: 20px 24px;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  scroll-margin-top: 16px;
+}
+
+.survey-analytics-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.survey-analytics-card__actions {
+  flex: none;
+}
+
+/* What the numbers below are based on: how many answers are counted and the switch that decides it */
+.survey-basis {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+  padding: 14px 20px;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+}
+
+.survey-basis__main {
+  font-size: 14px;
+}
+
+.survey-basis__note {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--app-text-secondary);
+}
+
+.survey-analytics-card__title {
+  flex: 1 1 240px;
+  min-width: 0;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.survey-analytics-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin-top: auto;
+  font-size: 12px;
+  color: var(--app-text-secondary);
+}
+
+.survey-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.survey-bars__label {
+  margin-bottom: 6px;
+  font-size: 13px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.survey-bars__line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.survey-bars__track {
+  flex: 1;
+  min-width: 0;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--app-text) 9%, transparent);
+}
+
+.survey-bars__fill {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--app-primary);
+}
+
+.survey-bars__value {
+  flex: none;
+  min-width: 88px;
+  text-align: right;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.survey-bars__value > span {
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--app-text-secondary);
+}
+
+.survey-stat-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 28px;
+  margin: 0;
+}
+
+.survey-stat-row dt {
+  font-size: 12px;
+  color: var(--app-text-secondary);
+}
+
+.survey-stat-row dd {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+}
+
+.survey-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Crosstab heat map: rounded tiles with a gap, five steps of the brand colour */
+
+/* Header: the question of the rows (left) and the question of the columns (above the answers)
+   are two separate blocks with a visible edge between them and between the two header rows */
+.survey-crosstab .ant-table-thead > tr > th {
+  vertical-align: bottom;
+  text-align: left;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--app-text) 3%, var(--app-surface));
+  border-bottom: 1px solid var(--app-border);
+}
+
+.survey-crosstab .ant-table-thead > tr > th::before {
+  display: none;
+}
+
+.survey-crosstab .ant-table-thead > tr > th.survey-crosstab__label {
+  background: color-mix(in srgb, var(--app-text) 7%, var(--app-surface));
+  border-right: 1px solid var(--app-border);
+}
+
+.survey-crosstab .ant-table-thead > tr > th.survey-crosstab__group {
+  background: color-mix(in srgb, var(--app-text) 7%, var(--app-surface));
+  border-bottom: 1px solid var(--app-border);
+}
+
+.survey-crosstab .ant-table-thead > tr > th:not(.survey-crosstab__group):not(.survey-crosstab__label) {
+  font-weight: 500;
+}
+
+/* No hover wash on the rows: the tiles are the only thing that carries colour */
+.survey-crosstab .ant-table-tbody > tr.ant-table-row:hover > td,
+.survey-crosstab .ant-table-tbody > tr.ant-table-row > td.ant-table-cell-row-hover {
+  background: transparent;
+}
+
+.survey-crosstab .ant-table-tbody > tr.ant-table-row:hover > td.ant-table-cell-fix-left,
+.survey-crosstab .ant-table-tbody > tr.ant-table-row > td.ant-table-cell-fix-left {
+  background: var(--app-surface);
+}
+
+/* The row label lines up with the first line of the tile text, not with the middle of the row */
+.survey-crosstab .ant-table-tbody > tr > td.survey-crosstab__label {
+  vertical-align: top;
+  padding-top: 10px;
+  border-right: 1px solid var(--app-border);
+}
+
+.survey-crosstab .ant-table-tbody > tr > td.survey-heat-cell {
+  padding: 3px;
+  background: transparent;
+}
+
+.survey-heat {
+  --heat-text: var(--app-text);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  min-height: 46px;
+  padding: 4px 12px;
+  border-radius: 8px;
+  color: var(--heat-text);
+  font-size: 12px;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+}
+
+.survey-heat strong {
+  font-size: 14px;
+}
+
+.survey-heat span {
+  opacity: 0.8;
+}
+
+.survey-heat--0 {
+  background: color-mix(in srgb, var(--app-text) 6%, transparent);
+  --heat-text: var(--app-text-secondary);
+}
+
+.survey-heat--1 {
+  background: color-mix(in srgb, var(--app-primary) 16%, var(--app-surface));
+}
+
+.survey-heat--2 {
+  background: color-mix(in srgb, var(--app-primary) 36%, var(--app-surface));
+}
+
+.survey-heat--3 {
+  background: color-mix(in srgb, var(--app-primary) 64%, var(--app-surface));
+  --heat-text: #1a1206;
+}
+
+.survey-heat--4 {
+  background: color-mix(in srgb, var(--app-primary) 90%, var(--app-surface));
+  --heat-text: #ffffff;
+}
+
+html[data-theme='dark'] .survey-heat--4 {
+  --heat-text: #1a1206;
+}
+
+/* Donut: the total sits in the hole of the ring */
+.survey-donut {
+  position: relative;
+}
+
+.survey-donut__center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.survey-donut__center strong {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.survey-donut__center span {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--app-text-secondary);
 }
 
 /* HTML legend of a donut chart: long labels wrap instead of being clipped */

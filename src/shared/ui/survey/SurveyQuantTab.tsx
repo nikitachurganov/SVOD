@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Card, Segmented, Select, Spin, Table, Tag } from 'antd';
+import { Alert, Card, Segmented, Select, Spin, Table } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import axios from 'axios';
 
@@ -11,7 +11,9 @@ import {
 } from '../../api/surveys.api';
 import { CrosstabView } from './CrosstabView';
 import { QuestionTextAnswers } from './QuestionTextAnswers';
-import { OptionsBarChart, ScaleHistogram } from './SurveyCharts';
+import { AnalyticsCard } from './AnalyticsCard';
+import { DistributionBars } from './DistributionBars';
+import { ScaleHistogram } from './SurveyCharts';
 import { formatNumber } from './surveyFormat';
 
 const CROSSTAB_ERRORS: Record<string, string> = {
@@ -52,17 +54,13 @@ const ViewSwitch = ({ value, onChange }: { value: View; onChange: (v: View) => v
   />
 );
 
-const ChoiceBody = ({ question }: { question: QuestionStat }) => {
-  const [view, setView] = useState<View>('chart');
+const ChoiceBody = ({ question, view }: { question: QuestionStat; view: View }) => {
   const marks = question.options.reduce((sum, o) => sum + o.count, 0);
   const multiple = question.type === 'checkbox';
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-        <ViewSwitch value={view} onChange={setView} />
-      </div>
       {view === 'chart' ? (
-        <OptionsBarChart options={question.options} />
+        <DistributionBars options={question.options} label={question.label} />
       ) : (
         <Table
           size="small"
@@ -83,7 +81,7 @@ const ChoiceBody = ({ question }: { question: QuestionStat }) => {
         />
       )}
       {multiple && (
-        <div style={{ marginTop: 8, fontSize: 12, color: 'var(--app-text-secondary)' }}>
+        <div style={{ marginTop: 12, fontSize: 12, color: 'var(--app-text-secondary)' }}>
           Можно выбрать несколько вариантов: доля — это часть ответивших на вопрос, поэтому сумма
           долей может превышать 100%. Всего отметок: {marks}.
         </div>
@@ -92,8 +90,7 @@ const ChoiceBody = ({ question }: { question: QuestionStat }) => {
   );
 };
 
-const ScaleBody = ({ question }: { question: QuestionStat }) => {
-  const [view, setView] = useState<View>('chart');
+const ScaleBody = ({ question, view }: { question: QuestionStat; view: View }) => {
   const stats: Array<[string, number | null]> = [
     ['Среднее', question.mean],
     ['Медиана', question.median],
@@ -102,16 +99,14 @@ const ScaleBody = ({ question }: { question: QuestionStat }) => {
   ];
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 13 }}>
-          {stats.map(([label, value]) => (
-            <span key={label}>
-              {label}: <strong>{value === null ? '—' : formatNumber(value)}</strong>
-            </span>
-          ))}
-        </div>
-        <ViewSwitch value={view} onChange={setView} />
-      </div>
+      <dl className="survey-stat-row" style={{ marginBottom: 12 }}>
+        {stats.map(([label, value]) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd>{value === null ? '—' : formatNumber(value)}</dd>
+          </div>
+        ))}
+      </dl>
       {view === 'chart' ? (
         <ScaleHistogram distribution={question.distribution} />
       ) : (
@@ -148,27 +143,28 @@ interface QuestionCardProps {
 /** One question: how many answered, how many skipped, and the answers themselves */
 const QuestionCard = ({ question, used, surveyId, excludeFlagged, onOpenResponse }: QuestionCardProps) => {
   const skipped = Math.max(0, used - question.answered);
+  const [view, setView] = useState<View>('chart');
+  const hasChart = question.answered > 0 && question.kind !== 'text';
   return (
-    <Card
+    <AnalyticsCard
       id={`question-${question.field_id}`}
-      size="small"
-      className={question.kind === 'text' ? 'survey-chart-grid__wide' : undefined}
-      style={{ scrollMarginTop: 16, minWidth: 0 }}
-      title={<span style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>{question.label}</span>}
-      extra={
-        <span style={{ fontSize: 12, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+      wide={question.kind === 'text'}
+      title={question.label}
+      actions={hasChart ? <ViewSwitch value={view} onChange={setView} /> : undefined}
+      meta={
+        <>
           <span>
-            ответили: {question.answered} из {used}
+            Ответили: <strong>{question.answered}</strong> из {used}
           </span>
-          {skipped > 0 && <Tag style={{ margin: 0 }}>пропустили: {skipped}</Tag>}
-        </span>
+          {skipped > 0 && <span>Пропустили: {skipped}</span>}
+        </>
       }
     >
       {question.answered === 0 && question.kind !== 'text' && (
-        <span style={{ color: 'var(--app-text-secondary)' }}>Нет ответов</span>
+        <span style={{ color: 'var(--app-text-secondary)' }}>Пока нет ответов на этот вопрос</span>
       )}
-      {question.answered > 0 && question.kind === 'choice' && <ChoiceBody question={question} />}
-      {question.answered > 0 && question.kind === 'scale' && <ScaleBody question={question} />}
+      {question.answered > 0 && question.kind === 'choice' && <ChoiceBody question={question} view={view} />}
+      {question.answered > 0 && question.kind === 'scale' && <ScaleBody question={question} view={view} />}
       {question.kind === 'text' && (
         <QuestionTextAnswers
           surveyId={surveyId}
@@ -177,7 +173,7 @@ const QuestionCard = ({ question, used, surveyId, excludeFlagged, onOpenResponse
           onOpenResponse={onOpenResponse}
         />
       )}
-    </Card>
+    </AnalyticsCard>
   );
 };
 
@@ -264,7 +260,7 @@ export const SurveyQuantTab = ({ surveyId, results, excludeFlagged, onOpenRespon
   ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       {scaleQuestions.length > 0 && (
         <Card size="small" title="Описательная статистика">
           <Table<QuestionStat>
@@ -325,17 +321,20 @@ export const SurveyQuantTab = ({ surveyId, results, excludeFlagged, onOpenRespon
       )}
 
       {shown.length > 0 && (
-        <div className="survey-chart-grid">
-          {shown.map((q) => (
-            <QuestionCard
-              key={q.field_id}
-              question={q}
-              used={results.used}
-              surveyId={surveyId}
-              excludeFlagged={excludeFlagged}
-              onOpenResponse={onOpenResponse}
-            />
-          ))}
+        <div>
+          <h3 className="survey-section-title">Результаты по вопросам</h3>
+          <div className="survey-chart-grid">
+            {shown.map((q) => (
+              <QuestionCard
+                key={q.field_id}
+                question={q}
+                used={results.used}
+                surveyId={surveyId}
+                excludeFlagged={excludeFlagged}
+                onOpenResponse={onOpenResponse}
+              />
+            ))}
+          </div>
         </div>
       )}
     </div>
