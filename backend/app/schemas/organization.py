@@ -25,6 +25,7 @@ class OrganizationResponse(BaseModel):
     owner_user_id: str
     owner: PublicAuthorResponse | None = None
     members_count: int = 0
+    is_personal: bool = False
     created_at: str
     updated_at: str
 

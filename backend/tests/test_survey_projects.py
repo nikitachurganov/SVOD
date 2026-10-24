@@ -29,6 +29,7 @@ def _project(**overrides):
         created_by_user_id=None,
         name="Проект",
         description=None,
+        color=None,
         created_at=now,
         updated_at=now,
     )
@@ -91,6 +92,13 @@ class ProjectSchemaTests(unittest.TestCase):
     def test_blank_description_becomes_none(self):
         self.assertIsNone(UpdateProjectRequest(name="A", description="   ").description)
         self.assertEqual(UpdateProjectRequest(name="A", description=" текст ").description, "текст")
+
+    def test_color_must_be_in_the_palette(self):
+        self.assertEqual(UpdateProjectRequest(name="A", color="violet").color, "violet")
+        self.assertIsNone(UpdateProjectRequest(name="A", color="").color)
+        self.assertIsNone(UpdateProjectRequest(name="A").color)
+        with self.assertRaises(ValidationError):
+            UpdateProjectRequest(name="A", color="#ff0000")
 
 
 class _ServiceCase(unittest.IsolatedAsyncioTestCase):

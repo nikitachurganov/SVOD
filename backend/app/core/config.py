@@ -37,6 +37,12 @@ class Settings(BaseSettings):
     # Public URL of the web app — used to build links in emails (account activation etc.)
     APP_PUBLIC_URL: str = "http://localhost:5173"
     INVITATION_TTL_DAYS: int = 7
+    # Public URL of the standalone surveys service: password reset links for its users point here.
+    # Empty — the links use APP_PUBLIC_URL.
+    SURVEYS_APP_PUBLIC_URL: str = ""
+    PASSWORD_RESET_TTL_MINUTES: int = 60
+    # A new reset email for the same account is not sent more often than this
+    PASSWORD_RESET_COOLDOWN_SECONDS: int = 60
     # Outgoing mail. Empty SMTP_HOST disables sending: the owner copies the link manually.
     SMTP_HOST: str = ""
     SMTP_PORT: int = 465

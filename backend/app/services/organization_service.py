@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants import request_execution as C
@@ -43,6 +44,8 @@ from app.schemas.user import PublicAuthorResponse
 INVITE_EXISTING_USER = "existing_user"
 INVITE_NEW_ACCOUNT = "new_account"
 
+PERSONAL_ORGANIZATION_NAME = "Личное пространство"
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -68,6 +71,7 @@ def _to_org_response(org: Organization, members_count: int = 0) -> OrganizationR
         owner_user_id=str(org.owner_user_id),
         owner=_to_author(org.owner),
         members_count=members_count,
+        is_personal=org.is_personal,
         created_at=org.created_at.isoformat(),
         updated_at=org.updated_at.isoformat(),
     )
@@ -134,6 +138,15 @@ def _ensure_owner(org: Organization, user: User) -> None:
         )
 
 
+def ensure_not_personal(org: Organization) -> None:
+    """A personal workspace belongs to one person: it cannot be deleted, handed over or opened to others."""
+    if org.is_personal:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Личное пространство нельзя удалить, передать или открыть для других",
+        )
+
+
 async def _get_org_or_404(session: AsyncSession, org_id: uuid.UUID) -> Organization:
     org = await organization_repository.get_org_by_id(session, org_id)
     if org is None:
@@ -179,6 +192,39 @@ async def create_organization(
     )
     await organization_repository.add_member(session, owner_member)
     await session.commit()
+
+    count = await organization_repository.count_members(session, org.id)
+    return _to_org_response(org, members_count=count)
+
+
+async def get_or_create_personal_organization(
+    session: AsyncSession, current_user: User
+) -> OrganizationResponse:
+    """The user's personal workspace; created on first use. Safe to call repeatedly and concurrently."""
+    org = await organization_repository.get_personal_org(session, current_user.id)
+    if org is None:
+        try:
+            org = await organization_repository.create_org(
+                session,
+                Organization(
+                    name=PERSONAL_ORGANIZATION_NAME,
+                    owner_user_id=current_user.id,
+                    is_personal=True,
+                ),
+            )
+            await organization_repository.add_member(
+                session,
+                OrganizationMember(
+                    organization_id=org.id, user_id=current_user.id, role_tag="owner"
+                ),
+            )
+            await session.commit()
+        except IntegrityError:
+            # A parallel request created it first (one personal workspace per user)
+            await session.rollback()
+            org = await organization_repository.get_personal_org(session, current_user.id)
+            if org is None:
+                raise
 
     count = await organization_repository.count_members(session, org.id)
     return _to_org_response(org, members_count=count)
@@ -231,6 +277,7 @@ async def delete_organization(
 ) -> None:
     org = await _get_org_or_404(session, org_id)
     _ensure_owner(org, current_user)
+    ensure_not_personal(org)
     await organization_repository.delete_org(session, org_id)
     await session.commit()
 
@@ -244,6 +291,7 @@ async def transfer_organization_ownership(
     """Set organization.owner_user_id and sync member role_tag (owner/member)."""
     org = await _get_org_or_404(session, org_id)
     _ensure_owner(org, current_user)
+    ensure_not_personal(org)
 
     try:
         new_owner_id = uuid.UUID(payload.new_owner_user_id)
@@ -417,6 +465,7 @@ async def create_invitation(
     """
     org = await _get_org_or_404(session, org_id)
     _ensure_owner(org, current_user)
+    ensure_not_personal(org)
     email = str(payload.email).strip()
 
     invited_user = await user_repository.get_by_email(session, email)

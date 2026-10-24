@@ -81,6 +81,9 @@
 | `SMTP_SECURITY` | нет | `ssl` | `ssl` (465) / `starttls` (587) / `none` |
 | `SMTP_TIMEOUT_SECONDS` | нет | `15.0` | Таймаут соединения |
 | `INVITATION_TTL_DAYS` | нет | `7` | Срок действия приглашения |
+| `SURVEYS_APP_PUBLIC_URL` | нет | пусто | Публичный адрес отдельного сервиса «Опросы»: в него ведут ссылки восстановления пароля для его пользователей. Пусто — используется `APP_PUBLIC_URL` |
+| `PASSWORD_RESET_TTL_MINUTES` | нет | `60` | Срок действия ссылки восстановления пароля |
+| `PASSWORD_RESET_COOLDOWN_SECONDS` | нет | `60` | Как часто можно запрашивать письмо для одного аккаунта. Без SMTP ссылка пишется в лог API |
 | `DADATA_API_KEY` | нет | пусто | Подсказки адресов (`GET /suggest/address`) |
 | `YANDEX_MAPS_API_KEY` | нет | пусто | Геосаджест (`GET /suggest/yandex`) |
 

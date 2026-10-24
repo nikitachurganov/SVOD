@@ -151,6 +151,7 @@ def _to_project_item(project: SurveyProject, surveys_count: int) -> SurveyProjec
         organization_id=str(project.organization_id),
         name=project.name,
         description=project.description,
+        color=getattr(project, "color", None),
         surveys_count=surveys_count,
         created_at=project.created_at.isoformat(),
         updated_at=project.updated_at.isoformat(),
@@ -211,6 +212,7 @@ async def create_project(
             created_by_user_id=user.id,
             name=payload.name,
             description=payload.description,
+            color=payload.color,
         ),
     )
     await session.commit()
@@ -220,10 +222,11 @@ async def create_project(
 async def update_project(
     session: AsyncSession, user: User, project_id: str, payload: UpdateProjectRequest
 ) -> SurveyProjectItem:
-    """Rename / re-describe: the surveys of the project and their ids are not touched."""
+    """Rename / re-describe / recolour: the surveys of the project and their ids are not touched."""
     project = await _get_project_for_member(session, project_id, user)
     project.name = payload.name
     project.description = payload.description
+    project.color = payload.color
     project.updated_at = datetime.now(timezone.utc)
     project = await survey_repository.update_project(session, project)
     await session.commit()

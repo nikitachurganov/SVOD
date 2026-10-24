@@ -14,8 +14,11 @@ COPY src ./src
 
 ARG VITE_API_URL=/api
 ARG VITE_FORMILY_RUNTIME=true
+# `surveys` builds the standalone surveys service; the default builds the whole platform
+ARG VITE_APP_MODE=platform
 ENV VITE_API_URL=$VITE_API_URL
 ENV VITE_FORMILY_RUNTIME=$VITE_FORMILY_RUNTIME
+ENV VITE_APP_MODE=$VITE_APP_MODE
 
 RUN npm run build
 

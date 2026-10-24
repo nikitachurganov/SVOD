@@ -1,14 +1,24 @@
 import { useState, type FormEvent } from 'react';
 import { Alert, Button, Divider, Form, Input } from 'antd';
+import axios from 'axios';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../shared/hooks/auth.hooks';
+import { requestPasswordReset } from '../shared/api/auth.api';
+import { HOME_PATH, IS_SURVEYS_APP } from '../shared/config/appMode';
 import logoUrl from '../assets/logo.svg';
 import yandexLogoUrl from '../assets/logo-yandex.svg';
 import vkLogoUrl from '../assets/logo-vk.svg';
 import heroBgUrl from '../assets/auth-hero-bg.png';
 import './AuthPage.css';
 
-type AuthMode = 'signIn' | 'signUp';
+type AuthMode = 'signIn' | 'signUp' | 'forgot';
+
+/** What other pages pass through the router state when they send the user here */
+interface AuthRouteState {
+  from?: string;
+  mode?: AuthMode;
+  notice?: string;
+}
 
 interface SignInValues {
   email: string;
@@ -21,17 +31,43 @@ interface SignUpValues extends SignInValues {
   confirmPassword: string;
 }
 
-const mapAuthError = (error: unknown): string => {
-  if (!(error instanceof Error)) return 'Неожиданная ошибка аутентификации';
-  if (error.message.includes('Invalid login credentials')) return 'Неверный адрес электронной почты или пароль';
-  if (error.message.includes('User already registered')) return 'Пользователь с таким адресом электронной почты уже зарегистрирован';
-  return error.message;
+const HEADINGS: Record<AuthMode, string> = {
+  signIn: 'Вход',
+  signUp: 'Регистрация',
+  forgot: 'Восстановление пароля',
+};
+
+const mapAuthError = (error: unknown, mode: AuthMode): string => {
+  if (axios.isAxiosError(error)) {
+    if (!error.response) return 'Не удалось связаться с сервером. Проверьте подключение и повторите попытку';
+    const { status, data } = error.response;
+    const detail = typeof data?.detail === 'string' ? data.detail : '';
+    if (status === 401) return 'Неверный адрес электронной почты или пароль';
+    if (status === 409) return 'Пользователь с таким адресом электронной почты уже зарегистрирован';
+    if (status === 422) {
+      if (mode === 'forgot') return 'Введите корректный адрес электронной почты';
+      return mode === 'signUp'
+        ? 'Проверьте заполнение полей: почта должна быть корректной, а пароль — не короче 8 символов'
+        : 'Проверьте адрес электронной почты и пароль';
+    }
+    // The server explains some 403 in Russian already (account not activated yet)
+    if (status === 403) return /[а-яё]/i.test(detail) ? detail : 'Доступ для этой учётной записи закрыт';
+    if (status === 429) return 'Слишком много попыток. Подождите немного и повторите';
+    if (status >= 500) return 'Ошибка на сервере. Попробуйте позже';
+  }
+  return 'Не удалось выполнить действие. Повторите попытку';
 };
 
 export const AuthPage = () => {
-  const [mode, setMode] = useState<AuthMode>('signIn');
+  const location = useLocation();
+  const routeState = location.state as AuthRouteState | null;
+
+  const [mode, setMode] = useState<AuthMode>(routeState?.mode === 'forgot' ? 'forgot' : 'signIn');
   const [loading, setLoading] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(routeState?.notice ?? null);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [resetSent, setResetSent] = useState(false);
 
   const [signInFields, setSignInFields] = useState<SignInValues>({ email: '', password: '' });
   const [signUpFields, setSignUpFields] = useState<SignUpValues>({
@@ -41,16 +77,38 @@ export const AuthPage = () => {
 
   const { signIn, signUp } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
-  const redirectTo =
-    typeof (location.state as { from?: string } | null)?.from === 'string'
-      ? (location.state as { from: string }).from
-      : '/requests';
+  const redirectTo = typeof routeState?.from === 'string' ? routeState.from : HOME_PATH;
 
   const switchMode = (nextMode: AuthMode) => {
     setMode(nextMode);
     setErrorText(null);
+    setNotice(null);
+    setResetSent(false);
     setFieldErrors({});
+  };
+
+  const openForgot = () => {
+    setForgotEmail(signInFields.email);
+    switchMode('forgot');
+  };
+
+  const onForgot = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!forgotEmail.trim()) {
+      setFieldErrors({ 'fp-email': 'Электронная почта обязательна' });
+      return;
+    }
+
+    setLoading(true);
+    setErrorText(null);
+    try {
+      await requestPasswordReset(forgotEmail);
+      setResetSent(true);
+    } catch (error) {
+      setErrorText(mapAuthError(error, 'forgot'));
+    } finally {
+      setLoading(false);
+    }
   };
 
   const onSignIn = async (e: FormEvent) => {
@@ -66,7 +124,7 @@ export const AuthPage = () => {
       await signIn(signInFields);
       navigate(redirectTo, { replace: true });
     } catch (error) {
-      setErrorText(mapAuthError(error));
+      setErrorText(mapAuthError(error, 'signIn'));
     } finally {
       setLoading(false);
     }
@@ -93,7 +151,7 @@ export const AuthPage = () => {
       });
       switchMode('signIn');
     } catch (error) {
-      setErrorText(mapAuthError(error));
+      setErrorText(mapAuthError(error, 'signUp'));
     } finally {
       setLoading(false);
     }
@@ -163,11 +221,59 @@ export const AuthPage = () => {
         </div>
       </Form>
 
+      <div className="auth-page__forgot-row">
+        <button type="button" className="auth-page__switch-link" onClick={openForgot}>
+          Забыли пароль?
+        </button>
+      </div>
+
       <Button type="primary" htmlType="submit" loading={loading} block className="auth-page__submit">
         {loading ? 'Вход…' : 'Войти'}
       </Button>
 
       {authSocialBlock}
+    </form>
+  );
+
+  const forgotForm = resetSent ? (
+    <div className="auth-page__form">
+      <Alert
+        type="success"
+        showIcon
+        message="Проверьте почту"
+        description={`Если аккаунт с адресом ${forgotEmail.trim()} существует, мы отправили письмо со ссылкой для смены пароля. Ссылка действует ограниченное время и работает один раз. Если письма нет, загляните в «Спам».`}
+        className="auth-page__alert"
+      />
+      <Button type="primary" block className="auth-page__submit" onClick={() => switchMode('signIn')}>
+        Вернуться ко входу
+      </Button>
+    </div>
+  ) : (
+    <form onSubmit={(e) => void onForgot(e)} className="auth-page__form">
+      <p className="auth-page__hint">
+        Укажите почту, с которой вы регистрировались, — мы отправим ссылку для смены пароля.
+      </p>
+      <Form layout="vertical" colon={false} component={false} className="auth-page__form-fields" size="large">
+        <Form.Item
+          label="Почта"
+          validateStatus={fieldErrors['fp-email'] ? 'error' : undefined}
+          help={fieldErrors['fp-email'] || undefined}
+        >
+          <Input
+            id="fp-email"
+            variant="borderless"
+            className="auth-page__input"
+            placeholder="example@mail.ru"
+            autoComplete="email"
+            value={forgotEmail}
+            onChange={(e) => { setForgotEmail(e.target.value); clearError('fp-email'); }}
+          />
+        </Form.Item>
+      </Form>
+
+      <Button type="primary" htmlType="submit" loading={loading} block className="auth-page__submit">
+        {loading ? 'Отправка…' : 'Отправить ссылку'}
+      </Button>
     </form>
   );
 
@@ -209,14 +315,27 @@ export const AuthPage = () => {
         <div className="auth-page__hero-overlay" />
         <div className="auth-page__hero-content">
           <img src={logoUrl} alt="СВОД" className="auth-page__hero-logo" />
-          <p className="auth-page__hero-tagline">Все заявки в одном управляемом потоке</p>
+          <p className="auth-page__hero-tagline">
+            {IS_SURVEYS_APP ? 'Опросы и анкетирование' : 'Все заявки в одном управляемом потоке'}
+          </p>
         </div>
       </div>
 
       <section className="auth-page__panel" aria-label="Форма авторизации">
-        <h1 className="auth-page__heading">{mode === 'signIn' ? 'Вход' : 'Регистрация'}</h1>
+        <h1 className="auth-page__heading">{HEADINGS[mode]}</h1>
 
         <div className="auth-page__panel-body">
+          {notice && (
+            <Alert
+              type="success"
+              showIcon
+              message={notice}
+              closable
+              onClose={() => setNotice(null)}
+              className="auth-page__alert"
+            />
+          )}
+
           {errorText && (
             <Alert
               type="error"
@@ -227,7 +346,7 @@ export const AuthPage = () => {
             />
           )}
 
-          {mode === 'signIn' ? signInForm : signUpForm}
+          {mode === 'signIn' ? signInForm : mode === 'signUp' ? signUpForm : forgotForm}
 
           <p className="auth-page__switch">
             {mode === 'signIn' ? (
@@ -239,7 +358,7 @@ export const AuthPage = () => {
               </>
             ) : (
               <>
-                Уже есть аккаунт?{' '}
+                {mode === 'forgot' ? 'Вспомнили пароль?' : 'Уже есть аккаунт?'}{' '}
                 <button type="button" className="auth-page__switch-link" onClick={() => switchMode('signIn')}>
                   Войти
                 </button>

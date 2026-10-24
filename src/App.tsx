@@ -16,6 +16,8 @@ import {
 
   createBrowserRouter,
 
+  type RouteObject,
+
   useLocation,
 
   useNavigate,
@@ -23,6 +25,8 @@ import {
 } from 'react-router-dom';
 
 import { useAuth } from './shared/hooks/auth.hooks';
+
+import { HOME_PATH, IS_SURVEYS_APP } from './shared/config/appMode';
 
 import { AppShellPanelsProvider } from './shared/context/appShellPanels.context';
 
@@ -66,6 +70,7 @@ import { CreateRequestPage } from './pages/CreateRequestPage';
 import { RequestViewPage } from './pages/RequestViewPage';
 
 import { AuthPage } from './pages/AuthPage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { ActivateAccountPage } from './pages/ActivateAccountPage';
 import { JoinOrganizationPage } from './pages/JoinOrganizationPage';
 
@@ -81,6 +86,7 @@ import { FormilyBuilderPage } from './dev/formily/FormilyBuilderPage';
 
 import { CreateOrganizationModal } from './components/layout/CreateOrganizationModal';
 import { NoOrganizationState } from './components/layout/NoOrganizationState';
+import { WorkspaceUnavailableState } from './components/layout/WorkspaceUnavailableState';
 
 
 
@@ -92,7 +98,7 @@ const getSelectedMenuKey = (pathname: string): string => {
 
   const matched = NAV_ITEMS.find((item) => pathname.startsWith(item.path));
 
-  return matched?.key ?? 'requests';
+  return matched?.key ?? NAV_ITEMS[0]?.key ?? 'requests';
 
 };
 
@@ -140,7 +146,7 @@ const AppLayoutContent = () => {
 
 
 
-  const { organizations, isLoading: isOrgLoading } = useOrganization();
+  const { organizations, isLoading: isOrgLoading, refreshOrganizations } = useOrganization();
 
   const hasOrganizations = organizations.length > 0;
 
@@ -252,6 +258,8 @@ const AppLayoutContent = () => {
 
     'app-shell-grid',
 
+    IS_SURVEYS_APP ? 'app-shell-grid--no-sidebar' : '',
+
     isDesktop && isSidebarCollapsed ? 'app-shell-grid--collapsed' : '',
 
   ]
@@ -272,27 +280,31 @@ const AppLayoutContent = () => {
 
       <div className={shellClass}>
 
-        <AppSidebar
+        {!IS_SURVEYS_APP && (
 
-          selectedKey={selectedKey}
+          <AppSidebar
 
-          isCollapsed={isSidebarCollapsed}
+            selectedKey={selectedKey}
 
-          isDesktop={isDesktop}
+            isCollapsed={isSidebarCollapsed}
 
-          isMobileOpen={mobileSidebarOpen}
+            isDesktop={isDesktop}
 
-          showOrgBlock={showOrgSidebarBlock}
+            isMobileOpen={mobileSidebarOpen}
 
-          onNavigate={handleNav}
+            showOrgBlock={showOrgSidebarBlock}
 
-          onToggleCollapse={toggleSidebar}
+            onNavigate={handleNav}
 
-        />
+            onToggleCollapse={toggleSidebar}
+
+          />
+
+        )}
 
 
 
-        {!isDesktop && mobileSidebarOpen && (
+        {!IS_SURVEYS_APP && !isDesktop && mobileSidebarOpen && (
 
           <button
 
@@ -332,7 +344,11 @@ const AppLayoutContent = () => {
 
             onCreateOrg={openCreateOrg}
 
-            showMobileMenu={!isDesktop}
+            showNotifications={!IS_SURVEYS_APP}
+
+            standalone={IS_SURVEYS_APP}
+
+            showMobileMenu={!IS_SURVEYS_APP && !isDesktop}
 
             onMobileMenuClick={toggleSidebar}
 
@@ -352,7 +368,16 @@ const AppLayoutContent = () => {
 
             ) : !hasOrganizations ? (
 
-              <NoOrganizationState onCreateClick={openCreateOrg} />
+              // The surveys service has no organizations: the personal workspace is created by the server
+              IS_SURVEYS_APP ? (
+
+                <WorkspaceUnavailableState onRetry={() => void refreshOrganizations()} />
+
+              ) : (
+
+                <NoOrganizationState onCreateClick={openCreateOrg} />
+
+              )
 
             ) : (
 
@@ -368,13 +393,17 @@ const AppLayoutContent = () => {
 
 
 
-      <CreateOrganizationModal
+      {!IS_SURVEYS_APP && (
 
-        open={createOrgOpen}
+        <CreateOrganizationModal
 
-        onClose={() => setCreateOrgOpen(false)}
+          open={createOrgOpen}
 
-      />
+          onClose={() => setCreateOrgOpen(false)}
+
+        />
+
+      )}
 
     </>
 
@@ -424,7 +453,9 @@ const ProtectedLayout = () => {
 
   if (isAuthLoading) return <FullPageLoader />;
 
-  if (!user) return <Navigate to="/auth" replace state={{ from: location.pathname }} />;
+  if (!user) {
+    return <Navigate to="/auth" replace state={{ from: `${location.pathname}${location.search}` }} />;
+  }
 
   return <AppLayout />;
 
@@ -436,9 +467,14 @@ const PublicOnlyAuthPage = () => {
 
   const { user, isAuthLoading } = useAuth();
 
+  const location = useLocation();
+
   if (isAuthLoading) return <FullPageLoader />;
 
-  if (user) return <Navigate to="/requests" replace />;
+  // Right after signing in `user` appears before AuthPage navigates: go to the page the guest opened, not home
+  const from = (location.state as { from?: unknown } | null)?.from;
+  const target = typeof from === 'string' && /^\/(?!\/)/.test(from) ? from : HOME_PATH;
+  if (user) return <Navigate to={target} replace />;
 
   return <AuthPage />;
 
@@ -446,9 +482,39 @@ const PublicOnlyAuthPage = () => {
 
 
 
-const router = createBrowserRouter([
+// Respondent-facing routes: no authentication, no author's shell
+const publicSurveyRoutes: RouteObject[] = [
+
+  // Public: respondent page of a survey
+  { path: '/survey/:token', element: <PublicSurveyPage /> },
+
+  // Author's preview of a survey: the same respondent form, nothing is saved
+  { path: '/surveys/:id/preview', element: <PublicSurveyPage preview /> },
+
+];
+
+// Author's surveys section (children of the protected layout)
+const surveyRoutes: RouteObject[] = [
+
+  { path: 'surveys', element: <SurveysPage /> },
+
+  { path: 'surveys/create', element: <CreateSurveyPage /> },
+
+  { path: 'surveys/projects/:projectId', element: <ProjectSurveysPage /> },
+
+  // One route for the survey page and its tabs (/form, /responses[/:responseId], /analytics)
+  { path: 'surveys/:id/*', element: <SurveyViewPage /> },
+
+  { path: 'surveys/:id/edit', element: <EditSurveyPage /> },
+
+];
+
+const platformRoutes: RouteObject[] = [
 
   { path: '/auth', element: <PublicOnlyAuthPage /> },
+
+  // Public: new password by the link from the password reset email
+  { path: '/reset-password/:token', element: <ResetPasswordPage /> },
 
   // Public: account pre-created by an organization owner, link from the invitation email
   { path: '/activate/:token', element: <ActivateAccountPage /> },
@@ -467,11 +533,7 @@ const router = createBrowserRouter([
 
   { path: '/public/request/:token', element: <PublicRequestLegacyRedirect /> },
 
-  // Public: respondent page of a survey
-  { path: '/survey/:token', element: <PublicSurveyPage /> },
-
-  // Author's preview of a survey: the same respondent form, nothing is saved
-  { path: '/surveys/:id/preview', element: <PublicSurveyPage preview /> },
+  ...publicSurveyRoutes,
 
   {
 
@@ -497,16 +559,7 @@ const router = createBrowserRouter([
 
       { path: 'forms/:id/edit', element: <EditFormPage /> },
 
-      { path: 'surveys', element: <SurveysPage /> },
-
-      { path: 'surveys/create', element: <CreateSurveyPage /> },
-
-      { path: 'surveys/projects/:projectId', element: <ProjectSurveysPage /> },
-
-      // One route for the survey page and its tabs (/form, /responses[/:responseId], /analytics)
-      { path: 'surveys/:id/*', element: <SurveyViewPage /> },
-
-      { path: 'surveys/:id/edit', element: <EditSurveyPage /> },
+      ...surveyRoutes,
 
       { path: 'participants', element: <ParticipantsPage /> },
 
@@ -518,11 +571,43 @@ const router = createBrowserRouter([
 
   },
 
-]);
+];
+
+// Standalone surveys service: sign-in, the surveys section and respondent pages only
+const surveysRoutes: RouteObject[] = [
+
+  { path: '/auth', element: <PublicOnlyAuthPage /> },
+
+  { path: '/reset-password/:token', element: <ResetPasswordPage /> },
+
+  ...publicSurveyRoutes,
+
+  {
+
+    path: '/',
+
+    element: <ProtectedLayout />,
+
+    children: [
+
+      { index: true, element: <Navigate to={HOME_PATH} replace /> },
+
+      ...surveyRoutes,
+
+      // Anything else (including other modules' old links) leads back to the surveys start page
+      { path: '*', element: <Navigate to={HOME_PATH} replace /> },
+
+    ],
+
+  },
+
+];
+
+const router = createBrowserRouter(IS_SURVEYS_APP ? surveysRoutes : platformRoutes);
 
 
 
-const App = () => <RouterProvider router={router} />;
+const App =() => <RouterProvider router={router} />;
 
 export default App;
 

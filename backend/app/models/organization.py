@@ -19,6 +19,10 @@ class Organization(Base):
     # Reusable "join organization" link: people apply by it, the owner moderates requests
     join_token: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True, index=True)
     join_link_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Personal workspace of the owner (standalone surveys service): one per user, never shared
+    is_personal: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     owner_user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="RESTRICT"),

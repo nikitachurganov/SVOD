@@ -22,7 +22,9 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (axios.isAxiosError(error) && error.response?.status === 401) {
+    // A wrong password on the sign-in form is not an expired session: let the form show the error
+    const isCredentialsRequest = /^\/auth\/(login|register)$/.test(error.config?.url ?? '');
+    if (axios.isAxiosError(error) && error.response?.status === 401 && !isCredentialsRequest) {
       localStorage.removeItem('access_token');
       window.location.href = '/auth';
     }

@@ -42,6 +42,16 @@ async def get_orgs_for_user(
     return list(result.scalars().all())
 
 
+async def get_personal_org(session: AsyncSession, user_id: uuid.UUID) -> Organization | None:
+    stmt = (
+        select(Organization)
+        .options(selectinload(Organization.owner))
+        .where(Organization.owner_user_id == user_id, Organization.is_personal.is_(True))
+    )
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none()
+
+
 async def create_org(session: AsyncSession, org: Organization) -> Organization:
     session.add(org)
     await session.flush()

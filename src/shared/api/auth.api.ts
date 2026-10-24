@@ -1,4 +1,5 @@
 import api from '../lib/api';
+import { IS_SURVEYS_APP } from '../config/appMode';
 
 export interface SignInPayload {
   email: string;
@@ -93,6 +94,24 @@ export const activateAccount = async (
     password,
   });
   localStorage.setItem('access_token', data.access_token);
+};
+
+/** Public: email a one-time link for a new password. Answers the same for unknown emails. */
+export const requestPasswordReset = async (email: string): Promise<void> => {
+  await api.post('/auth/password-reset', {
+    email: email.trim().toLowerCase(),
+    service: IS_SURVEYS_APP ? 'surveys' : 'platform',
+  });
+};
+
+/** Public: throws (404) when the link is invalid, used or expired */
+export const checkPasswordResetToken = async (token: string): Promise<void> => {
+  await api.get(`/auth/password-reset/${encodeURIComponent(token)}`);
+};
+
+/** Public: set a new password by the link from the email (does not sign in) */
+export const confirmPasswordReset = async (token: string, password: string): Promise<void> => {
+  await api.post(`/auth/password-reset/${encodeURIComponent(token)}`, { password });
 };
 
 export const signOut = async (): Promise<void> => {

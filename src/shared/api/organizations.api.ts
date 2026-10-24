@@ -33,6 +33,12 @@ export const getMyOrganizations = async (): Promise<OrganizationResponse[]> => {
   return data;
 };
 
+/** The user's personal workspace; the server creates it on first call */
+export const getPersonalOrganization = async (): Promise<OrganizationResponse> => {
+  const { data } = await api.post<OrganizationResponse>('/organizations/personal');
+  return data;
+};
+
 export const createOrganization = async (
   payload: CreateOrganizationPayload,
 ): Promise<OrganizationResponse> => {

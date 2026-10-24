@@ -8,13 +8,19 @@ import {
 import { useAuth } from '../hooks/auth.hooks';
 import {
   getMyOrganizations,
+  getPersonalOrganization,
   createOrganization as createOrganizationApi,
   type CreateOrganizationPayload,
 } from '../api/organizations.api';
+import { IS_SURVEYS_APP } from '../config/appMode';
 import type { OrganizationResponse } from '../../types/organization';
 import { OrganizationContext, type OrganizationContextValue } from './organization.context';
 
 const ACTIVE_ORG_KEY = 'active_organization_id';
+
+/** The standalone surveys service has no organizations: its only "organization" is the user's own workspace */
+const fetchOrganizations = async (): Promise<OrganizationResponse[]> =>
+  IS_SURVEYS_APP ? [await getPersonalOrganization()] : getMyOrganizations();
 
 export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
@@ -32,7 +38,7 @@ export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
     }
     setIsLoading(true);
     try {
-      const orgs = await getMyOrganizations();
+      const orgs = await fetchOrganizations();
       setOrganizations(orgs);
 
       if (orgs.length > 0) {
@@ -66,7 +72,7 @@ export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
       };
     }
 
-    getMyOrganizations()
+    fetchOrganizations()
       .then((orgs) => {
         if (cancelled) return;
         setOrganizations(orgs);

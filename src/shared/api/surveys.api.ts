@@ -102,6 +102,8 @@ export interface SurveyProject {
   organization_id: string;
   name: string;
   description: string | null;
+  /** Palette key; null — the client derives a colour from the id */
+  color: string | null;
   /** Without archived surveys */
   surveys_count: number;
   created_at: string;
@@ -111,6 +113,7 @@ export interface SurveyProject {
 export interface SurveyProjectPayload {
   name: string;
   description?: string | null;
+  color?: string | null;
 }
 
 export interface SurveyPayload {
@@ -343,6 +346,7 @@ export const createSurveyProject = async (
     organization_id: organizationId,
     name: payload.name,
     description: payload.description ?? null,
+    color: payload.color ?? null,
   });
   return data;
 };
@@ -354,6 +358,7 @@ export const updateSurveyProject = async (
   const { data } = await api.put<SurveyProject>(`/survey-projects/${id}`, {
     name: payload.name,
     description: payload.description ?? null,
+    color: payload.color ?? null,
   });
   return data;
 };

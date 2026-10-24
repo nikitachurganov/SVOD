@@ -260,6 +260,21 @@
   color: var(--app-link-hover);
 }
 
+.auth-page__forgot-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -12px;
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.auth-page__hint {
+  margin: 0;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--app-text-secondary);
+}
+
 html[data-theme='dark'] .auth-page {
   --auth-hero-overlay: rgba(0, 0, 0, 0.24);
 }

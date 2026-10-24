@@ -13,7 +13,8 @@ from app.services import join_request_service as svc
 
 
 def org(**overrides):
-    data = dict(id=uuid.uuid4(), name="Org", owner_user_id=uuid.uuid4(), join_token="tok", join_link_enabled=True)
+    data = dict(id=uuid.uuid4(), name="Org", owner_user_id=uuid.uuid4(), join_token="tok", join_link_enabled=True,
+                is_personal=False)
     data.update(overrides)
     return SimpleNamespace(**data)
 

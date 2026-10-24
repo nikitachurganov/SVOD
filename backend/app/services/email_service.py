@@ -100,6 +100,31 @@ async def send_account_invitation(
     return await send_email(to=to, subject=subject, text=text, html_body=body)
 
 
+async def send_password_reset(
+    *,
+    to: str,
+    first_name: str,
+    reset_url: str,
+    ttl_minutes: int,
+) -> bool:
+    subject = "Восстановление пароля — СВОД"
+    text = (
+        f"Здравствуйте, {first_name}!\n\n"
+        f"Мы получили запрос на смену пароля в сервисе СВОД. Чтобы задать новый пароль, перейдите по ссылке:\n"
+        f"{reset_url}\n\n"
+        f"Ссылка действует {ttl_minutes} мин. и работает один раз. "
+        f"Если вы не запрашивали смену пароля, просто проигнорируйте письмо — пароль останется прежним."
+    )
+    body = (
+        f"<p>Здравствуйте, {html.escape(first_name)}!</p>"
+        f"<p>Мы получили запрос на смену пароля в сервисе СВОД.</p>"
+        f"<p>{_button_html(reset_url, 'Задать новый пароль')}</p>"
+        f"<p style=\"color:#6b7280;font-size:13px\">Ссылка действует {ttl_minutes} мин. и работает один раз. "
+        f"Если вы не запрашивали смену пароля, просто проигнорируйте письмо — пароль останется прежним.</p>"
+    )
+    return await send_email(to=to, subject=subject, text=text, html_body=body)
+
+
 async def send_organization_invitation(
     *,
     to: str,

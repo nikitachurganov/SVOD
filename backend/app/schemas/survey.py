@@ -70,9 +70,23 @@ class MethodologyReportResponse(BaseModel):
 # ─── Projects ─────────────────────────────────────────────────────────────────
 
 
+# Keys of the folder palette; the shades themselves live in the client, per theme
+FOLDER_COLORS = ("orange", "violet", "blue", "green", "red", "pink", "indigo", "gray")
+
+
 class _ProjectFields(BaseModel):
     name: str = Field(..., max_length=200)
     description: str | None = Field(default=None, max_length=1000)
+    color: str | None = None
+
+    @field_validator("color")
+    @classmethod
+    def _color_in_palette(cls, value: str | None) -> str | None:
+        if value is None or value == "":
+            return None
+        if value not in FOLDER_COLORS:
+            raise ValueError("Неизвестный цвет папки")
+        return value
 
     @field_validator("name")
     @classmethod
@@ -102,6 +116,7 @@ class SurveyProjectItem(BaseModel):
     organization_id: str
     name: str
     description: str | None = None
+    color: str | None = None
     # Without archived surveys — the same set the project's table shows by default
     surveys_count: int = 0
     created_at: str

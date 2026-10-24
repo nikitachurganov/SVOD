@@ -4,6 +4,8 @@ import { Link } from 'react-router-dom';
 import type { AppBreadcrumbItem } from './appBreadcrumbs';
 import { HeaderNotifications } from './HeaderNotifications';
 import { HeaderProfileMenu } from './HeaderProfileMenu';
+import { HOME_PATH } from '../../shared/config/appMode';
+import logoUrl from '../../assets/logo.svg';
 
 interface AppContentHeaderProps {
   breadcrumbs: AppBreadcrumbItem[] | null;
@@ -15,6 +17,10 @@ interface AppContentHeaderProps {
   resolvedName: string;
   resolvedEmail: string;
   onCreateOrg: () => void;
+  /** Invitations and platform notifications; off in the standalone surveys service */
+  showNotifications?: boolean;
+  /** Standalone surveys service: no sidebar and no organizations, the brand lives here */
+  standalone?: boolean;
   showMobileMenu?: boolean;
   onMobileMenuClick?: () => void;
 }
@@ -29,12 +35,20 @@ export const AppContentHeader = ({
   resolvedName,
   resolvedEmail,
   onCreateOrg,
+  showNotifications = true,
+  standalone = false,
   showMobileMenu,
   onMobileMenuClick,
 }: AppContentHeaderProps) => (
   <header className="app-content-header" aria-label="Верхняя панель">
     <div className="app-content-header__main">
       <div className="app-content-header__left">
+        {standalone && (
+          <Link to={HOME_PATH} className="app-header-brand" aria-label="Опросы — на главную">
+            <img src={logoUrl} alt="СВОД" className="app-header-brand__logo" />
+            <span className="app-header-brand__name">Опросы</span>
+          </Link>
+        )}
         {showMobileMenu && (
           <Button
             type="text"
@@ -59,11 +73,15 @@ export const AppContentHeader = ({
           />
         ) : null}
       </div>
-      <HeaderNotifications
-        open={notificationsOpen}
-        onOpenChange={onNotificationsOpenChange}
-        closeProfile={() => onProfileOpenChange(false)}
-      />
+      <div className="app-content-header__right">
+        {showNotifications && (
+          <HeaderNotifications
+            open={notificationsOpen}
+            onOpenChange={onNotificationsOpenChange}
+            closeProfile={() => onProfileOpenChange(false)}
+          />
+        )}
+      </div>
     </div>
     <HeaderProfileMenu
       open={profileOpen}
@@ -73,6 +91,7 @@ export const AppContentHeader = ({
       resolvedName={resolvedName}
       resolvedEmail={resolvedEmail}
       onCreateOrg={onCreateOrg}
+      showCreateOrg={!standalone}
     />
   </header>
 );

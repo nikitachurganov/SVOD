@@ -8,6 +8,11 @@ import App from './App.tsx';
 import { ThemeProvider } from './shared/context/theme.context.tsx';
 import { AuthProvider } from './shared/context/auth.provider.tsx';
 import { OrganizationProvider } from './shared/context/organization.provider.tsx';
+import { IS_SURVEYS_APP } from './shared/config/appMode.ts';
+
+if (IS_SURVEYS_APP) {
+  document.title = 'Опросы — СВОД';
+}
 
 const faviconLink =
   document.querySelector<HTMLLinkElement>('link[rel="icon"]') ??

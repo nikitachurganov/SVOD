@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 from app.core.name_utils import normalize_name_part
@@ -60,6 +62,23 @@ class LoginRequest(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+    # Which web app the link in the email opens; the URL itself is chosen on the server
+    service: Literal["platform", "surveys"] = "platform"
+
+
+class PasswordResetConfirm(BaseModel):
+    password: str = Field(..., min_length=8, max_length=64)
+
+    @field_validator("password")
+    @classmethod
+    def validate_password_bytes(cls, value: str) -> str:
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("Password must not exceed 72 bytes.")
+        return value
 
 
 class AccountActivationInfo(BaseModel):

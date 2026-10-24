@@ -9,6 +9,7 @@ interface Props {
   resolvedName: string;
   resolvedEmail: string;
   onCreateOrg: () => void;
+  showCreateOrg?: boolean;
 }
 
 export const HeaderProfileMenu = ({
@@ -19,6 +20,7 @@ export const HeaderProfileMenu = ({
   resolvedName,
   resolvedEmail,
   onCreateOrg,
+  showCreateOrg = true,
 }: Props) => {
   const handleOpenChange = (next: boolean) => {
     if (next) {
@@ -46,6 +48,7 @@ export const HeaderProfileMenu = ({
           <HeaderProfileMenuContent
             onClose={() => onOpenChange(false)}
             onCreateOrg={onCreateOrg}
+            showCreateOrg={showCreateOrg}
           />
         }
       >

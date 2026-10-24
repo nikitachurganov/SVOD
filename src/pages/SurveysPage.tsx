@@ -3,24 +3,36 @@ import { Alert, Button, Card, Dropdown, Empty, Grid, Input, Modal, Skeleton } fr
 import type { MenuProps } from 'antd';
 import { FolderOutlined, MoreOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons';
 import axios from 'axios';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 import {
   createSurveyProject,
   deleteSurveyProject,
   getSurveyProjects,
+  getSurveys,
   updateSurveyProject,
+  type SurveyListItem,
   type SurveyProject,
   type SurveyProjectPayload,
 } from '../shared/api/surveys.api';
+import { resolveFolderColor } from '../shared/lib/folderColors';
+import { BetaBanner } from '../components/layout/BetaBanner';
 import { useOrganization } from '../shared/hooks/organization.hooks';
+import { IS_SURVEYS_APP } from '../shared/config/appMode';
 import { useNotifications } from '../shared/context/notifications.context';
+import { CreateSurveyModal } from '../shared/ui/survey/CreateSurveyModal';
+import { NewProjectFolder } from '../shared/ui/survey/NewProjectFolder';
 import { ProjectFormModal } from '../shared/ui/survey/ProjectFormModal';
-import { pluralizeSurveys } from './surveyStatus';
+import {
+  SURVEY_STATUS_LABEL,
+  pluralizeResponses,
+  pluralizeSurveys,
+} from './surveyStatus';
 
 /** The search box is only worth its space once the catalog is long enough to scan */
 const SEARCH_FROM = 6;
 const SKELETON_CARDS = 6;
+const RECENT_SURVEYS = 6;
 
 export const SurveysPage = () => {
   const { activeOrganization } = useOrganization();
@@ -29,9 +41,12 @@ export const SurveysPage = () => {
 
   const [projects, setProjects] = useState<SurveyProject[]>([]);
   const [loading, setLoading] = useState(true);
+  const [surveys, setSurveys] = useState<SurveyListItem[]>([]);
   const [loadFailed, setLoadFailed] = useState(false);
   const [search, setSearch] = useState('');
   const [formOpen, setFormOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const navigate = useNavigate();
   const [editing, setEditing] = useState<SurveyProject | null>(null);
   const [deleting, setDeleting] = useState<SurveyProject | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
@@ -40,11 +55,16 @@ export const SurveysPage = () => {
   const load = useCallback(() => {
     if (!organizationId) {
       setProjects([]);
+      setSurveys([]);
       setLoading(false);
       return;
     }
     setLoading(true);
     setLoadFailed(false);
+    // The survey list only feeds the stats; the page still works without it
+    getSurveys(organizationId)
+      .then(setSurveys)
+      .catch(() => setSurveys([]));
     getSurveyProjects(organizationId)
       .then(setProjects)
       .catch(() => setLoadFailed(true))
@@ -59,6 +79,20 @@ export const SurveysPage = () => {
     const needle = search.trim().toLowerCase();
     return needle ? projects.filter((p) => p.name.toLowerCase().includes(needle)) : projects;
   }, [projects, search]);
+
+  const projectColors = useMemo(
+    () => new Map(projects.map((project) => [project.id, project.color])),
+    [projects],
+  );
+
+  const recentSurveys = useMemo(
+    () =>
+      surveys
+        .filter((survey) => survey.status !== 'archived')
+        .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+        .slice(0, RECENT_SURVEYS),
+    [surveys],
+  );
 
   const openForm = (project: SurveyProject | null) => {
     setEditing(project);
@@ -107,7 +141,7 @@ export const SurveysPage = () => {
 
   const menuFor = (project: SurveyProject): MenuProps => ({
     items: [
-      { key: 'rename', label: 'Переименовать' },
+      { key: 'rename', label: 'Изменить' },
       { key: 'delete', label: 'Удалить', danger: true },
     ],
     onClick: ({ key }) => {
@@ -123,7 +157,7 @@ export const SurveysPage = () => {
       return (
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description="Выберите организацию, чтобы увидеть проекты."
+          description={IS_SURVEYS_APP ? 'Пространство ещё загружается.' : 'Выберите организацию, чтобы увидеть проекты.'}
         />
       );
     }
@@ -154,19 +188,32 @@ export const SurveysPage = () => {
     }
     if (projects.length === 0) {
       return (
-        <Empty
-          className="registry-page__empty"
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description="Пока нет проектов. Создайте проект, чтобы объединять опросы по темам исследований."
-        >
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => openForm(null)}>
+        <div className="projects-empty">
+          <div className="projects-empty__art" aria-hidden>
+            <div className="projects-empty__card projects-empty__card--back">
+              <span className="projects-empty__dot" />
+              <span className="projects-empty__line projects-empty__line--short" />
+              <span className="projects-empty__line" />
+            </div>
+            <div className="projects-empty__card projects-empty__card--front">
+              <span className="projects-empty__dot" />
+              <span className="projects-empty__line projects-empty__line--short" />
+              <span className="projects-empty__line" />
+            </div>
+          </div>
+          <h2 className="projects-empty__title">Пока нет проектов</h2>
+          <p className="projects-empty__text">
+            Создайте первый проект, чтобы объединять опросы по темам исследований и собирать ответы в одном месте.
+          </p>
+          <Button type="primary" size="large" icon={<PlusOutlined />} onClick={() => openForm(null)}>
             Создать проект
           </Button>
-        </Empty>
+        </div>
       );
     }
     return (
       <>
+        <h2 className="home-section__title">Проекты</h2>
         {projects.length > SEARCH_FROM && (
           <Input
             allowClear
@@ -184,29 +231,75 @@ export const SurveysPage = () => {
         ) : (
           <ul className="project-grid" aria-label="Проекты">
             {visibleProjects.map((project) => (
-              <li key={project.id} className="project-card">
-                <FolderOutlined className="project-card__icon" aria-hidden />
-                <div className="project-card__body">
-                  {/* The link is stretched over the whole card; the menu button sits above it */}
-                  <Link to={`/surveys/projects/${project.id}`} className="project-card__link">
-                    {project.name}
-                  </Link>
-                  {project.description && (
-                    <p className="project-card__description">{project.description}</p>
-                  )}
-                  <div className="project-card__meta">{pluralizeSurveys(project.surveys_count)}</div>
+              <li key={project.id} className="project-env" data-folder-color={resolveFolderColor(project.color, project.id)}>
+                <div className="project-env__tab" aria-hidden />
+                <div className="project-env__shell" aria-hidden />
+                <div className="project-env__sheet" aria-hidden />
+                <div className="project-env__panel">
+                  <div className="project-env__head">
+                    {/* The link is stretched over the whole card; the menu button sits above it */}
+                    <Link
+                      to={`/surveys/projects/${project.id}`}
+                      className="project-env__link"
+                      title={project.description || undefined}
+                    >
+                      {project.name}
+                    </Link>
+                    <Dropdown menu={menuFor(project)} trigger={['click']} placement="bottomRight">
+                      <Button
+                        type="text"
+                        className="project-env__menu"
+                        icon={<MoreOutlined />}
+                        aria-label={`Действия с проектом «${project.name}»`}
+                      />
+                    </Dropdown>
+                  </div>
+                  <div className="project-env__count">{pluralizeSurveys(project.surveys_count)}</div>
                 </div>
-                <Dropdown menu={menuFor(project)} trigger={['click']} placement="bottomRight">
-                  <Button
-                    type="text"
-                    className="project-card__menu"
-                    icon={<MoreOutlined />}
-                    aria-label={`Действия с проектом «${project.name}»`}
-                  />
-                </Dropdown>
               </li>
             ))}
+            {!search.trim() && (
+              <li className="project-env project-env--new">
+                <NewProjectFolder onClick={() => openForm(null)} />
+              </li>
+            )}
           </ul>
+        )}
+        <BetaBanner onCreateSurvey={() => setCreateOpen(true)} />
+        {recentSurveys.length > 0 && (
+          <section className="home-section" aria-label="Последние опросы">
+            <h2 className="home-section__title">Последние опросы</h2>
+            <ul className="recent-surveys">
+              {recentSurveys.map((survey) => (
+                <li key={survey.id} className="recent-surveys__item">
+                  <div className="recent-surveys__main">
+                    <Link to={`/surveys/${survey.id}`} className="recent-surveys__name">
+                      {survey.name}
+                    </Link>
+                    <div className="recent-surveys__meta">
+                      {pluralizeResponses(survey.responses_count)}
+                    </div>
+                  </div>
+                  <div className="recent-surveys__side">
+                    <span className={`recent-surveys__status recent-surveys__status--${survey.status}`}>
+                      {SURVEY_STATUS_LABEL[survey.status]}
+                    </span>
+                    <span
+                      className="recent-surveys__project"
+                      data-folder-color={resolveFolderColor(
+                        projectColors.get(survey.project_id),
+                        survey.project_id,
+                      )}
+                      title={survey.project_name}
+                    >
+                      <FolderOutlined aria-hidden />
+                      <span className="recent-surveys__project-name">{survey.project_name}</span>
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
         )}
       </>
     );
@@ -214,22 +307,19 @@ export const SurveysPage = () => {
 
   return (
     <div className="registry-page">
-      <div className="registry-page__header">
-        <div className="registry-page__title-row">
-          <h1 className="registry-page__title">Опросы</h1>
-          <Button
-            type="primary"
-            className="registry-page__create-btn"
-            icon={<PlusOutlined />}
-            onClick={() => openForm(null)}
-            disabled={!organizationId}
-          >
-            Создать проект
-          </Button>
-        </div>
-      </div>
-
       <div className="registry-page__content">{renderBody()}</div>
+
+      <CreateSurveyModal
+        open={createOpen}
+        organizationId={organizationId}
+        projects={projects}
+        onContinue={(project, created) => {
+          if (created) setProjects((prev) => [project, ...prev]);
+          setCreateOpen(false);
+          navigate(`/surveys/create?project=${project.id}`);
+        }}
+        onClose={() => setCreateOpen(false)}
+      />
 
       <ProjectFormModal
         open={formOpen}

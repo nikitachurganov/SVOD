@@ -134,6 +134,55 @@ html[data-theme] body {
   object-position: left center;
 }
 
+/* Standalone surveys service: no sidebar and no organizations, the brand lives in the header */
+.app-shell-grid--no-sidebar,
+.app-shell-grid--no-sidebar.app-shell-grid--collapsed {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.app-header-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  text-decoration: none;
+}
+
+.app-header-brand__logo {
+  width: 74px;
+  height: 24px;
+  object-fit: contain;
+  object-position: left center;
+}
+
+.app-header-brand__name {
+  padding-left: 10px;
+  border-left: 1px solid var(--app-border-secondary);
+  color: var(--app-text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+.app-content-header__right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+@media (max-width: 600px) {
+  .app-header-brand__name {
+    display: none;
+  }
+
+  .app-content-header__main {
+    padding: 0 12px;
+  }
+}
+
 .app-sidebar__collapse-btn {
   flex-shrink: 0;
   color: var(--app-text-secondary) !important;
@@ -1961,7 +2010,7 @@ html[data-theme] body {
 .project-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 16px;
+  gap: 12px 16px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -3685,5 +3734,732 @@ html[data-theme='dark'] .org-settings__integration-icon--red { background: #481b
     width: 40px;
     height: 40px;
     margin: -8px -10px 0 0;
+  }
+}
+
+/* Logo wordmark is black in the light variant; swap to the white one in dark theme */
+html[data-theme='dark'] .app-header-brand__logo,
+html[data-theme='dark'] .app-sidebar__logo-image {
+  content: url('./assets/logo-dark.svg');
+}
+
+/* ── Empty state of the projects start screen ─────────────────────────────── */
+
+.projects-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 520px;
+  margin: 24px auto 0;
+  text-align: center;
+}
+
+.projects-empty__art {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  aspect-ratio: 16 / 9;
+  margin-bottom: 32px;
+  overflow: hidden;
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 12% 88%, #ffd21f 0, transparent 45%),
+    radial-gradient(circle at 90% 90%, #ff5a1f 0, transparent 50%),
+    linear-gradient(135deg, #ff8f70 0%, #ff9a1f 45%, #ff3d5a 100%);
+}
+
+.projects-empty__card {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 46%;
+  padding: 16px;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  transform: rotate(-12deg);
+}
+
+.projects-empty__card--back { top: -14%; left: 14%; height: 62%; }
+.projects-empty__card--front { top: 34%; left: 44%; height: 62%; }
+
+.projects-empty__dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #111;
+}
+
+.projects-empty__line {
+  height: 10px;
+  border-radius: 6px;
+  background: #ececec;
+}
+
+.projects-empty__line--short { width: 55%; }
+
+.projects-empty__title {
+  margin: 0 0 8px;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--app-text);
+}
+
+.projects-empty__text {
+  margin: 0 0 24px;
+  color: var(--app-text-secondary);
+}
+
+@media (max-width: 575px) {
+  .projects-empty { margin-top: 8px; }
+  .projects-empty__art { margin-bottom: 24px; }
+}
+
+/* ── Start screen: project envelopes + recent surveys ─────────────────────── */
+
+.home-section {
+  margin-top: 32px;
+}
+
+.home-section__title {
+  margin: 0 0 12px;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--app-text);
+}
+
+/* Folder palette: bright shades on the light theme, deeper ones on the dark so the folder
+   does not glare against the dark page. --folder-rgb feeds the tinted front panel. */
+:root,
+[data-folder-color] {
+  --folder-color: #ff9a1f;
+  --folder-rgb: 255, 154, 31;
+}
+
+[data-folder-color='orange'] { --folder-color: #ff9a1f; --folder-rgb: 255, 154, 31; }
+[data-folder-color='violet'] { --folder-color: #df68fa; --folder-rgb: 223, 104, 250; }
+[data-folder-color='blue'] { --folder-color: #4da3ff; --folder-rgb: 77, 163, 255; }
+[data-folder-color='green'] { --folder-color: #3ccf91; --folder-rgb: 60, 207, 145; }
+[data-folder-color='red'] { --folder-color: #ff6b6b; --folder-rgb: 255, 107, 107; }
+[data-folder-color='pink'] { --folder-color: #ff7eb6; --folder-rgb: 255, 126, 182; }
+[data-folder-color='indigo'] { --folder-color: #8b7cf6; --folder-rgb: 139, 124, 246; }
+[data-folder-color='gray'] { --folder-color: #b4b9c2; --folder-rgb: 180, 185, 194; }
+
+html[data-theme='dark'] [data-folder-color='orange'] { --folder-color: #e0861f; --folder-rgb: 224, 134, 31; }
+html[data-theme='dark'] [data-folder-color='violet'] { --folder-color: #b95bd6; --folder-rgb: 185, 91, 214; }
+html[data-theme='dark'] [data-folder-color='blue'] { --folder-color: #3f86d6; --folder-rgb: 63, 134, 214; }
+html[data-theme='dark'] [data-folder-color='green'] { --folder-color: #2fb27c; --folder-rgb: 47, 178, 124; }
+html[data-theme='dark'] [data-folder-color='red'] { --folder-color: #d95757; --folder-rgb: 217, 87, 87; }
+html[data-theme='dark'] [data-folder-color='pink'] { --folder-color: #d9689d; --folder-rgb: 217, 104, 157; }
+html[data-theme='dark'] [data-folder-color='indigo'] { --folder-color: #7467d9; --folder-rgb: 116, 103, 217; }
+html[data-theme='dark'] [data-folder-color='gray'] { --folder-color: #6b7280; --folder-rgb: 107, 114, 128; }
+
+.folder-colors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.folder-colors__swatch {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  cursor: pointer;
+  background: var(--folder-color);
+  border: 2px solid transparent;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 2px var(--app-surface);
+  transition: transform 0.15s;
+}
+
+.folder-colors__swatch:hover {
+  transform: scale(1.1);
+}
+
+.folder-colors__swatch:focus-visible {
+  outline: 2px solid var(--app-focus);
+  outline-offset: 2px;
+}
+
+.folder-colors__swatch--active {
+  border-color: var(--app-text);
+}
+
+.project-env {
+  position: relative;
+  min-width: 0;
+  height: 210px;
+  overflow: hidden;
+  border-radius: 16px;
+}
+
+/* Hover keeps the folder where it is: only the sheet of paper slides up a little */
+.project-env:not(.project-env--new):hover .project-env__sheet,
+.project-env:not(.project-env--new):focus-within .project-env__sheet {
+  transform: translateY(-10px);
+}
+
+.project-env__tab,
+.project-env__shell {
+  position: absolute;
+  background: var(--folder-color);
+}
+
+.project-env__tab {
+  top: 0;
+  left: 0;
+  width: 132px;
+  height: 32px;
+  border-radius: 16px 12px 0 0;
+}
+
+/* Concave fillet where the tab meets the top edge of the folder: no sharp inner corner */
+.project-env__tab::after {
+  content: '';
+  position: absolute;
+  top: 12px;
+  right: -8px;
+  width: 8px;
+  height: 8px;
+  background: radial-gradient(circle at 100% 0, transparent 7.5px, var(--folder-color) 8px);
+}
+
+.project-env__shell {
+  inset: 20px 0 0;
+  border-radius: 0 16px 16px 16px;
+}
+
+/* The sheet of paper sticking out of the folder; it stays white in both themes, like real paper */
+.project-env__sheet {
+  position: absolute;
+  top: 32px;
+  right: 12px;
+  left: 12px;
+  height: 166px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 0 14px rgba(0, 0, 0, 0.15);
+  transition: transform 0.2s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .project-env__sheet { transition: none; }
+}
+
+.project-env__panel {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  height: 146px;
+  padding: 20px 24px;
+  /* Figma "Glass": frost 6, light from 345° at 30%. Dev Mode exports only the tint and the shadow;
+     the frost is the backdrop blur, the light is the thin highlight along the lit top edge. */
+  background: rgba(var(--folder-rgb), 0.09);
+  border-radius: 8px 8px 16px 16px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 1px 0 0 rgba(255, 255, 255, 0.12),
+    0 -1px 8px rgba(0, 0, 0, 0.13);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+.project-env__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.project-env__link {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 22px;
+  color: #141414;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.project-env__link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+}
+
+.project-env__link:focus-visible {
+  outline: none;
+}
+
+.project-env__link:focus-visible::after {
+  outline: 2px solid var(--app-focus);
+  outline-offset: -2px;
+}
+
+.project-env__menu {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  margin: -6px -14px 0 0;
+  color: #595959 !important;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+/* The menu shows up on hover/focus; touch screens have no hover, so it stays visible there */
+.project-env:hover .project-env__menu,
+.project-env:focus-within .project-env__menu,
+.project-env__menu[aria-expanded='true'] {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .project-env__menu { opacity: 1; }
+}
+
+.project-env__count {
+  margin-top: 2px;
+  font-size: 15px;
+  line-height: 18px;
+  color: #7a7a7a;
+}
+
+/* "New project": an empty folder drawn as a dashed grey silhouette */
+.new-folder {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  height: 100%;
+  padding: 20px 0 0;
+  font: inherit;
+  color: var(--app-text-secondary);
+  cursor: pointer;
+  background: none;
+  border: 0;
+  border-radius: 16px;
+  transition: color 0.15s;
+}
+
+.new-folder__outline {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+
+.new-folder__outline path {
+  fill: transparent;
+  stroke: var(--app-text-placeholder, #bfbfbf);
+  stroke-width: 1.5;
+  stroke-dasharray: 6 5;
+  stroke-linecap: round;
+  transition: stroke 0.15s, fill 0.15s;
+}
+
+.new-folder__icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  font-size: 18px;
+  border: 1.5px dashed currentcolor;
+  border-radius: 50%;
+}
+
+.new-folder__label {
+  position: relative;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.new-folder:hover,
+.new-folder:focus-visible {
+  color: var(--app-text);
+}
+
+.new-folder:hover .new-folder__outline path,
+.new-folder:focus-visible .new-folder__outline path {
+  fill: var(--app-bg-hover);
+  stroke: var(--app-text-secondary);
+}
+
+.new-folder:focus-visible {
+  outline: none;
+}
+
+/* Folders keep the mockup's 288px width; on a phone a folder takes the whole row */
+.project-grid:has(.project-env) {
+  grid-template-columns: repeat(auto-fill, minmax(260px, 288px));
+}
+
+@media (max-width: 575px) {
+  .project-grid:has(.project-env) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.recent-surveys {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.recent-surveys__item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border-secondary);
+  border-radius: 8px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.recent-surveys__item:hover,
+.recent-surveys__item:focus-within {
+  border-color: var(--app-border, var(--app-border-secondary));
+  box-shadow: 0 2px 8px var(--app-shadow);
+}
+
+.recent-surveys__main {
+  flex: 1;
+  min-width: 0;
+}
+
+.recent-surveys__name {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--app-text);
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Stretched link: the whole row opens the survey */
+.recent-surveys__name::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+}
+
+.recent-surveys__name:focus-visible {
+  outline: none;
+}
+
+.recent-surveys__name:focus-visible::after {
+  outline: 2px solid var(--app-focus);
+  outline-offset: 2px;
+}
+
+.recent-surveys__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--app-text-secondary);
+}
+
+.recent-surveys__side {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 16px;
+}
+
+.recent-surveys__project {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+  padding: 3px 10px;
+  font-size: 13px;
+  color: var(--app-text-secondary);
+  border: 1px solid var(--app-border-secondary);
+  border-radius: 6px;
+}
+
+.recent-surveys__project .anticon {
+  color: var(--folder-color);
+}
+
+.recent-surveys__project-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Status as coloured text with a dot, like the Active/Inactive label of the reference */
+.recent-surveys__status {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--app-text-secondary);
+}
+
+.recent-surveys__status::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  background: currentcolor;
+  border-radius: 50%;
+}
+
+.recent-surveys__status--open { color: #389e0d; }
+.recent-surveys__status--closed { color: #d46b08; }
+html[data-theme='dark'] .recent-surveys__status--open { color: #73d13d; }
+html[data-theme='dark'] .recent-surveys__status--closed { color: #ffa940; }
+
+@media (max-width: 767px) {
+  .recent-surveys__item {
+    flex-wrap: wrap;
+    gap: 10px 12px;
+    padding: 14px 16px;
+  }
+  .recent-surveys__main { flex-basis: 100%; }
+  .recent-surveys__side { flex-wrap: wrap; gap: 10px 12px; }
+}
+
+/* ── Beta banner under the projects ───────────────────────────────────────── */
+
+.beta-banner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  min-height: 112px;
+  margin-top: 32px;
+  padding: 20px 64px 20px 150px;
+  overflow: hidden;
+  background: var(--app-bg-hover);
+  border-radius: 20px;
+}
+
+/* The illustration sits in the bottom-left corner and bleeds off the rounded edges */
+.beta-banner__art {
+  position: absolute;
+  bottom: -34px;
+  left: -12px;
+  line-height: 0;
+  pointer-events: none;
+}
+
+.beta-banner__art img {
+  display: block;
+  object-fit: contain;
+}
+
+.beta-banner__link {
+  margin-top: 6px;
+  padding: 0;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--app-menu-active-text);
+  cursor: pointer;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid currentcolor;
+}
+
+.beta-banner__link:hover {
+  opacity: 0.8;
+}
+
+.beta-banner__link:focus-visible {
+  outline: 2px solid var(--app-focus);
+  outline-offset: 2px;
+}
+
+.beta-banner__text {
+  max-width: 640px;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--app-text-secondary);
+}
+
+.beta-banner__close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  color: var(--app-text);
+  cursor: pointer;
+  background: var(--app-surface);
+  border: 0;
+  border-radius: 50%;
+}
+
+.beta-banner__close:hover {
+  background: var(--app-menu-active-bg);
+}
+
+.beta-banner__close:focus-visible {
+  outline: 2px solid var(--app-focus);
+  outline-offset: 2px;
+}
+
+@media (max-width: 575px) {
+  .beta-banner {
+    align-items: flex-start;
+    gap: 12px;
+    margin-top: 24px;
+    padding: 16px 52px 16px 84px;
+    min-height: 96px;
+  }
+  .beta-banner__art { bottom: -4px; left: -8px; }
+  .beta-banner__art img { width: 80px; height: 80px; }
+}
+
+/* ── Project page: one card per survey ────────────────────────────────────── */
+
+.survey-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.survey-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px 20px 18px;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border-secondary);
+  border-radius: 12px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.survey-card:hover,
+.survey-card:focus-within {
+  border-color: var(--app-text-placeholder, var(--app-border-secondary));
+  box-shadow: 0 2px 10px var(--app-shadow);
+}
+
+.survey-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 24px;
+}
+
+/* Status as coloured text with a dot, the same as in the recent surveys list */
+.survey-card__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--app-text-secondary);
+}
+
+.survey-card__status::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  background: currentcolor;
+  border-radius: 50%;
+}
+
+.survey-card__status--open { color: #389e0d; }
+.survey-card__status--closed { color: #d46b08; }
+html[data-theme='dark'] .survey-card__status--open { color: #73d13d; }
+html[data-theme='dark'] .survey-card__status--closed { color: #ffa940; }
+
+.survey-card__menu {
+  position: relative;
+  z-index: 1;
+  margin: -6px -10px -6px 0;
+}
+
+.survey-card__name {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--app-text);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.survey-card__name::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+}
+
+.survey-card__name:focus-visible {
+  outline: none;
+}
+
+.survey-card__name:focus-visible::after {
+  outline: 2px solid var(--app-focus);
+  outline-offset: 2px;
+}
+
+.survey-card__stats {
+  display: flex;
+  gap: 24px;
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--app-border-secondary);
+}
+
+.survey-card__stats > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.survey-card__stats strong {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--app-text);
+}
+
+.survey-card__stats span {
+  font-size: 12px;
+  color: var(--app-text-secondary);
+}
+
+@media (max-width: 575px) {
+  .survey-grid {
+    grid-template-columns: 1fr;
   }
 }

@@ -6,11 +6,13 @@ import { useThemeMode } from '../../shared/context/theme.context';
 export interface HeaderProfileMenuContentProps {
   onClose: () => void;
   onCreateOrg: () => void;
+  showCreateOrg?: boolean;
 }
 
 export const HeaderProfileMenuContent = ({
   onClose,
   onCreateOrg,
+  showCreateOrg = true,
 }: HeaderProfileMenuContentProps) => {
   const { signOut } = useAuth();
   const { themeMode, toggleTheme } = useThemeMode();
@@ -37,13 +39,15 @@ export const HeaderProfileMenuContent = ({
 
   return (
     <div className="app-profile-dropdown">
-      <button
-        type="button"
-        className="app-profile-dropdown__item"
-        onClick={handleCreateOrg}
-      >
-        Создать организацию
-      </button>
+      {showCreateOrg && (
+        <button
+          type="button"
+          className="app-profile-dropdown__item"
+          onClick={handleCreateOrg}
+        >
+          Создать организацию
+        </button>
+      )}
 
       <div className="app-profile-dropdown__item app-profile-dropdown__item--switch">
         <span className="app-profile-dropdown__label">Темная тема</span>

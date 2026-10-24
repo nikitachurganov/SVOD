@@ -7,6 +7,8 @@ export interface OrganizationResponse {
   owner_user_id: string;
   owner: AuthorPreview | null;
   members_count: number;
+  /** Personal workspace of the owner (standalone surveys service) */
+  is_personal: boolean;
   created_at: string;
   updated_at: string;
 }
