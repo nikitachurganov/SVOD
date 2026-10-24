@@ -1,8 +1,10 @@
 import { useState, type FormEvent } from 'react';
-import { Alert, Button, Divider, Form, Input } from 'antd';
+import { Alert, Button, Divider, Form, Input, Segmented } from 'antd';
+import { MoonOutlined, SunOutlined } from '@ant-design/icons';
 import axios from 'axios';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../shared/hooks/auth.hooks';
+import { useThemeMode } from '../shared/context/theme.context';
 import { requestPasswordReset } from '../shared/api/auth.api';
 import { HOME_PATH, IS_SURVEYS_APP } from '../shared/config/appMode';
 import logoUrl from '../assets/logo.svg';
@@ -33,7 +35,7 @@ interface SignUpValues extends SignInValues {
 
 const HEADINGS: Record<AuthMode, string> = {
   signIn: 'Вход',
-  signUp: 'Регистрация',
+  signUp: 'Создать аккаунт',
   forgot: 'Восстановление пароля',
 };
 
@@ -76,6 +78,7 @@ export const AuthPage = () => {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const { signIn, signUp } = useAuth();
+  const { themeMode, toggleTheme } = useThemeMode();
   const navigate = useNavigate();
   const redirectTo = typeof routeState?.from === 'string' ? routeState.from : HOME_PATH;
 
@@ -170,11 +173,11 @@ export const AuthPage = () => {
       <Divider plain className="auth-page__divider">Или</Divider>
 
       <div className="auth-page__social-row">
-        <Button className="auth-page__social-btn" disabled>
+        <Button disabled block>
           <img src={yandexLogoUrl} alt="" className="auth-page__social-icon" />
           Войти с Яндекс ID
         </Button>
-        <Button className="auth-page__social-btn" disabled>
+        <Button disabled block>
           <img src={vkLogoUrl} alt="" className="auth-page__social-icon" />
           Войти с VK ID
         </Button>
@@ -301,7 +304,7 @@ export const AuthPage = () => {
         </div>
       </Form>
       <Button type="primary" htmlType="submit" loading={loading} block className="auth-page__submit">
-        {loading ? 'Регистрация…' : 'Зарегистрироваться'}
+        {loading ? 'Создание аккаунта…' : 'Создать аккаунт'}
       </Button>
 
       {authSocialBlock}
@@ -310,6 +313,20 @@ export const AuthPage = () => {
 
   return (
     <div className="auth-page">
+      <Segmented
+        className="auth-page__theme-control"
+        size="middle"
+        value={themeMode}
+        aria-label="Переключение темы"
+        onChange={(value) => {
+          if (value !== themeMode) toggleTheme();
+        }}
+        options={[
+          { label: '', value: 'light', icon: <SunOutlined />, title: 'Светлая тема' },
+          { label: '', value: 'dark', icon: <MoonOutlined />, title: 'Темная тема' },
+        ]}
+      />
+
       <div className="auth-page__hero" aria-hidden="true">
         <img src={heroBgUrl} alt="" className="auth-page__hero-bg" />
         <div className="auth-page__hero-overlay" />

@@ -9,6 +9,7 @@ from app.models.user import User
 from app.repositories import form_repository
 from app.schemas.form import CreateFormRequest, FormResponse, UpdateFormRequest
 from app.schemas.user import PublicAuthorResponse
+from app.services import access_control
 
 
 def _to_author(author: User | None) -> PublicAuthorResponse | None:
@@ -40,18 +41,36 @@ def _to_response(form: Form) -> FormResponse:
     )
 
 
+async def _ensure_form_access(session: AsyncSession, form: Form, user: User) -> None:
+    if form.organization_id is not None:
+        await access_control.ensure_organization_member(session, form.organization_id, user)
+        return
+    if form.created_by_user_id != user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+
 async def list_forms(
     session: AsyncSession,
+    current_user: User,
     organization_id: uuid.UUID | None = None,
     archived: bool | None = None,
-    mine_user_id: uuid.UUID | None = None,
+    mine: bool = False,
     unused: bool | None = None,
 ) -> list[FormResponse]:
+    organization_ids: list[uuid.UUID] | None = None
+    if organization_id is not None:
+        await access_control.ensure_organization_member(session, organization_id, current_user)
+    elif not mine:
+        organization_ids = await access_control.list_accessible_organization_ids(
+            session, current_user
+        )
+
     forms = await form_repository.get_all_filtered(
         session,
         organization_id=organization_id,
+        organization_ids=organization_ids,
         archived=archived,
-        created_by_user_id=mine_user_id,
+        created_by_user_id=current_user.id if mine else None,
         unused=unused,
     )
     return [_to_response(f) for f in forms]
@@ -60,22 +79,45 @@ async def list_forms(
 async def get_counts(
     session: AsyncSession,
     organization_id: uuid.UUID | None,
-    current_user_id: uuid.UUID,
+    current_user: User,
 ) -> dict[str, int]:
+    organization_ids: list[uuid.UUID] | None = None
+    if organization_id is not None:
+        await access_control.ensure_organization_member(
+            session,
+            organization_id,
+            current_user,
+        )
+    else:
+        organization_ids = await access_control.list_accessible_organization_ids(
+            session, current_user
+        )
+
     all_count = await form_repository.count_filtered(
-        session, organization_id=organization_id, archived=False
+        session,
+        organization_id=organization_id,
+        organization_ids=organization_ids,
+        archived=False,
     )
     mine_count = await form_repository.count_filtered(
         session,
         organization_id=organization_id,
+        organization_ids=organization_ids,
         archived=False,
-        created_by_user_id=current_user_id,
+        created_by_user_id=current_user.id,
     )
     unused_count = await form_repository.count_filtered(
-        session, organization_id=organization_id, archived=False, unused=True
+        session,
+        organization_id=organization_id,
+        organization_ids=organization_ids,
+        archived=False,
+        unused=True,
     )
     archived_count = await form_repository.count_filtered(
-        session, organization_id=organization_id, archived=True
+        session,
+        organization_id=organization_id,
+        organization_ids=organization_ids,
+        archived=True,
     )
     return {
         "all": all_count,
@@ -85,10 +127,11 @@ async def get_counts(
     }
 
 
-async def get_form(session: AsyncSession, form_id: str) -> FormResponse:
+async def get_form(session: AsyncSession, form_id: str, current_user: User) -> FormResponse:
     form = await form_repository.get_by_id(session, uuid.UUID(form_id))
     if not form:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Form not found")
+    await _ensure_form_access(session, form, current_user)
     return _to_response(form)
 
 
@@ -96,6 +139,9 @@ async def create_form(
     session: AsyncSession, payload: CreateFormRequest, current_user: User
 ) -> FormResponse:
     org_id = uuid.UUID(payload.organization_id) if payload.organization_id else None
+    if org_id is not None:
+        await access_control.ensure_organization_member(session, org_id, current_user)
+
     form = Form(
         name=payload.name,
         description=payload.description,
@@ -111,11 +157,12 @@ async def create_form(
 
 
 async def update_form(
-    session: AsyncSession, form_id: str, payload: UpdateFormRequest
+    session: AsyncSession, form_id: str, payload: UpdateFormRequest, current_user: User
 ) -> FormResponse:
     form = await form_repository.get_by_id(session, uuid.UUID(form_id))
     if not form:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Form not found")
+    await _ensure_form_access(session, form, current_user)
 
     form.name = payload.name
     form.description = payload.description
@@ -128,8 +175,14 @@ async def update_form(
     return _to_response(form)
 
 
-async def delete_form(session: AsyncSession, form_id: str) -> None:
-    deleted = await form_repository.remove(session, uuid.UUID(form_id))
+async def delete_form(session: AsyncSession, form_id: str, current_user: User) -> None:
+    form_uuid = uuid.UUID(form_id)
+    form = await form_repository.get_by_id(session, form_uuid)
+    if not form:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Form not found")
+    await _ensure_form_access(session, form, current_user)
+
+    deleted = await form_repository.remove(session, form_uuid)
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Form not found")
     await session.commit()

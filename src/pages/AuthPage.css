@@ -314,3 +314,28 @@ html[data-theme='dark'] .auth-page {
     grid-template-columns: 1fr;
   }
 }
+
+/* Theme switch (from origin/main) */
+.auth-page__theme-control {
+  position: fixed;
+  top: 32px;
+  right: 32px;
+  z-index: 10;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+}
+
+.auth-page__theme-control .ant-segmented-item-label {
+  min-width: 32px;
+  padding-inline: 8px;
+}
+
+html[data-theme='dark'] .auth-page__theme-control {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
+}
+
+@media (max-width: 980px) {
+  .auth-page__theme-control {
+    top: 24px;
+    right: 24px;
+  }
+}

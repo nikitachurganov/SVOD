@@ -1,6 +1,7 @@
 import uuid
+from collections.abc import Sequence
 
-from sqlalchemy import func, select
+from sqlalchemy import false, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -40,12 +41,18 @@ def _apply_form_filters(
     stmt,
     *,
     organization_id: uuid.UUID | None = None,
+    organization_ids: Sequence[uuid.UUID] | None = None,
     archived: bool | None = None,
     created_by_user_id: uuid.UUID | None = None,
     unused: bool | None = None,
 ):
     if organization_id is not None:
         stmt = stmt.where(Form.organization_id == organization_id)
+    elif organization_ids is not None:
+        if len(organization_ids) == 0:
+            stmt = stmt.where(false())
+        else:
+            stmt = stmt.where(Form.organization_id.in_(organization_ids))
     if archived is True:
         stmt = stmt.where(Form.archived == True)  # noqa: E712
     elif archived is False:
@@ -67,6 +74,7 @@ async def get_all_filtered(
     session: AsyncSession,
     *,
     organization_id: uuid.UUID | None = None,
+    organization_ids: Sequence[uuid.UUID] | None = None,
     archived: bool | None = None,
     created_by_user_id: uuid.UUID | None = None,
     unused: bool | None = None,
@@ -75,6 +83,7 @@ async def get_all_filtered(
     stmt = _apply_form_filters(
         stmt,
         organization_id=organization_id,
+        organization_ids=organization_ids,
         archived=archived,
         created_by_user_id=created_by_user_id,
         unused=unused,
@@ -88,6 +97,7 @@ async def count_filtered(
     session: AsyncSession,
     *,
     organization_id: uuid.UUID | None = None,
+    organization_ids: Sequence[uuid.UUID] | None = None,
     archived: bool | None = None,
     created_by_user_id: uuid.UUID | None = None,
     unused: bool | None = None,
@@ -96,6 +106,7 @@ async def count_filtered(
     stmt = _apply_form_filters(
         stmt,
         organization_id=organization_id,
+        organization_ids=organization_ids,
         archived=archived,
         created_by_user_id=created_by_user_id,
         unused=unused,
