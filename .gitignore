@@ -82,3 +82,5 @@ docker-compose.yml
 # Misc
 # =====================
 coverage/
+# VLESS proxy config contains secrets
+deploy/xray/config.json

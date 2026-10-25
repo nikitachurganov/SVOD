@@ -1,0 +1,25 @@
+# Optional override: send outgoing HTTPS requests of api/worker (OpenRouter etc.) through a VLESS proxy.
+# 1) python3 deploy/xray/make_config.py '<vless link>'
+# 2) docker compose -f docker-compose.surveys.yml -f docker-compose.proxy.yml up -d
+
+services:
+  proxy:
+    image: teddysun/xray:1.8.24
+    restart: unless-stopped
+    volumes:
+      - ./deploy/xray/config.json:/etc/xray/config.json:ro
+    networks:
+      - svod_internal
+
+  api:
+    environment: &proxy_env
+      HTTPS_PROXY: http://proxy:8118
+      HTTP_PROXY: http://proxy:8118
+      NO_PROXY: db,api,localhost,127.0.0.1
+    depends_on:
+      - proxy
+
+  worker:
+    environment: *proxy_env
+    depends_on:
+      - proxy
