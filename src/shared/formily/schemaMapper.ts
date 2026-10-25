@@ -36,6 +36,7 @@ const baseFieldSchema = (field: FormFieldInstance): ISchema => ({
   'x-decorator-props': {
     asterisk: field.required,
     labelWrap: true,
+    colon: false,
     wrapperWrap: true,
   },
 });
@@ -246,7 +247,7 @@ const fieldToSchemaProperty = (field: FormFieldInstance): ISchema | null => {
         title: field.label,
         required: field.required || undefined,
         'x-decorator': 'FormItem',
-        'x-decorator-props': { asterisk: field.required, labelWrap: true, wrapperWrap: true },
+        'x-decorator-props': { asterisk: field.required, labelWrap: true, wrapperWrap: true, colon: false },
         'x-component': 'FormilyFileUpload',
         'x-component-props': {
           fieldType: field.type,
