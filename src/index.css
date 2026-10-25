@@ -552,6 +552,21 @@ html[data-theme] body {
   letter-spacing: 0.32px;
 }
 
+.app-field-label--question {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  color: var(--app-text);
+  font-size: 0.875rem;
+  line-height: 1.5715;
+  letter-spacing: normal;
+}
+
+.app-field-label--question .app-field-label__required {
+  order: -1;
+  margin-left: 0;
+}
+
 .app-field-label__required {
   color: var(--app-text-error);
   margin-left: 0.125rem;

@@ -31,7 +31,7 @@ export const FormilyRadioChoice = ({ fieldMeta }: FormilyRadioChoiceProps) => {
 
   return (
     <div style={{ marginBottom: 24 }}>
-      {fieldMeta.label ? <FieldLabel label={fieldMeta.label} required={fieldMeta.required} /> : null}
+      {fieldMeta.label ? <FieldLabel label={fieldMeta.label} required={fieldMeta.required} question /> : null}
       <RadioChoiceField
         options={fieldMeta.options ?? []}
         value={field.value}
@@ -64,7 +64,7 @@ export const FormilyCheckboxChoice = ({ fieldMeta }: FormilyCheckboxChoiceProps)
 
   return (
     <div style={{ marginBottom: 24 }}>
-      {fieldMeta.label ? <FieldLabel label={fieldMeta.label} required={fieldMeta.required} /> : null}
+      {fieldMeta.label ? <FieldLabel label={fieldMeta.label} required={fieldMeta.required} question /> : null}
       <CheckboxChoiceField
         options={fieldMeta.options ?? []}
         value={field.value}
@@ -101,7 +101,7 @@ export const FormilyDropdownChoice = ({ fieldMeta }: FormilyDropdownChoiceProps)
 
   return (
     <div style={{ marginBottom: 24 }}>
-      {fieldMeta.label ? <FieldLabel label={fieldMeta.label} required={fieldMeta.required} /> : null}
+      {fieldMeta.label ? <FieldLabel label={fieldMeta.label} required={fieldMeta.required} question /> : null}
       <Select
         placeholder="Выберите вариант"
         value={parsed.selected || undefined}

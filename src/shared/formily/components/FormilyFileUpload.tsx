@@ -28,7 +28,7 @@ export const FormilyFileUpload = ({ fieldType, label, required }: FormilyFileUpl
 
   return (
     <div style={{ marginBottom: 24 }}>
-      {label ? <FieldLabel label={label} required={required} /> : null}
+      {label ? <FieldLabel label={label} required={required} question /> : null}
       <Upload.Dragger
         accept={getFileAccept(fieldType).join(',')}
         multiple
