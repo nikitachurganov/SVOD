@@ -141,39 +141,22 @@ const fieldToSchemaProperty = (field: FormFieldInstance): ISchema | null => {
     }
 
     case 'radio': {
-      const options = field.options ?? DEFAULT_OPTIONS;
-      if (hasOtherOption(options)) {
-        return {
-          ...base,
-          'x-component': 'FormilyRadioChoice',
-          'x-component-props': { fieldMeta: field },
-          'x-decorator': undefined,
-        };
-      }
       return {
         ...base,
-        ...optionsEnumSchema(options),
-        'x-component': 'Radio.Group',
-      } as ISchema;
+        'x-component': 'FormilyRadioChoice',
+        'x-component-props': { fieldMeta: { ...field, options: field.options ?? DEFAULT_OPTIONS } },
+        'x-decorator': undefined,
+      };
     }
 
     case 'checkbox': {
-      const options = field.options ?? DEFAULT_OPTIONS;
-      if (hasOtherOption(options)) {
-        return {
-          ...base,
-          type: 'array',
-          'x-component': 'FormilyCheckboxChoice',
-          'x-component-props': { fieldMeta: field },
-          'x-decorator': undefined,
-        };
-      }
       return {
         ...base,
         type: 'array',
-        ...optionsEnumSchema(options),
-        'x-component': 'Checkbox.Group',
-      } as ISchema;
+        'x-component': 'FormilyCheckboxChoice',
+        'x-component-props': { fieldMeta: { ...field, options: field.options ?? DEFAULT_OPTIONS } },
+        'x-decorator': undefined,
+      };
     }
 
     case 'yesNo':

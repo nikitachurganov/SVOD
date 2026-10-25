@@ -39,6 +39,11 @@ export const FormilyRadioChoice = ({ fieldMeta }: FormilyRadioChoiceProps) => {
         error={error === 'Укажите свой вариант' ? undefined : error}
         otherError={error === 'Укажите свой вариант' ? error : undefined}
       />
+      {fieldMeta.description ? (
+        <div style={{ color: 'var(--app-text-helper)', fontSize: '0.75rem', marginTop: 4 }}>
+          {fieldMeta.description}
+        </div>
+      ) : null}
     </div>
   );
 };
@@ -67,6 +72,11 @@ export const FormilyCheckboxChoice = ({ fieldMeta }: FormilyCheckboxChoiceProps)
         error={error === 'Укажите свой вариант' ? undefined : error}
         otherError={error === 'Укажите свой вариант' ? error : undefined}
       />
+      {fieldMeta.description ? (
+        <div style={{ color: 'var(--app-text-helper)', fontSize: '0.75rem', marginTop: 4 }}>
+          {fieldMeta.description}
+        </div>
+      ) : null}
     </div>
   );
 };

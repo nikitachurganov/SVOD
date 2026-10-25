@@ -3388,6 +3388,15 @@ html[data-theme='dark'] .survey-heat--4 {
   word-break: break-word;
 }
 
+.app-choice-field .ant-radio-button-wrapper.app-rating-button,
+.ant-radio-button-wrapper.app-rating-button {
+  border-radius: 8px;
+}
+
+.ant-radio-button-wrapper.app-rating-button::before {
+  display: none;
+}
+
 .app-choice-field__other-input {
   flex: 1;
   min-width: 0;

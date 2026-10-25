@@ -119,7 +119,7 @@ export const RatingInput = ({ field, value, onChange, error, hideMeta }: RatingI
                   </span>
                 ) : null}
                 {numericOptions.map((option) => (
-                  <Radio.Button key={option} value={option}>
+                  <Radio.Button key={option} value={option} className="app-rating-button">
                     {option}
                   </Radio.Button>
                 ))}
