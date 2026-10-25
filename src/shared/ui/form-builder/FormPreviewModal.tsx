@@ -163,12 +163,14 @@ const YesNoRadioGroupField = ({ value, onChange }: YesNoRadioGroupFieldProps) =>
               gap: 8,
               padding: '8px 12px',
               border: `1px solid ${checked ? 'var(--app-primary)' : 'var(--app-border)'}`,
-              borderRadius: 4,
+              borderRadius: 8,
+              fontSize: 14,
               background: checked ? 'var(--app-highlight)' : 'var(--app-surface)',
               cursor: 'pointer',
               userSelect: 'none',
               transition: 'border-color 0.2s ease, background 0.2s ease',
               flex: 1,
+              color: 'var(--app-text)',
             }}
           >
             <span style={{ pointerEvents: 'none', display: 'flex', alignItems: 'center' }}>
@@ -381,7 +383,7 @@ export const PreviewField = ({ field }: PreviewFieldProps) => {
           <>
             <Input
               id={`field-${field.id}`}
-              placeholder={field.description || undefined}
+              placeholder={undefined}
               value={(value as string) ?? ''}
               onChange={(e) => setFieldValue(field.id, e.target.value)}
               status={error ? 'error' : undefined}
@@ -400,7 +402,7 @@ export const PreviewField = ({ field }: PreviewFieldProps) => {
             <TextArea
               id={`field-${field.id}`}
               rows={3}
-              placeholder={field.description || undefined}
+              placeholder={undefined}
               value={(value as string) ?? ''}
               onChange={(e) => setFieldValue(field.id, e.target.value)}
               status={error ? 'error' : undefined}
@@ -507,7 +509,7 @@ export const PreviewField = ({ field }: PreviewFieldProps) => {
             <Input
               id={`field-${field.id}`}
               type="number"
-              placeholder={field.description || 'Введите число'}
+              placeholder={'Введите число'}
               value={(value as string) ?? ''}
               onChange={(e) => setFieldValue(field.id, e.target.value)}
               status={error ? 'error' : undefined}
@@ -525,7 +527,7 @@ export const PreviewField = ({ field }: PreviewFieldProps) => {
           <>
             <Input
               id={`field-${field.id}`}
-              placeholder={field.description || 'Полное имя'}
+              placeholder={'Полное имя'}
               value={(value as string) ?? ''}
               onChange={(e) => setFieldValue(field.id, e.target.value)}
               status={error ? 'error' : undefined}
@@ -561,7 +563,7 @@ export const PreviewField = ({ field }: PreviewFieldProps) => {
             <Input
               id={`field-${field.id}`}
               type="email"
-              placeholder={field.description || 'example@mail.com'}
+              placeholder={'example@mail.com'}
               value={(value as string) ?? ''}
               onChange={(e) => setFieldValue(field.id, e.target.value)}
               status={error ? 'error' : undefined}

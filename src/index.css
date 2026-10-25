@@ -3015,6 +3015,7 @@ html[data-theme='dark'] .survey-heat--4 {
   gap: 12px;
   flex-wrap: wrap;
   padding: 8px 24px;
+  color: var(--app-text);
   background: var(--app-surface);
   border-bottom: 1px solid var(--app-border-secondary);
 }
@@ -3301,6 +3302,7 @@ html[data-theme='dark'] .survey-heat--4 {
   margin: 0 0 20px;
   font-size: 1.375rem;
   font-weight: 600;
+  color: var(--app-text);
 }
 
 .public-form-flow__contacts {

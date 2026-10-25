@@ -35,12 +35,13 @@ const baseFieldSchema = (field: FormFieldInstance): ISchema => ({
   'x-decorator': 'FormItem',
   'x-decorator-props': {
     asterisk: field.required,
+    labelWrap: true,
+    wrapperWrap: true,
   },
 });
 
 const optionsEnumSchema = (options: FieldOption[]) => ({
-  enum: options.map((opt) => opt.id),
-  enumNames: options.map((opt) => opt.label),
+  enum: options.map((opt) => ({ label: opt.label, value: opt.id })),
 });
 
 const fieldValidator = (
@@ -61,7 +62,7 @@ const fieldToSchemaProperty = (field: FormFieldInstance): ISchema | null => {
         ...base,
         'x-component': 'Input',
         'x-component-props': {
-          placeholder: field.description || undefined,
+          placeholder: undefined,
         },
         'x-validator': fieldValidator(validateShortTextValue, field.required),
       };
@@ -71,7 +72,7 @@ const fieldToSchemaProperty = (field: FormFieldInstance): ISchema | null => {
         ...base,
         'x-component': 'Input',
         'x-component-props': {
-          placeholder: field.description || 'Полное имя',
+          placeholder: 'Полное имя',
         },
         'x-validator': fieldValidator(validateFullNameValue, field.required),
       };
@@ -90,7 +91,7 @@ const fieldToSchemaProperty = (field: FormFieldInstance): ISchema | null => {
         ...base,
         'x-component': 'Input',
         'x-component-props': {
-          placeholder: field.description || undefined,
+          placeholder: undefined,
           type: 'email',
         },
         'x-validator': fieldValidator(validateEmailValue, field.required),
@@ -101,7 +102,7 @@ const fieldToSchemaProperty = (field: FormFieldInstance): ISchema | null => {
         ...base,
         'x-component': 'Input.TextArea',
         'x-component-props': {
-          placeholder: field.description || undefined,
+          placeholder: undefined,
           rows: 3,
         },
         'x-validator': fieldValidator(validateLongTextValue, field.required),
@@ -112,7 +113,7 @@ const fieldToSchemaProperty = (field: FormFieldInstance): ISchema | null => {
         ...base,
         'x-component': 'Input',
         'x-component-props': {
-          placeholder: field.description || 'Введите число',
+          placeholder: 'Введите число',
           type: 'number',
         },
         'x-validator': fieldValidator(validateNumberValue, field.required),
@@ -133,7 +134,7 @@ const fieldToSchemaProperty = (field: FormFieldInstance): ISchema | null => {
         ...optionsEnumSchema(options),
         'x-component': 'Select',
         'x-component-props': {
-          placeholder: field.description || 'Выберите значение',
+          placeholder: 'Выберите значение',
           allowClear: true,
         },
       } as ISchema;
@@ -262,7 +263,7 @@ const fieldToSchemaProperty = (field: FormFieldInstance): ISchema | null => {
         title: field.label,
         required: field.required || undefined,
         'x-decorator': 'FormItem',
-        'x-decorator-props': { asterisk: field.required },
+        'x-decorator-props': { asterisk: field.required, labelWrap: true, wrapperWrap: true },
         'x-component': 'FormilyFileUpload',
         'x-component-props': {
           fieldType: field.type,

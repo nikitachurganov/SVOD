@@ -14,6 +14,8 @@ interface RatingInputProps {
   value: RatingFieldValue | number | undefined;
   onChange: (value: RatingFieldValue | undefined) => void;
   error?: string;
+  /** Hide label/description when the host (e.g. Formily FormItem) already renders them */
+  hideMeta?: boolean;
 }
 
 const toRatingValue = (
@@ -46,7 +48,7 @@ const buildRatingPayload = (
   return payload;
 };
 
-export const RatingInput = ({ field, value, onChange, error }: RatingInputProps) => {
+export const RatingInput = ({ field, value, onChange, error, hideMeta }: RatingInputProps) => {
   const config = getRatingConfig(field);
   const current = toRatingValue(value, config);
 
@@ -105,25 +107,27 @@ export const RatingInput = ({ field, value, onChange, error }: RatingInputProps)
       case 'numeric_scale':
         return (
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-              <span style={{ fontSize: 12, color: 'var(--app-text-secondary)' }}>
-                {config.leftLabel ?? String(config.min)}
-              </span>
-              <span style={{ fontSize: 12, color: 'var(--app-text-secondary)' }}>
-                {config.rightLabel ?? String(config.max)}
-              </span>
-            </div>
             <Radio.Group
               value={current?.value}
               disabled={config.disabled}
               onChange={(event) => handleChange(Number(event.target.value))}
             >
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+                {config.leftLabel ? (
+                  <span style={{ fontSize: 12, color: 'var(--app-text-secondary)' }}>
+                    {config.leftLabel}
+                  </span>
+                ) : null}
                 {numericOptions.map((option) => (
                   <Radio.Button key={option} value={option}>
                     {option}
                   </Radio.Button>
                 ))}
+                {config.rightLabel ? (
+                  <span style={{ fontSize: 12, color: 'var(--app-text-secondary)' }}>
+                    {config.rightLabel}
+                  </span>
+                ) : null}
               </div>
             </Radio.Group>
             {config.showValue && current ? (
@@ -150,14 +154,16 @@ export const RatingInput = ({ field, value, onChange, error }: RatingInputProps)
   };
 
   return (
-    <div style={{ marginBottom: 24 }}>
-      <FieldLabel
-        label={field.label || 'Оценка по шкале'}
-        required={field.required}
-        htmlFor={`field-${field.id}`}
-      />
+    <div style={{ marginBottom: hideMeta ? 0 : 24 }}>
+      {hideMeta ? null : (
+        <FieldLabel
+          label={field.label || 'Оценка по шкале'}
+          required={field.required}
+          htmlFor={`field-${field.id}`}
+        />
+      )}
       {renderControl()}
-      {field.description ? (
+      {field.description && !hideMeta ? (
         <div style={{ color: 'var(--app-text-helper)', fontSize: '0.75rem', marginTop: 4 }}>
           {field.description}
         </div>

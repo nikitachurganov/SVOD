@@ -28,6 +28,7 @@ export const FormilyRatingInput = ({ fieldMeta }: FormilyRatingInputProps) => {
       field={fieldMeta}
       value={value}
       error={error}
+      hideMeta
       onChange={(next) => field.onInput(next ?? null)}
     />
   );
