@@ -90,10 +90,15 @@ async def get_project(session: AsyncSession, project_id: uuid.UUID) -> SurveyPro
 async def get_default_project(
     session: AsyncSession, organization_id: uuid.UUID
 ) -> SurveyProject | None:
-    """The oldest project of the organization — the target for a survey created without one."""
+    """The oldest project of the organization — the target for a survey created without one.
+
+    The sample «Добро пожаловать» project is skipped: user surveys must not land in it."""
     result = await session.execute(
         select(SurveyProject)
-        .where(SurveyProject.organization_id == organization_id)
+        .where(
+            SurveyProject.organization_id == organization_id,
+            SurveyProject.name != "Добро пожаловать",
+        )
         .order_by(SurveyProject.created_at, SurveyProject.id)
         .limit(1)
     )

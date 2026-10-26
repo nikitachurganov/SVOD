@@ -186,6 +186,13 @@ export const FieldRenderer = ({ field }: FieldRendererProps) => {
         </div>
       );
 
+    case 'textBlock':
+      return (
+        <div style={{ color: 'var(--app-text-secondary)', fontSize: '0.75rem', whiteSpace: 'pre-line' }}>
+          {field.description || FIELD_TYPE_LABELS.textBlock}
+        </div>
+      );
+
     case 'file_vector':
     case 'file_image':
     case 'file_document':

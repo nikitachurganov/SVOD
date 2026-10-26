@@ -618,6 +618,28 @@ html[data-theme] body {
   color: var(--app-text-secondary);
 }
 
+/* Text without a question: greeting, instruction, section note */
+.app-form-text-block {
+  margin-bottom: var(--app-space-6, 1.5rem);
+}
+
+.app-form-text-block__title {
+  margin: 0 0 var(--app-space-3, 0.5rem);
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--app-text);
+}
+
+.app-form-text-block__text {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--app-text);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
 .app-request-form-value-row {
   display: flex;
   flex-direction: column;
@@ -3145,6 +3167,12 @@ html[data-theme='dark'] .survey-heat--4 {
   flex-wrap: wrap;
   gap: 10px;
   width: 100%;
+}
+
+/* «Назад» on the left, the main action on the right — also when «Назад» is absent */
+.public-form-flow__submit-bar .ant-btn-primary {
+  margin-left: auto;
+  min-width: 140px;
 }
 
 .public-form-flow--fill .app-form-fill__actions {

@@ -47,6 +47,7 @@ export const FORMILY_SUPPORTED_FIELD_TYPES: ReadonlySet<FormFieldType> = new Set
   'address_country_city',
   'location',
   'rating',
+  'textBlock',
 ]);
 
 export const isFormilyFieldTypeSupported = (type: FormFieldType): boolean =>

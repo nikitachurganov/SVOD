@@ -43,6 +43,9 @@ export const FieldBlock = ({
     onChange({ options });
   };
 
+  // «Текст без вопроса»: a heading and free text, nothing to answer
+  const isTextBlock = field.type === 'textBlock';
+
   return (
     <div
       style={{
@@ -57,7 +60,7 @@ export const FieldBlock = ({
 
       <div style={{ padding: '0px 16px 12px' }}>
         <AutoGrowInput
-          placeholder="Напишите название"
+          placeholder={isTextBlock ? 'Заголовок (необязательно)' : 'Напишите название'}
           value={field.label}
           onChange={(next) => onChange({ label: next })}
           style={{
@@ -74,12 +77,13 @@ export const FieldBlock = ({
         />
 
         <AutoGrowInput
-          placeholder="Напишите описание"
+          placeholder={isTextBlock ? 'Текст, который увидит респондент' : 'Напишите описание'}
           value={field.description}
+          multiline={isTextBlock}
           onChange={(next) => onChange({ description: next })}
           style={{
             padding: '0 4px',
-            fontSize: '0.75rem',
+            fontSize: isTextBlock ? '0.875rem' : '0.75rem',
             color: 'var(--app-text-secondary)',
             width: '100%',
             marginBottom: 12,
@@ -109,18 +113,22 @@ export const FieldBlock = ({
             gap: 8,
           }}
         >
-          <label
-            htmlFor={`required-${field.id}`}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}
-          >
-            <Switch
-              id={`required-${field.id}`}
-              size="small"
-              checked={field.required}
-              onChange={(checked) => onChange({ required: checked })}
-            />
-            {isMobile && 'Обязательный'}
-          </label>
+          {isTextBlock ? (
+            <span />
+          ) : (
+            <label
+              htmlFor={`required-${field.id}`}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}
+            >
+              <Switch
+                id={`required-${field.id}`}
+                size="small"
+                checked={field.required}
+                onChange={(checked) => onChange({ required: checked })}
+              />
+              {isMobile && 'Обязательный'}
+            </label>
+          )}
 
           {onMoveUp && onMoveDown && onMoveBefore && (
             <FieldMoveControls

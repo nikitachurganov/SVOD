@@ -227,6 +227,16 @@ export const PreviewField = ({ field }: PreviewFieldProps) => {
     );
   }
 
+  // ── Text without a question ─────────────────────────────────────────────
+  if (field.type === 'textBlock') {
+    return (
+      <section className="app-form-text-block">
+        {field.label && <h3 className="app-form-text-block__title">{field.label}</h3>}
+        {field.description && <p className="app-form-text-block__text">{field.description}</p>}
+      </section>
+    );
+  }
+
   // ── Address ─────────────────────────────────────────────────────────────
   if (field.type === 'address') {
     return <AddressField field={field} />;

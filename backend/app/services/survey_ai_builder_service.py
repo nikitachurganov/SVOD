@@ -25,6 +25,7 @@ from app.schemas.survey import SurveyAiBuildRequest, SurveyAiBuildResponse
 from app.services import survey_methodology_service
 from app.services.form_ai_builder_service import (
     FIELD_TYPE_DESCRIPTIONS,
+    SURVEY_FIELD_TYPE_DESCRIPTIONS,
     _collect_ids,
     _compact_pages,
     _parse_payload,
@@ -69,7 +70,7 @@ semantic_differential, cognitive_interviewing, attention_check).
 def _build_generation_prompt(method_ids: list[str], subject: str) -> str:
     type_lines = "\n".join(
         f"- {k}: {v}"
-        for k, v in FIELD_TYPE_DESCRIPTIONS.items()
+        for k, v in {**FIELD_TYPE_DESCRIPTIONS, **SURVEY_FIELD_TYPE_DESCRIPTIONS}.items()
         if k not in _UNSUPPORTED_SURVEY_TYPES
     )
     rules = "\n\n".join(
@@ -115,12 +116,19 @@ config для rating: {{"ratingVariant": "stars"|"numeric_scale"|"slider"|"nps",
 - Если пользователь просит изменить текущий опрос — возьми его за основу, сохрани id неизменённых и \
 изменённых полей, внеси только запрошенные изменения; блоки с methodology \
 nps, csat, ces, sus, ueq, attention_check не меняй и не удаляй.
+- Все тексты, включая варианты ответов, пиши на русском. Для вопроса с ответами «да / нет» используй тип yesNo, \
+а не radio с вариантами yes и no.
+- Не ставь двоеточие в конце формулировки вопроса.
+- Тип textBlock используй только для пояснений между разделами. Приветственную страницу (первая страница без \
+вопросов) система добавит сама: не создавай её, а напиши для неё текст в поле welcome.
 - Если сообщение не требует изменения опроса (вопрос, уточнение) — верни "pages": null.
 
 Отвечай ТОЛЬКО валидным JSON без markdown и пояснений вне JSON, строго в формате:
 {{
   "reply": "<короткий ответ пользователю на русском: что сделано или уточняющий вопрос>",
   "title": "<название опроса или null, если менять не нужно>",
+  "welcome": "<текст приветствия: 2–4 предложения — о чём исследование, благодарность за участие, анонимность; \
+null, если пользователь правит уже готовый опрос>",
   "pages": [ {{ "title": "Страница 1", "fields": [ ...поля... ] }} ] | null
 }}
 """
@@ -283,6 +291,40 @@ def insert_templates(
     return pages
 
 
+WELCOME_PAGE_TITLE = "Приветствие"
+_DEFAULT_WELCOME = (
+    "Спасибо, что согласились принять участие в исследовании! "
+    "Ваши ответы помогут нам сделать выводы и улучшить результат."
+)
+
+
+def _is_welcome_page(page: dict[str, Any]) -> bool:
+    fields = page.get("fields") or []
+    return bool(fields) and all(f.get("type") == "textBlock" for f in fields)
+
+
+def insert_welcome_page(pages: list[dict[str, Any]], *, text: str | None) -> list[dict[str, Any]]:
+    """First page without questions: a greeting and thanks for taking part. Added by code so every
+    generated survey has it, whatever the model returned."""
+    if pages and _is_welcome_page(pages[0]):
+        return pages
+    questions = sum(1 for _ in survey_methodology_service.iter_leaf_fields(pages))
+    minutes = max(1, round(questions / 2))
+    body = (text or "").strip() or _DEFAULT_WELCOME
+    body += (
+        f"\n\nОпрос займёт около {minutes} мин. Ответы анонимны и будут использованы "
+        "только в обобщённом виде. Нажмите «Далее», чтобы начать."
+    )
+    welcome = {
+        "type": "textBlock",
+        # The survey name is already shown above the form, so the heading is a plain greeting
+        "label": "Добро пожаловать!",
+        "placeholder": body,
+        "required": False,
+    }
+    return [{"title": WELCOME_PAGE_TITLE, "fields": [welcome]}, *pages]
+
+
 # ─── Public entrypoint ────────────────────────────────────────────────────────
 
 
@@ -350,6 +392,13 @@ async def build_survey(payload: SurveyAiBuildRequest) -> SurveyAiBuildResponse:
 
     title_raw = parsed.get("title")
     title = _str(title_raw, 500) if isinstance(title_raw, str) and title_raw.strip() else None
+
+    # A survey generated from scratch starts with a greeting page; edits keep the structure as is
+    if pages is not None and not has_form:
+        welcome_raw = parsed.get("welcome")
+        pages = insert_welcome_page(
+            pages, text=_str(welcome_raw, 1500) if isinstance(welcome_raw, str) else None
+        )
     reply = _str(parsed.get("reply"), 4000)
     if not reply:
         reply = "Опрос обновлён." if pages else "Готово."

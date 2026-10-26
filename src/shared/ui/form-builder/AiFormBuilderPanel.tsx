@@ -1,6 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Input } from 'antd';
-import { CloseOutlined, RobotOutlined, SendOutlined, UndoOutlined } from '@ant-design/icons';
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
+import { Button, Dropdown, Input } from 'antd';
+import {
+  BookOutlined,
+  CloseOutlined,
+  RobotOutlined,
+  SendOutlined,
+  UndoOutlined,
+} from '@ant-design/icons';
 import axios from 'axios';
 
 import {
@@ -23,7 +29,6 @@ import {
   type SurveyAiBuildResponse,
   type MethodologySummary,
 } from '../../api/surveys.api';
-import { MethodologySummaryCard } from '../survey/MethodologySummaryCard';
 import { MethodologyReportModal } from '../survey/MethodologyReportModal';
 import { MethodologyPickerModal } from '../survey/MethodologyPickerModal';
 
@@ -54,11 +59,15 @@ const reuseOptionIds = (
   });
 };
 
+/** Question titles are shown without a trailing colon ("Вопрос?:" → "Вопрос?") */
+const stripTrailingColon = (label: string): string => label.replace(/\s*:+\s*$/, '');
+
 const normalizeAiField = (
   payload: CreateFormFieldPayload,
   existing: Map<string, FormFieldInstance>,
 ): FormFieldInstance => {
   const field = payloadToInstance({ ...payload, children: undefined });
+  field.label = stripTrailingColon(field.label);
   const previous = payload.id ? existing.get(payload.id) : undefined;
   const sameType = previous?.type === field.type;
   const config = {
@@ -97,7 +106,7 @@ const responseToPages = (
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-interface ChatEntry extends FormAiChatMessage {
+export interface ChatEntry extends FormAiChatMessage {
   id: string;
   isError?: boolean;
   /** Form state before this assistant message applied its changes */
@@ -107,6 +116,11 @@ interface ChatEntry extends FormAiChatMessage {
 export interface AiFormBuilderPanelProps {
   formTitle: string;
   pages: FormPageInstance[];
+  /** Chat history lives in the editor so it survives preview mode and closing the panel */
+  entries: ChatEntry[];
+  onEntriesChange: Dispatch<SetStateAction<ChatEntry[]>>;
+  draft: string;
+  onDraftChange: (draft: string) => void;
   /** A number is a fixed side column; a string ('100%') fills the container (mobile drawer) */
   width?: number | string;
   onApply: (title: string | null, pages: FormPageInstance[]) => void;
@@ -143,6 +157,10 @@ const getErrorMessage = (error: unknown): string => {
 export const AiFormBuilderPanel = ({
   formTitle,
   pages,
+  entries,
+  onEntriesChange: setEntries,
+  draft,
+  onDraftChange: setDraft,
   width = 380,
   onApply,
   onRestore,
@@ -159,8 +177,6 @@ export const AiFormBuilderPanel = ({
     () => methodology?.summary?.methodologies.map((m) => m.id) ?? [],
     [methodology],
   );
-  const [entries, setEntries] = useState<ChatEntry[]>([]);
-  const [draft, setDraft] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const listRef = useRef<HTMLDivElement | null>(null);
 
@@ -272,13 +288,39 @@ export const AiFormBuilderPanel = ({
           <RobotOutlined style={{ color: 'var(--app-primary)' }} />
           {isSurvey ? 'ИИ-конструктор опросов' : 'ИИ-конструктор'}
         </div>
-        <Button
-          type="text"
-          size="small"
-          icon={<CloseOutlined />}
-          aria-label="Скрыть ИИ-конструктор"
-          onClick={onClose}
-        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          {isSurvey && methodology?.summary && (
+            <Dropdown
+              trigger={['click']}
+              menu={{
+                items: [
+                  {
+                    key: 'report',
+                    label: 'Подробный обзор методик',
+                    onClick: () => setReportOpen(true),
+                  },
+                  {
+                    key: 'edit',
+                    label: 'Изменить набор',
+                    disabled: isLoading,
+                    onClick: () => setPickerOpen(true),
+                  },
+                ],
+              }}
+            >
+              <Button type="text" size="small" icon={<BookOutlined />} aria-label="Методики">
+                Методики
+              </Button>
+            </Dropdown>
+          )}
+          <Button
+            type="text"
+            size="small"
+            icon={<CloseOutlined />}
+            aria-label="Скрыть ИИ-конструктор"
+            onClick={onClose}
+          />
+        </div>
       </div>
 
       {/* Messages */}
@@ -294,15 +336,6 @@ export const AiFormBuilderPanel = ({
           gap: 12,
         }}
       >
-        {isSurvey && methodology?.summary && (
-          <MethodologySummaryCard
-            summary={methodology.summary}
-            disabled={isLoading}
-            onOpenReport={() => setReportOpen(true)}
-            onEditSet={() => setPickerOpen(true)}
-          />
-        )}
-
         {entries.length === 0 && (
           <div style={{ color: 'var(--app-text-secondary)', fontSize: 13, lineHeight: 1.5 }}>
             <p style={{ marginTop: 0 }}>

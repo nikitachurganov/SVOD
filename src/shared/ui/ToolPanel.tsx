@@ -61,6 +61,7 @@ interface FieldTypeItem {
 
 const ALL_FIELDS: FieldTypeItem[] = [
   { key: 'group', label: 'Группа полей', iconName: 'material-symbols:folder-open', category: 'Структура' },
+  { key: 'textBlock', label: 'Текст без вопроса', iconName: 'material-symbols:subject', category: 'Структура' },
   { key: 'input', label: 'Короткий текст', iconName: 'material-symbols:text-fields', category: 'Основные поля' },
   { key: 'textarea', label: 'Длинный текст', iconName: 'material-symbols:notes', category: 'Основные поля' },
   { key: 'select', label: 'Выпадающий список', iconName: 'material-symbols-light:arrow-drop-down-rounded', category: 'Основные поля' },
@@ -90,9 +91,16 @@ interface ToolPanelProps {
   onFieldAdd?: (fieldKey: string) => void;
   /** Touch layout: tap a field to add it (no drag), tighter padding */
   tapToAdd?: boolean;
+  /** «Текст без вопроса» (greeting, instruction) exists in surveys only */
+  allowTextBlock?: boolean;
 }
 
-export const ToolPanel = ({ isCompact = false, onFieldAdd, tapToAdd = false }: ToolPanelProps) => {
+export const ToolPanel = ({
+  isCompact = false,
+  onFieldAdd,
+  tapToAdd = false,
+  allowTextBlock = false,
+}: ToolPanelProps) => {
   const [search, setSearch] = useState('');
 
   const groupedByCategory = useMemo(() => {
@@ -101,7 +109,10 @@ export const ToolPanel = ({ isCompact = false, onFieldAdd, tapToAdd = false }: T
 
     for (const category of CATEGORIES) {
       const fields = ALL_FIELDS.filter(
-        (f) => f.category === category && f.label.toLowerCase().includes(query),
+        (f) =>
+          f.category === category &&
+          (allowTextBlock || f.key !== 'textBlock') &&
+          f.label.toLowerCase().includes(query),
       );
       if (fields.length > 0) {
         result[category] = fields;
@@ -109,7 +120,7 @@ export const ToolPanel = ({ isCompact = false, onFieldAdd, tapToAdd = false }: T
     }
 
     return result;
-  }, [search]);
+  }, [search, allowTextBlock]);
 
   const hasResults = Object.keys(groupedByCategory).length > 0;
 

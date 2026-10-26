@@ -282,6 +282,19 @@ const appendFieldsToProperties = (
       continue;
     }
 
+    if (field.type === 'textBlock') {
+      // Static content: no value, so it never enters the form values
+      properties[`__text_${field.id}`] = {
+        type: 'void',
+        'x-component': 'FormTextBlock',
+        'x-component-props': {
+          title: field.label || undefined,
+          text: field.description || undefined,
+        },
+      };
+      continue;
+    }
+
     const schema = fieldToSchemaProperty(field);
     if (schema) {
       properties[field.id] = schema;
@@ -408,6 +421,7 @@ export const formilySchemaToPages = (
   const fields: FormFieldInstance[] = [];
   for (const [fieldId, fieldSchema] of Object.entries(properties)) {
     if (fieldId.startsWith('__group_') || fieldId.startsWith('__page_')) continue;
+    if (fieldId.startsWith('__text_')) continue;
     if (typeof fieldSchema !== 'object' || fieldSchema === null) continue;
     const field = schemaPropertyToField(fieldId, fieldSchema as ISchema);
     if (field) fields.push(field);

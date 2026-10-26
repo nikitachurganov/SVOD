@@ -31,6 +31,7 @@ from app.schemas.survey import (
 )
 from app.services import survey_results
 from app.services.form_ai_builder_service import _parse_payload, _str
+from app.services.openrouter_client import strip_json_fence
 from app.services.survey_ai_builder_service import _call_llm
 from app.services.survey_answers import answerable_fields, is_empty
 from app.services.survey_quality import excludes_from_analysis
@@ -62,7 +63,8 @@ _SUMMARY_PROMPT = f"""Ты — аналитик опросов в сервисе
 - Если ответов меньше {SMALL_SAMPLE}, одним из пунктов предупреди, что выборка мала и выводы предварительные.
 - Не утверждай причин, которых нет в ответах.
 - Для каждого пункта перечисли id вопросов (поле id в questions и *_question_id в segment_comparisons), \
-на цифрах которых он основан. Используй только id из данных; если пункт общий — пустой список.
+на цифрах которых он основан. Используй только id из данных; если пункт общий — пустой список. \
+Сами id пиши ТОЛЬКО в question_ids и никогда не вставляй их в text.
 - {_DATA_RULE}
 
 Отвечай ТОЛЬКО валидным JSON без markdown:
@@ -85,6 +87,8 @@ _PLAN_PROMPT = f"""Ты — планировщик анализа опроса. 
 и подходящие варианты ТОЧНО как в списке. Иначе null.
 - text_questions — открытые вопросы, из которых нужны цитаты (не больше {MAX_PLAN_TEXT_QUESTIONS}); \
 пустой список, если цитаты не нужны.
+- Если исследователь назвал вопрос по тексту (в кавычках или близко к формулировке), найди его в списке и \
+используй его id — для открытого вопроса добавь в text_questions.
 - Используй только id и варианты из списка. Отвечай ТОЛЬКО валидным JSON без markdown.
 - {_DATA_RULE}
 """
@@ -104,7 +108,12 @@ _ANSWER_PROMPT = f"""Ты — аналитик опросов в сервисе 
 «Что можно сделать:» — советы исследователю. Если вопрос про формулировки анкеты, используй список questions.
 - {_DATA_RULE}
 
+- Не вставляй в ответ id вопросов и ответов (кроме id цитат в quote_ids): называй вопросы их формулировкой.
+- Если исследователь назвал вопрос по тексту (в кавычках или близко к формулировке), найди его в списке questions \
+и отвечай именно по нему.
+
 Отвечай ТОЛЬКО валидным JSON без markdown: {{"reply": "<ответ>", "quote_ids": ["r3", "r7"]}}
+Переносы строк внутри "reply" записывай как \\n.
 """
 
 
@@ -269,6 +278,14 @@ def segment_comparisons(
     return [item for _, item in found[:MAX_SEGMENT_COMPARISONS]]
 
 
+_ID_MENTION_RE = re.compile(r"\s*\(\s*ids?\s*:[^)]*\)|\s*\bids?\s*:\s*[0-9a-f]{6,}(?:\s*,\s*[0-9a-f]{6,})*", re.I)
+
+
+def _strip_ids(text: str) -> str:
+    """The model sometimes pastes question ids into the bullet text, e.g. "(id: 2155662a, 46fb41e4)"."""
+    return _ID_MENTION_RE.sub("", text).strip()
+
+
 def parse_summary(raw: str, valid_ids: set[str]) -> tuple[list[str], list[list[str]]]:
     """(bullets, evidence): the model may cite only questions that really exist."""
     parsed = _parse_payload(raw) or {}
@@ -285,7 +302,7 @@ def parse_summary(raw: str, valid_ids: set[str]) -> tuple[list[str], list[list[s
         if not isinstance(text, str) or not text.strip():
             continue
         cited = [i for i in (ids if isinstance(ids, list) else []) if isinstance(i, str) and i in valid_ids]
-        bullets.append(_str(text, 400))
+        bullets.append(_strip_ids(_str(text, 400)))
         evidence.append(list(dict.fromkeys(cited))[:4])
     return bullets[:MAX_SUMMARY_BULLETS], evidence[:MAX_SUMMARY_BULLETS]
 
@@ -468,10 +485,22 @@ def _group_digest(
     }
 
 
+def _plain_reply(raw: str) -> str:
+    text = strip_json_fence(raw).strip()
+    if text.startswith("{"):
+        # Broken JSON: pull the "reply" string out of it, give up if there is none
+        match = re.search(r'"reply"\s*:\s*"(.*?)"\s*(?:,\s*"quote_ids"|\}\s*$)', text, re.S)
+        if not match:
+            return ""
+        text = match.group(1).replace("\\n", "\n").replace('\\"', '"')
+    return re.sub(r"\s*\[r\d+\]", "", text).strip()[:6000]
+
+
 def parse_answer(raw: str, quotes: dict[str, SurveyAiQuote]) -> tuple[str, list[SurveyAiQuote]]:
     parsed = _parse_payload(raw)
     if parsed is None:
-        return "", []
+        # Not valid JSON (plain text, markdown, a stray quote): show the text rather than fail
+        return _plain_reply(raw), []
     reply = re.sub(r"\s*\[r\d+\]", "", _str(parsed.get("reply"), 6000)).strip()
     ids = parsed.get("quote_ids")
     chosen: list[SurveyAiQuote] = []
@@ -543,7 +572,7 @@ async def chat(
             {"role": "system", "content": _data_block(data)},
             *[{"role": m.role, "content": m.content} for m in messages[-8:]],
         ],
-        max_tokens=1800,
+        max_tokens=2500,
         timeout=120.0,
     )
     reply, chosen = parse_answer(answer_raw, quotes)

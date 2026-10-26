@@ -22,7 +22,7 @@ import { ToolPanel } from '../ToolPanel';
 import { IconDefaultButton } from '../IconDefaultButton';
 import { FormCanvas } from './FormCanvas';
 import { AutoGrowInput } from './AutoGrowInput';
-import { AiFormBuilderPanel, type MethodologyState } from './AiFormBuilderPanel';
+import { AiFormBuilderPanel, type ChatEntry, type MethodologyState } from './AiFormBuilderPanel';
 import { CanvasFieldOverlay } from './DroppedFieldCard';
 import { useFormStore } from '../../hooks/useFormStore';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
@@ -388,26 +388,33 @@ const InlinePreview = ({ formTitle, pages, compact = false }: InlinePreviewProps
             <div
               style={{
                 display: 'flex',
-                justifyContent: 'flex-start',
+                justifyContent: 'space-between',
                 gap: 10,
-                marginTop: 16,
+                marginTop: 24,
               }}
             >
               {!isFirst && (
-                <Button onClick={handleBack}>
+                <Button size="large" onClick={handleBack}>
                   Назад
                 </Button>
               )}
               {!isLast && (
-                <Button type="primary" onClick={handleNext}>
+                <Button
+                  size="large"
+                  type="primary"
+                  onClick={handleNext}
+                  style={{ marginLeft: 'auto', minWidth: 140 }}
+                >
                   Далее
                 </Button>
               )}
               {isLast && (
                 <Button
+                  size="large"
                   type="primary"
                   onClick={handleSubmit}
                   disabled={isSubmitting}
+                  style={{ marginLeft: 'auto', minWidth: 140 }}
                 >
                   {isSubmitting ? 'Отправка...' : 'Отправить'}
                 </Button>
@@ -444,6 +451,9 @@ export const FormEditor = ({
   const [methodology, setMethodology] = useState<MethodologyState>(
     initialMethodology ?? { meta: null, summary: null },
   );
+  // AI chat history is kept here: the panel unmounts in preview mode and when it is closed
+  const [aiEntries, setAiEntries] = useState<ChatEntry[]>([]);
+  const [aiDraft, setAiDraft] = useState('');
   const [formTitle, setFormTitle] = useState<string>(initialTitle);
   const resolvedInitialPages: FormPageInstance[] =
     initialPages && initialPages.length
@@ -1119,7 +1129,11 @@ export const FormEditor = ({
                   width={toolboxWidth}
                   onResizeStart={handleToolboxResizeStart}
                 >
-                  <ToolPanel isCompact={toolboxWidth < 320} onFieldAdd={addFieldFromPanel} />
+                  <ToolPanel
+                    isCompact={toolboxWidth < 320}
+                    onFieldAdd={addFieldFromPanel}
+                    allowTextBlock={isSurvey}
+                  />
                 </ToolPanelDropZone>
               )}
 
@@ -1293,6 +1307,10 @@ export const FormEditor = ({
                 <AiFormBuilderPanel
                   formTitle={formTitle}
                   pages={pages}
+                  entries={aiEntries}
+                  onEntriesChange={setAiEntries}
+                  draft={aiDraft}
+                  onDraftChange={setAiDraft}
                   onApply={replaceFormState}
                   onRestore={(title, restoredPages, restoredMethodology) => {
                     replaceFormState(title, restoredPages);
@@ -1330,7 +1348,7 @@ export const FormEditor = ({
             }}
             styles={{ body: { padding: 0 } }}
           >
-            <ToolPanel tapToAdd onFieldAdd={addFieldFromPanel} />
+            <ToolPanel tapToAdd onFieldAdd={addFieldFromPanel} allowTextBlock={isSurvey} />
           </Drawer>
 
           <Drawer
@@ -1345,6 +1363,10 @@ export const FormEditor = ({
               width="100%"
               formTitle={formTitle}
               pages={pages}
+              entries={aiEntries}
+              onEntriesChange={setAiEntries}
+              draft={aiDraft}
+              onDraftChange={setAiDraft}
               onApply={replaceFormState}
               onRestore={(title, restoredPages, restoredMethodology) => {
                 replaceFormState(title, restoredPages);
