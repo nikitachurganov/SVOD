@@ -287,6 +287,7 @@ export const ProjectSurveysPage = () => {
           <Button
             type="primary"
             className="registry-page__create-btn"
+            data-tour="create-survey"
             icon={<PlusOutlined />}
             onClick={createSurvey}
           >

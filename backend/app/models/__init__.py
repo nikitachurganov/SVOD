@@ -1,5 +1,6 @@
 from app.models.user import User
 from app.models.password_reset import PasswordResetToken
+from app.models.user_onboarding import UserOnboarding
 from app.models.form import Form
 from app.models.request import Request
 from app.models.form_file import FormFile
@@ -34,6 +35,7 @@ from app.models.telegram import (
 __all__ = [
     "User",
     "PasswordResetToken",
+    "UserOnboarding",
     "Form",
     "Request",
     "FormFile",

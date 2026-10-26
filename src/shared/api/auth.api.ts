@@ -114,6 +114,22 @@ export const confirmPasswordReset = async (token: string, password: string): Pro
   await api.post(`/auth/password-reset/${encodeURIComponent(token)}`, { password });
 };
 
+export interface ChangePasswordPayload {
+  currentPassword: string;
+  newPassword: string;
+}
+
+/** Signed in: change the password. A wrong current password answers 400 (a 401 would end the session). */
+export const changeMyPassword = async ({
+  currentPassword,
+  newPassword,
+}: ChangePasswordPayload): Promise<void> => {
+  await api.post('/auth/me/password', {
+    current_password: currentPassword,
+    new_password: newPassword,
+  });
+};
+
 export const signOut = async (): Promise<void> => {
   localStorage.removeItem('access_token');
 };

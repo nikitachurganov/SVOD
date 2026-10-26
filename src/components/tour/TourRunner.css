@@ -1,0 +1,36 @@
+.tour-popup .ant-tour {
+  max-width: min(360px, calc(100vw - 32px));
+}
+
+.tour-popup__progress {
+  font-size: 12px;
+  color: var(--app-text-secondary);
+}
+
+[data-tour-active='true'] {
+  outline: 2px solid var(--app-primary);
+  outline-offset: 3px;
+  border-radius: 8px;
+}
+
+.tour-resume {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  max-width: calc(100vw - 32px);
+  padding: 10px 12px;
+  border: 1px solid var(--app-border-secondary);
+  border-radius: 10px;
+  background: var(--app-surface);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+}
+
+.tour-resume__text {
+  font-size: 13px;
+  color: var(--app-text);
+}

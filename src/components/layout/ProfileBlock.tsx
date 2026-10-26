@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { Switch } from 'antd';
+import { useNavigate } from 'react-router-dom';
+import { useTour } from '../tour/useTour';
 import { useAuth } from '../../shared/hooks/auth.hooks';
 import { useThemeMode } from '../../shared/context/theme.context';
 
@@ -15,6 +17,8 @@ export const HeaderProfileMenuContent = ({
   showCreateOrg = true,
 }: HeaderProfileMenuContentProps) => {
   const { signOut } = useAuth();
+  const navigate = useNavigate();
+  const { start: startTour } = useTour();
   const { themeMode, toggleTheme } = useThemeMode();
   const [isSigningOut, setIsSigningOut] = useState(false);
 
@@ -37,8 +41,34 @@ export const HeaderProfileMenuContent = ({
     void handleSignOut();
   };
 
+  const handleOpenProfile = () => {
+    onClose();
+    navigate('/profile');
+  };
+
+  const handleStartTour = () => {
+    onClose();
+    void startTour();
+  };
+
   return (
     <div className="app-profile-dropdown">
+      <button
+        type="button"
+        className="app-profile-dropdown__item"
+        onClick={handleOpenProfile}
+      >
+        Профиль
+      </button>
+
+      <button
+        type="button"
+        className="app-profile-dropdown__item"
+        onClick={handleStartTour}
+      >
+        Пройти обучение
+      </button>
+
       {showCreateOrg && (
         <button
           type="button"

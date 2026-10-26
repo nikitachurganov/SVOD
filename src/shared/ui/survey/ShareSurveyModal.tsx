@@ -58,6 +58,7 @@ export const ShareSurveyModal = ({
   return (
     <Modal
       open={open}
+      rootClassName="tour-share-modal"
       onCancel={onClose}
       title="Поделиться опросом"
       footer={

@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import func, select, tuple_
+from sqlalchemy import delete, func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.survey import Survey, SurveyProject, SurveyResponse
@@ -231,6 +231,16 @@ async def count_responses(
         stmt = stmt.where(func.jsonb_typeof(SurveyResponse.quality_flags) == "object")
     result = await session.execute(stmt)
     return int(result.scalar_one() or 0)
+
+
+async def delete_demo_responses(session: AsyncSession, survey_id: uuid.UUID) -> int:
+    """Removes the responses generated for the guided tour (marked ``demo`` in respondent_meta)."""
+    stmt = delete(SurveyResponse).where(
+        SurveyResponse.survey_id == survey_id,
+        SurveyResponse.respondent_meta["demo"].astext == "true",
+    )
+    result = await session.execute(stmt)
+    return int(result.rowcount or 0)
 
 
 async def get_response(

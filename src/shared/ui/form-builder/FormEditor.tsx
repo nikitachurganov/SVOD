@@ -1061,6 +1061,7 @@ export const FormEditor = ({
               {!isPreviewMode && (
                 <Button
                   icon={<RobotOutlined />}
+                  data-tour="ai-builder"
                   aria-pressed={isAiPanelOpen}
                   aria-label="ИИ-конструктор"
                   type={isAiPanelOpen && !isMobile ? 'default' : 'text'}
@@ -1089,6 +1090,7 @@ export const FormEditor = ({
               )}
               <Button
                 type="primary"
+                data-tour="save-survey"
                 onClick={handleSave}
                 disabled={isSaving}
               >

@@ -7,6 +7,7 @@ import {
   MessageOutlined,
   MoreOutlined,
   ShareAltOutlined,
+  ThunderboltOutlined,
 } from '@ant-design/icons';
 import axios from 'axios';
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
@@ -14,6 +15,7 @@ import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import {
   archiveSurvey,
   downloadSurveyResponsesCsv,
+  generateDemoResponses,
   generateSurveyAiSummary,
   getSurveyAiSummary,
   getSurveyById,
@@ -23,6 +25,7 @@ import {
   type SurveyDetail,
   type SurveyResults,
 } from '../shared/api/surveys.api';
+import { useTour } from '../components/tour/useTour';
 import { useBreadcrumbEntity } from '../shared/context/breadcrumb.context';
 import { useNotifications } from '../shared/context/notifications.context';
 import { AiConsentModal } from '../shared/ui/survey/AiConsentModal';
@@ -79,6 +82,8 @@ export const SurveyViewPage = () => {
   const { pathname } = useLocation();
   const { setEntityTitle, setEntityParent } = useBreadcrumbEntity();
   const { notifySuccess, notifyError } = useNotifications();
+  const { step: tourStep, next: tourNext } = useTour();
+  const [demoBusy, setDemoBusy] = useState(false);
 
   // /surveys/:id[/form|/responses[/:responseId]|/analytics] — the tab lives in the address
   const [, , , tabSegment, responseSegment] = pathname.split('/');
@@ -210,6 +215,30 @@ export const SurveyViewPage = () => {
     }
   };
 
+  /** Guided tour only: test answers, so that the person has something to analyse right away */
+  const generateDemo = async () => {
+    if (!survey) return;
+    setDemoBusy(true);
+    try {
+      await generateDemoResponses(survey.id);
+      await load();
+    } catch (err) {
+      const detail = axios.isAxiosError(err) ? err.response?.data?.detail : undefined;
+      if (detail === 'survey_has_responses') {
+        // Real answers are never mixed with test ones: carry on with what the survey already has
+        notifySuccess('В опросе уже есть ответы', 'Продолжим с ними');
+        tourNext();
+      } else {
+        notifyError(
+          'Не удалось создать тестовые ответы',
+          detail === 'survey_not_published' ? 'Сначала опубликуйте опрос.' : undefined,
+        );
+      }
+    } finally {
+      setDemoBusy(false);
+    }
+  };
+
   const handleArchive = async () => {
     if (!survey) return;
     setBusy(true);
@@ -291,8 +320,8 @@ export const SurveyViewPage = () => {
   const tabItems = [
     { key: 'overview', label: 'Обзор' },
     { key: 'form', label: 'Вопросы' },
-    { key: 'responses', label: `Ответы (${totalResponses})` },
-    { key: 'analytics', label: 'Аналитика' },
+    { key: 'responses', label: <span data-tour="tab-responses">{`Ответы (${totalResponses})`}</span> },
+    { key: 'analytics', label: <span data-tour="tab-analytics">Аналитика</span> },
   ];
 
   const panels: Record<SurveyTabKey, ReactNode> = {
@@ -370,11 +399,24 @@ export const SurveyViewPage = () => {
               flexWrap: 'wrap',
             }}
           >
+            {tourStep === 'demo' && (
+              <Button
+                type="primary"
+                size={controlSize}
+                icon={<ThunderboltOutlined />}
+                data-tour="demo-responses"
+                loading={demoBusy}
+                onClick={() => void generateDemo()}
+              >
+                Сгенерировать тестовые ответы
+              </Button>
+            )}
             {!isArchived && (
               <Button
                 type="primary"
                 size={controlSize}
                 icon={<ShareAltOutlined />}
+                data-tour="share-survey"
                 onClick={() => setShareOpen(true)}
               >
                 Поделиться

@@ -62,6 +62,9 @@ import { CreateSurveyPage } from './pages/CreateSurveyPage';
 import { EditSurveyPage } from './pages/EditSurveyPage';
 import { SurveyViewPage } from './pages/SurveyViewPage';
 import { PublicSurveyPage } from './pages/PublicSurveyPage';
+import { ProfilePage } from './pages/ProfilePage';
+import { OnboardingGate } from './components/onboarding/OnboardingGate';
+import { TourProvider } from './components/tour/TourProvider';
 
 import { RequestsPage } from './pages/RequestsPage';
 
@@ -151,6 +154,8 @@ const AppLayoutContent = () => {
   const hasOrganizations = organizations.length > 0;
 
   const showOrgSidebarBlock = hasOrganizations && !isOrgLoading;
+
+  const isProfileRoute = location.pathname === '/profile';
 
 
 
@@ -276,6 +281,8 @@ const AppLayoutContent = () => {
 
       <GlobalScrollbarStyles />
 
+      <OnboardingGate />
+
 
 
       <div className={shellClass}>
@@ -358,7 +365,12 @@ const AppLayoutContent = () => {
 
           <main id="main-content" className="app-shell-content">
 
-            {isOrgLoading ? (
+            {isProfileRoute ? (
+
+              // The account settings do not depend on an organization: a person without one can still change the password
+              <Outlet />
+
+            ) : isOrgLoading ? (
 
               <div className="app-shell-loading">
 
@@ -421,7 +433,11 @@ const AppLayout = () => (
 
       <BreadcrumbProvider>
 
-        <AppLayoutContent />
+        <TourProvider>
+
+          <AppLayoutContent />
+
+        </TourProvider>
 
       </BreadcrumbProvider>
 
@@ -561,6 +577,8 @@ const platformRoutes: RouteObject[] = [
 
       ...surveyRoutes,
 
+      { path: 'profile', element: <ProfilePage /> },
+
       { path: 'participants', element: <ParticipantsPage /> },
 
       { path: 'settings/organization', element: <OrganizationSettingsPage /> },
@@ -593,6 +611,8 @@ const surveysRoutes: RouteObject[] = [
       { index: true, element: <Navigate to={HOME_PATH} replace /> },
 
       ...surveyRoutes,
+
+      { path: 'profile', element: <ProfilePage /> },
 
       // Anything else (including other modules' old links) leads back to the surveys start page
       { path: '*', element: <Navigate to={HOME_PATH} replace /> },

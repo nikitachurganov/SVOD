@@ -7,14 +7,17 @@ from app.api.deps import CurrentUser, DbSession
 from app.schemas.auth import (
     AccountActivationInfo,
     ActivateAccountRequest,
+    ChangePasswordRequest,
     LoginRequest,
     PasswordResetConfirm,
     PasswordResetRequest,
     RegisterRequest,
     TokenResponse,
+    UpdateProfileRequest,
 )
-from app.schemas.user import UserProfileResponse
-from app.services import auth_service
+from app.schemas.onboarding import OnboardingSurveyRequest, TourUpdateRequest
+from app.schemas.user import OnboardingState, UserProfileResponse
+from app.services import auth_service, onboarding_service
 
 router = APIRouter()
 
@@ -84,5 +87,44 @@ async def confirm_password_reset(
 
 
 @router.get("/me", response_model=UserProfileResponse)
-async def me(user: CurrentUser) -> UserProfileResponse:
-    return auth_service.build_profile_response(user)
+async def me(user: CurrentUser, session: DbSession) -> UserProfileResponse:
+    return await auth_service.get_profile(session, user)
+
+
+@router.patch("/me", response_model=UserProfileResponse)
+async def update_me(
+    payload: UpdateProfileRequest, user: CurrentUser, session: DbSession
+) -> UserProfileResponse:
+    """Change the signed-in person's first, last and middle name."""
+    return await auth_service.update_profile(session, user, payload)
+
+
+@router.put("/me/onboarding", response_model=OnboardingState)
+async def submit_onboarding_survey(
+    payload: OnboardingSurveyRequest, user: CurrentUser, session: DbSession
+) -> OnboardingState:
+    """Save the answers of the first-visit questionnaire (who, what for, where from)."""
+    return await onboarding_service.submit_survey(session, user, payload)
+
+
+@router.post("/me/onboarding/dismiss", response_model=OnboardingState)
+async def dismiss_onboarding_survey(user: CurrentUser, session: DbSession) -> OnboardingState:
+    """Close the questionnaire without answering; only for accounts that predate it (403 otherwise)."""
+    return await onboarding_service.dismiss_survey(session, user)
+
+
+@router.patch("/me/tour", response_model=OnboardingState)
+async def update_tour(
+    payload: TourUpdateRequest, user: CurrentUser, session: DbSession
+) -> OnboardingState:
+    """Remember the answer to the tour offer and how far the person got."""
+    return await onboarding_service.update_tour(session, user, payload)
+
+
+@router.post("/me/password", status_code=204)
+async def change_my_password(
+    payload: ChangePasswordRequest, user: CurrentUser, session: DbSession
+) -> Response:
+    """Change the password of the signed-in person (the current one is required)."""
+    await auth_service.change_password(session, user, payload)
+    return Response(status_code=204)

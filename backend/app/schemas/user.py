@@ -20,6 +20,17 @@ class UserResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class OnboardingState(BaseModel):
+    """First-visit questionnaire and tour state, as the web client reads it."""
+    surveyCompleted: bool
+    # Show the questionnaire now: not answered yet and not closed
+    needsSurvey: bool
+    # May be closed without answering (accounts that predate the questionnaire)
+    dismissible: bool
+    tourStatus: str
+    tourStep: str | None
+
+
 class UserProfileResponse(BaseModel):
     """Matches the frontend UserProfile interface."""
     id: str
@@ -31,6 +42,7 @@ class UserProfileResponse(BaseModel):
     phoneNumber: str
     avatarUrl: str | None
     createdAt: str
+    onboarding: OnboardingState
 
 
 class PublicAuthorResponse(BaseModel):

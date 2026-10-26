@@ -18,17 +18,25 @@ from app.core.security import (
 )
 from app.models.organization import OrganizationInvitation, OrganizationMember
 from app.models.user import User
-from app.repositories import organization_repository, password_reset_repository, user_repository
+from app.models.user_onboarding import UserOnboarding
+from app.repositories import (
+    organization_repository,
+    password_reset_repository,
+    user_onboarding_repository,
+    user_repository,
+)
 from app.schemas.auth import (
     AccountActivationInfo,
     ActivateAccountRequest,
+    ChangePasswordRequest,
     LoginRequest,
     PasswordResetConfirm,
     RegisterRequest,
     TokenResponse,
+    UpdateProfileRequest,
 )
 from app.schemas.user import UserProfileResponse
-from app.services import email_service
+from app.services import email_service, onboarding_service
 
 logger = logging.getLogger(__name__)
 
@@ -202,7 +210,7 @@ async def confirm_password_reset(session: AsyncSession, token: str, payload: Pas
     await session.commit()
 
 
-def build_profile_response(user: User) -> UserProfileResponse:
+def build_profile_response(user: User, onboarding: UserOnboarding | None) -> UserProfileResponse:
     display_name = build_display_name(
         last_name=user.last_name,
         first_name=user.first_name,
@@ -218,7 +226,66 @@ def build_profile_response(user: User) -> UserProfileResponse:
         phoneNumber=user.phone_number,
         avatarUrl=user.avatar_url,
         createdAt=user.created_at.isoformat(),
+        onboarding=onboarding_service.build_state(onboarding),
     )
+
+
+async def get_profile(session: AsyncSession, user: User) -> UserProfileResponse:
+    return build_profile_response(user, await user_onboarding_repository.get(session, user.id))
+
+
+async def update_profile(
+    session: AsyncSession, user: User, payload: UpdateProfileRequest
+) -> UserProfileResponse:
+    """Changes the person's own name; phone and email stay as they are."""
+    _apply_profile(
+        user,
+        first_name=payload.first_name,
+        last_name=payload.last_name,
+        middle_name=payload.middle_name,
+        phone_number=user.phone_number,
+    )
+    await session.commit()
+    return await get_profile(session, user)
+
+
+# A wrong «current password» answers 400, not 401: the web client treats 401 as an expired session
+_WRONG_CURRENT_PASSWORD = "Текущий пароль указан неверно"
+_SAME_PASSWORD = "Новый пароль должен отличаться от текущего"
+_TOO_MANY_PASSWORD_ATTEMPTS = "Слишком много неверных попыток. Попробуйте позже."
+
+_PASSWORD_ATTEMPT_WINDOW = timedelta(minutes=15)
+_MAX_PASSWORD_ATTEMPTS = 5
+# Best-effort and process-local, like the other limits: it only slows guessing with a stolen token
+_failed_password_attempts: dict[uuid.UUID, list[datetime]] = {}
+
+
+def _recent_failed_attempts(user_id: uuid.UUID, now: datetime) -> list[datetime]:
+    recent = [t for t in _failed_password_attempts.get(user_id, []) if now - t < _PASSWORD_ATTEMPT_WINDOW]
+    if recent:
+        _failed_password_attempts[user_id] = recent
+    else:
+        _failed_password_attempts.pop(user_id, None)
+    return recent
+
+
+async def change_password(session: AsyncSession, user: User, payload: ChangePasswordRequest) -> None:
+    now = datetime.now(timezone.utc)
+    attempts = _recent_failed_attempts(user.id, now)
+    if len(attempts) >= _MAX_PASSWORD_ATTEMPTS:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=_TOO_MANY_PASSWORD_ATTEMPTS)
+
+    if not verify_password(payload.current_password, user.password_hash):
+        _failed_password_attempts[user.id] = [*attempts, now]
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=_WRONG_CURRENT_PASSWORD)
+    if payload.new_password == payload.current_password:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=_SAME_PASSWORD)
+
+    _failed_password_attempts.pop(user.id, None)
+    user.password_hash = hash_password(payload.new_password)
+    # Reset links issued earlier must not outlive the password they were meant to replace
+    await password_reset_repository.invalidate_unused(session, user.id, now)
+    await session.commit()
 
 
 # ---------------------------------------------------------------------------

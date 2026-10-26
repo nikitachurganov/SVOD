@@ -36,6 +36,7 @@ const AiSummaryCard = ({ aiSummary, aiLoading, aiError, onGenerate, questionLabe
     extra={
       <Button
         size="small"
+        data-tour="ai-summary"
         icon={aiSummary ? <ReloadOutlined /> : <RobotOutlined />}
         loading={aiLoading}
         onClick={() => onGenerate(true)}

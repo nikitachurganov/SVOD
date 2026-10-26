@@ -25,6 +25,10 @@ export const getBreadcrumbsForPath = (
     ];
   }
 
+  if (pathname === '/profile') {
+    return [{ title: 'Профиль' }];
+  }
+
   if (pathname === '/forms/create') {
     return [
       { title: 'Формы', path: '/forms' },

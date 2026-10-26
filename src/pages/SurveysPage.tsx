@@ -205,7 +205,13 @@ export const SurveysPage = () => {
           <p className="projects-empty__text">
             Создайте первый проект, чтобы объединять опросы по темам исследований и собирать ответы в одном месте.
           </p>
-          <Button type="primary" size="large" icon={<PlusOutlined />} onClick={() => openForm(null)}>
+          <Button
+            type="primary"
+            size="large"
+            icon={<PlusOutlined />}
+            data-tour="new-project"
+            onClick={() => openForm(null)}
+          >
             Создать проект
           </Button>
         </div>
@@ -259,7 +265,7 @@ export const SurveysPage = () => {
               </li>
             ))}
             {!search.trim() && (
-              <li className="project-env project-env--new">
+              <li className="project-env project-env--new" data-tour="new-project">
                 <NewProjectFolder onClick={() => openForm(null)} />
               </li>
             )}

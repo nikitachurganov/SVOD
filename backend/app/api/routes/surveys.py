@@ -34,7 +34,17 @@ from app.schemas.survey import (
     UpdateProjectRequest,
     UpdateSurveyRequest,
 )
-from app.services import survey_ai_builder_service, survey_methodology_service, survey_service
+from app.schemas.survey_demo import (
+    DemoResponsesRemoved,
+    DemoResponsesRequest,
+    DemoResponsesResult,
+)
+from app.services import (
+    survey_ai_builder_service,
+    survey_demo_service,
+    survey_methodology_service,
+    survey_service,
+)
 from app.services.public_suggest_rate_limit import check_public_suggest_limit
 
 router = APIRouter()
@@ -167,6 +177,22 @@ async def set_survey_status(
     survey_id: str, payload: SurveyStatusRequest, session: DbSession, user: CurrentUser
 ) -> SurveyDetail:
     return await survey_service.set_status(session, user, survey_id, payload.status)
+
+
+@router.post("/{survey_id}/demo-responses", response_model=DemoResponsesResult, status_code=201)
+async def add_demo_responses(
+    survey_id: str, payload: DemoResponsesRequest, session: DbSession, user: CurrentUser
+) -> DemoResponsesResult:
+    """Guided tour: fill a published survey that has no answers yet with made-up test responses."""
+    return await survey_demo_service.add_demo_responses(session, user, survey_id, payload.count)
+
+
+@router.delete("/{survey_id}/demo-responses", response_model=DemoResponsesRemoved)
+async def remove_demo_responses(
+    survey_id: str, session: DbSession, user: CurrentUser
+) -> DemoResponsesRemoved:
+    """Remove the test responses made for the guided tour; real responses stay."""
+    return await survey_demo_service.remove_demo_responses(session, user, survey_id)
 
 
 @router.delete("/{survey_id}", status_code=204)
