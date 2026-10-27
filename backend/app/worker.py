@@ -7,7 +7,7 @@ from prometheus_client import start_http_server
 from app.core.config import settings
 from app.core.database import async_session_factory
 from app.services import account_deletion_service, ai_job_service, notification_service
-from app.services import payment_service, subscription_lifecycle_service
+from app.services import ops_alert_service, payment_service, subscription_lifecycle_service
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("svod.worker")
@@ -15,6 +15,7 @@ logger = logging.getLogger("svod.worker")
 # What the billing tick does, each in a session of its own so one failure does not stop the rest
 _BILLING_STEPS = (
     ("payments", payment_service.reconcile_open),
+    ("ops alerts", ops_alert_service.run),
     ("subscriptions", subscription_lifecycle_service.process_due),
     ("scheduled deletions", account_deletion_service.process_scheduled_deletions),
     ("deletion reminders", account_deletion_service.send_deletion_reminders),
