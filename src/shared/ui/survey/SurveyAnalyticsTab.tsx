@@ -3,6 +3,9 @@ import { Alert, Button, Card, Tag } from 'antd';
 import { ReloadOutlined, RobotOutlined } from '@ant-design/icons';
 
 import type { SurveyAiSummary, SurveyResults } from '../../api/surveys.api';
+import { AiQuotaNote } from '../../../components/billing/AiQuotaNote';
+import { useSubscription } from '../../hooks/subscription.hooks';
+import { getAiQuota } from '../../lib/aiQuota';
 import { AnalyticsCard } from './AnalyticsCard';
 import { MetricCard } from './MetricCard';
 import { SegmentPieChart } from './SurveyCharts';
@@ -21,6 +24,31 @@ interface AiSummaryCardProps {
   questionLabels: Map<string, string>;
 }
 
+/** The button is switched off once the plan's AI actions are used up: the server would refuse it anyway */
+const GenerateSummaryButton = ({
+  hasSummary,
+  loading,
+  onGenerate,
+}: {
+  hasSummary: boolean;
+  loading: boolean;
+  onGenerate: (force: boolean) => void;
+}) => {
+  const { subscription } = useSubscription();
+  return (
+    <Button
+      size="small"
+      data-tour="ai-summary"
+      icon={hasSummary ? <ReloadOutlined /> : <RobotOutlined />}
+      loading={loading}
+      disabled={getAiQuota(subscription).exhausted}
+      onClick={() => onGenerate(true)}
+    >
+      {hasSummary ? 'Обновить' : 'Сформировать ИИ-резюме'}
+    </Button>
+  );
+};
+
 const showQuestion = (id: string) =>
   document.getElementById(`question-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
@@ -33,19 +61,10 @@ const AiSummaryCard = ({ aiSummary, aiLoading, aiError, onGenerate, questionLabe
         ИИ-резюме
       </span>
     }
-    extra={
-      <Button
-        size="small"
-        data-tour="ai-summary"
-        icon={aiSummary ? <ReloadOutlined /> : <RobotOutlined />}
-        loading={aiLoading}
-        onClick={() => onGenerate(true)}
-      >
-        {aiSummary ? 'Обновить' : 'Сформировать ИИ-резюме'}
-      </Button>
-    }
+    extra={<GenerateSummaryButton hasSummary={!!aiSummary} loading={aiLoading} onGenerate={onGenerate} />}
   >
     {aiError && <Alert type="error" showIcon message={aiError} style={{ marginBottom: 8 }} />}
+    <AiQuotaNote className="ai-quota-note--card" />
     {aiSummary ? (
       <>
         <ul style={{ margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 6 }}>

@@ -29,6 +29,10 @@ import {
   type SurveyAiBuildResponse,
   type MethodologySummary,
 } from '../../api/surveys.api';
+import { AiQuotaNote } from '../../../components/billing/AiQuotaNote';
+import { useSubscription } from '../../hooks/subscription.hooks';
+import { getAiQuota } from '../../lib/aiQuota';
+import { billingErrorMessage } from '../../lib/billingErrors';
 import { MethodologyReportModal } from '../survey/MethodologyReportModal';
 import { MethodologyPickerModal } from '../survey/MethodologyPickerModal';
 
@@ -146,6 +150,8 @@ const SURVEY_EXAMPLE_PROMPTS = [
 ];
 
 const getErrorMessage = (error: unknown): string => {
+  const billing = billingErrorMessage(error);
+  if (billing) return billing;
   if (axios.isAxiosError(error)) {
     const detail = error.response?.data?.detail;
     if (typeof detail === 'string') return detail;
@@ -170,6 +176,9 @@ export const AiFormBuilderPanel = ({
   onMethodologyChange,
 }: AiFormBuilderPanelProps) => {
   const isSurvey = mode === 'survey';
+  // Only the survey builder spends the plan's AI actions; the base product's form builder is not metered
+  const { subscription, refresh: refreshSubscription } = useSubscription();
+  const quotaExhausted = isSurvey && getAiQuota(subscription).exhausted;
   const [reportOpen, setReportOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const pagePayload = useMemo(() => mapPagesToPayload(pages), [pages]);
@@ -188,7 +197,7 @@ export const AiFormBuilderPanel = ({
 
   const send = async (text: string, methodologyIds?: string[]) => {
     const content = text.trim();
-    if (!content || isLoading) return;
+    if (!content || isLoading || quotaExhausted) return;
 
     const userEntry: ChatEntry = { id: crypto.randomUUID(), role: 'user', content };
     const history = [...entries, userEntry];
@@ -249,6 +258,8 @@ export const AiFormBuilderPanel = ({
       ]);
     } finally {
       setIsLoading(false);
+      // The action used one unit of the plan, whether it worked or was refused
+      if (isSurvey) void refreshSubscription();
     }
   };
 
@@ -349,7 +360,9 @@ export const AiFormBuilderPanel = ({
                   key={prompt}
                   type="button"
                   onClick={() => send(prompt)}
+                  disabled={quotaExhausted}
                   style={{
+                    opacity: quotaExhausted ? 0.5 : 1,
                     textAlign: 'left',
                     padding: '8px 12px',
                     border: '1px solid var(--app-border)',
@@ -435,6 +448,8 @@ export const AiFormBuilderPanel = ({
         )}
       </div>
 
+      {isSurvey && <AiQuotaNote className="ai-quota-note" />}
+
       {/* Composer */}
       <div
         style={{
@@ -459,7 +474,7 @@ export const AiFormBuilderPanel = ({
             isSurvey ? 'Например: сделай короче и добавь вопрос про общежитие' : 'Например: добавь поле с датой доставки'
           }
           autoSize={{ minRows: 1, maxRows: 6 }}
-          disabled={isLoading}
+          disabled={isLoading || quotaExhausted}
           maxLength={4000}
         />
         <Button
@@ -467,7 +482,7 @@ export const AiFormBuilderPanel = ({
           icon={<SendOutlined />}
           aria-label="Отправить"
           onClick={() => send(draft)}
-          disabled={isLoading || !draft.trim()}
+          disabled={isLoading || quotaExhausted || !draft.trim()}
           loading={isLoading}
         />
       </div>

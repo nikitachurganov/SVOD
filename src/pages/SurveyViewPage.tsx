@@ -25,6 +25,8 @@ import {
   type SurveyDetail,
   type SurveyResults,
 } from '../shared/api/surveys.api';
+import { useSubscription } from '../shared/hooks/subscription.hooks';
+import { billingErrorMessage } from '../shared/lib/billingErrors';
 import { useTour } from '../components/tour/useTour';
 import { useBreadcrumbEntity } from '../shared/context/breadcrumb.context';
 import { useNotifications } from '../shared/context/notifications.context';
@@ -67,6 +69,8 @@ const AI_SUGGESTIONS: Record<SurveyTabKey, string[]> = {
 };
 
 const aiErrorMessage = (err: unknown): string => {
+  const billing = billingErrorMessage(err);
+  if (billing) return billing;
   if (axios.isAxiosError(err)) {
     const detail = err.response?.data?.detail;
     if (detail === 'no_responses') return 'Пока нет ответов для анализа.';
@@ -102,6 +106,7 @@ export const SurveyViewPage = () => {
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [aiSummary, setAiSummary] = useState<SurveyAiSummary | null>(null);
+  const { refresh: refreshSubscription } = useSubscription();
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
@@ -169,6 +174,7 @@ export const SurveyViewPage = () => {
       setAiError(aiErrorMessage(err));
     } finally {
       setAiLoading(false);
+      void refreshSubscription();
     }
   };
 

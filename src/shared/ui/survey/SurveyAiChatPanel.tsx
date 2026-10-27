@@ -8,6 +8,10 @@ import {
   type CrosstabResult,
   type SurveyAiQuote,
 } from '../../api/surveys.api';
+import { AiQuotaNote } from '../../../components/billing/AiQuotaNote';
+import { useSubscription } from '../../hooks/subscription.hooks';
+import { getAiQuota } from '../../lib/aiQuota';
+import { billingErrorMessage } from '../../lib/billingErrors';
 import { CrosstabView } from './CrosstabView';
 
 const EXAMPLE_PROMPTS = [
@@ -26,6 +30,8 @@ interface ChatEntry {
 }
 
 const getErrorMessage = (error: unknown): string => {
+  const billing = billingErrorMessage(error);
+  if (billing) return billing;
   if (axios.isAxiosError(error)) {
     const detail = error.response?.data?.detail;
     if (typeof detail === 'string') return detail;
@@ -82,6 +88,8 @@ export const SurveyAiChatPanel = ({
   suggestions,
 }: SurveyAiChatPanelProps) => {
   const isMobile = Grid.useBreakpoint().md === false;
+  const { subscription, refresh: refreshSubscription } = useSubscription();
+  const quotaExhausted = getAiQuota(subscription).exhausted;
   const [entries, setEntries] = useState<ChatEntry[]>([]);
   const [draft, setDraft] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -93,7 +101,7 @@ export const SurveyAiChatPanel = ({
 
   const send = async (text: string) => {
     const content = text.trim();
-    if (!content || isLoading) return;
+    if (!content || isLoading || quotaExhausted) return;
     const userEntry: ChatEntry = { id: crypto.randomUUID(), role: 'user', content };
     const history = [...entries, userEntry];
     setEntries(history);
@@ -122,6 +130,8 @@ export const SurveyAiChatPanel = ({
       ]);
     } finally {
       setIsLoading(false);
+      // The question used one unit of the plan, whether it was answered or refused
+      void refreshSubscription();
     }
   };
 
@@ -268,6 +278,8 @@ export const SurveyAiChatPanel = ({
         )}
       </div>
 
+      <AiQuotaNote className="ai-quota-note" />
+
       <div
         style={{
           padding: 12,
@@ -289,7 +301,7 @@ export const SurveyAiChatPanel = ({
           }}
           placeholder="Например: почему студенты с 3 курса оценивают хуже?"
           autoSize={{ minRows: 1, maxRows: 6 }}
-          disabled={isLoading}
+          disabled={isLoading || quotaExhausted}
           maxLength={2000}
         />
         <Button
@@ -297,7 +309,7 @@ export const SurveyAiChatPanel = ({
           icon={<SendOutlined />}
           aria-label="Отправить"
           onClick={() => void send(draft)}
-          disabled={isLoading || !draft.trim()}
+          disabled={isLoading || quotaExhausted || !draft.trim()}
           loading={isLoading}
         />
       </div>
