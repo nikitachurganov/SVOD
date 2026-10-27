@@ -20,6 +20,7 @@ from app.models.organization import OrganizationInvitation, OrganizationMember
 from app.models.user import User
 from app.models.user_onboarding import UserOnboarding
 from app.repositories import (
+    email_verification_repository,
     organization_repository,
     password_reset_repository,
     user_onboarding_repository,
@@ -36,7 +37,7 @@ from app.schemas.auth import (
     UpdateProfileRequest,
 )
 from app.schemas.user import UserProfileResponse
-from app.services import email_service, onboarding_service
+from app.services import avatar_service, email_service, onboarding_service
 
 logger = logging.getLogger(__name__)
 
@@ -88,10 +89,16 @@ async def create_account(session: AsyncSession, payload: RegisterRequest) -> Use
     return await user_repository.create(session, user)
 
 
-async def register(session: AsyncSession, payload: RegisterRequest) -> TokenResponse:
+async def register(
+    session: AsyncSession, payload: RegisterRequest
+) -> tuple[TokenResponse, "EmailVerificationDelivery | None"]:
+    """Sign up. The second value is the confirmation email to send once the response is out."""
     user = await create_account(session, payload)
+    delivery = None
+    if user.email_verified_at is None:
+        delivery = await _issue_email_verification(session, user, payload.service)
     await session.commit()
-    return TokenResponse(access_token=create_access_token(subject=str(user.id)))
+    return TokenResponse(access_token=create_access_token(subject=str(user.id))), delivery
 
 
 async def login(session: AsyncSession, payload: LoginRequest) -> TokenResponse:
@@ -112,6 +119,8 @@ async def login(session: AsyncSession, payload: LoginRequest) -> TokenResponse:
             detail="Account is deactivated",
         )
 
+    user.last_login_at = datetime.now(timezone.utc)
+    await session.commit()
     token = create_access_token(subject=str(user.id))
     return TokenResponse(access_token=token)
 
@@ -204,13 +213,108 @@ async def check_password_reset_token(session: AsyncSession, token: str) -> None:
 
 async def confirm_password_reset(session: AsyncSession, token: str, payload: PasswordResetConfirm) -> None:
     row, user = await _load_reset_token(session, token)
+    now = datetime.now(timezone.utc)
     user.password_hash = hash_password(payload.password)
+    if user.email_verified_at is None:
+        # The link came to the mailbox, so the person has proven they own it
+        user.email_verified_at = now
     # The link is consumed together with any other outstanding ones
-    await password_reset_repository.invalidate_unused(session, user.id, datetime.now(timezone.utc))
+    await password_reset_repository.invalidate_unused(session, user.id, now)
     await session.commit()
 
 
-def build_profile_response(user: User, onboarding: UserOnboarding | None) -> UserProfileResponse:
+# ---------------------------------------------------------------------------
+# Email confirmation
+# ---------------------------------------------------------------------------
+
+_INVALID_VERIFICATION_LINK = "Ссылка недействительна или устарела. Запросите новое письмо в профиле."
+
+
+@dataclass(frozen=True)
+class EmailVerificationDelivery:
+    """Everything needed to email the link; the raw token is never stored."""
+
+    email: str
+    first_name: str
+    url: str
+
+
+async def _issue_email_verification(
+    session: AsyncSession, user: User, service: str
+) -> EmailVerificationDelivery:
+    """Create a one-time link, burning the earlier ones (no commit)."""
+    now = datetime.now(timezone.utc)
+    await email_verification_repository.invalidate_unused(session, user.id, now)
+    token = secrets.token_urlsafe(32)
+    await email_verification_repository.create(
+        session,
+        user_id=user.id,
+        token_hash=_hash_reset_token(token),
+        expires_at=now + timedelta(hours=settings.EMAIL_VERIFICATION_TTL_HOURS),
+    )
+    return EmailVerificationDelivery(
+        email=user.email,
+        first_name=user.first_name,
+        url=f"{_app_base_url(service)}/verify-email/{token}",
+    )
+
+
+async def request_email_verification(
+    session: AsyncSession, user: User, service: str
+) -> EmailVerificationDelivery | None:
+    """Resend the confirmation link to the signed-in person. None when there is nothing to send."""
+    if user.email_verified_at is not None:
+        return None
+
+    now = datetime.now(timezone.utc)
+    last_created = await email_verification_repository.latest_created_at(session, user.id)
+    if last_created and now - last_created < timedelta(seconds=settings.EMAIL_VERIFICATION_COOLDOWN_SECONDS):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Письмо уже отправлено. Повторить можно через минуту.",
+        )
+
+    delivery = await _issue_email_verification(session, user, service)
+    await session.commit()
+    return delivery
+
+
+async def deliver_email_verification(delivery: EmailVerificationDelivery) -> None:
+    sent = await email_service.send_email_verification(
+        to=delivery.email,
+        first_name=delivery.first_name,
+        verify_url=delivery.url,
+        ttl_hours=settings.EMAIL_VERIFICATION_TTL_HOURS,
+    )
+    if not sent and not email_service.is_configured():
+        # Local development without SMTP: the developer takes the link from the server log
+        logger.warning("SMTP is not configured; email confirmation link for %s: %s", delivery.email, delivery.url)
+
+
+async def confirm_email_verification(session: AsyncSession, token: str) -> None:
+    row = await email_verification_repository.get_by_hash(session, _hash_reset_token(token))
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_INVALID_VERIFICATION_LINK)
+    user = await user_repository.get_by_id(session, row.user_id)
+    if user is None or not user.is_active:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_INVALID_VERIFICATION_LINK)
+    if user.email_verified_at is not None:
+        # Already confirmed (the link was opened twice, or the mailbox was proven another way)
+        return
+
+    now = datetime.now(timezone.utc)
+    if row.used_at is not None or row.expires_at < now:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_INVALID_VERIFICATION_LINK)
+
+    user.email_verified_at = now
+    await email_verification_repository.invalidate_unused(session, user.id, now)
+    await session.commit()
+
+
+def build_profile_response(
+    user: User, onboarding: UserOnboarding | None, avatar_url: str | None = None
+) -> UserProfileResponse:
+    """`avatar_url` is the signed link to show, not the stored `user.avatar_url`."""
     display_name = build_display_name(
         last_name=user.last_name,
         first_name=user.first_name,
@@ -224,14 +328,21 @@ def build_profile_response(user: User, onboarding: UserOnboarding | None) -> Use
         fullName=display_name,
         email=user.email,
         phoneNumber=user.phone_number,
-        avatarUrl=user.avatar_url,
+        avatarUrl=avatar_url,
         createdAt=user.created_at.isoformat(),
+        role=user.role,
+        emailVerified=user.email_verified_at is not None,
+        emailVerificationAvailable=email_service.is_configured(),
         onboarding=onboarding_service.build_state(onboarding),
     )
 
 
 async def get_profile(session: AsyncSession, user: User) -> UserProfileResponse:
-    return build_profile_response(user, await user_onboarding_repository.get(session, user.id))
+    return build_profile_response(
+        user,
+        await user_onboarding_repository.get(session, user.id),
+        await avatar_service.resolve_url(user.avatar_url),
+    )
 
 
 async def update_profile(
@@ -269,19 +380,25 @@ def _recent_failed_attempts(user_id: uuid.UUID, now: datetime) -> list[datetime]
     return recent
 
 
-async def change_password(session: AsyncSession, user: User, payload: ChangePasswordRequest) -> None:
+def check_current_password(user: User, password: str) -> None:
+    """Re-ask for the password before a sensitive action; wrong guesses are counted and limited."""
     now = datetime.now(timezone.utc)
     attempts = _recent_failed_attempts(user.id, now)
     if len(attempts) >= _MAX_PASSWORD_ATTEMPTS:
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=_TOO_MANY_PASSWORD_ATTEMPTS)
 
-    if not verify_password(payload.current_password, user.password_hash):
+    if not verify_password(password, user.password_hash):
         _failed_password_attempts[user.id] = [*attempts, now]
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=_WRONG_CURRENT_PASSWORD)
+    _failed_password_attempts.pop(user.id, None)
+
+
+async def change_password(session: AsyncSession, user: User, payload: ChangePasswordRequest) -> None:
+    now = datetime.now(timezone.utc)
+    check_current_password(user, payload.current_password)
     if payload.new_password == payload.current_password:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=_SAME_PASSWORD)
 
-    _failed_password_attempts.pop(user.id, None)
     user.password_hash = hash_password(payload.new_password)
     # Reset links issued earlier must not outlive the password they were meant to replace
     await password_reset_repository.invalidate_unused(session, user.id, now)
@@ -368,6 +485,9 @@ async def activate_account(
     )
     user.password_hash = hash_password(payload.password)
     user.is_active = True
+    if user.email_verified_at is None:
+        # The activation link was sent to this mailbox
+        user.email_verified_at = datetime.now(timezone.utc)
 
     if await organization_repository.get_member(session, inv.organization_id, user.id) is None:
         session.add(

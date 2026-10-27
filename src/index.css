@@ -140,12 +140,37 @@ html[data-theme] body {
   grid-template-columns: minmax(0, 1fr);
 }
 
+/* Standalone surveys service: «СВОД | Опросы» is its own block with a divider across the whole
+   header, the mirror of the account block on the right, so it does not run into the breadcrumbs */
 .app-header-brand {
   display: flex;
   align-items: center;
-  gap: 10px;
   flex-shrink: 0;
+  padding: 4px 8px;
+  border-inline-end: 1px solid var(--app-border-secondary);
+  box-sizing: border-box;
+}
+
+/* The highlight is an inset rounded pill, the same as the account button on the right */
+.app-header-brand__link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: calc(var(--app-header-height) - 8px);
+  padding: 0 16px;
+  border-radius: 8px;
   text-decoration: none;
+  transition: background 0.15s;
+  box-sizing: border-box;
+}
+
+.app-header-brand__link:hover {
+  background: var(--app-surface-hover);
+}
+
+.app-header-brand__link:focus-visible {
+  outline: 2px solid var(--app-primary);
+  outline-offset: -2px;
 }
 
 .app-header-brand__logo {
@@ -156,12 +181,12 @@ html[data-theme] body {
 }
 
 .app-header-brand__name {
-  padding-left: 10px;
+  padding-left: 12px;
   border-left: 1px solid var(--app-border-secondary);
   color: var(--app-text-secondary);
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 20px;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 24px;
   white-space: nowrap;
 }
 
@@ -174,6 +199,10 @@ html[data-theme] body {
 }
 
 @media (max-width: 600px) {
+  .app-header-brand__link {
+    padding: 0 8px;
+  }
+
   .app-header-brand__name {
     display: none;
   }
@@ -1603,6 +1632,13 @@ html[data-theme] body {
   font-size: 14px;
   line-height: 22px;
   flex-shrink: 0;
+  overflow: hidden;
+}
+
+.app-profile-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .app-profile-text {

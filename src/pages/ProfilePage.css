@@ -5,43 +5,96 @@
   display: flex;
   flex-direction: column;
   gap: 24px;
-  padding: 24px;
+  padding: 32px 24px;
   background: var(--app-bg);
 }
 
-.profile-page__header {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  width: min(100%, 520px);
-}
-
 .profile-page__title {
-  margin: 0;
-  font-size: 24px;
-  line-height: 32px;
+  margin: 0 auto;
+  width: min(100%, 960px);
+  font-size: 28px;
+  line-height: 36px;
   font-weight: 600;
   color: var(--app-text);
 }
 
-.profile-page__subtitle {
-  margin: 0;
-  font-size: 14px;
-  color: var(--app-text-secondary);
+/* Section menu on the left, one panel on the right (settings-page layout) */
+.profile-page__layout {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  align-items: start;
+  gap: 32px;
+  width: min(100%, 960px);
+  margin: 0 auto;
 }
 
-.profile-page__card {
-  width: min(100%, 520px);
-  padding: 20px;
+.profile-page__nav {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.profile-page__nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  color: var(--app-text-secondary);
+  font-size: 14px;
+  line-height: 22px;
+  text-decoration: none;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.profile-page__nav-item:hover {
+  background: var(--app-surface-hover);
+  color: var(--app-text);
+}
+
+.profile-page__nav-item:focus-visible {
+  outline: 2px solid var(--app-primary);
+  outline-offset: 2px;
+}
+
+.profile-page__nav-item--active,
+.profile-page__nav-item--active:hover {
+  background: var(--app-surface-selected);
+  color: var(--app-text);
+  font-weight: 600;
+}
+
+.profile-page__nav-icon {
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+}
+
+.profile-page__content {
+  min-width: 0;
+}
+
+/* One calm card per section; its blocks are separated by thin lines instead of being separate cards */
+.profile-page__panel {
   border: 1px solid var(--app-border-secondary);
-  border-radius: 10px;
+  border-radius: 12px;
   background: var(--app-surface);
 }
 
-.profile-page__card-title {
+.profile-page__section {
+  padding: 24px;
+}
+
+.profile-page__section + .profile-page__section {
+  border-top: 1px solid var(--app-border-secondary);
+}
+
+.profile-page__section-title {
   margin: 0 0 16px;
-  font-size: 18px;
-  line-height: 26px;
+  font-size: 16px;
+  line-height: 24px;
   font-weight: 600;
   color: var(--app-text);
 }
@@ -50,16 +103,334 @@
   margin-bottom: 16px;
 }
 
+/* A setting: what it is on the left, the control on the right */
+.profile-page__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 24px;
+}
+
+.profile-page__row-label h3 {
+  margin: 0;
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 600;
+  color: var(--app-text);
+}
+
+.profile-page__row-label p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--app-text-secondary);
+}
+
+.profile-page__row-control {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.profile-page__avatar-control {
+  align-items: center;
+  gap: 16px;
+}
+
+.profile-page__avatar {
+  flex-shrink: 0;
+  border-radius: 12px;
+  background: var(--app-text-placeholder);
+  color: var(--app-text-on-brand);
+  font-size: 28px;
+}
+
+/* The photo is the upload button: a dimmed layer with the upload icon shows on hover and focus */
+.profile-page__avatar-button {
+  position: relative;
+  display: block;
+  width: 72px;
+  height: 72px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.profile-page__avatar-button:focus-visible {
+  outline: 2px solid var(--app-primary);
+  outline-offset: 2px;
+}
+
+.profile-page__avatar-button:disabled {
+  cursor: progress;
+}
+
+.profile-page__avatar-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 22px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.profile-page__avatar-button:hover .profile-page__avatar-overlay,
+.profile-page__avatar-button:focus-visible .profile-page__avatar-overlay,
+.profile-page__avatar-button--busy .profile-page__avatar-overlay {
+  opacity: 1;
+}
+
+/* No hover on touch screens: a small badge in the corner says the photo can be tapped */
+@media (hover: none) {
+  .profile-page__avatar-overlay {
+    inset: auto 4px 4px auto;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    font-size: 12px;
+    opacity: 1;
+  }
+}
+
+.profile-page__form {
+  max-width: 560px;
+}
+
+.profile-page__fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 16px;
+}
+
+.profile-page__value {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.profile-page__value-text {
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--app-text);
+  overflow-wrap: anywhere;
+}
+
+/* Status with a coloured dot, as in the subscription summary */
+.profile-page__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--app-text-secondary);
+}
+
+.profile-page__status::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--app-text-placeholder);
+}
+
+.profile-page__status--ok::before {
+  background: var(--ant-color-success, #52c41a);
+}
+
+.profile-page__status--warn::before {
+  background: var(--ant-color-warning, #faad14);
+}
+
+.profile-page__hint {
+  margin: 12px 0 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--app-text-secondary);
+}
+
+/* Danger zone: a quiet row at the bottom, not a card of its own */
+.profile-page__section--danger .profile-page__row-label h3 {
+  color: var(--ant-color-error, #ff4d4f);
+}
+
+/* Plans that are not available yet */
+.profile-page__feature {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--app-border-secondary);
+}
+
+.profile-page__feature:last-of-type {
+  border-bottom: 0;
+}
+
+.profile-page__feature-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--app-surface-elevated);
+  color: var(--app-text-secondary);
+  font-size: 18px;
+}
+
+.profile-page__feature-text h4,
+.profile-page__feature-text p {
+  margin: 0;
+}
+
+.profile-page__feature-text h4 {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--app-text);
+}
+
+.profile-page__feature-text p {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--app-text-secondary);
+}
+
+.profile-page__feature-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.profile-page__soon-tag.ant-tag {
+  margin-inline-end: 0;
+  color: var(--app-text-secondary);
+  border-color: var(--app-border);
+  background: transparent;
+}
+
+/* Subscription summary: the plan big, the facts as «label over value» */
+.profile-page__plan {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px 32px;
+  padding: 20px;
+  border-radius: 10px;
+  background: var(--app-surface-elevated);
+}
+
+.profile-page__plan-label,
+.profile-page__facts dt {
+  display: block;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--app-text-secondary);
+}
+
+.profile-page__plan-name {
+  display: block;
+  margin-top: 2px;
+  font-size: 24px;
+  line-height: 32px;
+  font-weight: 600;
+  color: var(--app-text);
+}
+
+.profile-page__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 32px;
+  margin: 0;
+}
+
+.profile-page__facts dd {
+  margin: 2px 0 0;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--app-text);
+}
+
+.profile-page__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
 @media (max-width: 760px) {
   .profile-page {
     padding: 16px;
+    gap: 16px;
   }
 
-  .profile-page__card {
+  .profile-page__title {
+    font-size: 24px;
+    line-height: 32px;
+  }
+
+  .profile-page__layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  /* The menu becomes a scrolling row above the panel */
+  .profile-page__nav {
+    position: static;
+    flex-direction: row;
+    overflow-x: auto;
+    gap: 4px;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+
+  .profile-page__nav-item {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .profile-page__section {
     padding: 16px;
+  }
+
+  .profile-page__row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .profile-page__row-control {
+    justify-content: flex-start;
+  }
+
+  .profile-page__fields {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .profile-page__form .ant-btn {
     width: 100%;
+  }
+
+  .profile-page__feature {
+    grid-template-columns: 36px minmax(0, 1fr);
+  }
+
+  .profile-page__feature-control {
+    grid-column: 2;
+    justify-content: space-between;
+  }
+
+  .profile-page__plan {
+    padding: 16px;
+  }
+
+  .profile-page__actions .ant-btn {
+    flex: 1 1 100%;
   }
 }

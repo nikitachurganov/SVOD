@@ -42,6 +42,12 @@ class UserProfileResponse(BaseModel):
     phoneNumber: str
     avatarUrl: str | None
     createdAt: str
+    # Platform role: "user" or "admin"
+    role: str
+    # The mailbox was confirmed by a link from an email
+    emailVerified: bool
+    # The server can send the confirmation email (SMTP is set up); without it nobody is asked to confirm
+    emailVerificationAvailable: bool
     onboarding: OnboardingState
 
 

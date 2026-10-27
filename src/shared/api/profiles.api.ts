@@ -20,6 +20,9 @@ interface MeResponse {
   phoneNumber: string;
   avatarUrl: string | null;
   createdAt: string;
+  role?: string;
+  emailVerified?: boolean;
+  emailVerificationAvailable?: boolean;
   onboarding?: OnboardingState;
 }
 
@@ -32,6 +35,10 @@ const toProfile = (data: MeResponse): UserProfile => ({
   phoneNumber: data.phoneNumber,
   avatarUrl: data.avatarUrl,
   createdAt: data.createdAt,
+  role: data.role ?? 'user',
+  // An older server does not report it: nobody is asked to confirm
+  emailVerified: data.emailVerified ?? true,
+  emailVerificationAvailable: data.emailVerificationAvailable ?? false,
   onboarding: data.onboarding ?? NO_ONBOARDING,
 });
 
@@ -51,6 +58,21 @@ export interface UpdateProfilePayload {
   lastName: string;
   middleName?: string | null;
 }
+
+/** Sets the profile photo (JPEG, PNG or WebP); the server explains a refusal in Russian */
+export const uploadMyAvatar = async (file: File): Promise<UserProfile> => {
+  const body = new FormData();
+  body.append('file', file);
+  const { data } = await api.post<MeResponse>('/auth/me/avatar', body, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return toProfile(data);
+};
+
+export const deleteMyAvatar = async (): Promise<UserProfile> => {
+  const { data } = await api.delete<MeResponse>('/auth/me/avatar');
+  return toProfile(data);
+};
 
 /** Changes the signed-in person's own name; throws on a server error so the form can show it */
 export const updateMyProfile = async ({

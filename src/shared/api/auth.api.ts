@@ -50,8 +50,10 @@ export const signUpWithEmail = async ({
     email,
     phone_number: phoneNumber?.trim() || '',
     password,
+    service: IS_SURVEYS_APP ? 'surveys' : 'platform',
   });
   localStorage.setItem('access_token', data.access_token);
+  // The person is signed in right away; the link only marks the mailbox as confirmed
   return { requiresEmailConfirmation: false };
 };
 
@@ -114,6 +116,18 @@ export const confirmPasswordReset = async (token: string, password: string): Pro
   await api.post(`/auth/password-reset/${encodeURIComponent(token)}`, { password });
 };
 
+/** Public: confirm the mailbox by the link from the email. Throws (404) when the link is invalid, used or expired. */
+export const confirmEmailVerification = async (token: string): Promise<void> => {
+  await api.post(`/auth/email-verification/${encodeURIComponent(token)}`);
+};
+
+/** Signed in: send the confirmation link again. Answers 429 (with a Russian explanation) when asked too often. */
+export const resendEmailVerification = async (): Promise<void> => {
+  await api.post('/auth/me/email-verification', {
+    service: IS_SURVEYS_APP ? 'surveys' : 'platform',
+  });
+};
+
 export interface ChangePasswordPayload {
   currentPassword: string;
   newPassword: string;
@@ -128,6 +142,14 @@ export const changeMyPassword = async ({
     current_password: currentPassword,
     new_password: newPassword,
   });
+};
+
+/**
+ * Signed in: delete the account with everything in it. A wrong password answers 400, and 409 means
+ * the person still owns an organization with other members (the server explains it in Russian).
+ */
+export const deleteMyAccount = async (password: string): Promise<void> => {
+  await api.post('/auth/me/delete', { password });
 };
 
 export const signOut = async (): Promise<void> => {

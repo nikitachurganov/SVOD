@@ -6,6 +6,8 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   closeNotifications: () => void;
   initials: string;
+  /** Signed link to the profile photo; the initials are shown without it */
+  avatarUrl?: string | null;
   resolvedName: string;
   resolvedEmail: string;
   onCreateOrg: () => void;
@@ -17,6 +19,7 @@ export const HeaderProfileMenu = ({
   onOpenChange,
   closeNotifications,
   initials,
+  avatarUrl,
   resolvedName,
   resolvedEmail,
   onCreateOrg,
@@ -61,7 +64,7 @@ export const HeaderProfileMenu = ({
           onClick={toggle}
         >
           <span className="app-profile-avatar" aria-hidden="true">
-            {initials}
+            {avatarUrl ? <img src={avatarUrl} alt="" /> : initials}
           </span>
           <span className="app-profile-text">
             <span className="app-profile-name">{resolvedName}</span>

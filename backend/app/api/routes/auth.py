@@ -1,6 +1,7 @@
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Response, UploadFile
+from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
 
 from app.api.deps import CurrentUser, DbSession
@@ -8,6 +9,8 @@ from app.schemas.auth import (
     AccountActivationInfo,
     ActivateAccountRequest,
     ChangePasswordRequest,
+    DeleteAccountRequest,
+    EmailVerificationRequest,
     LoginRequest,
     PasswordResetConfirm,
     PasswordResetRequest,
@@ -17,14 +20,20 @@ from app.schemas.auth import (
 )
 from app.schemas.onboarding import OnboardingSurveyRequest, TourUpdateRequest
 from app.schemas.user import OnboardingState, UserProfileResponse
-from app.services import auth_service, onboarding_service
+from app.services import account_deletion_service, auth_service, avatar_service, onboarding_service
 
 router = APIRouter()
 
 
 @router.post("/register", response_model=TokenResponse, status_code=201)
-async def register(payload: RegisterRequest, session: DbSession) -> TokenResponse:
-    return await auth_service.register(session, payload)
+async def register(
+    payload: RegisterRequest, session: DbSession, background_tasks: BackgroundTasks
+) -> TokenResponse:
+    token, delivery = await auth_service.register(session, payload)
+    if delivery is not None:
+        # Sent after the response, so a slow mail server does not hold up sign-up
+        background_tasks.add_task(auth_service.deliver_email_verification, delivery)
+    return token
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -86,6 +95,28 @@ async def confirm_password_reset(
     return Response(status_code=204)
 
 
+@router.post("/email-verification/{token}", status_code=204)
+async def confirm_email_verification(token: str, session: DbSession) -> Response:
+    """Public: confirm the mailbox by the link from the email (POST, so mail scanners opening links do not use it up)."""
+    await auth_service.confirm_email_verification(session, token)
+    return Response(status_code=204)
+
+
+@router.post("/me/email-verification", status_code=204)
+async def resend_email_verification(
+    user: CurrentUser,
+    session: DbSession,
+    background_tasks: BackgroundTasks,
+    payload: EmailVerificationRequest | None = None,
+) -> Response:
+    """Send the confirmation link again (429 if one was sent a moment ago; 204 and nothing sent if already confirmed)."""
+    service = payload.service if payload else "platform"
+    delivery = await auth_service.request_email_verification(session, user, service)
+    if delivery is not None:
+        background_tasks.add_task(auth_service.deliver_email_verification, delivery)
+    return Response(status_code=204)
+
+
 @router.get("/me", response_model=UserProfileResponse)
 async def me(user: CurrentUser, session: DbSession) -> UserProfileResponse:
     return await auth_service.get_profile(session, user)
@@ -97,6 +128,22 @@ async def update_me(
 ) -> UserProfileResponse:
     """Change the signed-in person's first, last and middle name."""
     return await auth_service.update_profile(session, user, payload)
+
+
+@router.post("/me/avatar", response_model=UserProfileResponse)
+async def upload_my_avatar(
+    user: CurrentUser, session: DbSession, file: UploadFile = File(...)
+) -> UserProfileResponse:
+    """Set the profile photo (JPEG, PNG or WebP up to AVATAR_MAX_BYTES)."""
+    await avatar_service.set_avatar(session, user, file)
+    return await auth_service.get_profile(session, user)
+
+
+@router.delete("/me/avatar", response_model=UserProfileResponse)
+async def delete_my_avatar(user: CurrentUser, session: DbSession) -> UserProfileResponse:
+    """Remove the profile photo."""
+    await avatar_service.remove_avatar(session, user)
+    return await auth_service.get_profile(session, user)
 
 
 @router.put("/me/onboarding", response_model=OnboardingState)
@@ -127,4 +174,29 @@ async def change_my_password(
 ) -> Response:
     """Change the password of the signed-in person (the current one is required)."""
     await auth_service.change_password(session, user, payload)
+    return Response(status_code=204)
+
+
+@router.post("/me/delete", status_code=204)
+async def delete_my_account(
+    payload: DeleteAccountRequest, user: CurrentUser, session: DbSession
+) -> Response:
+    """Delete the signed-in person's account with all their data (the password is required).
+
+    204 — deleted. 409 — they own an organization other people belong to, or a paid plan is
+    running (``active_subscription``). With a paid plan and ``defer_until_subscription_ends`` the
+    account is scheduled instead: 202 with the date it will be deleted."""
+    outcome = await account_deletion_service.delete_account(session, user, payload)
+    if outcome.deleted:
+        return Response(status_code=204)
+    return JSONResponse(
+        status_code=202,
+        content={"status": "scheduled", "delete_at": outcome.delete_at.isoformat()},
+    )
+
+
+@router.post("/me/delete/cancel", status_code=204)
+async def cancel_my_account_deletion(user: CurrentUser, session: DbSession) -> Response:
+    """Take back a scheduled deletion. Renewal of the plan stays off until it is resumed."""
+    await account_deletion_service.cancel_scheduled_deletion(session, user)
     return Response(status_code=204)

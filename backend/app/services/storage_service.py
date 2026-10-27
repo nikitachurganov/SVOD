@@ -48,6 +48,16 @@ def build_form_object_key(request_id: int, field_id: str, filename: str) -> str:
     return f"requests/{request_id}/form/{safe_field}/{uuid.uuid4()}{suffix}"
 
 
+def build_avatar_key(user_id: uuid.UUID, extension: str) -> str:
+    return f"avatars/{user_id}/{uuid.uuid4()}{extension}"
+
+
+def key_from_url(file_url: str) -> str | None:
+    """Object key of a stored `s3://bucket/key` URL; None for legacy attachments without a binary."""
+    prefix = f"s3://{settings.S3_BUCKET}/"
+    return file_url[len(prefix):] if file_url.startswith(prefix) else None
+
+
 async def upload_bytes(object_key: str, content: bytes, content_type: str | None) -> None:
     if settings.FILE_STORAGE_BACKEND != "s3":
         raise HTTPException(

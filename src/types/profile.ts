@@ -20,6 +20,12 @@ export interface UserProfile {
   phoneNumber: string;
   avatarUrl: string | null;
   createdAt: string;
+  /** Platform role: «admin» opens the administrator pages */
+  role: string;
+  /** The mailbox was confirmed by a link from an email */
+  emailVerified: boolean;
+  /** The server can send the confirmation email; without it nobody is asked to confirm */
+  emailVerificationAvailable: boolean;
   onboarding: OnboardingState;
 }
 

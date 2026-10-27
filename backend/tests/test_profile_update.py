@@ -25,6 +25,8 @@ def user_ns(**overrides):
         created_at=SimpleNamespace(isoformat=lambda: "2026-01-01T00:00:00+00:00"),
         password_hash=hash_password("OldPassword1"),
         is_active=True,
+        role="user",
+        email_verified_at=None,
     )
     data.update(overrides)
     return SimpleNamespace(**data)

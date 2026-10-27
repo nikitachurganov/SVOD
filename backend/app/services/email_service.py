@@ -125,6 +125,30 @@ async def send_password_reset(
     return await send_email(to=to, subject=subject, text=text, html_body=body)
 
 
+async def send_email_verification(
+    *,
+    to: str,
+    first_name: str,
+    verify_url: str,
+    ttl_hours: int,
+) -> bool:
+    subject = "Подтвердите почту — СВОД"
+    text = (
+        f"Здравствуйте, {first_name}!\n\n"
+        f"Вы зарегистрировались в сервисе СВОД. Чтобы подтвердить адрес электронной почты, перейдите по ссылке:\n"
+        f"{verify_url}\n\n"
+        f"Ссылка действует {ttl_hours} ч. Если вы не регистрировались в СВОД, просто проигнорируйте письмо."
+    )
+    body = (
+        f"<p>Здравствуйте, {html.escape(first_name)}!</p>"
+        f"<p>Вы зарегистрировались в сервисе СВОД. Подтвердите адрес электронной почты:</p>"
+        f"<p>{_button_html(verify_url, 'Подтвердить почту')}</p>"
+        f"<p style=\"color:#6b7280;font-size:13px\">Ссылка действует {ttl_hours} ч. "
+        f"Если вы не регистрировались в СВОД, просто проигнорируйте письмо.</p>"
+    )
+    return await send_email(to=to, subject=subject, text=text, html_body=body)
+
+
 async def send_organization_invitation(
     *,
     to: str,
@@ -144,3 +168,23 @@ async def send_organization_invitation(
         f"<p style=\"color:#6b7280;font-size:13px\">Приглашение появится в уведомлениях после входа.</p>"
     )
     return await send_email(to=to, subject=subject, text=text, html_body=body)
+
+
+async def send_notice(
+    *,
+    to: str,
+    first_name: str,
+    subject: str,
+    paragraphs: list[str],
+    action_label: str | None = None,
+    action_url: str | None = None,
+) -> bool:
+    """A plain notice in the style of the other emails: a greeting, paragraphs, a button if given."""
+    lines = [f"Здравствуйте, {first_name}!", "", *paragraphs]
+    body = f"<p>Здравствуйте, {html.escape(first_name)}!</p>" + "".join(
+        f"<p>{html.escape(paragraph)}</p>" for paragraph in paragraphs
+    )
+    if action_label and action_url:
+        lines += ["", f"{action_label}: {action_url}"]
+        body += f"<p>{_button_html(action_url, action_label)}</p>"
+    return await send_email(to=to, subject=subject, text="\n".join(lines), html_body=body)

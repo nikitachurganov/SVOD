@@ -41,6 +41,7 @@ def pending_user():
         full_name="Иванова Анна",
         password_hash=PENDING_ACTIVATION_HASH,
         is_active=False,
+        email_verified_at=None,
     )
 
 
@@ -90,6 +91,8 @@ class ActivationTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(token.access_token)
         self.assertTrue(user.is_active)
+        # The link came to this mailbox, so it counts as confirmed
+        self.assertIsNotNone(user.email_verified_at)
         self.assertTrue(verify_password("Password123", user.password_hash))
         self.assertEqual(inv.status, "accepted")
         member = session.add.call_args.args[0]
