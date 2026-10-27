@@ -41,6 +41,11 @@ BILLING_LIMIT_HIT = Counter(
     "Plan limits reached; enforced=false is what shadow mode would have blocked",
     ("limit", "plan", "enforced"),
 )
+PAYMENTS = Counter(
+    "svod_payments_total",
+    "Online payments by outcome: created, succeeded, canceled, refunded, mismatch, provider_error",
+    ("outcome",),
+)
 OVERDUE_STAGES = Gauge(
     "svod_overdue_stages",
     "Current number of overdue unfinished stages",
