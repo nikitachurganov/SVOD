@@ -5,6 +5,23 @@ export type AppBreadcrumbItem = {
 
 const LOADING_TITLE = 'Загрузка...';
 
+const SURVEYS_ROOT_CRUMB: AppBreadcrumbItem = { title: 'Опросы', path: '/surveys' };
+
+const STANDALONE_HOME_CRUMB: AppBreadcrumbItem = { title: 'Главная', path: '/surveys' };
+
+/**
+ * Standalone surveys service: the header brand already says «Опросы», so the home page has no trail
+ * at all, and every other page starts it with «Главная».
+ */
+export const withStandaloneRoot = (items: AppBreadcrumbItem[] | null): AppBreadcrumbItem[] => {
+  if (!items || items.length === 0) return [];
+  if (items[0].path === SURVEYS_ROOT_CRUMB.path) {
+    // The surveys list is the home page: its crumb is «Главная», alone it is not worth showing
+    return items.length === 1 ? [] : [STANDALONE_HOME_CRUMB, ...items.slice(1)];
+  }
+  return [STANDALONE_HOME_CRUMB, ...items];
+};
+
 export const getBreadcrumbsForPath = (
   pathname: string,
   entityTitle?: string | null,
@@ -27,6 +44,14 @@ export const getBreadcrumbsForPath = (
 
   if (pathname === '/profile') {
     return [{ title: 'Профиль' }];
+  }
+
+  if (pathname === '/plans') {
+    return [{ title: 'Тарифы' }];
+  }
+
+  if (pathname === '/admin') {
+    return [{ title: 'Администрирование' }];
   }
 
   if (pathname === '/forms/create') {

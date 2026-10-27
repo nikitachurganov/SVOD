@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTour } from '../tour/useTour';
 import { useAuth } from '../../shared/hooks/auth.hooks';
 import { useThemeMode } from '../../shared/context/theme.context';
+import { IS_SURVEYS_APP } from '../../shared/config/appMode';
 
 export interface HeaderProfileMenuContentProps {
   onClose: () => void;
@@ -16,7 +17,7 @@ export const HeaderProfileMenuContent = ({
   onCreateOrg,
   showCreateOrg = true,
 }: HeaderProfileMenuContentProps) => {
-  const { signOut } = useAuth();
+  const { signOut, profile } = useAuth();
   const navigate = useNavigate();
   const { start: startTour } = useTour();
   const { themeMode, toggleTheme } = useThemeMode();
@@ -46,6 +47,16 @@ export const HeaderProfileMenuContent = ({
     navigate('/profile');
   };
 
+  const handleOpenPlans = () => {
+    onClose();
+    navigate('/plans');
+  };
+
+  const handleOpenAdmin = () => {
+    onClose();
+    navigate('/admin');
+  };
+
   const handleStartTour = () => {
     onClose();
     void startTour();
@@ -60,6 +71,26 @@ export const HeaderProfileMenuContent = ({
       >
         Профиль
       </button>
+
+      {IS_SURVEYS_APP && (
+        <button
+          type="button"
+          className="app-profile-dropdown__item"
+          onClick={handleOpenPlans}
+        >
+          Тарифы
+        </button>
+      )}
+
+      {IS_SURVEYS_APP && profile?.role === 'admin' && (
+        <button
+          type="button"
+          className="app-profile-dropdown__item"
+          onClick={handleOpenAdmin}
+        >
+          Администрирование
+        </button>
+      )}
 
       <button
         type="button"

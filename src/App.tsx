@@ -39,7 +39,7 @@ import { NAV_ITEMS } from './components/layout/navItems';
 
 import { AppContentHeader } from './components/layout/AppContentHeader';
 
-import { getBreadcrumbsForPath } from './components/layout/appBreadcrumbs';
+import { getBreadcrumbsForPath, withStandaloneRoot } from './components/layout/appBreadcrumbs';
 
 import { BreadcrumbProvider, useBreadcrumbEntity } from './shared/context/breadcrumb.context';
 
@@ -63,7 +63,12 @@ import { EditSurveyPage } from './pages/EditSurveyPage';
 import { SurveyViewPage } from './pages/SurveyViewPage';
 import { PublicSurveyPage } from './pages/PublicSurveyPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { AdminPage } from './pages/AdminPage';
+import { PlansPage } from './pages/PlansPage';
+import { PaywallModalHost } from './components/billing/PaywallModalHost';
+import { SubscriptionProvider } from './shared/context/subscription.provider';
 import { OnboardingGate } from './components/onboarding/OnboardingGate';
+import { EmailVerificationBanner } from './components/layout/EmailVerificationBanner';
 import { TourProvider } from './components/tour/TourProvider';
 
 import { RequestsPage } from './pages/RequestsPage';
@@ -74,6 +79,7 @@ import { RequestViewPage } from './pages/RequestViewPage';
 
 import { AuthPage } from './pages/AuthPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
+import { VerifyEmailPage } from './pages/VerifyEmailPage';
 import { ActivateAccountPage } from './pages/ActivateAccountPage';
 import { JoinOrganizationPage } from './pages/JoinOrganizationPage';
 
@@ -283,6 +289,8 @@ const AppLayoutContent = () => {
 
       <OnboardingGate />
 
+      {IS_SURVEYS_APP && <PaywallModalHost />}
+
 
 
       <div className={shellClass}>
@@ -333,7 +341,11 @@ const AppLayoutContent = () => {
 
           <AppContentHeader
 
-            breadcrumbs={getBreadcrumbsForPath(location.pathname, entityTitle, entityParent)}
+            breadcrumbs={
+              IS_SURVEYS_APP
+                ? withStandaloneRoot(getBreadcrumbsForPath(location.pathname, entityTitle, entityParent))
+                : getBreadcrumbsForPath(location.pathname, entityTitle, entityParent)
+            }
 
             notificationsOpen={headerNotificationsOpen}
 
@@ -344,6 +356,8 @@ const AppLayoutContent = () => {
             onProfileOpenChange={setIsProfileOpen}
 
             initials={initials}
+
+            avatarUrl={profile?.avatarUrl}
 
             resolvedName={resolvedName}
 
@@ -362,6 +376,8 @@ const AppLayoutContent = () => {
           />
 
 
+
+          <EmailVerificationBanner />
 
           <main id="main-content" className="app-shell-content">
 
@@ -435,7 +451,11 @@ const AppLayout = () => (
 
         <TourProvider>
 
-          <AppLayoutContent />
+          <SubscriptionProvider>
+
+            <AppLayoutContent />
+
+          </SubscriptionProvider>
 
         </TourProvider>
 
@@ -474,6 +494,21 @@ const ProtectedLayout = () => {
   }
 
   return <AppLayout />;
+
+};
+
+
+
+// Administrator pages: anybody else is sent home. The server checks the role again on every request,
+// so this only spares a normal user a page that would answer 403.
+const AdminRoute = () => {
+  const { profile, isAuthLoading } = useAuth();
+
+  if (isAuthLoading || !profile) return <FullPageLoader />;
+
+  if (profile.role !== 'admin') return <Navigate to={HOME_PATH} replace />;
+
+  return <AdminPage />;
 
 };
 
@@ -528,6 +563,9 @@ const surveyRoutes: RouteObject[] = [
 const platformRoutes: RouteObject[] = [
 
   { path: '/auth', element: <PublicOnlyAuthPage /> },
+
+  // Public: confirm the mailbox by the link from the sign-up email
+  { path: '/verify-email/:token', element: <VerifyEmailPage /> },
 
   // Public: new password by the link from the password reset email
   { path: '/reset-password/:token', element: <ResetPasswordPage /> },
@@ -594,6 +632,8 @@ const platformRoutes: RouteObject[] = [
 // Standalone surveys service: sign-in, the surveys section and respondent pages only
 const surveysRoutes: RouteObject[] = [
 
+  { path: '/verify-email/:token', element: <VerifyEmailPage /> },
+
   { path: '/auth', element: <PublicOnlyAuthPage /> },
 
   { path: '/reset-password/:token', element: <ResetPasswordPage /> },
@@ -613,6 +653,10 @@ const surveysRoutes: RouteObject[] = [
       ...surveyRoutes,
 
       { path: 'profile', element: <ProfilePage /> },
+
+      { path: 'plans', element: <PlansPage /> },
+
+      { path: 'admin', element: <AdminRoute /> },
 
       // Anything else (including other modules' old links) leads back to the surveys start page
       { path: '*', element: <Navigate to={HOME_PATH} replace /> },

@@ -5,6 +5,7 @@ from app.models.user_onboarding import UserOnboarding
 from app.models.subscription import Subscription, SubscriptionEvent
 from app.models.usage_counter import UsageCounter
 from app.models.ai_usage_log import AIUsageLog
+from app.models.plan_request import PlanRequest
 from app.models.form import Form
 from app.models.request import Request
 from app.models.form_file import FormFile
@@ -45,6 +46,7 @@ __all__ = [
     "SubscriptionEvent",
     "UsageCounter",
     "AIUsageLog",
+    "PlanRequest",
     "Form",
     "Request",
     "FormFile",

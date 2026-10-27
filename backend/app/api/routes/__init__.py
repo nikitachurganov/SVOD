@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from app.api.routes.admin import router as admin_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.billing import router as billing_router
 from app.api.routes.forms import router as forms_router
@@ -19,6 +20,7 @@ from app.api.routes.surveys import (
 )
 
 api_router = APIRouter()
+api_router.include_router(admin_router, prefix="/admin", tags=["admin"])
 api_router.include_router(auth_router, prefix="/auth", tags=["auth"])
 api_router.include_router(billing_router, prefix="/billing", tags=["billing"])
 api_router.include_router(forms_router, prefix="/forms", tags=["forms"])
