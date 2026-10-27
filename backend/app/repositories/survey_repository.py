@@ -2,9 +2,24 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import delete, func, select, tuple_
+# Renamed: this module has its own ``update(session, survey)``
+from sqlalchemy import update as sql_update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.organization import Organization
 from app.models.survey import Survey, SurveyProject, SurveyResponse
+
+# The sample project every personal workspace starts with (see welcome_seed_service)
+WELCOME_PROJECT_NAME = "Добро пожаловать"
+
+
+def _in_quota():
+    """The responses the owner can see.
+
+    Those received beyond the response quota are locked: kept, but out of lists, counts and
+    analysis until the plan grows. Only ``count_responses(include_locked=True)`` sees them.
+    """
+    return SurveyResponse.locked.is_(False)
 
 
 def _apply_filters(
@@ -97,7 +112,7 @@ async def get_default_project(
         select(SurveyProject)
         .where(
             SurveyProject.organization_id == organization_id,
-            SurveyProject.name != "Добро пожаловать",
+            SurveyProject.name != WELCOME_PROJECT_NAME,
         )
         .order_by(SurveyProject.created_at, SurveyProject.id)
         .limit(1)
@@ -145,6 +160,29 @@ async def count_all_in_project(session: AsyncSession, project_id: uuid.UUID) -> 
     return int(result.scalar_one() or 0)
 
 
+async def count_open_surveys_for_owner(session: AsyncSession, owner_user_id: uuid.UUID) -> int:
+    """Published surveys in the organizations the user owns: what the plan's limit counts."""
+    result = await session.execute(
+        select(func.count(Survey.id))
+        .join(Organization, Organization.id == Survey.organization_id)
+        .where(Organization.owner_user_id == owner_user_id, Survey.status == "open")
+    )
+    return int(result.scalar_one() or 0)
+
+
+async def count_projects_for_owner(session: AsyncSession, owner_user_id: uuid.UUID) -> int:
+    """The user's own projects; the sample «Добро пожаловать» one is not theirs and is not counted."""
+    result = await session.execute(
+        select(func.count(SurveyProject.id))
+        .join(Organization, Organization.id == SurveyProject.organization_id)
+        .where(
+            Organization.owner_user_id == owner_user_id,
+            SurveyProject.name != WELCOME_PROJECT_NAME,
+        )
+    )
+    return int(result.scalar_one() or 0)
+
+
 async def get_by_id(session: AsyncSession, survey_id: uuid.UUID) -> Survey | None:
     result = await session.execute(select(Survey).where(Survey.id == survey_id))
     return result.scalar_one_or_none()
@@ -175,7 +213,7 @@ async def response_counts(
         return {}
     stmt = (
         select(SurveyResponse.survey_id, func.count(SurveyResponse.id))
-        .where(SurveyResponse.survey_id.in_(survey_ids))
+        .where(SurveyResponse.survey_id.in_(survey_ids), _in_quota())
         .group_by(SurveyResponse.survey_id)
     )
     result = await session.execute(stmt)
@@ -189,7 +227,7 @@ async def last_response_dates(
         return {}
     stmt = (
         select(SurveyResponse.survey_id, func.max(SurveyResponse.submitted_at))
-        .where(SurveyResponse.survey_id.in_(survey_ids))
+        .where(SurveyResponse.survey_id.in_(survey_ids), _in_quota())
         .group_by(SurveyResponse.survey_id)
     )
     result = await session.execute(stmt)
@@ -212,7 +250,7 @@ async def list_responses(
 ) -> list[SurveyResponse]:
     stmt = (
         select(SurveyResponse)
-        .where(SurveyResponse.survey_id == survey_id)
+        .where(SurveyResponse.survey_id == survey_id, _in_quota())
         .order_by(SurveyResponse.submitted_at.desc(), SurveyResponse.id.desc())
         .offset(offset)
     )
@@ -223,9 +261,16 @@ async def list_responses(
 
 
 async def count_responses(
-    session: AsyncSession, survey_id: uuid.UUID, *, flagged_only: bool = False
+    session: AsyncSession,
+    survey_id: uuid.UUID,
+    *,
+    flagged_only: bool = False,
+    include_locked: bool = False,
 ) -> int:
+    """Responses of the survey; ``include_locked`` also counts those the quota kept back."""
     stmt = select(func.count(SurveyResponse.id)).where(SurveyResponse.survey_id == survey_id)
+    if not include_locked:
+        stmt = stmt.where(_in_quota())
     if flagged_only:
         # JSONB may hold SQL NULL or JSON null for "no flags"; only an object means flagged
         stmt = stmt.where(func.jsonb_typeof(SurveyResponse.quality_flags) == "object")
@@ -248,14 +293,16 @@ async def get_response(
 ) -> SurveyResponse | None:
     result = await session.execute(
         select(SurveyResponse).where(
-            SurveyResponse.id == response_id, SurveyResponse.survey_id == survey_id
+            SurveyResponse.id == response_id,
+            SurveyResponse.survey_id == survey_id,
+            _in_quota(),
         )
     )
     return result.scalar_one_or_none()
 
 
 def _numbered(survey_id: uuid.UUID):
-    """Every response of the survey with its ordinal in the order of arrival (first = 1)."""
+    """Every visible response of the survey with its ordinal in the order of arrival (first = 1)."""
     return (
         select(
             SurveyResponse.id.label("rid"),
@@ -263,7 +310,7 @@ def _numbered(survey_id: uuid.UUID):
             .over(order_by=(SurveyResponse.submitted_at, SurveyResponse.id))
             .label("n"),
         )
-        .where(SurveyResponse.survey_id == survey_id)
+        .where(SurveyResponse.survey_id == survey_id, _in_quota())
         .subquery()
     )
 
@@ -291,9 +338,11 @@ async def list_numbered_responses(
     stmt = (
         select(SurveyResponse, ranked.c.n)
         .join(ranked, ranked.c.rid == SurveyResponse.id)
-        .where(SurveyResponse.survey_id == survey_id)
+        .where(SurveyResponse.survey_id == survey_id, _in_quota())
     )
-    count_stmt = select(func.count(SurveyResponse.id)).where(SurveyResponse.survey_id == survey_id)
+    count_stmt = select(func.count(SurveyResponse.id)).where(
+        SurveyResponse.survey_id == survey_id, _in_quota()
+    )
     if flagged is not None:
         stmt = stmt.where(_flagged_condition(flagged))
         count_stmt = count_stmt.where(_flagged_condition(flagged))
@@ -322,13 +371,13 @@ async def neighbour_response_ids(
     here = tuple_(response.submitted_at, response.id)
     older = await session.execute(
         select(SurveyResponse.id)
-        .where(SurveyResponse.survey_id == survey_id, key < here)
+        .where(SurveyResponse.survey_id == survey_id, _in_quota(), key < here)
         .order_by(SurveyResponse.submitted_at.desc(), SurveyResponse.id.desc())
         .limit(1)
     )
     newer = await session.execute(
         select(SurveyResponse.id)
-        .where(SurveyResponse.survey_id == survey_id, key > here)
+        .where(SurveyResponse.survey_id == survey_id, _in_quota(), key > here)
         .order_by(SurveyResponse.submitted_at.asc(), SurveyResponse.id.asc())
         .limit(1)
     )
@@ -337,6 +386,69 @@ async def neighbour_response_ids(
 
 async def last_response_at(session: AsyncSession, survey_id: uuid.UUID) -> datetime | None:
     result = await session.execute(
-        select(func.max(SurveyResponse.submitted_at)).where(SurveyResponse.survey_id == survey_id)
+        select(func.max(SurveyResponse.submitted_at)).where(
+            SurveyResponse.survey_id == survey_id, _in_quota()
+        )
     )
     return result.scalar_one_or_none()
+
+
+def _survey_ids_of_owner(owner_user_id: uuid.UUID):
+    return (
+        select(Survey.id)
+        .join(Organization, Organization.id == Survey.organization_id)
+        .where(Organization.owner_user_id == owner_user_id)
+    )
+
+
+async def count_locked_for_owner(session: AsyncSession, owner_user_id: uuid.UUID) -> int:
+    """Responses of the user's surveys that wait for a bigger plan."""
+    result = await session.execute(
+        select(func.count(SurveyResponse.id)).where(
+            SurveyResponse.locked.is_(True),
+            SurveyResponse.survey_id.in_(_survey_ids_of_owner(owner_user_id)),
+        )
+    )
+    return int(result.scalar_one() or 0)
+
+
+async def unlock_responses_for_owner(session: AsyncSession, owner_user_id: uuid.UUID) -> int:
+    """Open every response of the user's surveys that the quota kept back; returns how many."""
+    result = await session.execute(
+        sql_update(SurveyResponse)
+        .where(
+            SurveyResponse.locked.is_(True),
+            SurveyResponse.survey_id.in_(_survey_ids_of_owner(owner_user_id)),
+        )
+        .values(locked=False)
+    )
+    return int(result.rowcount or 0)
+
+
+async def list_open_survey_ids_by_activity(
+    session: AsyncSession, owner_user_id: uuid.UUID
+) -> list[uuid.UUID]:
+    """The user's published surveys, the most recently active first (last response, else last edit)."""
+    last_response = (
+        select(SurveyResponse.survey_id.label("sid"), func.max(SurveyResponse.submitted_at).label("at"))
+        .group_by(SurveyResponse.survey_id)
+        .subquery()
+    )
+    result = await session.execute(
+        select(Survey.id)
+        .join(Organization, Organization.id == Survey.organization_id)
+        .outerjoin(last_response, last_response.c.sid == Survey.id)
+        .where(Organization.owner_user_id == owner_user_id, Survey.status == "open")
+        .order_by(func.coalesce(last_response.c.at, Survey.updated_at).desc(), Survey.id)
+    )
+    return list(result.scalars().all())
+
+
+async def close_surveys(session: AsyncSession, survey_ids: list[uuid.UUID]) -> int:
+    """Stop collecting answers in these surveys; nothing is deleted."""
+    if not survey_ids:
+        return 0
+    result = await session.execute(
+        sql_update(Survey).where(Survey.id.in_(survey_ids)).values(status="closed")
+    )
+    return int(result.rowcount or 0)
