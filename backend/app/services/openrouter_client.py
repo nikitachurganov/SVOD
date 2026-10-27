@@ -4,6 +4,7 @@ import logging
 import httpx
 
 from app.core.config import settings
+from app.services import ai_usage
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +68,9 @@ async def _request_completion(
         response.raise_for_status()
 
     data = response.json()
+    if isinstance(data, dict):
+        # Counted before the answer is checked: a truncated or empty completion was still paid for
+        ai_usage.record(data.get("usage"), data.get("model") or settings.OPENROUTER_MODEL)
     try:
         choice = data["choices"][0]
         content = choice["message"]["content"]

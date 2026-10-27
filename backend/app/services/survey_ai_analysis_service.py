@@ -519,7 +519,9 @@ async def chat(
     messages: list[SurveyAiChatMessage],
     *,
     exclude_flagged: bool = True,
+    allow_crosstab: bool = True,
 ) -> SurveyAiAnalysisChatResponse:
+    """``allow_crosstab`` False: the plan has no cross-tabulation, so the model is not given one."""
     results = survey_results.build_results(pages, responses, exclude_flagged=exclude_flagged)
     if results.used == 0:
         return SurveyAiAnalysisChatResponse(
@@ -540,6 +542,8 @@ async def chat(
         timeout=60.0,
     )
     plan = parse_plan(plan_raw, fields)
+    if not allow_crosstab:
+        plan.crosstab = None
 
     # 2. Compute what the answer will rest on
     crosstab: CrosstabResult | None = None

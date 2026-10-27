@@ -43,21 +43,25 @@ _UNSUPPORTED_SURVEY_TYPES = frozenset(
 )
 _ALL_METHOD_IDS = frozenset(METHODOLOGIES)
 
-_SELECT_PROMPT = f"""Ты — методолог исследований в сервисе «СВОД». По описанию пользователя определи, \
+def _select_prompt(allowed: frozenset[str] | None = None) -> str:
+    """The selection prompt; with ``allowed`` the model sees only the methodologies of the plan."""
+    methods = [m for m in METHODOLOGIES.values() if allowed is None or m.id in allowed]
+    categories = [c for c in CATEGORIES.values() if any(m.category == c.id for m in methods)]
+    academic = ", ".join(m.id for m in methods if m.category == "academic_survey")
+    return f"""Ты — методолог исследований в сервисе «СВОД». По описанию пользователя определи, \
 какой опрос ему нужен, и подбери подходящие методики из каталога.
 
 Направления (category):
-{chr(10).join(f"- {c.id}: {c.name}. {c.goal}" for c in CATEGORIES.values())}
+{chr(10).join(f"- {c.id}: {c.name}. {c.goal}" for c in categories)}
 
 Каталог методик (id: название — когда применять):
-{chr(10).join(f"- {m.id} [{m.category}]: {m.name} — {m.when_to_use}" for m in METHODOLOGIES.values())}
+{chr(10).join(f"- {m.id} [{m.category}]: {m.name} — {m.when_to_use}" for m in methods)}
 
 Правила:
 - Выбери ОДНО направление и от 1 до {MAX_METHODOLOGIES} методик, которые действительно подходят. \
 Не набирай методики для количества.
 - Используй только id из каталога.
-- Для курсовых, дипломов и научных работ выбирай academic_survey (методики likert, \
-semantic_differential, cognitive_interviewing, attention_check).
+- Для курсовых, дипломов и научных работ выбирай academic_survey (методики {academic}).
 - goals — 1–4 коротких цели опроса на русском.
 - subject — что оценивается, в форме родительного падежа без предлога, чтобы подставить в «оценка …» \
 (например: «работы вуза», «сервиса доставки», «сайта кафедры»). Если неясно — пустая строка.
@@ -67,7 +71,15 @@ semantic_differential, cognitive_interviewing, attention_check).
 """
 
 
-def _build_generation_prompt(method_ids: list[str], subject: str) -> str:
+_SELECT_PROMPT = _select_prompt()
+
+
+def _build_generation_prompt(
+    method_ids: list[str], subject: str, max_questions: int | None = None
+) -> str:
+    # The plan's question limit is told to the model, so it does not build what cannot be saved
+    limit = min(30, max_questions) if max_questions else 30
+    usual = f"8–{min(20, limit)}"
     type_lines = "\n".join(
         f"- {k}: {v}"
         for k, v in {**FIELD_TYPE_DESCRIPTIONS, **SURVEY_FIELD_TYPE_DESCRIPTIONS}.items()
@@ -107,7 +119,7 @@ config для rating: {{"ratingVariant": "stars"|"numeric_scale"|"slider"|"nps",
 
 Общие правила:
 - Один вопрос — одна мысль. Без жаргона, наводящих формулировок и двойных отрицаний.
-- Опрос должен быть коротким: обычно 8–20 вопросов, не больше 30.
+- Опрос должен быть коротким: обычно {usual} вопросов, не больше {limit}.
 - Порядок: сначала лёгкие общие вопросы, затем основные, демография и классификационные вопросы — в конце.
 - Закрытые вопросы: варианты взаимоисключающие и исчерпывающие, при необходимости добавляй вариант «Другое» \
 или «Затрудняюсь ответить».
@@ -141,12 +153,18 @@ def _has_fields(pages: list[Any]) -> bool:
     return any(True for _ in survey_methodology_service.iter_leaf_fields(pages))
 
 
-def _valid_method_ids(raw: Any) -> list[str]:
+def _valid_method_ids(raw: Any, allowed: frozenset[str] | None = None) -> list[str]:
+    """Catalogue ids only; with ``allowed`` (the free plan) also only the ones the plan includes."""
     if not isinstance(raw, list):
         return []
     ids: list[str] = []
     for item in raw:
-        if isinstance(item, str) and item in METHODOLOGIES and item not in ids:
+        if (
+            isinstance(item, str)
+            and item in METHODOLOGIES
+            and item not in ids
+            and (allowed is None or item in allowed)
+        ):
             ids.append(item)
     return ids[:MAX_METHODOLOGIES]
 
@@ -174,11 +192,16 @@ async def _call_llm(messages: list[dict[str, str]], *, max_tokens: int, timeout:
         ) from exc
 
 
-async def select_methodologies(user_text: str) -> dict[str, Any]:
+async def select_methodologies(
+    user_text: str, allowed: frozenset[str] | None = None
+) -> dict[str, Any]:
     """Stage 1: pick category, goals, methodologies and subject for the request."""
     raw = await _call_llm(
         [
-            {"role": "system", "content": _SELECT_PROMPT},
+            {
+                "role": "system",
+                "content": _SELECT_PROMPT if allowed is None else _select_prompt(allowed),
+            },
             {"role": "user", "content": user_text},
         ],
         max_tokens=800,
@@ -186,7 +209,7 @@ async def select_methodologies(user_text: str) -> dict[str, Any]:
     )
     parsed = _parse_payload(raw) or {}
     category = parsed.get("category")
-    method_ids = _valid_method_ids(parsed.get("methodologies"))
+    method_ids = _valid_method_ids(parsed.get("methodologies"), allowed)
     if not isinstance(category, str) or category not in CATEGORIES:
         category = METHODOLOGIES[method_ids[0]].category if method_ids else None
     goals_raw = parsed.get("goals")
@@ -328,10 +351,16 @@ def insert_welcome_page(pages: list[dict[str, Any]], *, text: str | None) -> lis
 # ─── Public entrypoint ────────────────────────────────────────────────────────
 
 
-async def build_survey(payload: SurveyAiBuildRequest) -> SurveyAiBuildResponse:
+async def build_survey(
+    payload: SurveyAiBuildRequest,
+    *,
+    allowed_methodologies: frozenset[str] | None = None,
+    max_questions: int | None = None,
+) -> SurveyAiBuildResponse:
+    """``allowed_methodologies`` and ``max_questions`` carry the plan's limits (None: no limit)."""
     existing_meta = payload.methodology_meta if isinstance(payload.methodology_meta, dict) else {}
     existing_ids = survey_methodology_service.method_ids_from_meta(existing_meta)
-    explicit_ids = _valid_method_ids(payload.methodology_ids)
+    explicit_ids = _valid_method_ids(payload.methodology_ids, allowed_methodologies)
     has_form = _has_fields(payload.pages)
 
     category: str | None = existing_meta.get("category")
@@ -345,14 +374,18 @@ async def build_survey(payload: SurveyAiBuildRequest) -> SurveyAiBuildResponse:
     elif existing_ids and has_form:
         method_ids = existing_ids
     else:
-        selected = await select_methodologies(_user_text(payload))
+        selected = await select_methodologies(_user_text(payload), allowed_methodologies)
         method_ids = selected["methodologies"]
         category = selected["category"]
         goals = selected["goals"]
         subject = selected["subject"]
 
     # Academic surveys always get an attention check
-    if category == "academic_survey" and "attention_check" not in method_ids:
+    if (
+        category == "academic_survey"
+        and "attention_check" not in method_ids
+        and (allowed_methodologies is None or "attention_check" in allowed_methodologies)
+    ):
         method_ids = [*method_ids, "attention_check"]
 
     current_pages = _compact_pages(payload.pages)
@@ -361,7 +394,10 @@ async def build_survey(payload: SurveyAiBuildRequest) -> SurveyAiBuildResponse:
         {"title": payload.title.strip() or None, "pages": current_pages}, ensure_ascii=False
     )
     messages: list[dict[str, str]] = [
-        {"role": "system", "content": _build_generation_prompt(method_ids, subject)},
+        {
+            "role": "system",
+            "content": _build_generation_prompt(method_ids, subject, max_questions),
+        },
         {"role": "system", "content": context},
     ]
     for msg in payload.messages[-12:]:
