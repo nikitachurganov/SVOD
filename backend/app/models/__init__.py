@@ -2,6 +2,9 @@ from app.models.user import User
 from app.models.password_reset import PasswordResetToken
 from app.models.email_verification import EmailVerificationToken
 from app.models.user_onboarding import UserOnboarding
+from app.models.subscription import Subscription, SubscriptionEvent
+from app.models.usage_counter import UsageCounter
+from app.models.ai_usage_log import AIUsageLog
 from app.models.form import Form
 from app.models.request import Request
 from app.models.form_file import FormFile
@@ -38,6 +41,10 @@ __all__ = [
     "PasswordResetToken",
     "EmailVerificationToken",
     "UserOnboarding",
+    "Subscription",
+    "SubscriptionEvent",
+    "UsageCounter",
+    "AIUsageLog",
     "Form",
     "Request",
     "FormFile",

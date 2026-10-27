@@ -5,6 +5,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.constants.roles import ROLE_ADMIN
 from app.core.database import get_async_session
 from app.core.security import decode_access_token
 from app.models.user import User
@@ -45,3 +46,17 @@ async def get_current_user(
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+async def get_admin_user(user: CurrentUser) -> User:
+    """Platform administrators only. The role is read from the database on every request
+    (get_current_user loads the user), so taking the role away works at once."""
+    if user.role != ROLE_ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Administrator access required",
+        )
+    return user
+
+
+AdminUser = Annotated[User, Depends(get_admin_user)]
