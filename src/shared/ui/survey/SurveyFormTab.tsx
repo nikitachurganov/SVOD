@@ -102,6 +102,32 @@ const QuestionRow = ({ field, number }: { field: CreateFormFieldPayload; number:
   );
 };
 
+/** «Текст без вопроса» is content, not a question: it gets no number and does not shift the others */
+const numberQuestions = (
+  fields: CreateFormFieldPayload[],
+): { field: CreateFormFieldPayload; number: number | null }[] => {
+  let next = 0;
+  return fields.map((field) =>
+    field.type === 'textBlock' ? { field, number: null } : { field, number: ++next },
+  );
+};
+
+const TextBlockRow = ({ field }: { field: CreateFormFieldPayload }) => (
+  <li
+    style={{
+      ...ROW_STYLE,
+      gridTemplateColumns: 'minmax(0, 1fr)',
+      color: 'var(--app-text-secondary)',
+      fontSize: 13,
+    }}
+  >
+    <span style={{ wordBreak: 'break-word', lineHeight: 1.5 }}>
+      <em>Текст без вопроса</em>
+      {field.label ? ` · ${field.label}` : ''}
+    </span>
+  </li>
+);
+
 interface SurveyFormTabProps {
   survey: SurveyDetail;
   onEdit: () => void;
@@ -161,9 +187,13 @@ export const SurveyFormTab = ({ survey, onEdit, onPreview, onOpenReport }: Surve
                   {page.title || `Страница ${pageIndex + 1}`}
                 </li>
               ) : null,
-              ...page.fields.map((field, index) => (
-                <QuestionRow key={field.id ?? `${pageIndex}-${index}`} field={field} number={`${index + 1}.`} />
-              )),
+              ...numberQuestions(page.fields).map(({ field, number }, index) =>
+                number === null ? (
+                  <TextBlockRow key={field.id ?? `${pageIndex}-${index}`} field={field} />
+                ) : (
+                  <QuestionRow key={field.id ?? `${pageIndex}-${index}`} field={field} number={`${number}.`} />
+                ),
+              ),
             ])}
           </ol>
         ) : (

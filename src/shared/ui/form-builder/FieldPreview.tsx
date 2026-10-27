@@ -166,6 +166,7 @@ export const FieldPreview = ({ field, onOptionsChange }: FieldPreviewProps) => {
       );
 
     case 'group':
+    case 'textBlock':
       return null;
 
     case 'file_vector':

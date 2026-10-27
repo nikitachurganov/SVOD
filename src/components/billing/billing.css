@@ -1,0 +1,173 @@
+/* Plans, usage and the paywall */
+
+.billing-usage {
+  margin-bottom: 8px;
+}
+
+.billing-usage__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--app-text);
+}
+
+.billing-usage__head span:last-child {
+  color: var(--app-text-secondary);
+}
+
+.billing-note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--app-text-secondary);
+}
+
+.billing-note--warn {
+  color: var(--app-text-error, var(--ant-color-error, #ff4d4f));
+}
+
+.billing-note a {
+  color: var(--app-menu-active-text);
+}
+
+/* Under the composer of an AI panel and inside the summary card */
+.billing-note.ai-quota-note {
+  margin: 0;
+  padding: 8px 16px 0;
+  flex-shrink: 0;
+}
+
+.billing-note.ai-quota-note--card {
+  margin: 0 0 8px;
+}
+
+.billing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.billing-alert {
+  margin-top: 12px;
+}
+
+/* The plans page */
+.plans-page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.plans-page__title {
+  margin: 0;
+  font-size: 24px;
+  line-height: 32px;
+  font-weight: 600;
+  color: var(--app-text);
+}
+
+.plans-page__lead {
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--app-text-secondary);
+}
+
+.plans-page__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.plan-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+  border: 1px solid var(--app-border-secondary);
+  border-radius: 12px;
+  background: var(--app-surface);
+}
+
+.plan-card--accent {
+  border-color: var(--app-menu-active-text);
+}
+
+.plan-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.plan-card__name {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--app-text);
+}
+
+.plan-card__price {
+  font-size: 28px;
+  line-height: 36px;
+  font-weight: 600;
+  color: var(--app-text);
+}
+
+.plan-card__price small {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--app-text-secondary);
+}
+
+.plan-card__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--app-text);
+}
+
+.plan-card__list li::before {
+  content: '✓';
+  margin-right: 8px;
+  color: var(--app-menu-active-text);
+}
+
+.plan-card__footer {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.plans-page__section-title {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--app-text);
+}
+
+.plans-page__table {
+  overflow-x: auto;
+}
+
+@media (max-width: 760px) {
+  .plans-page {
+    padding: 16px;
+    gap: 16px;
+  }
+
+  .billing-actions .ant-btn {
+    flex: 1 1 auto;
+  }
+}

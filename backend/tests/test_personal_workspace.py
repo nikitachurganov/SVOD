@@ -64,9 +64,13 @@ class PersonalWorkspaceTests(unittest.IsolatedAsyncioTestCase):
             patch.object(repo, "create_org", AsyncMock(return_value=created)) as create,
             patch.object(repo, "add_member", AsyncMock()) as add_member,
             patch.object(repo, "count_members", AsyncMock(return_value=1)),
+            patch.object(
+                organization_service.welcome_seed_service, "seed_welcome_project", AsyncMock()
+            ) as seed,
         ):
             result = await organization_service.get_or_create_personal_organization(session, owner)
 
+        seed.assert_awaited_once_with(session, created.id, owner.id)
         new_org = create.await_args.args[1]
         self.assertTrue(new_org.is_personal)
         self.assertEqual(new_org.owner_user_id, owner.id)
@@ -85,8 +89,12 @@ class PersonalWorkspaceTests(unittest.IsolatedAsyncioTestCase):
                 repo, "create_org", AsyncMock(side_effect=IntegrityError("insert", {}, Exception("dup")))
             ),
             patch.object(repo, "count_members", AsyncMock(return_value=1)),
+            patch.object(
+                organization_service.welcome_seed_service, "seed_welcome_project", AsyncMock()
+            ) as seed,
         ):
             result = await organization_service.get_or_create_personal_organization(session, owner)
+        seed.assert_not_awaited()
         session.rollback.assert_awaited_once()
         self.assertEqual(result.id, str(winner.id))
 

@@ -10,6 +10,7 @@ import type { MethodologyState } from '../shared/ui/form-builder/AiFormBuilderPa
 import { useOrganization } from '../shared/hooks/organization.hooks';
 import { IS_SURVEYS_APP } from '../shared/config/appMode';
 import { useBreadcrumbEntity } from '../shared/context/breadcrumb.context';
+import { createInitialSurveyPages } from '../shared/utils/welcomePage';
 
 type ProjectCheck = 'none' | 'loading' | 'ok' | 'missing';
 
@@ -20,6 +21,7 @@ export const CreateSurveyPage = () => {
   // /surveys/create?project=<id> — the survey is created inside that project
   const projectId = useSearchParams()[0].get('project');
   const [checked, setChecked] = useState<{ id: string; found: boolean } | null>(null);
+  const [initialPages] = useState(createInitialSurveyPages);
   const check: ProjectCheck = !projectId
     ? 'none'
     : checked?.id !== projectId
@@ -106,6 +108,7 @@ export const CreateSurveyPage = () => {
     <FormEditor
       mode="survey"
       pageTitle="Новый опрос"
+      initialPages={initialPages}
       saveButtonLabel="Сохранить"
       onSave={handleSave}
       onBack={() => navigate(backPath)}

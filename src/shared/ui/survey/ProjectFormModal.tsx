@@ -85,6 +85,7 @@ export const ProjectFormModal = ({ open, project, onSubmit, onClose }: ProjectFo
   return (
     <Modal
       open={open}
+      rootClassName="tour-project-modal"
       title={project ? 'Изменить проект' : 'Новый проект'}
       okText={project ? 'Сохранить' : 'Создать'}
       cancelText="Отмена"

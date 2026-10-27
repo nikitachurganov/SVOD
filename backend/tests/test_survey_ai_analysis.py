@@ -172,12 +172,20 @@ class ChatTests(unittest.TestCase):
         self.assertEqual(llm.await_count, 0)
         self.assertIn("нет ответов", result.reply)
 
-    def test_chat_falls_back_on_unparseable_answer(self):
+    def test_chat_falls_back_on_unusable_answer(self):
+        # JSON without a reply: nothing to show, so the researcher gets the fallback message
         result, _ = self._run(
-            ["{}", "not json"], [SurveyAiChatMessage(role="user", content="Привет")]
+            ["{}", '{"quote_ids": []}'], [SurveyAiChatMessage(role="user", content="Привет")]
         )
         self.assertIn("Не удалось разобрать", result.reply)
         self.assertEqual(result.quotes, [])
+
+    def test_chat_shows_a_plain_text_answer_instead_of_failing(self):
+        result, _ = self._run(
+            ["{}", "Чаще всего упоминали Яндекс Формы."],
+            [SurveyAiChatMessage(role="user", content="Что чаще упоминали?")],
+        )
+        self.assertEqual(result.reply, "Чаще всего упоминали Яндекс Формы.")
 
 
 class SegmentComparisonTests(unittest.TestCase):

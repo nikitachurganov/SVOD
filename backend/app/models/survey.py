@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, false
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -89,6 +89,7 @@ class Survey(Base):
 
 class SurveyResponse(Base):
     __tablename__ = "survey_responses"
+    __table_args__ = (Index("ix_survey_responses_survey_id_locked", "survey_id", "locked"),)
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
@@ -103,6 +104,11 @@ class SurveyResponse(Base):
     # Survey pages at the moment of submission — the survey can be edited later
     schema_snapshot: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     quality_flags: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True), nullable=True)
+    # Received beyond the owner's response quota: kept, but hidden from lists and analysis until
+    # the plan grows (see billing_guard.register_response)
+    locked: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
     respondent_meta: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True), nullable=True)
     duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
     submitted_at: Mapped[datetime] = mapped_column(

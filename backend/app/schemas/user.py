@@ -20,6 +20,17 @@ class UserResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class OnboardingState(BaseModel):
+    """First-visit questionnaire and tour state, as the web client reads it."""
+    surveyCompleted: bool
+    # Show the questionnaire now: not answered yet and not closed
+    needsSurvey: bool
+    # May be closed without answering (accounts that predate the questionnaire)
+    dismissible: bool
+    tourStatus: str
+    tourStep: str | None
+
+
 class UserProfileResponse(BaseModel):
     """Matches the frontend UserProfile interface."""
     id: str
@@ -31,6 +42,13 @@ class UserProfileResponse(BaseModel):
     phoneNumber: str
     avatarUrl: str | None
     createdAt: str
+    # Platform role: "user" or "admin"
+    role: str
+    # The mailbox was confirmed by a link from an email
+    emailVerified: bool
+    # The server can send the confirmation email (SMTP is set up); without it nobody is asked to confirm
+    emailVerificationAvailable: bool
+    onboarding: OnboardingState
 
 
 class PublicAuthorResponse(BaseModel):

@@ -424,6 +424,23 @@ export const archiveSurvey = async (id: string): Promise<void> => {
   await api.delete(`/surveys/${id}`);
 };
 
+/**
+ * Guided tour: fills a published survey that has no answers yet with made-up test responses.
+ * The server answers 409 `survey_has_responses` / `survey_not_published` otherwise.
+ */
+export const generateDemoResponses = async (id: string, count?: number): Promise<number> => {
+  const { data } = await api.post<{ created: number }>(`/surveys/${id}/demo-responses`, {
+    ...(count ? { count } : {}),
+  });
+  return data.created;
+};
+
+/** Removes the test responses made for the tour; real responses stay */
+export const removeDemoResponses = async (id: string): Promise<number> => {
+  const { data } = await api.delete<{ removed: number }>(`/surveys/${id}/demo-responses`);
+  return data.removed;
+};
+
 export interface SurveyResponsesParams {
   limit?: number;
   offset?: number;

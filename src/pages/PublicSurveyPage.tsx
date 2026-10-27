@@ -92,6 +92,10 @@ export const PublicSurveyPage = ({ preview = false }: PublicSurveyPageProps) => 
     [survey],
   );
 
+  // A first page made only of text blocks is the greeting: it is not numbered in the progress line
+  const hasWelcomePage = pages[0]?.fields.every((field) => field.type === 'textBlock') ?? false;
+  const welcomeOffset = hasWelcomePage ? 1 : 0;
+
   const currentPage = pages[Math.min(pageIndex, Math.max(pages.length - 1, 0))];
   const isFirst = pageIndex === 0;
   const isLast = pageIndex >= pages.length - 1;
@@ -223,13 +227,17 @@ export const PublicSurveyPage = ({ preview = false }: PublicSurveyPageProps) => 
 
   const actions = (
     <div className="public-form-flow__submit-bar">
-      {!isFirst && <Button onClick={handlePrev}>Назад</Button>}
+      {!isFirst && (
+        <Button size="large" onClick={handlePrev}>
+          Назад
+        </Button>
+      )}
       {isLast ? (
-        <Button type="primary" onClick={() => void handleSubmit()} loading={submitting}>
+        <Button size="large" type="primary" onClick={() => void handleSubmit()} loading={submitting}>
           {submitting ? 'Отправка…' : 'Отправить ответы'}
         </Button>
       ) : (
-        <Button type="primary" onClick={() => void handleNext()}>
+        <Button size="large" type="primary" onClick={() => void handleNext()}>
           Далее
         </Button>
       )}
@@ -242,8 +250,8 @@ export const PublicSurveyPage = ({ preview = false }: PublicSurveyPageProps) => 
       <div className="public-form-flow__fill-main">
         <FormFillWizardLayout
           contentRef={contentRef}
-          pageIndex={pageIndex}
-          pageCount={pages.length}
+          pageIndex={pageIndex - welcomeOffset}
+          pageCount={pages.length - welcomeOffset}
           pageTitle={currentPage?.title}
           notification={
             submitError ? (
@@ -260,10 +268,10 @@ export const PublicSurveyPage = ({ preview = false }: PublicSurveyPageProps) => 
           actions={pages.length > 0 ? actions : undefined}
         >
           <h1 className="public-form-flow__form-title">{survey?.name}</h1>
-          {survey?.description && (
+          {isFirst && survey?.description && (
             <p style={{ color: 'var(--app-text-secondary)' }}>{survey.description}</p>
           )}
-          {survey?.organization_name && (
+          {isFirst && survey?.organization_name && (
             <p style={{ color: 'var(--app-text-secondary)', fontSize: 13 }}>
               {survey.organization_name}
             </p>

@@ -5,13 +5,22 @@ interface AutoGrowInputProps
   value: string;
   onChange: (value: string) => void;
   style?: CSSProperties;
+  /** Allows line breaks (paragraphs of a text block); by default it behaves like an input */
+  multiline?: boolean;
 }
 
 /**
  * A borderless one-line field that grows to show a long text instead of cutting it off.
- * It behaves like an input: Enter does not add a line break, pasted line breaks become spaces.
+ * By default it behaves like an input: Enter does not add a line break, pasted line breaks become spaces.
  */
-export const AutoGrowInput = ({ value, onChange, style, onKeyDown, ...rest }: AutoGrowInputProps) => {
+export const AutoGrowInput = ({
+  value,
+  onChange,
+  style,
+  onKeyDown,
+  multiline = false,
+  ...rest
+}: AutoGrowInputProps) => {
   const ref = useRef<HTMLTextAreaElement>(null);
 
   useLayoutEffect(() => {
@@ -27,9 +36,11 @@ export const AutoGrowInput = ({ value, onChange, style, onKeyDown, ...rest }: Au
       ref={ref}
       rows={1}
       value={value}
-      onChange={(event) => onChange(event.target.value.replace(/\r?\n/g, ' '))}
+      onChange={(event) =>
+        onChange(multiline ? event.target.value : event.target.value.replace(/\r?\n/g, ' '))
+      }
       onKeyDown={(event) => {
-        if (event.key === 'Enter') event.preventDefault();
+        if (event.key === 'Enter' && !multiline) event.preventDefault();
         onKeyDown?.(event);
       }}
       style={{

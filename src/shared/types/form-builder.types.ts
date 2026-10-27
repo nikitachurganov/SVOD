@@ -19,7 +19,8 @@ export type FormFieldType =
   | 'address'
   | 'address_country_city'
   | 'location'
-  | 'rating';
+  | 'rating'
+  | 'textBlock';
 
 export interface FieldOption {
   id: string;
@@ -85,6 +86,7 @@ export const PANEL_KEY_TO_FIELD_TYPE: Readonly<Partial<Record<string, FormFieldT
   countryCity: 'address_country_city',
   location: 'location',
   rating: 'rating',
+  textBlock: 'textBlock',
 } as const;
 
 /** Human-readable labels for each field type */
@@ -110,6 +112,7 @@ export const FIELD_TYPE_LABELS: Readonly<Record<FormFieldType, string>> = {
   address_country_city: 'Страна и город',
   location: 'Города и страны',
   rating: 'Оценка по шкале',
+  textBlock: 'Текст без вопроса',
 } as const;
 
 /** Field types that carry an options array */

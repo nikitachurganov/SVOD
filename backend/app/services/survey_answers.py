@@ -13,6 +13,8 @@ from app.services.survey_methodology_service import iter_leaf_fields
 MAX_ANSWERS_BYTES = 200_000
 MAX_TEXT_LENGTH = 10_000
 _FILE_TYPES = {"file_vector", "file_image", "file_document"}
+# Files are not analysed; a text block is shown to the respondent but has no answer
+_NON_ANSWER_TYPES = _FILE_TYPES | {"textBlock"}
 _FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
 
 
@@ -26,11 +28,18 @@ def is_empty(value: Any) -> bool:
     return False
 
 
+def _with_yes_no_options(field: dict[str, Any]) -> dict[str, Any]:
+    """A yesNo answer is stored as "yes" / "no"; give it options so results show «Да» / «Нет»."""
+    if field.get("type") != "yesNo" or field.get("options"):
+        return field
+    return {**field, "options": [{"id": "yes", "label": "Да"}, {"id": "no", "label": "Нет"}]}
+
+
 def answerable_fields(pages: Any) -> list[dict[str, Any]]:
     return [
-        f
+        _with_yes_no_options(f)
         for f in iter_leaf_fields(pages)
-        if isinstance(f.get("id"), str) and f.get("type") not in _FILE_TYPES
+        if isinstance(f.get("id"), str) and f.get("type") not in _NON_ANSWER_TYPES
     ]
 
 

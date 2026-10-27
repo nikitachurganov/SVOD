@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Request, status
 
 from app.api.deps import DbSession
+from app.core.client_ip import client_ip
 from app.schemas.public_link import (
     PublicPageDataResponse,
     PublicRequestCreatedResponse,
@@ -29,7 +30,7 @@ async def suggest_public_forms(
     session: DbSession,
     request: Request,
 ) -> PublicSuggestFormsResponse:
-    ip = request.client.host if request.client else "unknown"
+    ip = client_ip(request)
     if not check_public_suggest_limit(f"suggest:{token}:{ip}"):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,

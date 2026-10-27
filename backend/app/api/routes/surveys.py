@@ -5,6 +5,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 
 from app.api.deps import CurrentUser, DbSession
+from app.models.user import User
 from app.schemas.survey import (
     CreateProjectRequest,
     CreateSurveyRequest,
@@ -34,7 +35,21 @@ from app.schemas.survey import (
     UpdateProjectRequest,
     UpdateSurveyRequest,
 )
-from app.services import survey_ai_builder_service, survey_methodology_service, survey_service
+from app.schemas.survey_demo import (
+    DemoResponsesRemoved,
+    DemoResponsesRequest,
+    DemoResponsesResult,
+)
+from app.services import (
+    ai_meter,
+    billing_guard,
+    email_service,
+    survey_ai_builder_service,
+    survey_demo_service,
+    survey_methodology_service,
+    survey_service,
+)
+from app.core.client_ip import client_ip
 from app.services.public_suggest_rate_limit import check_public_suggest_limit
 
 router = APIRouter()
@@ -131,9 +146,22 @@ async def surveys_counts(
 
 @router.post("/ai-builder", response_model=SurveyAiBuildResponse)
 async def build_survey_with_ai(
-    payload: SurveyAiBuildRequest, _user: CurrentUser
+    payload: SurveyAiBuildRequest, session: DbSession, user: CurrentUser
 ) -> SurveyAiBuildResponse:
-    return await survey_ai_builder_service.build_survey(payload)
+    # Unconfirmed accounts are rejected before the burst limit so they cannot use up its budget
+    _require_verified_email(user)
+    _ai_rate_limit(user.id)
+    ent = await billing_guard.entitlements(session, user)
+    # Methodologies picked by hand that the plan does not include are refused before any AI is spent
+    billing_guard.ensure_methodologies(ent, payload.methodology_ids)
+    # Existing pages in the request mean the user is refining a survey, not building a new one
+    action = ai_meter.ACTION_SURVEY_EDIT if payload.pages else ai_meter.ACTION_SURVEY_BUILD
+    async with ai_meter.action(user, action):
+        return await survey_ai_builder_service.build_survey(
+            payload,
+            allowed_methodologies=billing_guard.allowed_methodologies(ent),
+            max_questions=billing_guard.question_cap(ent),
+        )
 
 
 @router.post("", response_model=SurveyDetail, status_code=201)
@@ -167,6 +195,22 @@ async def set_survey_status(
     survey_id: str, payload: SurveyStatusRequest, session: DbSession, user: CurrentUser
 ) -> SurveyDetail:
     return await survey_service.set_status(session, user, survey_id, payload.status)
+
+
+@router.post("/{survey_id}/demo-responses", response_model=DemoResponsesResult, status_code=201)
+async def add_demo_responses(
+    survey_id: str, payload: DemoResponsesRequest, session: DbSession, user: CurrentUser
+) -> DemoResponsesResult:
+    """Guided tour: fill a published survey that has no answers yet with made-up test responses."""
+    return await survey_demo_service.add_demo_responses(session, user, survey_id, payload.count)
+
+
+@router.delete("/{survey_id}/demo-responses", response_model=DemoResponsesRemoved)
+async def remove_demo_responses(
+    survey_id: str, session: DbSession, user: CurrentUser
+) -> DemoResponsesRemoved:
+    """Remove the test responses made for the guided tour; real responses stay."""
+    return await survey_demo_service.remove_demo_responses(session, user, survey_id)
 
 
 @router.delete("/{survey_id}", status_code=204)
@@ -249,6 +293,16 @@ async def get_crosstab(
     )
 
 
+def _require_verified_email(user: User) -> None:
+    # Without SMTP nobody is asked to confirm the mailbox (the link only goes to the server log),
+    # so insisting on it would lock new accounts out of the builder for good
+    if email_service.is_configured() and user.email_verified_at is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Подтвердите адрес почты по ссылке из письма, чтобы пользоваться ИИ-конструктором.",
+        )
+
+
 def _ai_rate_limit(user_id: uuid.UUID) -> None:
     if not check_public_suggest_limit(f"survey-ai:{user_id}"):
         raise HTTPException(
@@ -313,7 +367,7 @@ async def get_public_survey(token: str, session: DbSession) -> PublicSurveyRespo
 async def submit_public_response(
     token: str, payload: SubmitSurveyRequest, session: DbSession, request: Request
 ) -> SurveySubmittedResponse:
-    ip = request.client.host if request.client else "unknown"
+    ip = client_ip(request)
     if not check_public_suggest_limit(f"survey-submit:{token}:{ip}"):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,

@@ -12,7 +12,7 @@ from app.core.config import settings
 from app.core.name_utils import build_display_name
 from app.core.security import PENDING_ACTIVATION_HASH, is_pending_activation
 from app.models.request_stage import RequestStage
-from app.services import email_service
+from app.services import email_service, welcome_seed_service
 
 from app.models.external_contractor import ExternalContractor
 from app.models.organization import (
@@ -218,6 +218,9 @@ async def get_or_create_personal_organization(
                     organization_id=org.id, user_id=current_user.id, role_tag="owner"
                 ),
             )
+            # A new workspace starts with a sample survey; the IntegrityError branch below
+            # means another request created the workspace, so the seed is never doubled
+            await welcome_seed_service.seed_welcome_project(session, org.id, current_user.id)
             await session.commit()
         except IntegrityError:
             # A parallel request created it first (one personal workspace per user)

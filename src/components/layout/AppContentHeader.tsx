@@ -14,6 +14,7 @@ interface AppContentHeaderProps {
   profileOpen: boolean;
   onProfileOpenChange: (open: boolean) => void;
   initials: string;
+  avatarUrl?: string | null;
   resolvedName: string;
   resolvedEmail: string;
   onCreateOrg: () => void;
@@ -32,6 +33,7 @@ export const AppContentHeader = ({
   profileOpen,
   onProfileOpenChange,
   initials,
+  avatarUrl,
   resolvedName,
   resolvedEmail,
   onCreateOrg,
@@ -41,14 +43,16 @@ export const AppContentHeader = ({
   onMobileMenuClick,
 }: AppContentHeaderProps) => (
   <header className="app-content-header" aria-label="Верхняя панель">
+    {standalone && (
+      <div className="app-header-brand">
+        <Link to={HOME_PATH} className="app-header-brand__link" aria-label="СВОД Опросы — на главную">
+          <img src={logoUrl} alt="СВОД" className="app-header-brand__logo" />
+          <span className="app-header-brand__name">Опросы</span>
+        </Link>
+      </div>
+    )}
     <div className="app-content-header__main">
       <div className="app-content-header__left">
-        {standalone && (
-          <Link to={HOME_PATH} className="app-header-brand" aria-label="Опросы — на главную">
-            <img src={logoUrl} alt="СВОД" className="app-header-brand__logo" />
-            <span className="app-header-brand__name">Опросы</span>
-          </Link>
-        )}
         {showMobileMenu && (
           <Button
             type="text"
@@ -88,6 +92,7 @@ export const AppContentHeader = ({
       onOpenChange={onProfileOpenChange}
       closeNotifications={() => onNotificationsOpenChange(false)}
       initials={initials}
+      avatarUrl={avatarUrl}
       resolvedName={resolvedName}
       resolvedEmail={resolvedEmail}
       onCreateOrg={onCreateOrg}

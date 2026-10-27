@@ -1,0 +1,35 @@
+.onboarding-modal__lead {
+  margin: 0 0 20px;
+  color: var(--app-text-secondary);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.onboarding-modal__checks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 16px;
+  width: 100%;
+}
+
+.onboarding-modal__checks .ant-checkbox-wrapper {
+  margin: 0;
+}
+
+.onboarding-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+@media (max-width: 560px) {
+  .onboarding-modal__checks {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .onboarding-modal__actions .ant-btn {
+    flex: 1 1 100%;
+  }
+}

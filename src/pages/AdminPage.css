@@ -1,0 +1,112 @@
+/* Administrator pages: the user table, plan requests and the summary */
+
+.admin-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.admin-filters__search {
+  width: 280px;
+  max-width: 100%;
+}
+
+.admin-filters__select {
+  min-width: 170px;
+}
+
+.admin-section {
+  margin: 20px 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--app-text);
+}
+
+.admin-usage {
+  margin-bottom: 4px;
+}
+
+.admin-usage__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.admin-overrides {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 0;
+  align-items: center;
+}
+
+.admin-overrides > div {
+  width: 100%;
+}
+
+.admin-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.admin-actions__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-events {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.admin-events__item {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--app-border-secondary);
+}
+
+.admin-events__item:last-child {
+  border-bottom: none;
+}
+
+.admin-stats__group {
+  margin-bottom: 8px;
+}
+
+.admin-stats__group .admin-section {
+  margin-top: 8px;
+}
+
+.admin-stats__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 12px;
+}
+
+.admin-stats__tile {
+  border-radius: 8px;
+}
+
+.admin-stats__hint {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--app-text-secondary);
+}
+
+/* The drawer never exceeds the screen on a phone */
+.admin-drawer .ant-drawer-content-wrapper {
+  max-width: 100vw;
+}
+
+@media (max-width: 767px) {
+  .admin-filters__search,
+  .admin-filters__select {
+    width: 100%;
+  }
+}

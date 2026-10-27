@@ -10,6 +10,7 @@ import {
 } from '@formily/antd-v5';
 
 import { FormGroupTitle } from './components/FormGroupTitle';
+import { FormTextBlock } from './components/FormTextBlock';
 import { FormilyAddressInput } from './components/FormilyAddressInput';
 import { FormilyCountryCityInput } from './components/FormilyCountryCityInput';
 import { FormilyLocationInput } from './components/FormilyLocationInput';
@@ -29,6 +30,7 @@ export const SchemaField = createSchemaField({
     Checkbox,
     Radio,
     FormGroupTitle,
+    FormTextBlock,
     FormilyAddressInput,
     FormilyCountryCityInput,
     FormilyLocationInput,

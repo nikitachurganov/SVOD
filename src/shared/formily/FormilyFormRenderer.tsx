@@ -25,7 +25,7 @@ export const FormilyFormRenderer = ({
 
   return (
     <FormProvider form={form}>
-      <Form component="form" layout="vertical">
+      <Form component="form" layout="vertical" colon={false}>
         <SchemaField schema={schema} />
       </Form>
     </FormProvider>

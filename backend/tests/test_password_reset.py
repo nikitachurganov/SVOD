@@ -20,6 +20,7 @@ def active_user(**overrides):
         first_name="Анна",
         password_hash=hash_password("OldPassword1"),
         is_active=True,
+        email_verified_at=None,
     )
     data.update(overrides)
     return SimpleNamespace(**data)

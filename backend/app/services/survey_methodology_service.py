@@ -58,7 +58,8 @@ def _walk(fields: Any):
             continue
         if field.get("type") == "group":
             yield from _walk(field.get("children"))
-        else:
+        elif field.get("type") != "textBlock":
+            # A text block is content for the respondent, not a question
             yield field
 
 

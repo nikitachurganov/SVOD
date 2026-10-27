@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { announcePaywall, parseBillingError } from './billingErrors';
 
 const BASE_URL = import.meta.env.VITE_API_URL as string | undefined;
 
@@ -27,6 +28,11 @@ api.interceptors.response.use(
     if (axios.isAxiosError(error) && error.response?.status === 401 && !isCredentialsRequest) {
       localStorage.removeItem('access_token');
       window.location.href = '/auth';
+    }
+    // A plan limit stopped the action: one window offers the way out, whichever screen asked
+    if (axios.isAxiosError(error) && error.response?.status === 402) {
+      const billing = parseBillingError(error);
+      if (billing) announcePaywall(billing);
     }
     return Promise.reject(error);
   },

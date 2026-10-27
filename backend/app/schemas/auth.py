@@ -14,6 +14,8 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     phone_number: str = Field(default="", max_length=20)
     password: str = Field(..., min_length=8, max_length=64)
+    # Which web app the confirmation link in the email opens; the URL itself is chosen on the server
+    service: Literal["platform", "surveys"] = "platform"
 
     @field_validator("first_name", "last_name", "middle_name", "full_name", mode="before")
     @classmethod
@@ -70,6 +72,10 @@ class PasswordResetRequest(BaseModel):
     service: Literal["platform", "surveys"] = "platform"
 
 
+class EmailVerificationRequest(BaseModel):
+    service: Literal["platform", "surveys"] = "platform"
+
+
 class PasswordResetConfirm(BaseModel):
     password: str = Field(..., min_length=8, max_length=64)
 
@@ -79,6 +85,37 @@ class PasswordResetConfirm(BaseModel):
         if len(value.encode("utf-8")) > 72:
             raise ValueError("Password must not exceed 72 bytes.")
         return value
+
+
+class UpdateProfileRequest(BaseModel):
+    first_name: str = Field(..., min_length=1, max_length=100)
+    last_name: str = Field(..., min_length=1, max_length=100)
+    middle_name: str | None = Field(None, max_length=100)
+
+    @field_validator("first_name", "last_name", "middle_name", mode="before")
+    @classmethod
+    def normalize_name_values(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return normalize_name_part(value)
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(..., min_length=1, max_length=72)
+    new_password: str = Field(..., min_length=8, max_length=64)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_password_bytes(cls, value: str) -> str:
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("Password must not exceed 72 bytes.")
+        return value
+
+
+class DeleteAccountRequest(BaseModel):
+    password: str = Field(..., min_length=1, max_length=72)
+    # With a paid plan running: delete the account when the paid period ends instead of right now
+    defer_until_subscription_ends: bool = False
 
 
 class AccountActivationInfo(BaseModel):

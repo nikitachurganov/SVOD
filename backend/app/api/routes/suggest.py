@@ -3,6 +3,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query, Request, status
 
 from app.api.deps import CurrentUser
+from app.core.client_ip import client_ip
 from app.services import address_suggest_service
 from app.services.public_suggest_rate_limit import check_public_suggest_limit
 
@@ -35,8 +36,8 @@ async def suggest_yandex_address(
     country: str | None = Query(default=None, max_length=8),
 ) -> list[dict[str, Any]]:
     """Public Yandex Geosuggest proxy (rate-limited). Works without JWT for public forms."""
-    client_ip = request.client.host if request.client else "unknown"
-    if not check_public_suggest_limit(f"yandex-address:{client_ip}"):
+    address = client_ip(request)
+    if not check_public_suggest_limit(f"yandex-address:{address}"):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Слишком много запросов подсказок. Попробуйте позже.",

@@ -6,7 +6,8 @@ export const collectFieldIds = (fields: FormFieldInstance[]): string[] => {
   for (const field of fields) {
     if (field.type === 'group' && field.children && field.children.length > 0) {
       ids.push(...collectFieldIds(field.children));
-    } else {
+    } else if (field.type !== 'textBlock') {
+      // A text block has no value to validate
       ids.push(field.id);
     }
   }

@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.constants.billing_plans import FEATURE_CROSSTABS, FEATURE_CSV_EXPORT
 from app.knowledge.methodologies import CATEGORIES, METHODOLOGIES
 from app.models.survey import Survey, SurveyProject, SurveyResponse
 from app.models.user import User
@@ -41,6 +42,8 @@ from app.schemas.survey import (
 )
 from app.schemas.user import PublicAuthorResponse
 from app.services import (
+    ai_meter,
+    billing_guard,
     survey_ai_analysis_service,
     survey_answers,
     survey_methodology_service,
@@ -205,6 +208,8 @@ async def create_project(
 ) -> SurveyProjectItem:
     org_id = _parse_uuid(payload.organization_id, "Organization not found")
     await _ensure_member(session, org_id, user)
+    # Only an explicit "new project" counts; the default project a first survey gets is not refused
+    await billing_guard.ensure_can_add_project(session, user)
     project = await survey_repository.create_project(
         session,
         SurveyProject(
@@ -335,6 +340,7 @@ async def create_survey(
 ) -> SurveyDetail:
     org_id = _parse_uuid(payload.organization_id, "Organization not found")
     await _ensure_member(session, org_id, user)
+    await billing_guard.ensure_questions_within_limit(session, user, payload.pages)
     project = await _resolve_project_for_new_survey(session, user, org_id, payload.project_id)
     survey = Survey(
         organization_id=org_id,
@@ -357,7 +363,11 @@ async def update_survey(
     session: AsyncSession, user: User, survey_id: str, payload: UpdateSurveyRequest
 ) -> SurveyDetail:
     survey = await _get_for_member(session, survey_id, user)
-    if await survey_repository.count_responses(session, survey.id) > 0:
+    await billing_guard.ensure_questions_within_limit(
+        session, user, payload.pages, previous_pages=survey.pages
+    )
+    # Locked responses are answers to the current form as well: the structure stays fixed for them
+    if await survey_repository.count_responses(session, survey.id, include_locked=True) > 0:
         problems = survey_answers.structure_conflicts(survey.pages, payload.pages)
         if problems:
             raise HTTPException(
@@ -403,6 +413,10 @@ async def set_status(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="survey_has_no_questions",
         )
+    if new_status == "open" and survey.status != "open":
+        # Publishing is what the plan limits: how many surveys are live, and how long they are
+        await billing_guard.ensure_can_open_survey(session, user)
+        await billing_guard.ensure_questions_within_limit(session, user, survey.pages)
     survey.status = new_status
     survey.updated_at = datetime.now(timezone.utc)
     survey = await survey_repository.update(session, survey)
@@ -534,9 +548,13 @@ async def get_question_answers(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="not_an_open_question"
         )
-    rows = await survey_repository.list_responses(session, survey.id, limit=MAX_RESULTS_ROWS)
-    # ``rows`` is newest first; the arrival number counts from the oldest response
-    total_rows = len(rows)
+    analysis = await billing_guard.load_analysis(
+        session, user, survey.id, ceiling=MAX_RESULTS_ROWS, exclude_flagged=exclude_flagged
+    )
+    rows = analysis.rows
+    exclude_flagged = analysis.exclude_flagged
+    # ``rows`` is newest first; the arrival number counts from the oldest response of the survey
+    total_rows = analysis.total
     items: list[QuestionAnswerItem] = []
     for index, row in enumerate(rows):
         if exclude_flagged and survey_quality.excludes_from_analysis(row.quality_flags):
@@ -563,8 +581,12 @@ async def get_results(
     session: AsyncSession, user: User, survey_id: str, *, exclude_flagged: bool = True
 ) -> SurveyResults:
     survey = await _get_for_member(session, survey_id, user)
-    rows = await survey_repository.list_responses(session, survey.id, limit=MAX_RESULTS_ROWS)
-    return survey_results.build_results(survey.pages, rows, exclude_flagged=exclude_flagged)
+    analysis = await billing_guard.load_analysis(
+        session, user, survey.id, ceiling=MAX_RESULTS_ROWS, exclude_flagged=exclude_flagged
+    )
+    return survey_results.build_results(
+        survey.pages, analysis.rows, exclude_flagged=analysis.exclude_flagged
+    )
 
 
 async def get_crosstab(
@@ -577,10 +599,13 @@ async def get_crosstab(
     exclude_flagged: bool = True,
 ) -> CrosstabResult:
     survey = await _get_for_member(session, survey_id, user)
-    rows = await survey_repository.list_responses(session, survey.id, limit=MAX_RESULTS_ROWS)
+    await billing_guard.ensure_feature(session, user, FEATURE_CROSSTABS)
+    analysis = await billing_guard.load_analysis(
+        session, user, survey.id, ceiling=MAX_RESULTS_ROWS, exclude_flagged=exclude_flagged
+    )
     try:
         return survey_results.build_crosstab(
-            survey.pages, rows, row_id, col_id, exclude_flagged=exclude_flagged
+            survey.pages, analysis.rows, row_id, col_id, exclude_flagged=analysis.exclude_flagged
         )
     except survey_results.CrosstabError as exc:
         raise HTTPException(
@@ -629,30 +654,34 @@ async def generate_ai_summary(
     session: AsyncSession, user: User, survey_id: str, payload: SurveyAiSummaryRequest
 ) -> SurveyAiSummary:
     survey = await _get_for_member(session, survey_id, user)
-    rows = await survey_repository.list_responses(session, survey.id, limit=MAX_RESULTS_ROWS)
-    results = survey_results.build_results(
-        survey.pages, rows, exclude_flagged=payload.exclude_flagged
+    analysis = await billing_guard.load_analysis(
+        session, user, survey.id, ceiling=MAX_RESULTS_ROWS, exclude_flagged=payload.exclude_flagged
     )
+    rows = analysis.rows
+    exclude_flagged = analysis.exclude_flagged
+    results = survey_results.build_results(survey.pages, rows, exclude_flagged=exclude_flagged)
     stored = _stored_summary(survey)
     if (
         stored is not None
         and not payload.force
         and stored["responses_used"] == results.used
-        and bool(stored.get("exclude_flagged", True)) == payload.exclude_flagged
+        and bool(stored.get("exclude_flagged", True)) == exclude_flagged
     ):
         return _to_ai_summary(stored, stale=False)
     comparisons = survey_ai_analysis_service.segment_comparisons(
-        survey.pages, rows, exclude_flagged=payload.exclude_flagged
+        survey.pages, rows, exclude_flagged=exclude_flagged
     )
-    bullets, evidence = await survey_ai_analysis_service.generate_summary(
-        survey.name, results, comparisons
-    )
+    # Charged only here: a summary served from the cache above costs nothing
+    async with ai_meter.action(user, ai_meter.ACTION_AI_SUMMARY, survey_id=survey.id):
+        bullets, evidence = await survey_ai_analysis_service.generate_summary(
+            survey.name, results, comparisons
+        )
     survey.ai_summary = {
         "bullets": bullets,
         "evidence": evidence,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "responses_used": results.used,
-        "exclude_flagged": payload.exclude_flagged,
+        "exclude_flagged": exclude_flagged,
     }
     await survey_repository.update(session, survey)
     await session.commit()
@@ -667,20 +696,25 @@ async def ai_chat(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="last_message_must_be_user"
         )
-    rows = await survey_repository.list_responses(session, survey.id, limit=MAX_RESULTS_ROWS)
-    return await survey_ai_analysis_service.chat(
-        survey.name,
-        survey.pages,
-        rows,
-        payload.messages,
-        exclude_flagged=payload.exclude_flagged,
+    analysis = await billing_guard.load_analysis(
+        session, user, survey.id, ceiling=MAX_RESULTS_ROWS, exclude_flagged=payload.exclude_flagged
     )
+    async with ai_meter.action(user, ai_meter.ACTION_AI_CHAT, survey_id=survey.id):
+        return await survey_ai_analysis_service.chat(
+            survey.name,
+            survey.pages,
+            analysis.rows,
+            payload.messages,
+            exclude_flagged=analysis.exclude_flagged,
+            allow_crosstab=analysis.crosstab_allowed,
+        )
 
 
 async def export_responses_csv(
     session: AsyncSession, user: User, survey_id: str
 ) -> tuple[str, str]:
     survey = await _get_for_member(session, survey_id, user)
+    await billing_guard.ensure_feature(session, user, FEATURE_CSV_EXPORT)
     rows = await survey_repository.list_responses(session, survey.id)
     return survey.name, survey_answers.build_csv(survey.pages, list(reversed(rows)))
 
@@ -731,11 +765,15 @@ async def submit_public_response(
             detail={"code": "empty_answers", "missing": []},
         )
     flags = survey_quality.detect_flags(survey.pages, answers, payload.duration_seconds)
+    # Over the owner's quota the answer is still accepted (the respondent sees no difference),
+    # but it stays locked until the plan grows
+    locked = await billing_guard.register_response(session, survey)
     response = SurveyResponse(
         survey_id=survey.id,
         answers=answers,
         schema_snapshot=survey.pages if isinstance(survey.pages, list) else [],
         quality_flags=flags,
+        locked=locked,
         respondent_meta=None if survey.anonymous else {"user_agent": (user_agent or "")[:200]},
         duration_seconds=payload.duration_seconds,
     )

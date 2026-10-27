@@ -103,8 +103,7 @@ async def upload_file(
 
 
 def _object_key(row: FormFile) -> str | None:
-    prefix = f"s3://{settings.S3_BUCKET}/"
-    return row.file_url[len(prefix):] if row.file_url.startswith(prefix) else None
+    return storage_service.key_from_url(row.file_url)
 
 
 async def get_download_url(

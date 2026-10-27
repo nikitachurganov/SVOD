@@ -40,6 +40,14 @@ FIELD_TYPE_DESCRIPTIONS: dict[str, str] = {
     "group": "Группа полей — контейнер, объединяющий связанные поля в children",
 }
 
+# Survey-only: static content for the respondent (greeting, instructions), not a question
+SURVEY_FIELD_TYPE_DESCRIPTIONS: dict[str, str] = {
+    "textBlock": (
+        "Текст без вопроса — приветствие, инструкция или пояснение; без ответа респондента. "
+        "Заголовок — в label (можно пустой), сам текст — в description"
+    ),
+}
+
 _TYPES_WITH_OPTIONS = {"dropdown", "radio", "checkbox"}
 _RATING_VARIANTS = {"stars", "numeric_scale", "slider", "nps"}
 _LOCATION_MODES = {"country_only", "city_only", "country_and_city"}
@@ -49,6 +57,7 @@ _MAX_FIELDS_PER_LEVEL = 60
 _MAX_OPTIONS = 50
 _MAX_LABEL = 300
 _MAX_DESCRIPTION = 1000
+_MAX_TEXT_BLOCK = 3000
 
 _SYSTEM_PROMPT = f"""Ты — ИИ-конструктор форм заявок в сервисе «СВОД». Пользователь описывает, какая форма ему нужна, \
 или просит изменить текущую форму. Ты собираешь форму ТОЛЬКО из доступных типов полей.
@@ -162,6 +171,23 @@ def _str(value: Any, limit: int) -> str:
     return str(value).strip()[:limit]
 
 
+def _clean_label(value: Any) -> str:
+    """Question titles are shown without a trailing colon ("Вопрос?:" → "Вопрос?")."""
+    return _str(value, _MAX_LABEL).rstrip(" :").strip()
+
+
+# The model sometimes answers in English despite the prompt; keep the most common options Russian
+_RU_OPTION_LABELS = {
+    "yes": "Да",
+    "no": "Нет",
+    "true": "Да",
+    "false": "Нет",
+    "other": "Другое",
+    "maybe": "Затрудняюсь ответить",
+    "not sure": "Затрудняюсь ответить",
+}
+
+
 def _sanitize_config(field_type: str, raw: Any) -> dict[str, Any] | None:
     if not isinstance(raw, dict):
         return None
@@ -195,15 +221,32 @@ def _sanitize_field(
     if not isinstance(raw, dict):
         return None
     field_type = raw.get("type")
-    if field_type not in FIELD_TYPE_DESCRIPTIONS:
+    if field_type not in FIELD_TYPE_DESCRIPTIONS and field_type not in SURVEY_FIELD_TYPE_DESCRIPTIONS:
         logger.info("AI form builder: dropping field with unknown type %r", field_type)
         return None
     if field_type == "group" and not allow_group:
         return None
 
+    if field_type == "textBlock":
+        text = _str(raw.get("description") or raw.get("placeholder"), _MAX_TEXT_BLOCK)
+        title = _clean_label(raw.get("label"))
+        if not (title or text):
+            return None
+        block: dict[str, Any] = {
+            "type": "textBlock",
+            "label": title,
+            "placeholder": text or None,
+            "required": False,
+        }
+        raw_id = raw.get("id")
+        if isinstance(raw_id, str) and raw_id in known_ids and raw_id not in used_ids:
+            block["id"] = raw_id
+            used_ids.add(raw_id)
+        return block
+
     field: dict[str, Any] = {
         "type": field_type,
-        "label": _str(raw.get("label"), _MAX_LABEL),
+        "label": _clean_label(raw.get("label")),
         "placeholder": _str(raw.get("description") or raw.get("placeholder"), _MAX_DESCRIPTION)
         or None,
         "required": bool(raw.get("required")),
@@ -221,6 +264,7 @@ def _sanitize_field(
         if isinstance(raw_options, list):
             for opt in raw_options[:_MAX_OPTIONS]:
                 label = _str(opt.get("label") if isinstance(opt, dict) else opt, _MAX_LABEL)
+                label = _RU_OPTION_LABELS.get(label.lower(), label)
                 if label:
                     options.append({"label": label})
         if not options:
@@ -299,7 +343,8 @@ def _parse_payload(raw: str) -> dict[str, Any] | None:
         if not candidate:
             continue
         try:
-            obj = json.loads(candidate)
+            # strict=False: models often put raw newlines inside multi-paragraph "reply" strings
+            obj = json.loads(candidate, strict=False)
         except (json.JSONDecodeError, ValueError):
             continue
         if isinstance(obj, dict):
