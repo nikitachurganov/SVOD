@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, String, Text, true
+from sqlalchemy import Boolean, DateTime, Index, String, Text, text, true
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -10,6 +10,14 @@ from app.core.database import Base
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (
+        # The worker looks for accounts waiting to be deleted; almost nobody is one
+        Index(
+            "ix_users_deletion_requested_at",
+            "deletion_requested_at",
+            postgresql_where=text("deletion_requested_at IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
@@ -33,6 +41,11 @@ class User(Base):
     )
     # When the person confirmed the mailbox by a link from an email; None — not confirmed yet
     email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Deletion was asked for while a paid plan is running: the account is deleted when that paid
+    # period ends (see account_deletion_service). None — no deletion is planned.
+    deletion_requested_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )
