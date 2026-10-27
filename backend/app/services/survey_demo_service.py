@@ -296,7 +296,8 @@ async def add_demo_responses(
     if survey.status not in ("open", "closed"):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="survey_not_published")
     # Test answers go only to a survey nobody has answered: they must never mix with real data
-    if await survey_repository.count_responses(session, survey.id) > 0:
+    # Responses kept back by the quota are real answers too
+    if await survey_repository.count_responses(session, survey.id, include_locked=True) > 0:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="survey_has_responses")
 
     responses = build_responses(survey, count)
