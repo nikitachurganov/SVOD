@@ -54,7 +54,7 @@
 }
 
 .auth-page__hero-logo {
-  width: 124px;
+  width: 150px;
   height: auto;
 }
 
@@ -273,6 +273,38 @@
   font-size: 14px;
   line-height: 22px;
   color: var(--app-text-secondary);
+}
+
+/* Sign-up ticks: the terms and the offer, the consent to personal data processing */
+.auth-page__consents {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--app-text-secondary);
+}
+
+.auth-page__consents a {
+  color: var(--app-menu-active-text);
+}
+
+/* A long label wraps; the box itself keeps its size and sits by the first line */
+.auth-page__consents .ant-checkbox-wrapper {
+  align-items: flex-start;
+}
+
+.auth-page__consents .ant-checkbox {
+  flex: none;
+  margin-top: 2px;
+}
+
+.auth-page__consent-error {
+  margin: -4px 0 0 24px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--ant-color-error, #ff4d4f);
 }
 
 html[data-theme='dark'] .auth-page {

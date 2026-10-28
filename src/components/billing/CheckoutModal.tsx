@@ -59,6 +59,17 @@ export const CheckoutModal = ({ open, onClose }: Props) => {
         Вы перейдёте на защищённую страницу платёжного сервиса ЮKassa. После оплаты вернётесь сюда, тариф
         включится сразу.
       </p>
+      <p className="billing-note" style={{ marginBottom: 16 }}>
+        Нажимая «Перейти к оплате», вы принимаете{' '}
+        <a href="/legal#offer" target="_blank" rel="noreferrer">
+          публичную оферту
+        </a>
+        . Контакты и реквизиты —{' '}
+        <a href="/legal#contacts" target="_blank" rel="noreferrer">
+          здесь
+        </a>
+        .
+      </p>
       {error ? <Alert type="error" showIcon title={error} style={{ marginBottom: 16 }} /> : null}
       <Radio.Group
         value={term}

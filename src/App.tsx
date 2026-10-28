@@ -65,6 +65,8 @@ import { PublicSurveyPage } from './pages/PublicSurveyPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { AdminPage } from './pages/AdminPage';
 import { PlansPage } from './pages/PlansPage';
+import { LegalPage } from './pages/LegalPage';
+import { PublicLegalLayout } from './components/legal/PublicLegalLayout';
 import { PaywallModalHost } from './components/billing/PaywallModalHost';
 import { SubscriptionProvider } from './shared/context/subscription.provider';
 import { OnboardingGate } from './components/onboarding/OnboardingGate';
@@ -629,6 +631,27 @@ const platformRoutes: RouteObject[] = [
 
 ];
 
+// Open to everyone: prices, the offer, contacts and requisites (the payment provider checks them)
+const publicLegalRoutes: RouteObject[] = [
+
+  {
+    element: <PublicLegalLayout />,
+    children: [
+      { path: '/pricing', element: <PlansPage /> },
+      // All the documents are one long read with anchors; the old addresses of the separate pages
+      // stay valid for the links that were already given out (the payment provider, emails)
+      { path: '/legal', element: <LegalPage /> },
+      { path: '/offer', element: <Navigate to="/legal#offer" replace /> },
+      { path: '/terms', element: <Navigate to="/legal#terms" replace /> },
+      { path: '/privacy', element: <Navigate to="/legal#privacy" replace /> },
+      { path: '/consent', element: <Navigate to="/legal#consent" replace /> },
+      { path: '/refund', element: <Navigate to="/legal#refund" replace /> },
+      { path: '/contacts', element: <Navigate to="/legal#contacts" replace /> },
+    ],
+  },
+
+];
+
 // Standalone surveys service: sign-in, the surveys section and respondent pages only
 const surveysRoutes: RouteObject[] = [
 
@@ -637,6 +660,8 @@ const surveysRoutes: RouteObject[] = [
   { path: '/auth', element: <PublicOnlyAuthPage /> },
 
   { path: '/reset-password/:token', element: <ResetPasswordPage /> },
+
+  ...publicLegalRoutes,
 
   ...publicSurveyRoutes,
 

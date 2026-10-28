@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, Skeleton, Table, Tag } from 'antd';
+import { Alert, Button, Skeleton, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { Link } from 'react-router-dom';
 import { PlanActions } from '../components/billing/PlanActions';
@@ -10,6 +10,8 @@ import {
   formatPrice,
 } from '../components/billing/billingFormat';
 import { getPlans } from '../shared/api/billing.api';
+import { LEGAL } from '../shared/config/legal';
+import { useAuth } from '../shared/hooks/auth.hooks';
 import { useSubscription } from '../shared/hooks/subscription.hooks';
 import { actionsWord } from '../shared/lib/aiQuota';
 import type { PlanInfo, PlansResponse } from '../types/billing';
@@ -62,8 +64,12 @@ const highlights = (plan: PlanInfo): string[] => [
   ...plan.features.filter((feature) => feature !== 'all_methodologies').map((feature) => FEATURE_LABELS[feature]),
 ];
 
-/** The plans side by side; what is not in the catalogue is not promised here */
+/**
+ * The plans side by side; what is not in the catalogue is not promised here.
+ * Also the public price list (`/pricing`), which the payment provider checks before connecting payments.
+ */
 export const PlansPage = () => {
+  const { user } = useAuth();
   const { subscription } = useSubscription();
   const [plans, setPlans] = useState<PlansResponse | null>(null);
   const [failed, setFailed] = useState(false);
@@ -158,6 +164,13 @@ export const PlansPage = () => {
               Или {formatPrice(researcher.price_year_kopecks)} в год.
             </p>
             <PlanActions />
+            {user ? null : (
+              <Link to="/auth" state={{ from: '/plans' }}>
+                <Button type="primary" block>
+                  Войти и подключить
+                </Button>
+              </Link>
+            )}
           </div>
         </article>
 
@@ -191,11 +204,50 @@ export const PlansPage = () => {
         </div>
       </section>
 
+      <section>
+        <h2 className="plans-page__section-title">Как вы получите услугу</h2>
+        <ul className="plans-page__terms">
+          <li>
+            Это цифровая услуга: доставки нет. Доступ открывается в вашем личном кабинете на {LEGAL.siteUrl}.
+          </li>
+          <li>
+            После оплаты тариф «Исследователь» включается автоматически, обычно сразу. Если платили по счёту,
+            включим в течение рабочего дня после поступления денег.
+          </li>
+          <li>
+            Срок и остаток лимитов видны в разделе «Профиль» → «Подписка». Подписка не продлевается сама:
+            перед окончанием срока мы напомним.
+          </li>
+          <li>Чек самозанятого придёт на вашу почту после оплаты.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 className="plans-page__section-title">Оплата и возврат</h2>
+        <ul className="plans-page__terms">
+          <li>Оплата банковской картой или через СБП на странице ЮKassa, либо по счёту по заявке.</li>
+          <li>
+            Если оплаченная услуга не была оказана, вернём деньги по заявке на{' '}
+            <a href={`mailto:${LEGAL.email}`}>{LEGAL.email}</a>. Подробные условия — в{' '}
+            <Link to="/legal#offer">публичной оферте</Link>.
+          </li>
+        </ul>
+      </section>
+
+      <p className="billing-note">
+        Оплачивая тариф, вы принимаете <Link to="/legal#offer">публичную оферту</Link>. Исполнитель: {LEGAL.fullName},
+        ИНН {LEGAL.inn}. Все контакты — на странице <Link to="/legal#contacts">«Контакты и реквизиты»</Link>.
+      </p>
+
       <p className="billing-note">
         {plans.payments_enabled
           ? 'Оплата проходит на странице платёжного сервиса ЮKassa, тариф включается сразу. Нужен счёт? Оставьте заявку, мы свяжемся.'
           : 'Оплата пока по счёту: оставьте заявку, мы свяжемся, пришлём реквизиты и включим тариф после оплаты.'}{' '}
-        Текущее использование и срок — в разделе <Link to="/profile?tab=subscription">«Подписка»</Link>.
+        {user ? (
+          <>
+            Текущее использование и срок — в разделе <Link to="/profile?tab=subscription">«Подписка»</Link>.
+          </>
+        ) : null}
       </p>
     </div>
   );

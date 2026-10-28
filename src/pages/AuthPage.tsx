@@ -1,8 +1,8 @@
 import { useState, type FormEvent } from 'react';
-import { Alert, Button, Divider, Form, Input, Segmented } from 'antd';
+import { Alert, Button, Checkbox, Divider, Form, Input, Segmented } from 'antd';
 import { MoonOutlined, SunOutlined } from '@ant-design/icons';
 import axios from 'axios';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../shared/hooks/auth.hooks';
 import { useThemeMode } from '../shared/context/theme.context';
 import { requestPasswordReset } from '../shared/api/auth.api';
@@ -76,6 +76,9 @@ export const AuthPage = () => {
     email: '', password: '', firstName: '', lastName: '', confirmPassword: '',
   });
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  // Two separate ticks: the terms and the offer, and the consent to personal data processing
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [acceptedData, setAcceptedData] = useState(false);
 
   const { signIn, signUp } = useAuth();
   const { themeMode, toggleTheme } = useThemeMode();
@@ -141,6 +144,8 @@ export const AuthPage = () => {
     if (!signUpFields.email) errors['su-email'] = 'Электронная почта обязательна';
     if (!signUpFields.password || signUpFields.password.length < 8) errors['su-password'] = 'Пароль должен содержать не менее 8 символов';
     if (signUpFields.password !== signUpFields.confirmPassword) errors['su-confirmPassword'] = 'Пароли не совпадают';
+    if (!acceptedTerms) errors['su-terms'] = 'Нужно принять условия, чтобы создать аккаунт';
+    if (!acceptedData) errors['su-data'] = 'Нужно согласие на обработку персональных данных';
     if (Object.keys(errors).length) { setFieldErrors(errors); return; }
 
     setLoading(true);
@@ -303,6 +308,27 @@ export const AuthPage = () => {
           </Form.Item>
         </div>
       </Form>
+
+      <div className="auth-page__consents">
+        <Checkbox
+          checked={acceptedTerms}
+          onChange={(e) => { setAcceptedTerms(e.target.checked); clearError('su-terms'); }}
+        >
+          Принимаю <Link to="/legal#terms" target="_blank">пользовательское соглашение</Link> и{' '}
+          <Link to="/legal#offer" target="_blank">публичную оферту</Link>
+        </Checkbox>
+        {fieldErrors['su-terms'] && <div className="auth-page__consent-error" role="alert">{fieldErrors['su-terms']}</div>}
+
+        <Checkbox
+          checked={acceptedData}
+          onChange={(e) => { setAcceptedData(e.target.checked); clearError('su-data'); }}
+        >
+          Даю <Link to="/legal#consent" target="_blank">согласие на обработку персональных данных</Link>, с{' '}
+          <Link to="/legal#privacy" target="_blank">политикой конфиденциальности</Link> ознакомлен(а)
+        </Checkbox>
+        {fieldErrors['su-data'] && <div className="auth-page__consent-error" role="alert">{fieldErrors['su-data']}</div>}
+      </div>
+
       <Button type="primary" htmlType="submit" loading={loading} block className="auth-page__submit">
         {loading ? 'Создание аккаунта…' : 'Создать аккаунт'}
       </Button>
@@ -381,6 +407,12 @@ export const AuthPage = () => {
                 </button>
               </>
             )}
+          </p>
+
+          <p className="auth-page__hint">
+            <Link to="/pricing">Тарифы</Link> · <Link to="/legal#offer">Оферта</Link> ·{' '}
+            <Link to="/legal#terms">Соглашение</Link> · <Link to="/legal#privacy">Конфиденциальность</Link> ·{' '}
+            <Link to="/legal#contacts">Контакты и реквизиты</Link>
           </p>
         </div>
       </section>

@@ -1,0 +1,185 @@
+/* Public pages: prices, documents, contacts */
+/* html, body and #root are fixed to the viewport with overflow hidden: the shell scrolls itself */
+.legal-shell {
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--app-bg, var(--app-surface));
+  color: var(--app-text);
+}
+
+/* Only the area between the header and the footer scrolls, so neither of them moves when the page
+   under them is short, long or still loading. The header is the one of the service (app-content-header) */
+.legal-shell__header,
+.legal-shell__footer {
+  flex-shrink: 0;
+}
+
+/* The anchors of the table of contents keep the look of Ant Design */
+.legal-shell a:not(.ant-anchor-link-title) {
+  color: var(--app-menu-active-text);
+}
+
+/* Breadcrumbs look the same as in the service header */
+.legal-shell .app-content-header__breadcrumb a {
+  color: var(--app-text-secondary);
+}
+
+.legal-shell .app-content-header__breadcrumb a:hover {
+  color: var(--app-text);
+}
+
+/* Switching between the pages: the list on the left, the page on the right */
+.legal-shell__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  /* The scrollbar takes its place on every page, so the content does not shift sideways */
+  scrollbar-gutter: stable;
+}
+
+.legal-shell__layout {
+  display: grid;
+  grid-template-columns: 296px minmax(0, 1fr);
+  align-items: start;
+  width: 100%;
+  max-width: 1360px;
+  margin: 0 auto;
+}
+
+/* The table of contents is the standard Ant Design Anchor: the line and the marker take the primary
+   color of the theme, which is the color of the service */
+.legal-shell__nav {
+  position: sticky;
+  top: 0;
+  padding: 24px 16px 24px 24px;
+}
+
+.legal-shell__main {
+  min-width: 0;
+  width: 100%;
+}
+
+/* The documents: one long read, the documents follow each other */
+.legal-longread {
+  min-width: 0;
+}
+
+.legal-longread__section + .legal-longread__section {
+  margin-top: 16px;
+  border-top: 1px solid var(--app-border-secondary);
+}
+
+/* The last document is short: with room below it the page can scroll it to the top, so its anchor
+   becomes the current one at the very end (the area is the screen minus the header and the footer) */
+.legal-longread__section:last-child {
+  min-height: calc(100vh - var(--app-header-height));
+}
+
+.legal-shell__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 24px;
+  padding: 12px 24px;
+  border-top: 1px solid var(--app-border-secondary);
+  background: var(--app-surface);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--app-text-secondary);
+}
+
+/* The offer and the contacts */
+.legal-doc {
+  max-width: 800px;
+  margin: 0;
+  padding: 24px;
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.legal-doc h1 {
+  margin: 0 0 4px;
+  font-size: 24px;
+  line-height: 32px;
+  font-weight: 600;
+}
+
+.legal-doc h2 {
+  margin: 24px 0 8px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.legal-doc p,
+.legal-doc ol,
+.legal-doc ul {
+  margin: 0 0 8px;
+}
+
+.legal-doc__meta {
+  color: var(--app-text-secondary);
+}
+
+.legal-doc__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.legal-doc__table th,
+.legal-doc__table td {
+  padding: 8px 12px 8px 0;
+  border-bottom: 1px solid var(--app-border-secondary);
+  vertical-align: top;
+  text-align: left;
+}
+
+.legal-doc__table th {
+  width: 220px;
+  font-weight: 400;
+  color: var(--app-text-secondary);
+}
+
+/* On a narrow screen the anchors become a row under the header */
+@media (max-width: 900px) {
+  .legal-shell__layout {
+    display: block;
+  }
+
+  .legal-shell__nav {
+    z-index: 15;
+    padding: 8px 16px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    border-bottom: 1px solid var(--app-border-secondary);
+    background: var(--app-surface);
+  }
+
+  .legal-shell__nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* The row is stuck to the top: an anchor must stop below it */
+  .legal-longread__section {
+    scroll-margin-top: 52px;
+  }
+}
+
+@media (max-width: 600px) {
+  .legal-shell__header .app-content-header__left {
+    display: none;
+  }
+
+  .legal-shell__header .app-content-header__main {
+    justify-content: flex-end;
+  }
+
+  .legal-doc {
+    padding: 16px;
+  }
+
+  .legal-doc__table th {
+    width: 120px;
+  }
+}

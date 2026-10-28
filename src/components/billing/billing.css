@@ -63,6 +63,18 @@
   padding: 24px;
 }
 
+/* Inside the signed-in app the content area does not scroll (overflow: hidden), so the page scrolls
+   itself: it takes the whole area, which keeps the scrollbar at the window edge, and the same
+   1040px column stays in the middle through the side padding */
+.app-shell-content > .plans-page {
+  flex: 1;
+  min-height: 0;
+  max-width: none;
+  margin: 0;
+  overflow-y: auto;
+  padding-inline: max(24px, calc((100% - 1040px) / 2));
+}
+
 .plans-page__title {
   margin: 0;
   font-size: 24px;
@@ -155,6 +167,21 @@
   font-size: 16px;
   font-weight: 600;
   color: var(--app-text);
+}
+
+.plans-page__terms {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--app-text);
+}
+
+.plans-page__terms a {
+  color: var(--app-menu-active-text);
 }
 
 .plans-page__table {

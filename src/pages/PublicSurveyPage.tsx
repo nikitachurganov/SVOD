@@ -19,6 +19,7 @@ import {
 } from '../shared/ui/form-fill/FormFillRenderer';
 import { FormFillWizardLayout } from '../shared/ui/form-fill/FormFillWizardLayout';
 import { useFormStore } from '../shared/hooks/useFormStore';
+import { LEGAL } from '../shared/config/legal';
 
 type LoadState =
   | { status: 'loading' }
@@ -288,6 +289,23 @@ export const PublicSurveyPage = ({ preview = false }: PublicSurveyPageProps) => 
             <p style={{ color: 'var(--app-text-secondary)' }}>В этом опросе пока нет вопросов.</p>
           )}
         </FormFillWizardLayout>
+        <footer
+          style={{
+            marginTop: 20,
+            marginBottom: 20,
+            textAlign: 'center',
+            fontSize: 12,
+            color: 'var(--app-text-tertiary, #8c8c8c)',
+          }}
+        >
+          <span>Платформа {LEGAL.serviceName}. Сервис предоставляет техническую инфраструктуру и не является организатором опроса.{' '}</span>
+          <a
+            href={`mailto:${LEGAL.email}?subject=Жалоба на опрос`}
+            style={{ color: 'inherit', textDecoration: 'underline' }}
+          >
+            Пожаловаться на опрос
+          </a>
+        </footer>
       </div>
     </div>
   );

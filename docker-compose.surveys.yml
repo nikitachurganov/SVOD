@@ -85,6 +85,11 @@ services:
         VITE_API_URL: /api
         VITE_APP_MODE: surveys
         VITE_FORMILY_RUNTIME: ${VITE_FORMILY_RUNTIME:-true}
+        VITE_LEGAL_FULL_NAME: ${VITE_LEGAL_FULL_NAME:-}
+        VITE_LEGAL_INN: ${VITE_LEGAL_INN:-}
+        VITE_LEGAL_PHONE: ${VITE_LEGAL_PHONE:-}
+        VITE_LEGAL_ADDRESS: ${VITE_LEGAL_ADDRESS:-}
+        VITE_LEGAL_EMAIL: ${VITE_LEGAL_EMAIL:-}
     restart: unless-stopped
     networks:
       - svod_internal
