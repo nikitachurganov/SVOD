@@ -17,7 +17,7 @@ from app.constants.billing_plans import (
     INTERVAL_NONE,
     INTERVAL_YEAR,
     LIMIT_FIELDS,
-    METRIC_AI_ACTIONS,
+    METRIC_AI_TOKENS,
     METRIC_RESPONSES,
     PERIOD_DAYS,
     PLAN_START,
@@ -129,8 +129,8 @@ def _row(
         plan_title=ent.plan.title,
         subscription_status=ent.status,
         plan_ends_at=ent.period_end if paid else None,
-        ai_actions_used=ai_used,
-        ai_actions_max=ent.plan.ai_actions_per_period,
+        ai_tokens_used=ai_used,
+        ai_tokens_max=ent.plan.ai_tokens_per_period,
         surveys_count=surveys,
         responses_count=responses,
         deletion_requested_at=user.deletion_requested_at,
@@ -173,8 +173,8 @@ async def list_users(
     entitlements = {user.id: _entitlements(sub, now) for user, sub in rows}
     used = await admin_repository.usage_by_user(
         session,
-        {user.id: entitlements[user.id].period_start for user, sub in rows if sub is not None},
-        METRIC_AI_ACTIONS,
+        {user.id: entitlements[user.id].ai_window_start for user, sub in rows if sub is not None},
+        METRIC_AI_TOKENS,
     )
     surveys = await admin_repository.survey_counts_by_owner(session, ids)
     responses = await admin_repository.response_counts_by_owner(session, ids)
@@ -202,8 +202,7 @@ def _limits(plan: Plan) -> AdminLimits:
         max_questions=plan.max_questions,
         responses_per_period=plan.responses_per_period,
         max_analyzed_responses=plan.max_analyzed_responses,
-        ai_actions_per_period=plan.ai_actions_per_period,
-        ai_budget_rub_per_period=plan.ai_budget_rub_per_period,
+        ai_tokens_per_period=plan.ai_tokens_per_period,
     )
 
 
@@ -240,6 +239,9 @@ async def get_user_detail(session: AsyncSession, user_id: uuid.UUID) -> AdminUse
     counters = (
         await billing_repository.get_usage(session, user_id, ent.period_start) if sub else {}
     )
+    ai_counters = (
+        await billing_repository.get_usage(session, user_id, ent.ai_window_start) if sub else {}
+    )
     surveys = (await admin_repository.survey_counts_by_owner(session, [user_id])).get(user_id, 0)
     responses = (await admin_repository.response_counts_by_owner(session, [user_id])).get(
         user_id, 0
@@ -259,7 +261,7 @@ async def get_user_detail(session: AsyncSession, user_id: uuid.UUID) -> AdminUse
     payments = await payment_repository.list_for_user(session, user_id, limit=PAYMENTS_SHOWN)
 
     plan = ent.plan
-    ai_used = counters.get(METRIC_AI_ACTIONS, 0)
+    ai_used = ai_counters.get(METRIC_AI_TOKENS, 0)
     return AdminUserDetail(
         user=_row(user, ent, ai_used=ai_used, surveys=surveys, responses=responses),
         subscription=AdminSubscription(
@@ -276,7 +278,9 @@ async def get_user_detail(session: AsyncSession, user_id: uuid.UUID) -> AdminUse
             limits=_limits(plan),
         ),
         usage=AdminUsage(
-            ai_actions=UsageMetric(used=ai_used, max=plan.ai_actions_per_period),
+            ai_tokens=UsageMetric(
+                used=ai_used, max=plan.ai_tokens_per_period, resets_at=ent.ai_window_end
+            ),
             responses=UsageMetric(
                 used=counters.get(METRIC_RESPONSES, 0), max=plan.responses_per_period
             ),

@@ -23,11 +23,13 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants.billing_plans import (
-    COURSE_PACK_PRICE_KOPECKS,
     INTERVAL_MONTH,
     INTERVAL_ONE_OFF,
     INTERVAL_YEAR,
+    PACK_PRICE_KOPECKS,
+    PLAN_PACK,
     PLAN_RESEARCHER,
+    Plan,
     get_plan,
 )
 from app.core.config import settings
@@ -80,7 +82,7 @@ RECONCILE_BATCH = 20
 _TERM_TITLES = {
     INTERVAL_MONTH: "1 месяц",
     INTERVAL_YEAR: "1 год",
-    INTERVAL_ONE_OFF: "пакет «Курсовая»",
+    INTERVAL_ONE_OFF: "разовый доступ",
 }
 
 
@@ -105,18 +107,18 @@ def _error(status_code: int, code: str, message: str | None = None) -> HTTPExcep
     return HTTPException(status_code=status_code, detail=detail)
 
 
-def offer(term: str) -> tuple[int, int]:
-    """(price in kopecks, days) of the paid plan for the term, from the catalogue the server enforces."""
+def offer(term: str) -> tuple[Plan, int, int]:
+    """(plan, price in kopecks, days) for the term, from the catalogue the server enforces."""
     plan = get_plan(PLAN_RESEARCHER)
     if term == INTERVAL_MONTH:
         price = plan.price_month_kopecks
     elif term == INTERVAL_YEAR:
         price = plan.price_year_kopecks
     elif term == INTERVAL_ONE_OFF:
-        price = COURSE_PACK_PRICE_KOPECKS
+        plan, price = get_plan(PLAN_PACK), PACK_PRICE_KOPECKS
     else:
         raise _error(status.HTTP_422_UNPROCESSABLE_ENTITY, "invalid_term", "Неверный срок подключения")
-    return price, DAYS_BY_INTERVAL[term]
+    return plan, price, DAYS_BY_INTERVAL[term]
 
 
 def _return_url(payment_id: uuid.UUID) -> str:
@@ -145,8 +147,18 @@ async def create_checkout(
     """Create the payment at the provider and return the row with the page to send the person to."""
     if not settings.payments_enabled:
         raise _error(status.HTTP_409_CONFLICT, "payments_disabled", "Онлайн-оплата пока не подключена")
-    amount, days = offer(term)
+    plan, amount, days = offer(term)
     now = now or _now()
+
+    if plan.code == PLAN_PACK:
+        # The pack would replace a running subscription that gives far more: do not sell it
+        paid = await lifecycle.active_paid_subscription(session, user.id, now)
+        if paid is not None and paid.plan_code == PLAN_RESEARCHER:
+            raise _error(
+                status.HTTP_409_CONFLICT,
+                "already_subscribed",
+                "У вас уже действует тариф «Исследователь»",
+            )
 
     existing = await payment_repository.find_open_checkout(
         session, user.id, term, since=now - REUSE_CHECKOUT_FOR
@@ -154,7 +166,6 @@ async def create_checkout(
     if existing is not None:
         return existing
 
-    plan = get_plan(PLAN_RESEARCHER)
     payment = await payment_repository.add(
         session,
         Payment(
@@ -265,15 +276,23 @@ async def _apply(
                 logger.error("Payment %s succeeded but its account no longer exists", payment.id)
                 PAYMENTS.labels("succeeded").inc()
                 return Settlement(OUTCOME_UNCHANGED, payment, None)
-            sub = await lifecycle.grant(
-                session,
-                user.id,
-                payment.plan_code,
-                days=payment.days,
-                interval=payment.term,
-                note=f"Оплата {payment.id}",
-                now=now,
-            )
+            try:
+                sub = await lifecycle.grant(
+                    session,
+                    user.id,
+                    payment.plan_code,
+                    days=payment.days,
+                    interval=payment.term,
+                    note=f"Оплата {payment.id}",
+                    now=now,
+                )
+            except ValueError as exc:
+                # Paid, but the plan cannot be given (e.g. a pack bought while a subscription
+                # started in the meantime): the money has to go back by hand
+                payment.failure_reason = "grant_failed"
+                logger.error("Payment %s succeeded but could not be applied: %s", payment.id, exc)
+                PAYMENTS.labels("succeeded").inc()
+                return Settlement(OUTCOME_UNCHANGED, payment, user)
             payment.applied_at = now
             await _journal(
                 session,

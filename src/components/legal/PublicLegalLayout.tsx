@@ -29,10 +29,22 @@ export const PublicLegalLayout = () => {
     if (!hash) bodyRef.current?.scrollTo({ top: 0 });
   }, [pathname, hash]);
 
-  const pageTitle = PAGE_TITLES[pathname];
+  const isLegal = pathname === '/legal' || pathname.startsWith('/legal');
+  const isPricing = pathname === '/pricing';
+  const tariffsPath = user ? '/plans' : '/pricing';
+
   const breadcrumbs: { title: string; path?: string }[] = [
     { title: 'Главная', path: HOME_PATH },
-    ...(pageTitle ? [{ title: pageTitle }] : []),
+    ...(isLegal
+      ? [
+          { title: 'Тарифы', path: tariffsPath },
+          { title: 'Документы' },
+        ]
+      : isPricing
+        ? [{ title: 'Тарифы' }]
+        : PAGE_TITLES[pathname]
+          ? [{ title: PAGE_TITLES[pathname] }]
+          : []),
   ];
 
   return (
@@ -57,11 +69,7 @@ export const PublicLegalLayout = () => {
               />
             </div>
             <div className="app-content-header__right">
-              {user ? (
-                <Link to={HOME_PATH}>
-                  <Button type="primary">Открыть сервис</Button>
-                </Link>
-              ) : (
+              {user ? null : (
                 <Link to="/auth">
                   <Button type="primary">Войти</Button>
                 </Link>
@@ -76,14 +84,16 @@ export const PublicLegalLayout = () => {
           </main>
         </div>
 
-        <footer className="legal-shell__footer">
-          <div>
-            {LEGAL.serviceName}. {LEGAL.fullName}, ИНН {LEGAL.inn}. {LEGAL.taxStatus}.
-          </div>
-          <div>
-            <a href={`mailto:${LEGAL.email}`}>{LEGAL.email}</a>
-          </div>
-        </footer>
+        {isLegal ? (
+          <footer className="legal-shell__footer">
+            <div>
+              {LEGAL.serviceName}. {LEGAL.fullName}, ИНН {LEGAL.inn}. {LEGAL.taxStatus}.
+            </div>
+            <div>
+              <a href={`mailto:${LEGAL.email}`}>{LEGAL.email}</a>
+            </div>
+          </footer>
+        ) : null}
       </div>
     </NotificationsProvider>
   );

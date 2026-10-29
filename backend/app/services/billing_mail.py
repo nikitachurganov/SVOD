@@ -100,9 +100,10 @@ async def send_plan_ended(user: Any, plan_title: str, closed_surveys: int = 0) -
 
 
 _LIMIT_WORDS = {
-    "ai_actions": (
-        "ИИ-действий",
-        "кнопки ИИ перестанут работать до начала следующего периода или повышения тарифа.",
+    "ai_tokens": (
+        "токенов ИИ",
+        "кнопки ИИ перестанут работать, а опросы, сбор ответов и обычная аналитика продолжат "
+        "работать как раньше. Токены вернутся с новым периодом подписки или с подключением тарифа.",
     ),
     "responses": (
         "ответов",
@@ -119,7 +120,7 @@ async def send_limit_warning(user: Any, metric: str, used: int, limit: int) -> b
         first_name=user.first_name,
         subject="Лимит тарифа почти исчерпан — СВОД",
         paragraphs=[
-            f"В текущем периоде вы использовали {used} из {limit} {what}.",
+            f"Вы использовали {used:,} из {limit:,} {what}.".replace(",", " "),
             f"Когда лимит закончится, {consequence}",
         ],
         action_label="Посмотреть тарифы",

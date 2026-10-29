@@ -47,7 +47,7 @@ class Subscription(Base):
     provider: Mapped[str | None] = mapped_column(String(32), nullable=True)
     provider_subscription_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     payment_method_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    # Individual limits set by an administrator, e.g. {"ai_actions_per_period": 500}
+    # Individual limits set by an administrator, e.g. {"ai_tokens_per_period": 10000000}
     limit_overrides: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_now

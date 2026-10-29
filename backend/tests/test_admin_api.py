@@ -100,7 +100,7 @@ class UserTableTests(unittest.IsolatedAsyncioTestCase):
         self.free = person(email="free@example.com")
         self.payer = person(email="payer@example.com", last_login_at=NOW - DAY)
         self.sub = paid_subscription(
-            user_id=self.payer.id, limit_overrides={"ai_actions_per_period": 500}
+            user_id=self.payer.id, limit_overrides={"ai_tokens_per_period": 500}
         )
         self.list = patch.object(
             admin_service.admin_repository,
@@ -145,7 +145,7 @@ class UserTableTests(unittest.IsolatedAsyncioTestCase):
         result = await self.table()
 
         row = result.items[0]
-        self.assertEqual((row.plan_code, row.ai_actions_used, row.surveys_count), ("start", 0, 0))
+        self.assertEqual((row.plan_code, row.ai_tokens_used, row.surveys_count), ("start", 0, 0))
         self.assertIsNone(row.plan_ends_at)
         self.assertTrue(row.email_verified)
 
@@ -154,7 +154,7 @@ class UserTableTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual((row.plan_code, row.subscription_status), ("researcher", "active"))
         self.assertEqual(row.plan_ends_at, self.sub.current_period_end)
-        self.assertEqual((row.ai_actions_used, row.ai_actions_max), (7, 500))
+        self.assertEqual((row.ai_tokens_used, row.ai_tokens_max), (7, 500))
         self.assertEqual((row.surveys_count, row.responses_count), (3, 120))
 
     async def test_the_page_carries_the_total_and_the_offset(self):
@@ -316,7 +316,7 @@ class GrantAndRevokeTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_the_grant_goes_through_the_same_function_as_the_command_line(self):
         payload = AdminGrantRequest(
-            days=30, note="  подарок  ", limit_overrides={"ai_actions_per_period": 500}
+            days=30, note="  подарок  ", limit_overrides={"ai_tokens_per_period": 500}
         )
 
         await admin_service.grant_plan(self.session, self.admin, self.target.id, payload)
@@ -326,7 +326,7 @@ class GrantAndRevokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(kwargs["days"], 30)
         self.assertEqual(kwargs["actor_user_id"], self.admin.id)
         self.assertEqual(kwargs["note"], "подарок")
-        self.assertEqual(kwargs["limit_overrides"], {"ai_actions_per_period": 500})
+        self.assertEqual(kwargs["limit_overrides"], {"ai_tokens_per_period": 500})
 
     async def test_a_date_without_a_zone_is_taken_as_utc(self):
         payload = AdminGrantRequest(until=datetime(2027, 1, 1))
@@ -529,6 +529,25 @@ class CreatePlanRequestTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(ctx.exception.status_code, 422)
         self.create.assert_not_awaited()
 
+    async def test_the_pack_is_asked_for_once_and_the_subscription_by_the_month_or_year(self):
+        for payload in (
+            PlanRequestCreate(contact="@anna", plan_code="pack", billing_interval="month"),
+            PlanRequestCreate(contact="@anna", plan_code="researcher", billing_interval="one_off"),
+        ):
+            with self.subTest(payload=payload):
+                with self.assertRaises(HTTPException) as ctx:
+                    await plan_request_service.create_request(self.session, self.user, payload, NOW)
+                self.assertEqual(ctx.exception.detail["code"], "invalid_interval")
+        self.create.assert_not_awaited()
+
+        for payload in (
+            PlanRequestCreate(contact="@anna", plan_code="pack", billing_interval="one_off"),
+            PlanRequestCreate(contact="@anna", plan_code="researcher", billing_interval="year"),
+        ):
+            with self.subTest(accepted=payload):
+                await plan_request_service.create_request(self.session, self.user, payload, NOW)
+        self.assertEqual(self.create.await_count, 2)
+
     def test_the_contact_must_say_something(self):
         for contact in ("", "  ", "ab", "  a "):
             with self.subTest(contact=contact):
@@ -567,7 +586,7 @@ class DecisionTests(unittest.IsolatedAsyncioTestCase):
         self.addCleanup(patch.stopall)
 
     async def test_approval_activates_the_plan_for_the_requested_term(self):
-        for interval, days in (("month", 30), ("year", 365), ("one_off", 30)):
+        for interval, days in (("month", 30), ("year", 365), ("one_off", 60)):
             with self.subTest(interval=interval):
                 self.grant.reset_mock()
                 self.request.status = PLAN_REQUEST_PENDING

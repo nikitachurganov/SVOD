@@ -5,7 +5,7 @@ import { PaymentHistory } from '../billing/PaymentHistory';
 import { PaymentReturnNotice } from '../billing/PaymentReturnNotice';
 import { PlanActions } from '../billing/PlanActions';
 import { UsageBar } from '../billing/UsageBar';
-import { formatDay, formatPrice, STATUS_LABELS } from '../billing/billingFormat';
+import { formatDay, formatPrice, formatTokens, STATUS_LABELS } from '../billing/billingFormat';
 import { useSubscription } from '../../shared/hooks/subscription.hooks';
 import '../billing/billing.css';
 
@@ -62,6 +62,14 @@ export const ProfileSubscriptionTab = () => {
   const paid = plan.code !== 'start' && plan.code !== 'unlimited';
   const trialing = subscription.status === 'trialing';
   const monthlyPrice = plan.price_month_kopecks;
+  const isPack = plan.code === 'pack';
+  const aiResets = usage.ai_tokens.resets_at;
+  // The pack's tokens burn at the end of its term, the subscription's come back, the free ones are given once
+  const aiNote = !aiResets
+    ? 'Бесплатные токены даются один раз и не обновляются.'
+    : isPack
+      ? `Токены действуют до ${formatDay(aiResets)}.`
+      : `Токены обновятся ${formatDay(aiResets)}.`;
 
   return (
     <section className="profile-page__panel" aria-labelledby="profile-subscription-title">
@@ -104,12 +112,18 @@ export const ProfileSubscriptionTab = () => {
               <dd>{paid ? (STATUS_LABELS[subscription.status] ?? subscription.status) : 'Бесплатный'}</dd>
             </div>
             <div>
-              <dt>Стоимость в месяц</dt>
-              <dd>{formatPrice(monthlyPrice)}</dd>
+              <dt>{isPack ? 'Стоимость' : 'Стоимость в месяц'}</dt>
+              <dd>{isPack ? 'Разово' : formatPrice(monthlyPrice)}</dd>
             </div>
             <div>
-              <dt>{paid ? 'Действует до' : 'Лимиты обновятся'}</dt>
-              <dd>{formatDay(subscription.current_period_end)}</dd>
+              <dt>{paid ? 'Действует до' : 'Токены ИИ'}</dt>
+              <dd>
+                {paid
+                  ? formatDay(subscription.current_period_end)
+                  : subscription.billing_enabled
+                    ? 'Даются один раз'
+                    : '—'}
+              </dd>
             </div>
           </dl>
         </div>
@@ -133,9 +147,12 @@ export const ProfileSubscriptionTab = () => {
         {subscription.billing_enabled ? (
           <>
             <h3 className="profile-page__section-title" style={{ marginTop: 24 }}>
-              Использование за период
+              Использование
             </h3>
-            <UsageBar label="ИИ-действия" metric={usage.ai_actions} />
+            <UsageBar label="Токены ИИ" metric={usage.ai_tokens} format={formatTokens} />
+            <p className="billing-note" style={{ marginTop: 0 }}>
+              {aiNote} Когда токены закончатся, опросы и обычная аналитика продолжат работать.
+            </p>
             <UsageBar label="Ответы" metric={usage.responses} />
             <UsageBar label="Открытые опросы" metric={usage.active_surveys} />
             <UsageBar label="Проекты" metric={usage.projects} />

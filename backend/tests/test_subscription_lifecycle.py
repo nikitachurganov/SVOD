@@ -10,6 +10,7 @@ from fastapi import HTTPException
 
 from app.services import billing_service
 from app.services import subscription_lifecycle_service as lifecycle
+from tests.limited_plans import LIMITED_START
 
 NOW = datetime(2026, 11, 1, 12, 0, tzinfo=timezone.utc)
 DAY = timedelta(days=1)
@@ -169,8 +170,8 @@ class GrantTests(LifecycleCase):
         self.add_event.assert_not_awaited()
 
     async def test_individual_limits_are_cleaned_and_can_be_cleared(self):
-        await self.grant(limit_overrides={"ai_actions_per_period": 500, "junk": 1, "max_projects": -3})
-        self.assertEqual(self.sub.limit_overrides, {"ai_actions_per_period": 500})
+        await self.grant(limit_overrides={"ai_tokens_per_period": 500, "junk": 1, "max_projects": -3})
+        self.assertEqual(self.sub.limit_overrides, {"ai_tokens_per_period": 500})
 
         await self.grant(limit_overrides={})
         self.assertIsNone(self.sub.limit_overrides)
@@ -178,6 +179,29 @@ class GrantTests(LifecycleCase):
         self.sub.limit_overrides = {"max_projects": 7}
         await self.grant()
         self.assertEqual(self.sub.limit_overrides, {"max_projects": 7})
+
+    async def test_the_pack_can_be_granted_to_a_free_account(self):
+        await lifecycle.grant(self.session, self.sub.user_id, "pack", days=60, now=NOW)
+
+        self.assertEqual((self.sub.plan_code, self.sub.status), ("pack", "active"))
+        self.assertEqual((self.sub.current_period_start, self.sub.current_period_end), (NOW, NOW + 60 * DAY))
+
+    async def test_a_new_pack_is_a_fresh_allowance_and_does_not_extend_the_running_one(self):
+        self.sub = sub(plan_code="pack", current_period_start=NOW - 50 * DAY, current_period_end=NOW + 10 * DAY)
+
+        await lifecycle.grant(self.session, self.sub.user_id, "pack", days=60, now=NOW)
+
+        self.assertEqual((self.sub.current_period_start, self.sub.current_period_end), (NOW, NOW + 60 * DAY))
+        self.assertFalse(self.add_event.await_args.kwargs["payload"]["extended"])
+
+    async def test_a_pack_does_not_replace_a_running_subscription(self):
+        self.sub = sub(current_period_start=NOW - 10 * DAY, current_period_end=NOW + 5 * DAY)
+
+        with self.assertRaises(ValueError):
+            await lifecycle.grant(self.session, self.sub.user_id, "pack", days=60, now=NOW)
+
+        self.assertEqual(self.sub.plan_code, "researcher")
+        self.assertEqual(self.sub.current_period_end, NOW + 5 * DAY)
 
     async def test_renewal_is_switched_back_on_unless_the_account_is_to_be_deleted(self):
         self.sub = sub(cancel_at_period_end=True)
@@ -327,7 +351,19 @@ class DowngradeTests(LifecycleCase):
         ).start()
         self.close = patch.object(repo, "close_surveys", AsyncMock(return_value=2)).start()
 
-    async def test_the_free_plan_keeps_the_three_most_active_surveys_open(self):
+    def limit_the_free_plan(self):
+        # The catalogue does not limit surveys; the downgrade still honours a limit if there is one
+        patch.object(lifecycle, "START", LIMITED_START).start()
+
+    async def test_the_free_plan_closes_nothing_because_it_limits_no_survey(self):
+        self.assertEqual(await lifecycle.enforce_downgrade(self.session, self.sub.user_id), [])
+
+        self.close.assert_not_awaited()
+        self.add_event.assert_not_awaited()
+
+    async def test_a_limited_free_plan_keeps_the_three_most_active_surveys_open(self):
+        self.limit_the_free_plan()
+
         closed = await lifecycle.enforce_downgrade(self.session, self.sub.user_id)
 
         self.assertEqual(closed, self.open_ids[3:])
@@ -337,6 +373,7 @@ class DowngradeTests(LifecycleCase):
         self.assertEqual(kwargs["payload"]["count"], 2)
 
     async def test_within_the_limit_nothing_is_closed_or_journalled(self):
+        self.limit_the_free_plan()
         self.list_open.return_value = self.open_ids[:3]
 
         self.assertEqual(await lifecycle.enforce_downgrade(self.session, self.sub.user_id), [])
@@ -345,6 +382,7 @@ class DowngradeTests(LifecycleCase):
         self.add_event.assert_not_awaited()
 
     async def test_an_expired_paid_subscription_becomes_a_free_one(self):
+        self.limit_the_free_plan()
         paid = sub(
             current_period_start=NOW - 40 * DAY,
             current_period_end=NOW - 5 * DAY,
@@ -589,6 +627,21 @@ class LimitWarningTests(WorkerCase):
                     await lifecycle.warn_if_near_limit(self.session, self.sub.user_id, "ai_actions", used, 15, NOW)
                 )
         self.add_event.assert_not_awaited()
+
+    async def test_a_jump_over_the_threshold_queues_the_warning_once(self):
+        # AI tokens grow in jumps: 110 000 -> 130 000 of 150 000 passes the 120 000 threshold
+        crossed = await lifecycle.warn_if_near_limit(
+            self.session, self.sub.user_id, "ai_tokens", 130_000, 150_000, NOW, previous=110_000
+        )
+        self.assertTrue(crossed)
+
+        for previous, used in ((120_000, 130_000), (125_000, 140_000), (90_000, 100_000)):
+            with self.subTest(previous=previous, used=used):
+                self.assertFalse(
+                    await lifecycle.warn_if_near_limit(
+                        self.session, self.sub.user_id, "ai_tokens", used, 150_000, NOW, previous=previous
+                    )
+                )
 
     async def test_tiny_limits_and_shadow_mode_never_warn(self):
         self.assertFalse(await lifecycle.warn_if_near_limit(self.session, self.sub.user_id, "responses", 3, 4, NOW))

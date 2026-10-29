@@ -41,6 +41,8 @@ export const PlanActions = ({ extendLabel = 'Запросить продлени
   if (!subscription?.billing_enabled) return null;
 
   const onFreePlan = subscription.plan.code === 'start';
+  // A pack is bought again as a new one, not prolonged
+  const onPack = subscription.plan.code === 'pack';
   const trialAvailable = onFreePlan && !subscription.trial_used;
   const pending = subscription.plan_request;
 
@@ -70,7 +72,7 @@ export const PlanActions = ({ extendLabel = 'Запросить продлени
             icon={<CreditCardOutlined />}
             onClick={() => setCheckoutOpen(true)}
           >
-            {onFreePlan ? 'Оплатить тариф' : 'Оплатить продление'}
+            {onFreePlan || onPack ? 'Оплатить тариф' : 'Оплатить продление'}
           </Button>
         ) : null}
         {/* The invoice request is only the way to pay while online payment is not switched on */}
@@ -84,7 +86,7 @@ export const PlanActions = ({ extendLabel = 'Запросить продлени
             icon={<SendOutlined />}
             onClick={() => setRequestOpen(true)}
           >
-            {onFreePlan ? 'Запросить подключение' : extendLabel}
+            {onFreePlan || onPack ? 'Запросить подключение' : extendLabel}
           </Button>
         )}
       </div>

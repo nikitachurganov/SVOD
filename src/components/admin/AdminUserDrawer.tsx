@@ -30,6 +30,7 @@ import type {
   AdminUserDetail,
   UsageMetric,
 } from '../../types/admin';
+import { formatNumber, formatTokens, isUnlimited } from '../billing/billingFormat';
 import { GrantPlanModal } from './GrantPlanModal';
 import {
   AI_ACTION_LABELS,
@@ -55,22 +56,33 @@ const REQUEST_STATUS: Record<string, { label: string; color: string }> = {
   rejected: { label: 'Отклонена', color: 'error' },
 };
 
-const UsageBar = ({ label, metric }: { label: string; metric: UsageMetric }) => {
+const UsageBar = ({
+  label,
+  metric,
+  format = formatNumber,
+}: {
+  label: string;
+  metric: UsageMetric;
+  format?: (value: number) => string;
+}) => {
+  const unlimited = isUnlimited(metric.max);
   const percent = metric.max > 0 ? Math.min(100, Math.round((metric.used / metric.max) * 100)) : 0;
   return (
     <div className="admin-usage">
       <div className="admin-usage__head">
         <span>{label}</span>
         <span style={muted}>
-          {metric.used} из {metric.max}
+          {unlimited ? `${format(metric.used)}, без ограничений` : `${format(metric.used)} из ${format(metric.max)}`}
         </span>
       </div>
-      <Progress
-        percent={percent}
-        showInfo={false}
-        size="small"
-        status={metric.max > 0 && metric.used >= metric.max ? 'exception' : 'normal'}
-      />
+      {unlimited ? null : (
+        <Progress
+          percent={percent}
+          showInfo={false}
+          size="small"
+          status={metric.max > 0 && metric.used >= metric.max ? 'exception' : 'normal'}
+        />
+      )}
     </div>
   );
 };
@@ -331,7 +343,7 @@ export const AdminUserDrawer = ({ userId, onClose, onChanged }: Props) => {
       ) : null}
 
       <h3 className="admin-section">Использование за период</h3>
-      <UsageBar label="ИИ-действия" metric={usage.ai_actions} />
+      <UsageBar label="Токены ИИ" metric={usage.ai_tokens} format={formatTokens} />
       <UsageBar label="Ответы" metric={usage.responses} />
       <UsageBar label="Открытые опросы" metric={usage.active_surveys} />
       <UsageBar label="Проекты" metric={usage.projects} />

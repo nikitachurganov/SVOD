@@ -15,12 +15,17 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants.billing_plans import (
-    COURSE_PACK_DAYS,
-    COURSE_PACK_PRICE_KOPECKS,
+    AI_LIFETIME_ANCHOR,
+    AI_WINDOW_LIFETIME,
+    AI_WINDOW_MONTH,
     INTERVAL_NONE,
-    METRIC_AI_ACTIONS,
+    METRIC_AI_TOKENS,
     METRIC_RESPONSES,
+    PACK,
+    PACK_DAYS,
+    PACK_PRICE_KOPECKS,
     PERIOD_DAYS,
+    PLAN_PACK,
     PLAN_RESEARCHER,
     PLAN_START,
     PLANS,
@@ -67,6 +72,10 @@ class Entitlements:
     trial_used: bool
     cancel_at_period_end: bool
     billing_enabled: bool
+    # The span the plan's AI tokens are counted over; the end is None for the free allowance, which
+    # is given once and never renewed
+    ai_window_start: datetime
+    ai_window_end: datetime | None
 
 
 def free_window(anchor: datetime, now: datetime) -> tuple[datetime, datetime]:
@@ -74,6 +83,19 @@ def free_window(anchor: datetime, now: datetime) -> tuple[datetime, datetime]:
     steps = max((now - anchor) // _PERIOD, 0)
     start = anchor + steps * _PERIOD
     return start, start + _PERIOD
+
+
+def ai_window(
+    plan: Plan, period_start: datetime, period_end: datetime, now: datetime
+) -> tuple[datetime, datetime | None]:
+    """The span the plan's AI tokens are counted over (usage counters are keyed by its start)."""
+    if plan.ai_window == AI_WINDOW_LIFETIME:
+        return AI_LIFETIME_ANCHOR, None
+    if plan.ai_window == AI_WINDOW_MONTH:
+        # A yearly subscription still gets its tokens back every 30 days
+        start, end = free_window(period_start, now)
+        return start, min(end, period_end)
+    return period_start, period_end
 
 
 # The owner is warned when this share of a monthly limit is used
@@ -123,6 +145,7 @@ def resolve_entitlements(sub: Subscription, now: datetime, grace_days: int) -> E
         # The overrides were granted together with the plan; they go away when it does
         plan = apply_overrides(plan, sub.limit_overrides)
     period_start, period_end = _current_period(sub, stored.code, downgraded, now)
+    ai_start, ai_end = ai_window(plan, period_start, period_end, now)
     return Entitlements(
         plan=plan,
         status=STATUS_EXPIRED if downgraded else sub.status,
@@ -133,6 +156,8 @@ def resolve_entitlements(sub: Subscription, now: datetime, grace_days: int) -> E
         trial_used=sub.trial_used_at is not None,
         cancel_at_period_end=sub.cancel_at_period_end,
         billing_enabled=True,
+        ai_window_start=ai_start,
+        ai_window_end=ai_end,
     )
 
 
@@ -148,6 +173,8 @@ def unlimited_entitlements(now: datetime) -> Entitlements:
         trial_used=False,
         cancel_at_period_end=False,
         billing_enabled=False,
+        ai_window_start=now,
+        ai_window_end=None,
     )
 
 
@@ -163,7 +190,7 @@ def limit_reached_error(
             "used": used,
             "max": maximum,
             "plan": ent.plan.code,
-            "upgrade_to": PLAN_RESEARCHER if ent.plan.code == PLAN_START else None,
+            "upgrade_to": PLAN_RESEARCHER if ent.plan.code != PLAN_RESEARCHER else None,
             "resets_at": ent.period_end.isoformat(),
         },
     )
@@ -179,7 +206,7 @@ def feature_locked_error(ent: Entitlements, feature: str, **extra: object) -> HT
             "feature": feature,
             **extra,
             "plan": ent.plan.code,
-            "upgrade_to": PLAN_RESEARCHER if ent.plan.code == PLAN_START else None,
+            "upgrade_to": PLAN_RESEARCHER if ent.plan.code != PLAN_RESEARCHER else None,
             "resets_at": ent.period_end.isoformat(),
         },
     )
@@ -263,7 +290,7 @@ def plan_info(plan: Plan) -> PlanInfo:
             max_questions=plan.max_questions,
             responses_per_period=plan.responses_per_period,
             max_analyzed_responses=plan.max_analyzed_responses,
-            ai_actions_per_period=plan.ai_actions_per_period,
+            ai_tokens_per_period=plan.ai_tokens_per_period,
         ),
         features=sorted(plan.features),
     )
@@ -271,10 +298,12 @@ def plan_info(plan: Plan) -> PlanInfo:
 
 def build_plans_response() -> PlansResponse:
     return PlansResponse(
-        plans=[plan_info(plan) for plan in PLANS.values()],
+        # The one-off pack is not a subscription: it is described by the pack_* fields
+        plans=[plan_info(plan) for plan in PLANS.values() if plan.code != PLAN_PACK],
         payments_enabled=settings.payments_enabled,
-        course_pack_price_kopecks=COURSE_PACK_PRICE_KOPECKS,
-        course_pack_days=COURSE_PACK_DAYS,
+        pack=plan_info(PACK),
+        pack_price_kopecks=PACK_PRICE_KOPECKS,
+        pack_days=PACK_DAYS,
     )
 
 
@@ -284,8 +313,12 @@ async def get_subscription_summary(session: AsyncSession, user: User) -> Subscri
     used: dict[str, int] = {}
     open_surveys = projects = locked = 0
     pending = None
+    ai_used = 0
     if ent.billing_enabled:
         used = await billing_repository.get_usage(session, user.id, ent.period_start)
+        ai_used = (await billing_repository.get_usage(session, user.id, ent.ai_window_start)).get(
+            METRIC_AI_TOKENS, 0
+        )
         pending = await plan_request_repository.get_pending_for_user(session, user.id)
         open_surveys = await survey_repository.count_open_surveys_for_owner(session, user.id)
         projects = await survey_repository.count_projects_for_owner(session, user.id)
@@ -306,8 +339,8 @@ async def get_subscription_summary(session: AsyncSession, user: User) -> Subscri
         deletion_scheduled=scheduled,
         deletion_at=ent.period_end if scheduled and ent.plan.code != PLAN_START else None,
         usage=SubscriptionUsage(
-            ai_actions=UsageMetric(
-                used=used.get(METRIC_AI_ACTIONS, 0), max=ent.plan.ai_actions_per_period
+            ai_tokens=UsageMetric(
+                used=ai_used, max=ent.plan.ai_tokens_per_period, resets_at=ent.ai_window_end
             ),
             responses=UsageMetric(
                 used=used.get(METRIC_RESPONSES, 0), max=ent.plan.responses_per_period

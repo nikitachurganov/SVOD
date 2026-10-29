@@ -24,8 +24,8 @@ export interface AdminUserRow {
   /** active, trialing, past_due or expired — as it really applies now */
   subscription_status: string;
   plan_ends_at: string | null;
-  ai_actions_used: number;
-  ai_actions_max: number;
+  ai_tokens_used: number;
+  ai_tokens_max: number;
   surveys_count: number;
   responses_count: number;
   deletion_requested_at: string | null;
@@ -55,8 +55,7 @@ export interface AdminLimits {
   max_questions: number;
   responses_per_period: number;
   max_analyzed_responses: number;
-  ai_actions_per_period: number;
-  ai_budget_rub_per_period: number;
+  ai_tokens_per_period: number;
 }
 
 export type LimitOverrides = Partial<AdminLimits>;
@@ -81,7 +80,7 @@ export interface UsageMetric {
 }
 
 export interface AdminUsage {
-  ai_actions: UsageMetric;
+  ai_tokens: UsageMetric;
   responses: UsageMetric;
   active_surveys: UsageMetric;
   projects: UsageMetric;

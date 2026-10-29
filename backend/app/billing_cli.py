@@ -138,10 +138,11 @@ async def show_user(session: AsyncSession, email: str) -> str:
     if sub.limit_overrides:
         lines.append(f"Индивидуальные лимиты: {sub.limit_overrides}")
     used = await billing_repository.get_usage(session, user.id, ent.period_start)
+    ai_used = await billing_repository.get_usage(session, user.id, ent.ai_window_start)
     locked = await survey_repository.count_locked_for_owner(session, user.id)
     lines.append(
-        f"Использовано в периоде: ИИ-действий {used.get('ai_actions', 0)}, "
-        f"ответов {used.get('responses', 0)}; скрытых ответов {locked}"
+        f"Использовано: токенов ИИ {ai_used.get('ai_tokens', 0)} из {ent.plan.ai_tokens_per_period}; "
+        f"ответов в периоде {used.get('responses', 0)}; скрытых ответов {locked}"
     )
     events = await billing_repository.list_events(session, sub.id, limit=SHOWN_EVENTS)
     if events:

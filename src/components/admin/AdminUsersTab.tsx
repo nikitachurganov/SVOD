@@ -11,6 +11,7 @@ import type {
   AdminUsersQuery,
   Paged,
 } from '../../types/admin';
+import { formatTokens } from '../billing/billingFormat';
 import { PLAN_TITLES, STATUS_LABELS, formatDate, formatDateTime, personName } from './adminLabels';
 
 const PAGE_SIZE = 25;
@@ -159,10 +160,10 @@ export const AdminUsersTab = ({ onOpenUser, refreshKey }: Props) => {
         ),
       },
       {
-        title: 'ИИ',
+        title: 'Токены ИИ',
         key: 'ai',
-        width: 90,
-        render: (_, row) => `${row.ai_actions_used} / ${row.ai_actions_max}`,
+        width: 130,
+        render: (_, row) => `${formatTokens(row.ai_tokens_used)} / ${formatTokens(row.ai_tokens_max)}`,
       },
       { title: 'Опросов', dataIndex: 'surveys_count', key: 'surveys', width: 90 },
       { title: 'Ответов', dataIndex: 'responses_count', key: 'responses', width: 90 },

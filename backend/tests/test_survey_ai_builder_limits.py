@@ -11,11 +11,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi import HTTPException
 
 from app.api.routes import surveys as surveys_routes
-from app.constants.billing_plans import BASIC_METHODOLOGIES, RESEARCHER, START
+from app.constants.billing_plans import BASIC_METHODOLOGIES
 from app.knowledge.methodologies import METHODOLOGIES
 from app.schemas.survey import SurveyAiBuildRequest, SurveyAiBuildResponse
 from app.services import billing_guard, billing_service
 from app.services import survey_ai_builder_service as builder
+from tests.limited_plans import LIMITED_RESEARCHER as RESEARCHER
+from tests.limited_plans import LIMITED_START as START
 
 NOW = datetime(2026, 11, 1, 12, 0, tzinfo=timezone.utc)
 
@@ -179,6 +181,8 @@ def ent(plan=START, billing_enabled=True):
         trial_used=False,
         cancel_at_period_end=False,
         billing_enabled=billing_enabled,
+        ai_window_start=NOW - timedelta(days=10),
+        ai_window_end=NOW + timedelta(days=20),
     )
 
 

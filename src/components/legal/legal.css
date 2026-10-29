@@ -118,6 +118,10 @@
   margin: 0 0 8px;
 }
 
+.legal-doc ul {
+  padding-left: 20px;
+}
+
 .legal-doc__meta {
   color: var(--app-text-secondary);
 }

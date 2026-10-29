@@ -2,6 +2,7 @@ import type { AdminLimits, AdminUserRow } from '../../types/admin';
 
 export const PLAN_TITLES: Record<string, string> = {
   start: 'Старт',
+  pack: 'Исследование',
   researcher: 'Исследователь',
 };
 
@@ -23,24 +24,23 @@ export const INTERVAL_LABELS: Record<string, string> = {
 export const REQUEST_TERM_LABELS: Record<string, string> = {
   month: 'на месяц',
   year: 'на год',
-  one_off: 'пакет «Курсовая»',
+  one_off: 'разовый доступ «Исследование»',
 };
 
 /** How many days the plan runs when nobody names a term: the same as the server's default */
 export const REQUEST_TERM_DAYS: Record<string, number> = {
   month: 30,
   year: 365,
-  one_off: 30,
+  one_off: 60,
 };
 
 export const LIMIT_LABELS: Record<keyof AdminLimits, string> = {
-  ai_actions_per_period: 'ИИ-действий за период',
+  ai_tokens_per_period: 'Токенов ИИ за период',
   responses_per_period: 'Ответов за период',
   max_active_surveys: 'Открытых опросов',
   max_projects: 'Проектов',
   max_questions: 'Вопросов в опросе',
   max_analyzed_responses: 'Ответов в анализе',
-  ai_budget_rub_per_period: 'Бюджет ИИ за период, ₽',
 };
 
 export const EVENT_LABELS: Record<string, string> = {

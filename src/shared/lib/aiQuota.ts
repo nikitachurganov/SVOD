@@ -3,20 +3,31 @@ import type { SubscriptionInfo } from '../../types/billing';
 export interface AiQuota {
   /** False while billing is off or the data has not arrived: nothing is shown or blocked */
   visible: boolean;
+  /** AI tokens used and the allowance of the plan */
   used: number;
   max: number;
   remaining: number;
-  /** The limit is reached and the server enforces it: the AI buttons are switched off */
+  /** The allowance is used up and the server enforces it: the AI buttons are switched off */
   exhausted: boolean;
   /** Less than a fifth is left */
   low: boolean;
+  /** When the tokens come back; null for the free allowance, which is given once */
+  resetsAt: string | null;
 }
 
-const HIDDEN: AiQuota = { visible: false, used: 0, max: 0, remaining: 0, exhausted: false, low: false };
+const HIDDEN: AiQuota = {
+  visible: false,
+  used: 0,
+  max: 0,
+  remaining: 0,
+  exhausted: false,
+  low: false,
+  resetsAt: null,
+};
 
 export const getAiQuota = (subscription: SubscriptionInfo | null): AiQuota => {
   if (!subscription?.billing_enabled) return HIDDEN;
-  const { used, max } = subscription.usage.ai_actions;
+  const { used, max, resets_at: resetsAt } = subscription.usage.ai_tokens;
   const remaining = Math.max(max - used, 0);
   return {
     visible: true,
@@ -25,15 +36,6 @@ export const getAiQuota = (subscription: SubscriptionInfo | null): AiQuota => {
     remaining,
     exhausted: subscription.enforced && used >= max,
     low: max > 0 && remaining <= max * 0.2,
+    resetsAt: resetsAt ?? null,
   };
-};
-
-/** «1 действие», «2 действия», «5 действий» */
-export const actionsWord = (count: number): string => {
-  const rest100 = count % 100;
-  const rest10 = count % 10;
-  if (rest100 >= 11 && rest100 <= 14) return 'действий';
-  if (rest10 === 1) return 'действие';
-  if (rest10 >= 2 && rest10 <= 4) return 'действия';
-  return 'действий';
 };

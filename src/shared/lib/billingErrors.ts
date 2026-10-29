@@ -11,7 +11,7 @@ export interface BillingError {
   code: BillingErrorCode;
   /** A sentence in Russian, ready to show */
   message: string;
-  /** active_surveys, projects, questions, ai_actions, ai_budget, feature, … */
+  /** active_surveys, projects, questions, ai_tokens, feature, … */
   limit?: string;
   feature?: string;
   used?: number;
@@ -39,10 +39,11 @@ const describeLimit = (detail: Record<string, unknown>): string => {
   const resets =
     typeof detail.resets_at === 'string' ? ` Лимит обновится ${formatDay(detail.resets_at)}.` : '';
   switch (limit) {
-    case 'ai_actions':
-      return `ИИ-действия на этот период закончились${max !== undefined ? ` (${max})` : ''}.${resets}`;
-    case 'ai_budget':
-      return `Исчерпан лимит расходов на ИИ в этом периоде.${resets}`;
+    case 'ai_tokens': {
+      const when =
+        typeof detail.resets_at === 'string' ? ` Токены обновятся ${formatDay(detail.resets_at)}.` : '';
+      return `Токены ИИ закончились. Опросы, сбор ответов и обычная аналитика работают как раньше.${when}`;
+    }
     case 'active_surveys':
       return `На вашем тарифе можно держать открытыми не больше ${max ?? 'нескольких'} опросов. Закройте один из них или повысьте тариф.`;
     case 'projects':

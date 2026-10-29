@@ -270,7 +270,7 @@ class ShowCommandTests(unittest.IsolatedAsyncioTestCase):
         patch.object(
             billing_cli.billing_repository,
             "get_usage",
-            AsyncMock(return_value={"ai_actions": 4, "responses": 105}),
+            AsyncMock(return_value={"ai_tokens": 4000, "responses": 105}),
         ).start()
         patch.object(
             billing_cli.survey_repository, "count_locked_for_owner", AsyncMock(return_value=5)
@@ -295,7 +295,7 @@ class ShowCommandTests(unittest.IsolatedAsyncioTestCase):
             "продление отключено",
             "Пробный период: не использован",
             "{'max_projects': 7}",
-            "ИИ-действий 4, ответов 105; скрытых ответов 5",
+            "токенов ИИ 4000 из 6000000; ответов в периоде 105; скрытых ответов 5",
             "manual_grant",
             "счёт 7",
         ):

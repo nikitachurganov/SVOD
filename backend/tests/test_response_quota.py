@@ -10,10 +10,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi import HTTPException
 
 from app import billing_cli
-from app.constants.billing_plans import RESEARCHER, START
 from app.core import metrics
 from app.schemas.survey import SubmitSurveyRequest
 from app.services import billing_guard, billing_service, survey_demo_service, survey_service
+from tests.limited_plans import LIMITED_RESEARCHER as RESEARCHER
+from tests.limited_plans import LIMITED_START as START
 
 NOW = datetime(2026, 11, 1, 12, 0, tzinfo=timezone.utc)
 PERIOD_START = NOW - timedelta(days=10)
@@ -30,6 +31,8 @@ def ent(plan=START, billing_enabled=True):
         trial_used=False,
         cancel_at_period_end=False,
         billing_enabled=billing_enabled,
+        ai_window_start=PERIOD_START,
+        ai_window_end=NOW + timedelta(days=20),
     )
 
 

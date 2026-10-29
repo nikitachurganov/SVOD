@@ -121,6 +121,23 @@ async def reserve_usage(
     return result.scalar_one_or_none()
 
 
+async def add_usage(
+    session: AsyncSession, user_id: uuid.UUID, metric: str, period_start: datetime, amount: int
+) -> int:
+    """Add ``amount`` to the counter (tokens spent by an AI action) and return the new value."""
+    stmt = (
+        pg_insert(UsageCounter)
+        .values(user_id=user_id, metric=metric, period_start=period_start, value=amount)
+        .on_conflict_do_update(
+            index_elements=["user_id", "metric", "period_start"],
+            set_={"value": UsageCounter.value + amount},
+        )
+        .returning(UsageCounter.value)
+    )
+    result = await session.execute(stmt)
+    return result.scalar_one()
+
+
 async def release_usage(
     session: AsyncSession, user_id: uuid.UUID, metric: str, period_start: datetime
 ) -> None:

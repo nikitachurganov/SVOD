@@ -27,8 +27,8 @@ class AdminUserRow(BaseModel):
     # Plan status as it really applies now: active, trialing, past_due or expired
     subscription_status: str
     plan_ends_at: datetime | None
-    ai_actions_used: int
-    ai_actions_max: int
+    ai_tokens_used: int
+    ai_tokens_max: int
     surveys_count: int
     responses_count: int
     deletion_requested_at: datetime | None
@@ -42,8 +42,7 @@ class AdminUserList(BaseModel):
 
 
 class AdminLimits(PlanLimits):
-    # The AI spending cap of one period, in roubles
-    ai_budget_rub_per_period: int
+    """The limits the administrator may override for one person: the same as the plan's."""
 
 
 class AdminSubscription(BaseModel):
@@ -63,7 +62,7 @@ class AdminSubscription(BaseModel):
 
 
 class AdminUsage(BaseModel):
-    ai_actions: UsageMetric
+    ai_tokens: UsageMetric
     responses: UsageMetric
     active_surveys: UsageMetric
     projects: UsageMetric

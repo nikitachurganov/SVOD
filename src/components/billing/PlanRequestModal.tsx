@@ -4,7 +4,7 @@ import { billingActionError, createPlanRequest, getPlans } from '../../shared/ap
 import { useAuth } from '../../shared/hooks/auth.hooks';
 import { useNotifications } from '../../shared/context/notifications.context';
 import type { PlanRequestTerm, PlansResponse } from '../../types/billing';
-import { formatPrice } from './billingFormat';
+import { formatPrice, formatTokens } from './billingFormat';
 
 interface FormValues {
   billing_interval: PlanRequestTerm;
@@ -50,7 +50,8 @@ export const PlanRequestModal = ({ open, onClose, onSent }: Props) => {
     setError(null);
     try {
       await createPlanRequest({
-        plan_code: 'researcher',
+        // The pack is a plan of its own, sold once; the subscription by the month or the year
+        plan_code: values.billing_interval === 'one_off' ? 'pack' : 'researcher',
         billing_interval: values.billing_interval,
         contact: values.contact.trim(),
         comment: values.comment?.trim() || undefined,
@@ -68,7 +69,7 @@ export const PlanRequestModal = ({ open, onClose, onSent }: Props) => {
   return (
     <Modal
       open={open}
-      title="Подключить тариф «Исследователь»"
+      title="Подключить тариф"
       okText="Отправить заявку"
       cancelText="Отмена"
       confirmLoading={saving}
@@ -85,15 +86,15 @@ export const PlanRequestModal = ({ open, onClose, onSent }: Props) => {
         <Form.Item name="billing_interval" label="Срок">
           <Radio.Group style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <Radio value="month">
-              На месяц{researcher ? ` — ${formatPrice(researcher.price_month_kopecks)}` : ''}
+              «Исследователь» на месяц{researcher ? ` — ${formatPrice(researcher.price_month_kopecks)}` : ''}
             </Radio>
             <Radio value="year">
-              На год{researcher ? ` — ${formatPrice(researcher.price_year_kopecks)}` : ''}
+              «Исследователь» на год{researcher ? ` — ${formatPrice(researcher.price_year_kopecks)}` : ''}
             </Radio>
             <Radio value="one_off">
-              Пакет «Курсовая»
+              Разовый доступ «Исследование»
               {plans
-                ? ` — ${formatPrice(plans.course_pack_price_kopecks)} на ${plans.course_pack_days} дней, без продления`
+                ? ` — ${formatPrice(plans.pack_price_kopecks)} на ${plans.pack_days} дней, ${formatTokens(plans.pack.limits.ai_tokens_per_period)} токенов ИИ, без продления`
                 : ''}
             </Radio>
           </Radio.Group>

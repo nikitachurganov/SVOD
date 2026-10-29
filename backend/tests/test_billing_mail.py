@@ -114,9 +114,10 @@ class BillingMailTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("закрыли", self.text())
 
     async def test_limit_warning_speaks_of_the_right_limit(self):
-        await billing_mail.send_limit_warning(USER, "ai_actions", 12, 15)
-        self.assertIn("12 из 15 ИИ-действий", self.text())
+        await billing_mail.send_limit_warning(USER, "ai_tokens", 130_000, 150_000)
+        self.assertIn("130 000 из 150 000 токенов ИИ", self.text())
         self.assertIn("кнопки ИИ перестанут работать", self.text())
+        self.assertIn("опросы, сбор ответов и обычная аналитика продолжат", self.text())
 
         await billing_mail.send_limit_warning(USER, "responses", 80, 100)
         self.assertIn("80 из 100 ответов", self.text())

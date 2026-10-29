@@ -12,7 +12,8 @@ class PlanLimits(BaseModel):
     max_questions: int
     responses_per_period: int
     max_analyzed_responses: int
-    ai_actions_per_period: int
+    # AI allowance in tokens (prompt + completion)
+    ai_tokens_per_period: int
 
 
 class PlanInfo(BaseModel):
@@ -28,18 +29,21 @@ class PlansResponse(BaseModel):
     plans: list[PlanInfo]
     # True: the person can pay online; False: only a request for an invoice is offered
     payments_enabled: bool = False
-    # One-off pack: the Researcher plan for a fixed number of days, no auto-renewal
-    course_pack_price_kopecks: int
-    course_pack_days: int
+    # One-off pack: a fixed allowance of AI tokens for a fixed number of days, no auto-renewal
+    pack: PlanInfo
+    pack_price_kopecks: int
+    pack_days: int
 
 
 class UsageMetric(BaseModel):
     used: int
     max: int
+    # When the counter starts over; None for what is never renewed
+    resets_at: datetime | None = None
 
 
 class SubscriptionUsage(BaseModel):
-    ai_actions: UsageMetric
+    ai_tokens: UsageMetric
     responses: UsageMetric
     active_surveys: UsageMetric
     projects: UsageMetric
@@ -51,7 +55,7 @@ class PlanRequestCreate(BaseModel):
     """A request for a paid plan that an administrator activates after the payment."""
 
     plan_code: str = PLAN_RESEARCHER
-    # month, year or one_off (the course-work pack)
+    # month or year for the Researcher plan, one_off for the pack
     billing_interval: str = INTERVAL_MONTH
     # How to reach the person about the payment: an email or a messenger handle
     contact: str = Field(min_length=3, max_length=200)
@@ -72,7 +76,7 @@ class PlanRequestCreate(BaseModel):
 
 
 class CheckoutRequest(BaseModel):
-    # month, year or one_off (the course-work pack)
+    # month or year (Researcher), one_off (the pack)
     term: str = INTERVAL_MONTH
 
 

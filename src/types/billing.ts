@@ -1,6 +1,6 @@
 /** Shapes of the billing API (backend/app/schemas/billing.py); the server speaks snake_case */
 
-export type PlanCode = 'start' | 'researcher' | 'unlimited' | (string & {});
+export type PlanCode = 'start' | 'pack' | 'researcher' | 'unlimited' | (string & {});
 
 export interface PlanLimits {
   max_active_surveys: number;
@@ -8,7 +8,8 @@ export interface PlanLimits {
   max_questions: number;
   responses_per_period: number;
   max_analyzed_responses: number;
-  ai_actions_per_period: number;
+  /** AI allowance in tokens (prompt + completion); the only limit the plans really differ in */
+  ai_tokens_per_period: number;
 }
 
 export interface PlanInfo {
@@ -25,17 +26,21 @@ export interface PlansResponse {
   plans: PlanInfo[];
   /** True: the person can pay online; false: only a request for an invoice is offered */
   payments_enabled: boolean;
-  course_pack_price_kopecks: number;
-  course_pack_days: number;
+  /** The one-off pack: a fixed AI allowance for a fixed time, no auto-renewal */
+  pack: PlanInfo;
+  pack_price_kopecks: number;
+  pack_days: number;
 }
 
 export interface UsageMetric {
   used: number;
   max: number;
+  /** When the counter starts over; null for what is never renewed (the free AI allowance) */
+  resets_at?: string | null;
 }
 
 export interface SubscriptionUsage {
-  ai_actions: UsageMetric;
+  ai_tokens: UsageMetric;
   responses: UsageMetric;
   active_surveys: UsageMetric;
   projects: UsageMetric;

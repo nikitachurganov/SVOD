@@ -14,10 +14,11 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants.billing_plans import (
-    COURSE_PACK_DAYS,
     INTERVAL_MONTH,
     INTERVAL_ONE_OFF,
     INTERVAL_YEAR,
+    PACK_DAYS,
+    PLAN_PACK,
     PLAN_START,
     PLANS,
 )
@@ -43,7 +44,7 @@ EVENT_PLAN_REQUEST_REJECTED = "plan_request_rejected"
 DAYS_BY_INTERVAL = {
     INTERVAL_MONTH: 30,
     INTERVAL_YEAR: 365,
-    INTERVAL_ONE_OFF: COURSE_PACK_DAYS,
+    INTERVAL_ONE_OFF: PACK_DAYS,
 }
 
 
@@ -75,6 +76,11 @@ async def create_request(
     if plan is None or plan.code == PLAN_START:
         raise _error(status.HTTP_422_UNPROCESSABLE_ENTITY, "invalid_plan", "Такого тарифа нет")
     if payload.billing_interval not in DAYS_BY_INTERVAL:
+        raise _error(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, "invalid_interval", "Неверный срок подключения"
+        )
+    # The pack is sold once, the subscription by the month or the year
+    if (plan.code == PLAN_PACK) != (payload.billing_interval == INTERVAL_ONE_OFF):
         raise _error(
             status.HTTP_422_UNPROCESSABLE_ENTITY, "invalid_interval", "Неверный срок подключения"
         )

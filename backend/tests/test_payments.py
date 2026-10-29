@@ -27,7 +27,7 @@ from app.services.yookassa_client import ProviderPayment
 
 NOW = datetime(2026, 11, 1, 12, 0, tzinfo=timezone.utc)
 FAR = datetime(2099, 1, 1, tzinfo=timezone.utc)
-MONTH = 790_00
+MONTH = 600_00
 
 
 def provider_payment(**overrides) -> ProviderPayment:
@@ -152,7 +152,7 @@ class ClientTests(unittest.IsolatedAsyncioTestCase):
         "id": "pay-1",
         "status": "pending",
         "paid": False,
-        "amount": {"value": "790.00", "currency": "RUB"},
+        "amount": {"value": "600.00", "currency": "RUB"},
         "confirmation": {"type": "redirect", "confirmation_url": "https://pay.example/1"},
         "test": True,
         "metadata": {"payment_id": "x"},
@@ -177,7 +177,7 @@ class ClientTests(unittest.IsolatedAsyncioTestCase):
             "Basic " + base64.b64encode(b"shop:secret").decode(),
         )
         body = json.loads(request.content)
-        self.assertEqual(body["amount"], {"value": "790.00", "currency": "RUB"})
+        self.assertEqual(body["amount"], {"value": "600.00", "currency": "RUB"})
         self.assertEqual(body["confirmation"], {"type": "redirect", "return_url": "https://app/return"})
         self.assertTrue(body["capture"])
         self.assertEqual(body["metadata"], {"payment_id": "x"})
@@ -241,9 +241,14 @@ class ClientTests(unittest.IsolatedAsyncioTestCase):
 
 class OfferTests(unittest.TestCase):
     def test_the_price_and_the_days_follow_the_catalogue(self):
-        self.assertEqual(payment_service.offer("month"), (79000, 30))
-        self.assertEqual(payment_service.offer("year"), (790000, 365))
-        self.assertEqual(payment_service.offer("one_off"), (49000, 30))
+        for term, plan_code, price, days in (
+            ("month", "researcher", 600_00, 30),
+            ("year", "researcher", 5_400_00, 365),
+            ("one_off", "pack", 250_00, 60),
+        ):
+            with self.subTest(term=term):
+                plan, amount, length = payment_service.offer(term)
+                self.assertEqual((plan.code, amount, length), (plan_code, price, days))
 
     def test_an_unknown_term_is_refused(self):
         with self.assertRaises(HTTPException) as ctx:
@@ -316,6 +321,39 @@ class CheckoutTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(kwargs["amount_kopecks"], MONTH)
         self.assertIn(f"payment={payment.id}", kwargs["return_url"])
         self.assertEqual(kwargs["metadata"], {"payment_id": str(payment.id), "user_id": str(self.person.id)})
+
+    async def test_the_pack_is_sold_as_the_pack_plan_for_sixty_days(self):
+        with patch.object(
+            payment_service.lifecycle, "active_paid_subscription", AsyncMock(return_value=None)
+        ):
+            payment = await payment_service.create_checkout(self.session, self.person, "one_off", NOW)
+
+        self.assertEqual(
+            (payment.plan_code, payment.term, payment.days, payment.amount_kopecks),
+            ("pack", "one_off", 60, 250_00),
+        )
+        self.assertIn("Исследование", self.create.await_args.kwargs["description"])
+
+    async def test_the_pack_is_not_sold_to_a_running_subscription(self):
+        running = SimpleNamespace(plan_code="researcher")
+        with patch.object(
+            payment_service.lifecycle, "active_paid_subscription", AsyncMock(return_value=running)
+        ):
+            with self.assertRaises(HTTPException) as ctx:
+                await payment_service.create_checkout(self.session, self.person, "one_off", NOW)
+
+        self.assertEqual((ctx.exception.status_code, ctx.exception.detail["code"]), (409, "already_subscribed"))
+        self.assertEqual(self.added, [])
+        self.create.assert_not_awaited()
+
+    async def test_a_pack_that_follows_another_pack_is_allowed(self):
+        previous = SimpleNamespace(plan_code="pack")
+        with patch.object(
+            payment_service.lifecycle, "active_paid_subscription", AsyncMock(return_value=previous)
+        ):
+            payment = await payment_service.create_checkout(self.session, self.person, "one_off", NOW)
+
+        self.assertEqual(payment.plan_code, "pack")
 
     async def test_nothing_is_created_while_payments_are_off(self):
         for flag, value in (("BILLING_ENABLED", False), ("YOOKASSA_SHOP_ID", ""), ("YOOKASSA_SECRET_KEY", "")):

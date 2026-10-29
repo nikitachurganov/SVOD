@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.constants.billing_plans import (
     INTERVAL_NONE,
     INTERVAL_ONE_OFF,
+    PLAN_PACK,
     PLAN_RESEARCHER,
     PLAN_START,
     PLANS,
@@ -105,7 +106,7 @@ async def grant(
     """
     plan = PLANS.get(plan_code)
     if plan is None or plan.code == PLAN_START:
-        raise ValueError(f"Выдать можно только платный тариф: {PLAN_RESEARCHER}")
+        raise ValueError(f"Выдать можно только платный тариф: {PLAN_RESEARCHER} или {PLAN_PACK}")
     if (days is None) == (until is None):
         raise ValueError("Нужен ровно один из параметров: срок в днях или дата окончания")
     if days is not None and days < 1:
@@ -113,11 +114,11 @@ async def grant(
     now = now or _now()
 
     sub = await billing_service.ensure_subscription(session, user_id, now)
-    running = (
-        sub.plan_code == plan.code
-        and sub.status == STATUS_ACTIVE
-        and sub.current_period_end > now
-    )
+    paid_running = sub.status == STATUS_ACTIVE and sub.current_period_end > now
+    if plan.code == PLAN_PACK and paid_running and sub.plan_code == PLAN_RESEARCHER:
+        raise ValueError("Уже действует тариф «Исследователь»: разовый пакет не нужен")
+    # A pack is a fresh allowance for a fresh term, never an extension of the one that runs
+    running = paid_running and sub.plan_code == plan.code and plan.code != PLAN_PACK
     start = sub.current_period_start if running else now
     if until is not None:
         end = max(until, sub.current_period_end) if running else until
@@ -309,13 +310,21 @@ async def warn_if_near_limit(
     used: int,
     limit: int,
     period_start: datetime,
+    *,
+    previous: int | None = None,
 ) -> bool:
     """Queue the "80 % used" email at the moment the usage crosses the threshold.
 
     The email goes out from the worker (a request must not wait for SMTP). Only in enforced mode:
     while limits do not block, a warning about them would only confuse. Once per metric and period.
+    A counter that grows one by one hits the threshold exactly; one that grows in jumps (AI tokens)
+    passes ``previous``, and the threshold counts as crossed when it lies between the two values.
     """
-    if not settings.BILLING_ENFORCE or used != billing_service.warning_threshold(limit):
+    threshold = billing_service.warning_threshold(limit)
+    if not settings.BILLING_ENFORCE or threshold is None:
+        return False
+    crossed = used == threshold if previous is None else previous < threshold <= used
+    if not crossed:
         return False
     sub = await billing_service.ensure_subscription(session, user_id)
     match = {"metric": metric, "period_start": period_start.isoformat()}

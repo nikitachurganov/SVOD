@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.api.routes import billing as billing_routes
-from app.constants.billing_plans import PLAN_UNLIMITED, RESEARCHER, START
+from app.constants.billing_plans import AI_LIFETIME_ANCHOR, PLAN_UNLIMITED, RESEARCHER, START
 from app.services import billing_service as service
 
 NOW = datetime(2026, 11, 1, 12, 0, tzinfo=timezone.utc)
@@ -113,21 +113,58 @@ class ResolveEntitlementsTests(unittest.TestCase):
         self.assertEqual(ent.period_end, NOW + 25 * DAY)
 
     def test_overrides_apply_to_a_paid_plan_and_to_a_free_row(self):
-        paid = self.resolve(limit_overrides={"ai_actions_per_period": 500})
+        paid = self.resolve(limit_overrides={"ai_tokens_per_period": 10_000_000})
         free = self.resolve(
-            plan_code="start", billing_interval="none", limit_overrides={"ai_actions_per_period": 40}
+            plan_code="start", billing_interval="none", limit_overrides={"ai_tokens_per_period": 40}
         )
 
-        self.assertEqual(paid.plan.ai_actions_per_period, 500)
+        self.assertEqual(paid.plan.ai_tokens_per_period, 10_000_000)
         self.assertEqual(paid.plan.max_projects, RESEARCHER.max_projects)
-        self.assertEqual(free.plan.ai_actions_per_period, 40)
+        self.assertEqual(free.plan.ai_tokens_per_period, 40)
 
     def test_overrides_go_away_with_the_paid_plan(self):
         ent = self.resolve(
-            current_period_end=NOW - 5 * DAY, limit_overrides={"ai_actions_per_period": 500}
+            current_period_end=NOW - 5 * DAY, limit_overrides={"ai_tokens_per_period": 10_000_000}
         )
 
-        self.assertEqual(ent.plan.ai_actions_per_period, START.ai_actions_per_period)
+        self.assertEqual(ent.plan.ai_tokens_per_period, START.ai_tokens_per_period)
+
+    def test_the_free_allowance_is_counted_once_for_good(self):
+        ent = self.resolve(plan_code="start", billing_interval="none")
+
+        self.assertEqual((ent.ai_window_start, ent.ai_window_end), (AI_LIFETIME_ANCHOR, None))
+
+    def test_a_ran_out_subscription_goes_back_to_the_free_allowance(self):
+        ent = self.resolve(current_period_end=NOW - 5 * DAY)
+
+        self.assertEqual((ent.ai_window_start, ent.ai_window_end), (AI_LIFETIME_ANCHOR, None))
+
+    def test_a_monthly_subscription_gets_its_tokens_for_the_period(self):
+        ent = self.resolve()
+
+        self.assertEqual((ent.ai_window_start, ent.ai_window_end), (NOW - 10 * DAY, NOW + 20 * DAY))
+
+    def test_a_yearly_subscription_gets_its_tokens_back_every_thirty_days(self):
+        start = NOW - 70 * DAY
+        ent = self.resolve(
+            billing_interval="year", current_period_start=start, current_period_end=start + 365 * DAY
+        )
+
+        # The third 30-day window of the year: days 60..90
+        self.assertEqual((ent.ai_window_start, ent.ai_window_end), (start + 60 * DAY, start + 90 * DAY))
+        self.assertEqual((ent.period_start, ent.period_end), (start, start + 365 * DAY))
+
+    def test_the_last_window_of_a_subscription_does_not_outlive_it(self):
+        start = NOW - 35 * DAY
+        ent = self.resolve(current_period_start=start, current_period_end=start + 45 * DAY)
+
+        self.assertEqual((ent.ai_window_start, ent.ai_window_end), (start + 30 * DAY, start + 45 * DAY))
+
+    def test_a_pack_is_counted_over_its_whole_term(self):
+        ent = self.resolve(plan_code="pack", billing_interval="one_off")
+
+        self.assertEqual(ent.plan.code, "pack")
+        self.assertEqual((ent.ai_window_start, ent.ai_window_end), (NOW - 10 * DAY, NOW + 20 * DAY))
 
     def test_trial_flags(self):
         used = self.resolve(trial_used_at=NOW - 60 * DAY, cancel_at_period_end=True)
@@ -265,7 +302,7 @@ class SubscriptionSummaryTests(unittest.IsolatedAsyncioTestCase):
             survey_repo, "count_locked_for_owner", AsyncMock(return_value=0)
         ).start()
         return patch.object(
-            service.billing_repository, "get_usage", AsyncMock(return_value={"ai_actions": 4})
+            service.billing_repository, "get_usage", AsyncMock(return_value={"ai_tokens": 4})
         ).start()
 
     async def test_summary_has_plan_period_and_usage(self):
@@ -281,17 +318,36 @@ class SubscriptionSummaryTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(result.billing_enabled)
         self.assertEqual((result.plan.code, result.plan.title), ("researcher", "Исследователь"))
-        self.assertEqual(result.plan.limits.ai_actions_per_period, 200)
+        self.assertEqual(result.plan.limits.ai_tokens_per_period, 6_000_000)
         self.assertEqual(result.status, "active")
         self.assertEqual(result.current_period_end, NOW + 20 * DAY)
         self.assertTrue(result.trial_used)
-        self.assertEqual((result.usage.ai_actions.used, result.usage.ai_actions.max), (4, 200))
-        self.assertEqual((result.usage.responses.used, result.usage.responses.max), (0, 3_000))
-        self.assertEqual((result.usage.active_surveys.used, result.usage.active_surveys.max), (2, 20))
-        self.assertEqual((result.usage.projects.used, result.usage.projects.max), (1, 10))
+        ai = result.usage.ai_tokens
+        self.assertEqual((ai.used, ai.max, ai.resets_at), (4, 6_000_000, NOW + 20 * DAY))
+        self.assertEqual(
+            (result.usage.responses.used, result.usage.responses.max),
+            (0, RESEARCHER.responses_per_period),
+        )
+        self.assertEqual(
+            (result.usage.active_surveys.used, result.usage.active_surveys.max),
+            (2, RESEARCHER.max_active_surveys),
+        )
+        self.assertEqual(
+            (result.usage.projects.used, result.usage.projects.max), (1, RESEARCHER.max_projects)
+        )
         self.assertEqual(result.usage.locked_responses, 4)
-        get_usage.assert_awaited_once_with(self.session, self.user.id, NOW - 10 * DAY)
+        # Once for the counters of the period, once for the window of the AI tokens
+        self.assertEqual(get_usage.await_count, 2)
+        get_usage.assert_awaited_with(self.session, self.user.id, NOW - 10 * DAY)
         self.session.commit.assert_awaited_once()
+
+    async def test_the_free_allowance_has_no_date_it_comes_back(self):
+        self.enable(subscription=sub(plan_code="start", billing_interval="none"))
+
+        result = await service.get_subscription_summary(self.session, self.user)
+
+        self.assertIsNone(result.usage.ai_tokens.resets_at)
+        self.assertEqual(result.usage.ai_tokens.max, 150_000)
 
     async def test_shadow_mode_is_reported_as_not_enforced(self):
         self.enable(enforce=False)
@@ -320,7 +376,7 @@ class SubscriptionSummaryTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result.billing_enabled)
         self.assertFalse(result.enforced)
         self.assertEqual(result.plan.code, PLAN_UNLIMITED)
-        self.assertEqual(result.usage.ai_actions.used, 0)
+        self.assertEqual(result.usage.ai_tokens.used, 0)
         usage.assert_not_awaited()
         counts.assert_not_awaited()
         locked.assert_not_awaited()
@@ -329,23 +385,43 @@ class SubscriptionSummaryTests(unittest.IsolatedAsyncioTestCase):
 
 
 class PlansResponseTests(unittest.IsolatedAsyncioTestCase):
-    async def test_public_catalogue_lists_both_plans_and_the_course_pack(self):
+    async def test_public_catalogue_lists_the_subscription_plans_and_the_pack_apart(self):
         result = await billing_routes.get_plans()
 
         self.assertEqual([plan.code for plan in result.plans], ["start", "researcher"])
         researcher = result.plans[1]
-        self.assertEqual(researcher.price_month_kopecks, 79_000)
+        self.assertEqual((researcher.price_month_kopecks, researcher.price_year_kopecks), (60_000, 540_000))
         self.assertEqual(
             researcher.features,
             ["all_methodologies", "crosstabs", "csv_export", "quality_filter"],
         )
         self.assertEqual(result.plans[0].features, [])
-        self.assertEqual((result.course_pack_price_kopecks, result.course_pack_days), (49_000, 30))
+        self.assertEqual((result.pack_price_kopecks, result.pack_days), (25_000, 60))
+        self.assertEqual(result.pack.code, "pack")
+        self.assertEqual(result.pack.limits.ai_tokens_per_period, 2_000_000)
+        self.assertEqual(result.pack.features, ["all_methodologies", "csv_export"])
+
+    async def test_the_token_allowance_of_every_plan_is_published(self):
+        result = await billing_routes.get_plans()
+
+        self.assertEqual(
+            [plan.limits.ai_tokens_per_period for plan in result.plans], [150_000, 6_000_000]
+        )
 
     async def test_internal_limits_are_not_exposed(self):
         result = await billing_routes.get_plans()
 
-        self.assertNotIn("ai_budget_rub_per_period", result.plans[0].limits.model_dump())
+        self.assertEqual(
+            set(result.plans[0].limits.model_dump()),
+            {
+                "max_active_surveys",
+                "max_projects",
+                "max_questions",
+                "responses_per_period",
+                "max_analyzed_responses",
+                "ai_tokens_per_period",
+            },
+        )
 
 
 if __name__ == "__main__":
