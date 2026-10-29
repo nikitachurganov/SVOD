@@ -73,25 +73,22 @@ export const PlanActions = ({ extendLabel = 'Запросить продлени
             {onFreePlan ? 'Оплатить тариф' : 'Оплатить продление'}
           </Button>
         ) : null}
-        {pending ? (
+        {/* The invoice request is only the way to pay while online payment is not switched on */}
+        {paymentsEnabled ? null : pending ? (
           <Button icon={<CheckCircleOutlined />} disabled>
             Заявка отправлена
           </Button>
         ) : (
           <Button
-            type={trialAvailable || paymentsEnabled ? 'default' : 'primary'}
+            type={trialAvailable ? 'default' : 'primary'}
             icon={<SendOutlined />}
             onClick={() => setRequestOpen(true)}
           >
-            {paymentsEnabled
-              ? 'Нужен счёт? Оставить заявку'
-              : onFreePlan
-                ? 'Запросить подключение'
-                : extendLabel}
+            {onFreePlan ? 'Запросить подключение' : extendLabel}
           </Button>
         )}
       </div>
-      {pending ? (
+      {pending && !paymentsEnabled ? (
         <p className="billing-note">
           Мы получили вашу заявку и свяжемся с вами по указанному контакту. Тариф включится после оплаты.
         </p>
