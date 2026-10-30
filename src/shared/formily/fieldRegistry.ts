@@ -1,4 +1,5 @@
 import { createSchemaField } from '@formily/react';
+import { Schema } from '@formily/json-schema';
 import {
   Checkbox,
   DatePicker,
@@ -18,6 +19,11 @@ import { FormilyRatingInput } from './components/FormilyRatingInput';
 import { FormilyFileUpload } from './components/FormilyFileUpload';
 import { FormilyRadioChoice, FormilyCheckboxChoice, FormilyDropdownChoice } from './components/FormilyChoiceInputs';
 import { FormilyPhoneInput } from './components/FormilyPhoneInput';
+
+// Labels, descriptions and option names are typed by form authors and end up in the schema.
+// Formily evaluates any string that looks like "{{ ... }}" as JavaScript, so a form could run
+// code in a respondent's browser. Our schemas never use expressions: keep such text as plain text.
+Schema.registerCompiler((expression: string) => `{{${expression}}}`);
 
 /** Shared SchemaField registry for Formily runtime */
 export const SchemaField = createSchemaField({

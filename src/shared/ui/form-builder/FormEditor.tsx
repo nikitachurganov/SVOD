@@ -479,6 +479,13 @@ export const FormEditor = ({
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [deletePageId, setDeletePageId] = useState<string | null>(null);
   const [pendingDeletion, setPendingDeletion] = useState<PendingDeletion | null>(null);
+  // Mirror of pendingDeletion: handlers read it directly, so no side effects run inside
+  // setState updaters (React calls those twice in StrictMode)
+  const pendingDeletionRef = useRef<PendingDeletion | null>(null);
+  const updatePendingDeletion = useCallback((next: PendingDeletion | null) => {
+    pendingDeletionRef.current = next;
+    setPendingDeletion(next);
+  }, []);
   const [undoNow, setUndoNow] = useState(() => Date.now());
   const isMobile = useMediaQuery(MOBILE_QUERY);
   // Narrow screens get the AI chat as a full-screen drawer that starts closed
@@ -545,11 +552,10 @@ export const FormEditor = ({
   }, [pendingDeletion]);
 
   const clearPendingDeletion = useCallback(() => {
-    setPendingDeletion((prev) => {
-      if (prev) window.clearTimeout(prev.timeoutId);
-      return null;
-    });
-  }, []);
+    const prev = pendingDeletionRef.current;
+    if (prev) window.clearTimeout(prev.timeoutId);
+    updatePendingDeletion(null);
+  }, [updatePendingDeletion]);
 
   const queueDeletionUndo = useCallback(
     ({
@@ -561,63 +567,60 @@ export const FormEditor = ({
       parentGroupId: string | null;
       index: number;
     }) => {
-      setPendingDeletion((prev) => {
-        if (prev) {
-          window.clearTimeout(prev.timeoutId);
+      const prev = pendingDeletionRef.current;
+      if (prev) {
+        window.clearTimeout(prev.timeoutId);
+      }
+
+      const expiresAt = Date.now() + 5000;
+      const timeoutId = window.setTimeout(() => {
+        if (pendingDeletionRef.current?.expiresAt === expiresAt) {
+          updatePendingDeletion(null);
         }
+      }, 5000);
 
-        const expiresAt = Date.now() + 5000;
-        const timeoutId = window.setTimeout(() => {
-          setPendingDeletion((current) =>
-            current && current.expiresAt === expiresAt ? null : current,
-          );
-        }, 5000);
-
-        return {
-          field: cloneField(field),
-          pageId: activePageId,
-          parentGroupId,
-          index,
-          expiresAt,
-          timeoutId,
-        };
+      updatePendingDeletion({
+        field: cloneField(field),
+        pageId: activePageId,
+        parentGroupId,
+        index,
+        expiresAt,
+        timeoutId,
       });
     },
-    [activePageId],
+    [activePageId, updatePendingDeletion],
   );
 
   const handleUndoDelete = useCallback(() => {
-    setPendingDeletion((prev) => {
-      if (!prev) return null;
-      window.clearTimeout(prev.timeoutId);
+    const prev = pendingDeletionRef.current;
+    if (!prev) return;
+    window.clearTimeout(prev.timeoutId);
+    updatePendingDeletion(null);
 
-      setPages((pageList) =>
-        pageList.map((page) => {
-          if (page.id !== prev.pageId) return page;
+    setPages((pageList) =>
+      pageList.map((page) => {
+        if (page.id !== prev.pageId) return page;
 
-          if (prev.parentGroupId === null) {
-            const nextFields = [...page.fields];
-            const targetIndex = Math.min(Math.max(prev.index, 0), nextFields.length);
-            nextFields.splice(targetIndex, 0, cloneField(prev.field));
-            return { ...page, fields: nextFields };
-          }
+        if (prev.parentGroupId === null) {
+          const nextFields = [...page.fields];
+          const targetIndex = Math.min(Math.max(prev.index, 0), nextFields.length);
+          nextFields.splice(targetIndex, 0, cloneField(prev.field));
+          return { ...page, fields: nextFields };
+        }
 
-          return {
-            ...page,
-            fields: page.fields.map((field) => {
-              if (field.id !== prev.parentGroupId || !field.children) return field;
-              const nextChildren = [...field.children];
-              const targetIndex = Math.min(Math.max(prev.index, 0), nextChildren.length);
-              nextChildren.splice(targetIndex, 0, cloneField(prev.field));
-              return { ...field, children: nextChildren };
-            }),
-          };
-        }),
-      );
-
-      return null;
-    });
-  }, []);
+        return {
+          ...page,
+          fields: page.fields.map((field) => {
+            if (field.id !== prev.parentGroupId || !field.children) return field;
+            const nextChildren = [...field.children];
+            const targetIndex = Math.min(Math.max(prev.index, 0), nextChildren.length);
+            nextChildren.splice(targetIndex, 0, cloneField(prev.field));
+            return { ...field, children: nextChildren };
+          }),
+        };
+      }),
+    );
+  }, [updatePendingDeletion]);
 
   useEffect(() => {
     if (!pendingDeletion) {
@@ -797,6 +800,8 @@ export const FormEditor = ({
     if (data.source === 'panel') {
       const fieldType = PANEL_KEY_TO_FIELD_TYPE[data.fieldKey];
       if (!fieldType) return;
+      // Dropped back onto the tool panel itself: cancel, nothing to add
+      if (overId === TOOL_PANEL_DROP_ID) return;
 
       const newField = createField(fieldType);
 
@@ -979,17 +984,15 @@ export const FormEditor = ({
   };
 
   const handleDeletePage = (pageId: string) => {
-    setPages((prev) => {
-      if (prev.length <= 1) return prev;
-      const index = prev.findIndex((p) => p.id === pageId);
-      if (index === -1) return prev;
-      const next = prev.filter((p) => p.id !== pageId);
-      if (pageId === activePageId && next.length > 0) {
-        const newIndex = index > 0 ? index - 1 : 0;
-        setActivePageId(next[newIndex].id);
-      }
-      return next;
-    });
+    if (pages.length <= 1) return;
+    const index = pages.findIndex((p) => p.id === pageId);
+    if (index === -1) return;
+    const next = pages.filter((p) => p.id !== pageId);
+    setPages(next);
+    if (pageId === activePageId && next.length > 0) {
+      const newIndex = index > 0 ? index - 1 : 0;
+      setActivePageId(next[newIndex].id);
+    }
   };
 
   const handleTabEdit = (targetKey: string, action: 'add' | 'remove') => {
