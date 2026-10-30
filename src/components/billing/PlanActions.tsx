@@ -11,13 +11,15 @@ import './billing.css';
 interface Props {
   /** The label of the request button when the person already has the paid plan */
   extendLabel?: string;
+  /** What is bought: the subscription, or the one-off pack (no trial, its own labels) */
+  offer?: 'researcher' | 'pack';
 }
 
 /**
  * How a person gets the paid plan: a free trial once, then a request that an administrator
  * activates after the payment. Shared by the subscription tab and the plans page.
  */
-export const PlanActions = ({ extendLabel = 'Запросить продление' }: Props) => {
+export const PlanActions = ({ extendLabel = 'Запросить продление', offer = 'researcher' }: Props) => {
   const { subscription, refresh, replace } = useSubscription();
   const { notifySuccess, notifyError } = useNotifications();
   const [requestOpen, setRequestOpen] = useState(false);
@@ -43,8 +45,33 @@ export const PlanActions = ({ extendLabel = 'Запросить продлени
   const onFreePlan = subscription.plan.code === 'start';
   // A pack is bought again as a new one, not prolonged
   const onPack = subscription.plan.code === 'pack';
-  const trialAvailable = onFreePlan && !subscription.trial_used;
+  const forPack = offer === 'pack';
+  const trialAvailable = !forPack && onFreePlan && !subscription.trial_used;
   const pending = subscription.plan_request;
+  // The pack would replace a running subscription that gives far more: the server refuses it too
+  const packBlocked =
+    forPack &&
+    subscription.plan.code === 'researcher' &&
+    subscription.status === 'active' &&
+    !subscription.trial_ends_at;
+  const term = forPack ? 'one_off' : 'month';
+
+  if (packBlocked) {
+    return (
+      <Button block disabled>
+        Входит в вашу подписку
+      </Button>
+    );
+  }
+
+  const payLabel = forPack
+    ? onPack
+      ? 'Купить заново'
+      : 'Купить доступ'
+    : onFreePlan || onPack
+      ? 'Оплатить тариф'
+      : 'Оплатить продление';
+  const requestLabel = forPack || onFreePlan || onPack ? 'Запросить подключение' : extendLabel;
 
   const handleTrial = async () => {
     setTrialBusy(true);
@@ -72,7 +99,7 @@ export const PlanActions = ({ extendLabel = 'Запросить продлени
             icon={<CreditCardOutlined />}
             onClick={() => setCheckoutOpen(true)}
           >
-            {onFreePlan || onPack ? 'Оплатить тариф' : 'Оплатить продление'}
+            {payLabel}
           </Button>
         ) : null}
         {/* The invoice request is only the way to pay while online payment is not switched on */}
@@ -86,7 +113,7 @@ export const PlanActions = ({ extendLabel = 'Запросить продлени
             icon={<SendOutlined />}
             onClick={() => setRequestOpen(true)}
           >
-            {onFreePlan || onPack ? 'Запросить подключение' : extendLabel}
+            {requestLabel}
           </Button>
         )}
       </div>
@@ -95,9 +122,10 @@ export const PlanActions = ({ extendLabel = 'Запросить продлени
           Мы получили вашу заявку и свяжемся с вами по указанному контакту. Тариф включится после оплаты.
         </p>
       ) : null}
-      <CheckoutModal open={checkoutOpen} onClose={() => setCheckoutOpen(false)} />
+      <CheckoutModal open={checkoutOpen} onClose={() => setCheckoutOpen(false)} initialTerm={term} />
       <PlanRequestModal
         open={requestOpen}
+        initialTerm={term}
         onClose={() => setRequestOpen(false)}
         onSent={() => void refresh()}
       />

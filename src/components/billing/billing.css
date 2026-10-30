@@ -93,24 +93,70 @@
 .plans-page__cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 16px;
+  column-gap: 16px;
+  /* Room for the ribbon above a card when the cards wrap into a column */
+  row-gap: 28px;
+  padding-top: 12px;
 }
 
+/* Every card has the same five parts: head, price, AI tokens, button, what is included.
+   With subgrid the parts line up across the cards, so the buttons stand on one line */
 .plan-card {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 20px;
+  gap: 16px;
+  padding: 24px;
   border: 1px solid var(--app-border-secondary);
   border-radius: 12px;
   background: var(--app-surface);
 }
 
-.plan-card--accent {
-  border-color: var(--app-menu-active-text);
+@supports (grid-template-rows: subgrid) {
+  .plan-card {
+    display: grid;
+    grid-row: span 5;
+    grid-template-rows: subgrid;
+    align-content: start;
+  }
+}
+
+/* The plan we suggest: tinted at the top and outlined in the brand colour */
+.plan-card--featured {
+  border-color: var(--app-primary);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--app-primary) 9%, var(--app-surface)) 0,
+    var(--app-surface) 240px
+  );
+}
+
+/* The plan the person has: a thicker ring, so it reads at a glance without a coloured tag */
+.plan-card--current {
+  border-color: var(--app-primary);
+  box-shadow: 0 0 0 1px var(--app-primary);
+}
+
+.plan-card__ribbon {
+  position: absolute;
+  top: -11px;
+  left: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--app-primary);
+  color: var(--app-text-on-brand);
+  font-size: 12px;
+  line-height: 22px;
+  font-weight: 600;
 }
 
 .plan-card__head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.plan-card__title-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -119,22 +165,120 @@
 
 .plan-card__name {
   margin: 0;
-  font-size: 18px;
+  font-size: 20px;
+  line-height: 28px;
   font-weight: 600;
   color: var(--app-text);
+}
+
+.plan-card__badge {
+  flex-shrink: 0;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--app-primary) 40%, transparent);
+  background: color-mix(in srgb, var(--app-primary) 14%, transparent);
+  color: var(--app-primary);
+  font-size: 12px;
+  line-height: 22px;
+  font-weight: 600;
+}
+
+.plan-card__tagline {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--app-text-secondary);
 }
 
 .plan-card__price {
-  font-size: 28px;
-  line-height: 36px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 8px;
+  color: var(--app-text);
+}
+
+.plan-card__amount {
+  font-size: 36px;
+  line-height: 44px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.plan-card__period {
+  font-size: 14px;
+  color: var(--app-text-secondary);
+}
+
+.plan-card__price-note {
+  flex-basis: 100%;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--app-text-secondary);
+}
+
+/* The AI allowance: the one thing the plans differ in, so it gets its own block */
+.plan-card__tokens {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--app-surface-accent);
+}
+
+.plan-card__tokens-icon {
+  margin-top: 3px;
+  font-size: 16px;
+  color: var(--app-primary);
+}
+
+.plan-card__tokens-amount {
+  font-size: 15px;
+  line-height: 22px;
   font-weight: 600;
   color: var(--app-text);
 }
 
-.plan-card__price small {
-  font-size: 13px;
+.plan-card__tokens-amount span {
   font-weight: 400;
   color: var(--app-text-secondary);
+}
+
+.plan-card__tokens-hint {
+  margin: 2px 0 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--app-text-secondary);
+}
+
+.plan-card__cta {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.plan-card__cta .billing-actions {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.plan-card__cta .billing-note {
+  margin: 0;
+}
+
+.plan-card__features {
+  padding-top: 16px;
+  border-top: 1px solid var(--app-border-secondary);
+}
+
+.plan-card__features-title {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--app-text);
 }
 
 .plan-card__list {
@@ -143,23 +287,23 @@
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   font-size: 13px;
   line-height: 20px;
   color: var(--app-text);
 }
 
-.plan-card__list li::before {
-  content: '✓';
-  margin-right: 8px;
-  color: var(--app-menu-active-text);
+.plan-card__list li {
+  position: relative;
+  padding-left: 22px;
 }
 
-.plan-card__footer {
-  margin-top: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+.plan-card__list li::before {
+  content: '✓';
+  position: absolute;
+  left: 2px;
+  font-weight: 600;
+  color: var(--app-primary);
 }
 
 .plans-page__section-title {

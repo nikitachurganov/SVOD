@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Alert, Button, Collapse, Skeleton, Table, Tag } from 'antd';
+import { Alert, Button, Collapse, Skeleton, Table } from 'antd';
+import { ThunderboltOutlined } from '@ant-design/icons';
 import type { CollapseProps } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { Link } from 'react-router-dom';
@@ -64,13 +65,27 @@ const buildRows = (start: PlanInfo, pack: PlanInfo, researcher: PlanInfo, packDa
   ];
 };
 
-const featureLines = (plan: PlanInfo): string[] =>
+/** What the plan adds to the one before it: the card says «everything from X, plus» and lists only these */
+const extraLines = (base: PlanInfo, plan: PlanInfo): string[] =>
   plan.features
-    .filter((feature) => feature !== 'all_methodologies')
+    .filter((feature) => !base.features.includes(feature))
     .map((feature) => FEATURE_LABELS[feature]);
 
 const methodologyLine = (plan: PlanInfo): string =>
   plan.features.includes('all_methodologies') ? 'Все методики опросов' : '5 базовых методик';
+
+/** The AI allowance is what the plans differ in, so it stands under the price in every card */
+const TokensRow = ({ amount, when, hint }: { amount: number; when: string; hint: string }) => (
+  <div className="plan-card__tokens">
+    <ThunderboltOutlined className="plan-card__tokens-icon" aria-hidden />
+    <div>
+      <div className="plan-card__tokens-amount">
+        {formatNumber(amount)} <span>токенов ИИ {when}</span>
+      </div>
+      <p className="plan-card__tokens-hint">{hint}</p>
+    </div>
+  </div>
+);
 
 /**
  * The plans side by side; what is not in the catalogue is not promised here.
@@ -123,6 +138,10 @@ export const PlansPage = () => {
   }
 
   const current = subscription?.billing_enabled ? subscription.plan.code : null;
+  const cardClass = (code: string, featured = false): string =>
+    ['plan-card', featured ? 'plan-card--featured' : '', current === code ? 'plan-card--current' : '']
+      .filter(Boolean)
+      .join(' ');
   const columns: ColumnsType<Row> = [
     { title: '', dataIndex: 'label', key: 'label' },
     { title: start.title, dataIndex: 'start', key: 'start', width: 180 },
@@ -222,74 +241,121 @@ export const PlansPage = () => {
       </div>
 
       <div className="plans-page__cards">
-        <article className="plan-card">
+        <article className={cardClass('start')}>
           <div className="plan-card__head">
-            <h2 className="plan-card__name">{start.title}</h2>
-            {current === 'start' ? <Tag color="blue">Ваш тариф</Tag> : null}
+            <div className="plan-card__title-row">
+              <h2 className="plan-card__name">{start.title}</h2>
+              {current === 'start' ? <span className="plan-card__badge">Ваш тариф</span> : null}
+            </div>
+            <p className="plan-card__tagline">Попробовать сервис и собрать первые ответы</p>
           </div>
           <div className="plan-card__price">
-            0 ₽ <small>навсегда</small>
+            <span className="plan-card__amount">0 ₽</span>
+            <span className="plan-card__period">навсегда</span>
           </div>
-          <ul className="plan-card__list">
-            <li>{formatNumber(start.limits.ai_tokens_per_period)} токенов ИИ в подарок на старте</li>
-            <li>Опросы и ответы без ограничений</li>
-            <li>{methodologyLine(start)}</li>
-            <li>Базовые графики и таблицы</li>
-          </ul>
+          <TokensRow
+            amount={start.limits.ai_tokens_per_period}
+            when="один раз при регистрации"
+            hint="Чтобы попробовать ИИ-конструктор и резюме"
+          />
+          <div className="plan-card__cta">
+            {!user ? (
+              <Link to="/auth" state={{ from: '/plans' }}>
+                <Button block>Начать бесплатно</Button>
+              </Link>
+            ) : (
+              <Button block disabled>
+                {current === 'start' ? 'Ваш текущий тариф' : 'Бесплатно навсегда'}
+              </Button>
+            )}
+          </div>
+          <div className="plan-card__features">
+            <p className="plan-card__features-title">Что входит:</p>
+            <ul className="plan-card__list">
+              <li>Опросы и ответы без ограничений</li>
+              <li>{methodologyLine(start)}</li>
+              <li>Базовые графики и таблицы</li>
+            </ul>
+          </div>
         </article>
 
-        <article className="plan-card">
+        <article className={cardClass('pack')}>
           <div className="plan-card__head">
-            <h2 className="plan-card__name">{pack.title}</h2>
-            {current === 'pack' ? <Tag color="blue">Ваш тариф</Tag> : null}
+            <div className="plan-card__title-row">
+              <h2 className="plan-card__name">{pack.title}</h2>
+              {current === 'pack' ? <span className="plan-card__badge">Ваш тариф</span> : null}
+            </div>
+            <p className="plan-card__tagline">Одно исследование под ключ, без подписки</p>
           </div>
           <div className="plan-card__price">
-            {formatPrice(plans.pack_price_kopecks)} <small>разово, {plans.pack_days} дней</small>
+            <span className="plan-card__amount">{formatPrice(plans.pack_price_kopecks)}</span>
+            <span className="plan-card__period">разово, на {plans.pack_days} дней</span>
           </div>
-          <ul className="plan-card__list">
-            <li>{formatNumber(pack.limits.ai_tokens_per_period)} токенов ИИ на весь срок</li>
-            <li>Хватит примерно на 15–20 полных исследований с глубоким чатом</li>
-            <li>Опросы и ответы без ограничений</li>
-            <li>{methodologyLine(pack)}</li>
-            {featureLines(pack).map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-            <li>Без автопродления: заплатили один раз</li>
-          </ul>
-          <p className="billing-note" style={{ margin: 0, marginTop: 'auto' }}>
-            Выберите «Разовый доступ» в окне оплаты или в заявке на подключение.
-          </p>
+          <TokensRow
+            amount={pack.limits.ai_tokens_per_period}
+            when={`на ${plans.pack_days} дней`}
+            hint="Хватит примерно на 15–20 полных исследований с глубоким чатом"
+          />
+          <div className="plan-card__cta">
+            {user ? (
+              <PlanActions offer="pack" />
+            ) : (
+              <Link to="/auth" state={{ from: '/plans' }}>
+                <Button block>Войти и купить</Button>
+              </Link>
+            )}
+          </div>
+          <div className="plan-card__features">
+            <p className="plan-card__features-title">Всё из «{start.title}», плюс:</p>
+            <ul className="plan-card__list">
+              {extraLines(start, pack).map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+              <li>Без автопродления: заплатили один раз</li>
+            </ul>
+          </div>
         </article>
 
-        <article className="plan-card plan-card--accent">
+        <article className={cardClass('researcher', true)}>
+          {current === 'researcher' ? null : <span className="plan-card__ribbon">Выгоднее всего</span>}
           <div className="plan-card__head">
-            <h2 className="plan-card__name">{researcher.title}</h2>
-            {current === 'researcher' ? <Tag color="blue">Ваш тариф</Tag> : null}
+            <div className="plan-card__title-row">
+              <h2 className="plan-card__name">{researcher.title}</h2>
+              {current === 'researcher' ? <span className="plan-card__badge">Ваш тариф</span> : null}
+            </div>
+            <p className="plan-card__tagline">Для тех, кто исследует постоянно</p>
           </div>
           <div className="plan-card__price">
-            {formatPrice(researcher.price_month_kopecks)} <small>в месяц</small>
+            <span className="plan-card__amount">{formatPrice(researcher.price_month_kopecks)}</span>
+            <span className="plan-card__period">в месяц</span>
+            <span className="plan-card__price-note">
+              или {formatPrice(researcher.price_year_kopecks)} в год — на четверть дешевле
+            </span>
           </div>
-          <ul className="plan-card__list">
-            <li>{formatNumber(researcher.limits.ai_tokens_per_period)} токенов ИИ каждый месяц</li>
-            <li>Хватит больше чем на 50 глубоких исследований в месяц</li>
-            <li>Опросы и ответы без ограничений</li>
-            <li>{methodologyLine(researcher)}</li>
-            {featureLines(researcher).map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
-          <div className="plan-card__footer">
-            <p className="billing-note" style={{ margin: 0 }}>
-              Или {formatPrice(researcher.price_year_kopecks)} в год: на четверть дешевле.
-            </p>
-            <PlanActions />
-            {user ? null : (
+          <TokensRow
+            amount={researcher.limits.ai_tokens_per_period}
+            when="каждый месяц"
+            hint="Больше чем на 50 глубоких исследований в месяц"
+          />
+          <div className="plan-card__cta">
+            {user ? (
+              <PlanActions />
+            ) : (
               <Link to="/auth" state={{ from: '/plans' }}>
                 <Button type="primary" block>
                   Войти и подключить
                 </Button>
               </Link>
             )}
+          </div>
+          <div className="plan-card__features">
+            <p className="plan-card__features-title">Всё из «{pack.title}», плюс:</p>
+            <ul className="plan-card__list">
+              {extraLines(pack, researcher).map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+              <li>Токены обновляются каждый месяц</li>
+            </ul>
           </div>
         </article>
       </div>

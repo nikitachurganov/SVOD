@@ -9,6 +9,8 @@ import { formatPrice, formatTokens } from './billingFormat';
 interface Props {
   open: boolean;
   onClose: () => void;
+  /** The term chosen when the window opens */
+  initialTerm?: PlanRequestTerm;
 }
 
 type ConsentKey = 'offer' | 'privacy' | 'personalData';
@@ -27,7 +29,7 @@ const CONSENTS: { key: ConsentKey; before: string; link: string; to: string }[] 
 const NOTHING_ACCEPTED: Record<ConsentKey, boolean> = { offer: false, privacy: false, personalData: false };
 
 /** Choosing the term and going to the payment page; the plan is switched on when the payment is settled */
-export const CheckoutModal = ({ open, onClose }: Props) => {
+export const CheckoutModal = ({ open, onClose, initialTerm = 'month' }: Props) => {
   const [plans, setPlans] = useState<PlansResponse | null>(null);
   const [term, setTerm] = useState<PlanRequestTerm>('month');
   const { notifyInfo } = useNotifications();
@@ -41,6 +43,7 @@ export const CheckoutModal = ({ open, onClose }: Props) => {
     if (!open) return;
     setAccepted(NOTHING_ACCEPTED);
     setError(null);
+    setTerm(initialTerm);
     let cancelled = false;
     getPlans()
       .then((next) => {
@@ -50,7 +53,7 @@ export const CheckoutModal = ({ open, onClose }: Props) => {
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, initialTerm]);
 
   const { subscription } = useSubscription();
   const researcher = plans?.plans.find((plan) => plan.code === 'researcher');

@@ -17,10 +17,12 @@ interface Props {
   onClose: () => void;
   /** The request is stored: the plan and the banner of the person should be read again */
   onSent: () => void;
+  /** The term chosen when the window opens */
+  initialTerm?: PlanRequestTerm;
 }
 
 /** Asking for the paid plan: payment is by invoice for now, an administrator turns the plan on after it */
-export const PlanRequestModal = ({ open, onClose, onSent }: Props) => {
+export const PlanRequestModal = ({ open, onClose, onSent, initialTerm = 'month' }: Props) => {
   const { profile } = useAuth();
   const { notifySuccess } = useNotifications();
   const [form] = Form.useForm<FormValues>();
@@ -36,11 +38,11 @@ export const PlanRequestModal = ({ open, onClose, onSent }: Props) => {
         if (!cancelled) setPlans(next);
       })
       .catch(() => {});
-    form.setFieldsValue({ billing_interval: 'month', contact: profile?.email ?? '', comment: '' });
+    form.setFieldsValue({ billing_interval: initialTerm, contact: profile?.email ?? '', comment: '' });
     return () => {
       cancelled = true;
     };
-  }, [open, form, profile?.email]);
+  }, [open, form, profile?.email, initialTerm]);
 
   const researcher = plans?.plans.find((plan) => plan.code === 'researcher');
 
