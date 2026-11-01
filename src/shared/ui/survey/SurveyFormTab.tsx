@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Button, Card, Empty, Modal, Popover } from 'antd';
 import { EditOutlined, EyeOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 
@@ -7,14 +7,6 @@ import type { CreateFormFieldPayload } from '../../api/forms.api';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { MethodologySummaryCard } from './MethodologySummaryCard';
 import { answerKindLabel } from './surveyFormat';
-
-/** Plain-words state of the collection, matching what the public link really does */
-const COLLECTION_STATE: Record<SurveyDetail['status'], string> = {
-  draft: 'ещё не начат',
-  open: 'открыт',
-  closed: 'остановлен',
-  archived: 'остановлен (опрос в архиве)',
-};
 
 const pluralizeQuestions = (n: number): string => {
   const mod10 = n % 10;
@@ -61,71 +53,64 @@ const TypeTag = ({ field }: { field: CreateFormFieldPayload }) => {
   );
 };
 
-const ROW_STYLE = {
-  display: 'grid',
-  gridTemplateColumns: '32px minmax(0, 1fr) auto',
-  gap: 12,
-  alignItems: 'start',
-  padding: '14px 0',
-  borderTop: '1px solid var(--app-border-secondary)',
-} as const;
+type OutlineItem =
+  | { kind: 'question'; field: CreateFormFieldPayload; number: number }
+  | { kind: 'text'; field: CreateFormFieldPayload }
+  | { kind: 'group'; field: CreateFormFieldPayload; children: OutlineItem[] };
 
-const QuestionRow = ({ field, number }: { field: CreateFormFieldPayload; number: string }) => {
-  const isMobile = useMediaQuery('(max-width: 767px)');
-  // A phone is too narrow for a third column: the type tag goes under the question text
-  const numberColumn = isMobile ? '28px' : '32px';
-  if (field.children?.length) {
-    return (
-      <>
-        <li style={{ ...ROW_STYLE, gridTemplateColumns: `${numberColumn} minmax(0, 1fr)` }}>
-          <span style={{ color: 'var(--app-text-secondary)', textAlign: 'right' }}>{number}</span>
-          <strong style={{ wordBreak: 'break-word' }}>{field.label}</strong>
-        </li>
-        {field.children.map((child, index) => (
-          <QuestionRow key={child.id ?? index} field={child} number={`${number}${index + 1}.`} />
-        ))}
-      </>
-    );
-  }
-  return (
-    <li
-      style={
-        isMobile ? { ...ROW_STYLE, gridTemplateColumns: `${numberColumn} minmax(0, 1fr)`, rowGap: 8 } : ROW_STYLE
+/**
+ * Questions are numbered through the whole form, as the respondent counts them. A group is a heading,
+ * not a question, and «Текст без вопроса» is content: neither takes a number.
+ */
+const buildOutline = (fields: CreateFormFieldPayload[], counter: { n: number }): OutlineItem[] =>
+  fields.map((field) => {
+    if (field.children?.length) {
+      return { kind: 'group', field, children: buildOutline(field.children, counter) };
+    }
+    if (field.type === 'textBlock') return { kind: 'text', field };
+    counter.n += 1;
+    return { kind: 'question', field, number: counter.n };
+  });
+
+const countQuestions = (items: OutlineItem[]): number =>
+  items.reduce(
+    (sum, item) =>
+      sum + (item.kind === 'question' ? 1 : item.kind === 'group' ? countQuestions(item.children) : 0),
+    0,
+  );
+
+const OutlineRows = ({ items }: { items: OutlineItem[] }) => (
+  <>
+    {items.map((item, index) => {
+      const key = item.field.id ?? index;
+      if (item.kind === 'group') {
+        return (
+          <li key={key} className="survey-form-outline__group">
+            <div className="survey-form-outline__group-title">{item.field.label}</div>
+            <ol className="survey-form-outline__sublist">
+              <OutlineRows items={item.children} />
+            </ol>
+          </li>
+        );
       }
-    >
-      <span style={{ color: 'var(--app-text-secondary)', textAlign: 'right' }}>{number}</span>
-      <span style={{ wordBreak: 'break-word', lineHeight: 1.5 }}>{field.label}</span>
-      <div style={isMobile ? { gridColumn: 2 } : undefined}>
-        <TypeTag field={field} />
-      </div>
-    </li>
-  );
-};
-
-/** «Текст без вопроса» is content, not a question: it gets no number and does not shift the others */
-const numberQuestions = (
-  fields: CreateFormFieldPayload[],
-): { field: CreateFormFieldPayload; number: number | null }[] => {
-  let next = 0;
-  return fields.map((field) =>
-    field.type === 'textBlock' ? { field, number: null } : { field, number: ++next },
-  );
-};
-
-const TextBlockRow = ({ field }: { field: CreateFormFieldPayload }) => (
-  <li
-    style={{
-      ...ROW_STYLE,
-      gridTemplateColumns: 'minmax(0, 1fr)',
-      color: 'var(--app-text-secondary)',
-      fontSize: 13,
-    }}
-  >
-    <span style={{ wordBreak: 'break-word', lineHeight: 1.5 }}>
-      <em>Текст без вопроса</em>
-      {field.label ? ` · ${field.label}` : ''}
-    </span>
-  </li>
+      if (item.kind === 'text') {
+        return (
+          <li key={key} className="survey-form-outline__row survey-form-outline__row--text">
+            <span className="survey-form-outline__num" aria-hidden="true" />
+            <span className="survey-form-outline__label">{item.field.label || 'Текст без вопроса'}</span>
+            <span className="survey-type-tag">Текст</span>
+          </li>
+        );
+      }
+      return (
+        <li key={key} className="survey-form-outline__row">
+          <span className="survey-form-outline__num">{item.number}</span>
+          <span className="survey-form-outline__label">{item.field.label}</span>
+          <TypeTag field={item.field} />
+        </li>
+      );
+    })}
+  </>
 );
 
 interface SurveyFormTabProps {
@@ -143,14 +128,14 @@ export const SurveyFormTab = ({ survey, onEdit, onPreview, onOpenReport }: Surve
   const hasQuestions = survey.questions_count > 0 && survey.pages.some((page) => page.fields.length > 0);
   const hasResponses = survey.responses_count > 0;
 
+  const outline = useMemo(() => {
+    const counter = { n: 0 };
+    return survey.pages.map((page) => ({ page, items: buildOutline(page.fields, counter) }));
+  }, [survey.pages]);
+
   // The limits on editing a form that already has answers are explained when the researcher
   // is about to edit it, not as a permanent banner above the questions
   const startEditing = () => (hasResponses ? setWarningOpen(true) : onEdit());
-
-  const params = [
-    `Приём ответов: ${COLLECTION_STATE[survey.status]}`,
-    `Анонимность: ${survey.anonymous ? 'включена' : 'выключена'}`,
-  ];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -167,35 +152,33 @@ export const SurveyFormTab = ({ survey, onEdit, onPreview, onOpenReport }: Surve
               </Button>
             )}
             <Button type="primary" icon={<EditOutlined />} onClick={startEditing} disabled={archived}>
-              Редактировать форму
+              Редактировать
             </Button>
           </div>
         </div>
 
-        <div style={{ marginTop: 8, fontSize: 13, color: 'var(--app-text-secondary)' }}>
-          {params.join(' · ')}
-        </div>
-
         {hasQuestions ? (
-          <ol style={{ listStyle: 'none', margin: '16px 0 0', padding: 0 }}>
-            {survey.pages.flatMap((page, pageIndex) => [
-              survey.pages.length > 1 && page.fields.length > 0 ? (
-                <li
-                  key={`page-${page.id ?? pageIndex}`}
-                  style={{ padding: '18px 0 6px', fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.4, color: 'var(--app-text-secondary)' }}
-                >
-                  {page.title || `Страница ${pageIndex + 1}`}
-                </li>
-              ) : null,
-              ...numberQuestions(page.fields).map(({ field, number }, index) =>
-                number === null ? (
-                  <TextBlockRow key={field.id ?? `${pageIndex}-${index}`} field={field} />
-                ) : (
-                  <QuestionRow key={field.id ?? `${pageIndex}-${index}`} field={field} number={`${number}.`} />
-                ),
+          <div className="survey-form-outline">
+            {outline.map(({ page, items }, pageIndex) =>
+              items.length === 0 ? null : (
+                <section key={page.id ?? pageIndex} className="survey-form-outline__page">
+                  {outline.length > 1 && (
+                    <header className="survey-form-outline__page-head">
+                      <span className="survey-form-outline__page-title">
+                        {page.title || `Страница ${pageIndex + 1}`}
+                      </span>
+                      <span className="survey-form-outline__page-count">
+                        {pluralizeQuestions(countQuestions(items))}
+                      </span>
+                    </header>
+                  )}
+                  <ol className="survey-form-outline__list">
+                    <OutlineRows items={items} />
+                  </ol>
+                </section>
               ),
-            ])}
-          </ol>
+            )}
+          </div>
         ) : (
           <Empty
             style={{ margin: '24px 0 8px' }}

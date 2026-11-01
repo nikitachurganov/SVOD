@@ -1,6 +1,7 @@
-import { Breadcrumb, Button } from 'antd';
-import { MenuUnfoldOutlined } from '@ant-design/icons';
+import { Breadcrumb, Button, Tooltip } from 'antd';
+import { MenuUnfoldOutlined, ReadOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
+import { useTour } from '../tour/useTour';
 import type { AppBreadcrumbItem } from './appBreadcrumbs';
 import { HeaderNotifications } from './HeaderNotifications';
 import { HeaderProfileMenu } from './HeaderProfileMenu';
@@ -41,7 +42,10 @@ export const AppContentHeader = ({
   standalone = false,
   showMobileMenu,
   onMobileMenuClick,
-}: AppContentHeaderProps) => (
+}: AppContentHeaderProps) => {
+  const { start: startTour } = useTour();
+
+  return (
   <header className="app-content-header" aria-label="Верхняя панель">
     {standalone && (
       <div className="app-header-brand">
@@ -85,6 +89,14 @@ export const AppContentHeader = ({
             closeProfile={() => onProfileOpenChange(false)}
           />
         )}
+        <Tooltip title="Пройти обучение">
+          <Button
+            type="text"
+            icon={<ReadOutlined />}
+            aria-label="Пройти обучение"
+            onClick={() => void startTour()}
+          />
+        </Tooltip>
       </div>
     </div>
     <HeaderProfileMenu
@@ -99,4 +111,5 @@ export const AppContentHeader = ({
       showCreateOrg={!standalone}
     />
   </header>
-);
+  );
+};

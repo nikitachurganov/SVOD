@@ -16,12 +16,19 @@ interface ShareSurveyModalProps {
 }
 
 const STATUS_NOTE: Partial<Record<SurveyStatus, { type: 'warning' | 'info'; text: string }>> = {
-  draft: { type: 'warning', text: 'Опрос в черновиках: ссылка заработает после публикации.' },
   closed: {
     type: 'info',
-    text: 'Приём ответов остановлен: по этой ссылке новые ответы не принимаются.',
+    text: 'Приём ответов остановлен: чтобы снова принимать ответы, нажмите «Открыть снова».',
   },
-  archived: { type: 'info', text: 'Опрос в архиве: ссылка не принимает ответы.' },
+  archived: { type: 'info', text: 'Опрос в архиве: ответы по ссылке не принимаются.' },
+};
+
+/** The invitation is made only while the link works; otherwise the note below says why it does not */
+const INTRO: Record<SurveyStatus, string> = {
+  open: 'Отправьте эту ссылку респондентам — регистрация не нужна.',
+  draft: 'Чтобы поделиться опросом, его нужно опубликовать. После публикации здесь появится ссылка для респондентов.',
+  closed: 'Ссылка для респондентов осталась прежней, но новые ответы по ней не принимаются.',
+  archived: 'Ссылка для респондентов осталась прежней, но опрос в архиве.',
 };
 
 /** The one place to get the respondent link: copy it and see whether it accepts answers */
@@ -38,6 +45,7 @@ export const ShareSurveyModal = ({
   const inputRef = useRef<InputRef>(null);
   const link = buildPublicSurveyUrl(publicToken);
   const note = STATUS_NOTE[status];
+  const isDraft = status === 'draft';
 
   useEffect(() => () => window.clearTimeout(timer.current), []);
 
@@ -62,26 +70,25 @@ export const ShareSurveyModal = ({
       onCancel={onClose}
       title="Поделиться опросом"
       footer={
-        // Both actions sit on one line and share the control height; on a narrow screen they wrap
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
-          {status === 'open' ? (
-            <Button
-              icon={<ExportOutlined />}
-              href={link}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
+        status === 'open' ? (
+          <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+            <Button icon={<ExportOutlined />} href={link} target="_blank" rel="noopener noreferrer">
               Открыть как респондент
             </Button>
-          ) : (
-            <span />
-          )}
-          <Button onClick={onClose}>Закрыть</Button>
-        </div>
+          </div>
+        ) : null
       }
       destroyOnHidden
     >
-      <p style={{ margin: '0 0 12px' }}>Отправьте эту ссылку респондентам — регистрация не нужна.</p>
+      <p style={{ margin: '0 0 12px' }}>{INTRO[status]}</p>
+      {isDraft ? (
+        onPublish && (
+          <Button type="primary" loading={publishing} onClick={onPublish}>
+            Опубликовать опрос
+          </Button>
+        )
+      ) : (
+        <>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <Input
           style={{ flex: '1 1 220px', minWidth: 0 }}
@@ -109,18 +116,14 @@ export const ShareSurveyModal = ({
         )}
       </div>
 
+        </>
+      )}
+
       {note && (
         <Alert
           type={note.type}
           showIcon
           message={note.text}
-          action={
-            status === 'draft' && onPublish ? (
-              <Button size="small" type="primary" loading={publishing} onClick={onPublish}>
-                Опубликовать
-              </Button>
-            ) : undefined
-          }
         />
       )}
 

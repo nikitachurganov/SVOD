@@ -1,10 +1,12 @@
-from typing import Annotated
+from typing import Annotated, Literal
+from urllib.parse import urlencode
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Response, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Request, Response, UploadFile
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 
 from app.api.deps import CurrentUser, DbSession
+from app.core.config import settings
 from app.schemas.auth import (
     AccountActivationInfo,
     ActivateAccountRequest,
@@ -20,9 +22,100 @@ from app.schemas.auth import (
 )
 from app.schemas.onboarding import OnboardingSurveyRequest, TourUpdateRequest
 from app.schemas.user import OnboardingState, UserProfileResponse
-from app.services import account_deletion_service, auth_service, avatar_service, onboarding_service
+from app.services import (
+    account_deletion_service,
+    auth_service,
+    avatar_service,
+    oauth_client,
+    oauth_service,
+    onboarding_service,
+)
 
 router = APIRouter()
+
+
+# ---------------------------------------------------------------------------
+# Sign-in through Yandex ID (the browser is redirected, so these are GET and answer 302)
+# ---------------------------------------------------------------------------
+
+
+def _oauth_redirect(service: str, *, token: str | None = None, error: str | None = None) -> RedirectResponse:
+    base = oauth_service.app_base_url(service)
+    if token:
+        # In the fragment: it reaches neither a server nor a log
+        url = f"{base}/auth/oauth#{urlencode({'access_token': token})}"
+    else:
+        url = f"{base}/auth?{urlencode({'oauth_error': error or oauth_service.ERROR_FAILED})}"
+    response = RedirectResponse(url, status_code=302)
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.delete_cookie(oauth_service.STATE_COOKIE, path="/")
+    return response
+
+
+def _known_provider(provider: str) -> str:
+    if provider not in oauth_client.PROVIDERS:
+        raise HTTPException(status_code=404, detail="Unknown provider")
+    return provider
+
+
+@router.get("/oauth/providers")
+async def oauth_providers() -> dict[str, list[str]]:
+    """Public: which outside sign-in buttons the page may enable."""
+    return {"providers": settings.oauth_providers}
+
+
+@router.get("/oauth/{provider}/start")
+async def oauth_start(provider: str, service: Literal["platform", "surveys"] = "platform") -> Response:
+    """Public: send the browser to the provider's consent page."""
+    _known_provider(provider)
+    try:
+        start = oauth_service.begin(provider, service)
+    except oauth_service.OAuthFlowError as exc:
+        return _oauth_redirect(service, error=exc.code)
+    response = RedirectResponse(start.url, status_code=302)
+    response.headers["Cache-Control"] = "no-store"
+    response.set_cookie(
+        oauth_service.STATE_COOKIE,
+        start.cookie_value,
+        max_age=settings.OAUTH_STATE_TTL_MINUTES * 60,
+        httponly=True,
+        secure=settings.APP_PUBLIC_URL.strip().lower().startswith("https://"),
+        samesite="lax",
+        path="/",
+    )
+    return response
+
+
+@router.get("/oauth/{provider}/callback")
+async def oauth_callback(
+    provider: str,
+    request: Request,
+    session: DbSession,
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+) -> Response:
+    """Public: the provider returns here; the person goes on to the web app with a token or an error."""
+    _known_provider(provider)
+    service = "platform"
+    try:
+        flow_state = oauth_service.read_state(request.cookies.get(oauth_service.STATE_COOKIE), provider, state)
+        service = flow_state.service
+        if error or not code:
+            raise oauth_service.OAuthFlowError(
+                oauth_service.ERROR_DENIED if error == "access_denied" else oauth_service.ERROR_FAILED
+            )
+        token = await oauth_service.complete(
+            session,
+            provider,
+            state=flow_state,
+            state_value=state or "",
+            code=code,
+        )
+    except oauth_service.OAuthFlowError as exc:
+        return _oauth_redirect(service, error=exc.code)
+    return _oauth_redirect(service, token=token)
 
 
 @router.post("/register", response_model=TokenResponse, status_code=201)

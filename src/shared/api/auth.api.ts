@@ -57,6 +57,43 @@ export const signUpWithEmail = async ({
   return { requiresEmailConfirmation: false };
 };
 
+export type OAuthProvider = 'yandex';
+
+/** Where the sign-in page was opened from; read back by the page the provider returns to */
+const OAUTH_NEXT_KEY = 'oauth_next';
+
+/** Public: which outside sign-in providers the server has configured */
+export const getOAuthProviders = async (): Promise<OAuthProvider[]> => {
+  const { data } = await api.get<{ providers: OAuthProvider[] }>('/auth/oauth/providers');
+  return data.providers;
+};
+
+/** Leaves the app for the provider's consent page; the server sends the person back to /auth/oauth */
+export const startOAuthSignIn = (provider: OAuthProvider, next: string): void => {
+  try {
+    sessionStorage.setItem(OAUTH_NEXT_KEY, next);
+  } catch {
+    // Private mode: the person lands on the home page instead
+  }
+  const base = String(api.defaults.baseURL ?? '').replace(/\/$/, '');
+  const service = IS_SURVEYS_APP ? 'surveys' : 'platform';
+  window.location.assign(`${base}/auth/oauth/${provider}/start?service=${service}`);
+};
+
+/** Keeps the token the server handed over after a sign-in through a provider; returns where to go next ('' = home) */
+export const finishOAuthSignIn = (accessToken: string): string => {
+  localStorage.setItem('access_token', accessToken);
+  let next: string | null = null;
+  try {
+    next = sessionStorage.getItem(OAUTH_NEXT_KEY);
+    sessionStorage.removeItem(OAUTH_NEXT_KEY);
+  } catch {
+    // ignored
+  }
+  // Only a path inside the app, never an address on another site
+  return next && /^\/(?!\/)/.test(next) ? next : '';
+};
+
 export interface AccountActivationInfo {
   email: string;
   first_name: string;

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Spin } from 'antd';
+import { Alert } from 'antd';
 import axios from 'axios';
 import { useNavigate, useParams } from 'react-router-dom';
 
@@ -9,6 +9,7 @@ import { FormEditor } from '../shared/ui/form-builder/FormEditor';
 import type { FormPageInstance } from '../shared/types/form-builder.types';
 import type { MethodologyState } from '../shared/ui/form-builder/AiFormBuilderPanel';
 import { useBreadcrumbEntity } from '../shared/context/breadcrumb.context';
+import { FormEditorSkeleton } from '../shared/ui/skeletons/PageSkeletons';
 
 /** The server refuses edits that would change the meaning of answers already collected */
 const structureLockMessage = (err: unknown): string | null => {
@@ -41,7 +42,14 @@ export const EditSurveyPage = () => {
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        setError(err instanceof Error ? err.message : 'Не удалось загрузить опрос');
+        const status = axios.isAxiosError(err) ? err.response?.status : undefined;
+        setError(
+          status === 403 || status === 404
+            ? 'Опрос недоступен: он удалён или принадлежит другому аккаунту.'
+            : err instanceof Error
+              ? err.message
+              : 'Не удалось загрузить опрос',
+        );
         setFetchedId(id);
       });
     return () => {
@@ -76,11 +84,7 @@ export const EditSurveyPage = () => {
   );
 
   if (loading) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
-        <Spin size="large" />
-      </div>
-    );
+    return <FormEditorSkeleton />;
   }
 
   if (error || !survey || !id) {

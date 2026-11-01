@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { ConfigProvider, theme as antTheme } from 'antd';
+import { ConfigProvider, theme as antTheme, type ThemeConfig } from 'antd';
 
 export type ThemeMode = 'light' | 'dark';
 
@@ -81,16 +81,25 @@ export const ThemeProvider = ({ children }: ThemeProviderProps) => {
         colorSplit: '#e2e5e9',
       };
 
+  const themeConfig: ThemeConfig = {
+    algorithm: themeMode === 'dark' ? antTheme.darkAlgorithm : antTheme.defaultAlgorithm,
+    token: themeToken,
+    cssVar: { prefix: 'ant' },
+  };
+
+  // Static notification/message/Modal calls render outside this tree;
+  // holderRender wraps them so toasts follow the current theme too.
+  useEffect(() => {
+    ConfigProvider.config({
+      holderRender: (node) => <ConfigProvider theme={themeConfig}>{node}</ConfigProvider>,
+    });
+    // themeConfig is derived from themeMode only
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [themeMode]);
+
   return (
     <ThemeContext.Provider value={value}>
-      <ConfigProvider
-        theme={{
-          algorithm:
-            themeMode === 'dark' ? antTheme.darkAlgorithm : antTheme.defaultAlgorithm,
-          token: themeToken,
-          cssVar: { prefix: 'ant' },
-        }}
-      >
+      <ConfigProvider theme={themeConfig}>
         {children}
       </ConfigProvider>
     </ThemeContext.Provider>

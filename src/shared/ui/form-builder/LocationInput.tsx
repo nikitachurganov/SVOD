@@ -234,7 +234,7 @@ export const LocationInput = ({ field, value, onChange, error }: LocationInputPr
   return (
     <div style={{ marginBottom: 24 }}>
       <FieldLabel
-        label={field.label || 'Города и страны'}
+        label={field.label || 'Страна и город'}
         required={field.required}
         htmlFor={`field-${field.id}`}
       />

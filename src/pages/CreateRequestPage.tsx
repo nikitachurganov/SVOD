@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Button, Form, Input, Select, Spin } from 'antd';
+import { Alert, Button, Form, Input, Select } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -24,6 +24,7 @@ import {
 import { FormFillWizardLayout } from '../shared/ui/form-fill/FormFillWizardLayout';
 import { useFormStore } from '../shared/hooks/useFormStore';
 import { requiredRule } from '../shared/utils/formRules';
+import { FormBodySkeleton } from '../shared/ui/skeletons/PageSkeletons';
 
 interface MetaFormValues {
   title: string;
@@ -249,17 +250,7 @@ export const CreateRequestPage = () => {
       </div>
 
       {loadingForms ? (
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            flex: 1,
-            minHeight: '60vh',
-          }}
-        >
-          <Spin size="large" tip="Загрузка формы…" />
-        </div>
+        <FormBodySkeleton />
       ) : error ? (
         <div style={{ padding: 24 }}>
           <Alert type="error" title="Ошибка загрузки" description={error} showIcon closable={false} />

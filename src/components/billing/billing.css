@@ -4,6 +4,36 @@
   margin-bottom: 8px;
 }
 
+/* A block of the usage list: the AI tokens with their note, then the plain counters */
+.billing-usage-group {
+  padding: 14px 0;
+  border-top: 1px solid var(--app-border-secondary);
+}
+
+.billing-usage-group .billing-usage {
+  margin-bottom: 0;
+}
+
+.billing-usage-group .billing-usage__head {
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.billing-usage-group .ant-progress {
+  margin: 4px 0 0;
+  line-height: 1;
+}
+
+.billing-usage-group__note {
+  margin-top: 8px;
+}
+
+.billing-usage-group--rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 .billing-usage__head {
   display: flex;
   justify-content: space-between;
@@ -81,13 +111,6 @@
   line-height: 32px;
   font-weight: 600;
   color: var(--app-text);
-}
-
-.plans-page__lead {
-  margin: 4px 0 0;
-  font-size: 14px;
-  line-height: 22px;
-  color: var(--app-text-secondary);
 }
 
 .plans-page__cards {

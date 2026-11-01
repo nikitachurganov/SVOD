@@ -110,7 +110,7 @@ export const FIELD_TYPE_LABELS: Readonly<Record<FormFieldType, string>> = {
   file_document: 'Загрузка документов',
   address: 'Адрес',
   address_country_city: 'Страна и город',
-  location: 'Города и страны',
+  location: 'Страна и город',
   rating: 'Оценка по шкале',
   textBlock: 'Текст без вопроса',
 } as const;

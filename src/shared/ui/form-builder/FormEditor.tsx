@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Alert, Button, Drawer, Modal, notification } from 'antd';
+import { Alert, Button, Drawer, Modal, Tabs, notification } from 'antd';
 import {
   ArrowLeftOutlined,
   DeleteOutlined,
@@ -15,7 +15,8 @@ import {
   useSensors,
   useDroppable,
 } from '@dnd-kit/core';
-import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core';
+import type { DragEndEvent, DragOverEvent, DragStartEvent } from '@dnd-kit/core';
+import { PanelDropTargetContext } from './panelDropTarget';
 import { arrayMove } from '@dnd-kit/sortable';
 
 import { ToolPanel } from '../ToolPanel';
@@ -43,7 +44,7 @@ import {
   type FormPageInstance,
 } from '../../types/form-builder.types';
 import { getDefaultFieldConfig } from '../../utils/fieldConfig';
-import { moveFieldBeforeTarget, moveFieldByOffset } from '../../utils/fieldMove.utils';
+import { moveFieldByOffset } from '../../utils/fieldMove.utils';
 
 // ─── Public props ─────────────────────────────────────────────────────────────
 
@@ -142,7 +143,7 @@ const PanelDragChip = ({ label }: { label: string }) => {
 // ─── Active drag state ────────────────────────────────────────────────────────
 
 type ActiveDragInfo =
-  | { source: 'panel'; label: string }
+  | { source: 'panel'; label: string; field: FormFieldInstance | null }
   | { source: 'canvas'; fieldId: string }
   | null;
 
@@ -473,6 +474,8 @@ export const FormEditor = ({
   const [toolboxWidth, setToolboxWidth] = useState<number>(360);
   const resizeStateRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const [activeDrag, setActiveDrag] = useState<ActiveDragInfo>(null);
+  // Droppable under the pointer while dragging a field from the panel (drop-position hint)
+  const [panelDropTargetId, setPanelDropTargetId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [titleError, setTitleError] = useState<string | null>(null);
@@ -764,28 +767,35 @@ export const FormEditor = ({
     [setActivePageFields],
   );
 
-  const handleFieldMoveBefore = useCallback(
-    (fieldId: string, beforeFieldId: string | null) => {
-      setActivePageFields((prev) => moveFieldBeforeTarget(prev, fieldId, beforeFieldId));
-    },
-    [setActivePageFields],
-  );
-
   // ── Drag start ───────────────────────────────────────────────────────────────
   const handleDragStart = useCallback((event: DragStartEvent) => {
     const data = event.active.data.current as DragData | undefined;
     if (!data) return;
 
+    const panelFieldType = data.source === 'panel' ? PANEL_KEY_TO_FIELD_TYPE[data.fieldKey] : null;
     setActiveDrag(
       data.source === 'panel'
-        ? { source: 'panel', label: data.label }
+        ? {
+            source: 'panel',
+            label: data.label,
+            // Dragged as the same card a field moved on the canvas shows
+            field: panelFieldType ? createField(panelFieldType) : null,
+          }
         : { source: 'canvas', fieldId: String(event.active.id) },
     );
+  }, []);
+
+  const handleDragOver = useCallback((event: DragOverEvent) => {
+    const data = event.active.data.current as DragData | undefined;
+    if (data?.source !== 'panel') return;
+    // Keep the last target when the pointer is between cards, so the gap does not flicker
+    if (event.over) setPanelDropTargetId(String(event.over.id));
   }, []);
 
   // ── Drag end ─────────────────────────────────────────────────────────────────
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     setActiveDrag(null);
+    setPanelDropTargetId(null);
 
     const { active, over } = event;
     if (!over) return;
@@ -903,7 +913,11 @@ export const FormEditor = ({
     if (!activeDrag) return null;
 
     if (activeDrag.source === 'panel') {
-      return <PanelDragChip label={activeDrag.label} />;
+      return activeDrag.field ? (
+        <CanvasFieldOverlay field={activeDrag.field} />
+      ) : (
+        <PanelDragChip label={activeDrag.label} />
+      );
     }
 
     const topLevel = activeFields.find((f) => f.id === activeDrag.fieldId);
@@ -1007,7 +1021,17 @@ export const FormEditor = ({
   };
 
   return (
-    <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+    <DndContext
+      sensors={sensors}
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
+      onDragEnd={handleDragEnd}
+      onDragCancel={() => {
+        setActiveDrag(null);
+        setPanelDropTargetId(null);
+      }}
+    >
+      <PanelDropTargetContext.Provider value={activeDrag?.source === 'panel' ? panelDropTargetId : null}>
       <div
         className="app-form-editor"
         style={{
@@ -1077,9 +1101,8 @@ export const FormEditor = ({
               <IconDefaultButton
                 size="middle"
                 icon={<EyeOutlined />}
-                aria-label={isPreviewMode ? 'К редактированию' : 'Предпросмотр'}
-                aria-pressed={isPreviewMode}
-                onClick={() => setIsPreviewMode((prev) => !prev)}
+                aria-label="Предпросмотр"
+                onClick={() => setIsPreviewMode(true)}
                 disabled={isSaving}
               />
               {pendingDeletion && !isMobile && (
@@ -1123,9 +1146,7 @@ export const FormEditor = ({
             overflow: 'hidden',
           }}
         >
-          {isPreviewMode ? (
-            <InlinePreview formTitle={formTitle} pages={pages} compact={isMobile} />
-          ) : (
+          {
             <>
               {/* Left — Tool Panel (also a drop zone); on a phone it is a bottom sheet instead */}
               {!isMobile && (
@@ -1144,21 +1165,26 @@ export const FormEditor = ({
 
               {/* Right — Form Builder canvas */}
               <div
-                ref={canvasRef}
                 style={{
                   flex: 1,
                   minHeight: 0,
                   minWidth: 0,
                   height: '100%',
-                  padding: isMobile ? 12 : 20,
-                  overflowY: 'auto',
-                  overflowX: 'hidden',
                   display: 'flex',
                   flexDirection: 'column',
                   background: 'var(--app-bg)',
                   color: 'var(--app-text)',
                 }}
               >
+                {/* Fixed header: title + page tabs on the same surface as the other panels */}
+                <div
+                  style={{
+                    background: 'var(--app-surface)',
+                    padding: isMobile ? '12px 0 0' : '20px 0 0',
+                    flexShrink: 0,
+                  }}
+                >
+                <div style={{ padding: isMobile ? '0 12px' : '0 20px' }}>
                 <FormTitleInput
                   placeholder={isSurvey ? 'Название опроса' : 'Название формы'}
                   value={formTitle}
@@ -1170,98 +1196,45 @@ export const FormEditor = ({
                   }}
                   error={titleError}
                 />
+                </div>
                 <div style={{ marginBottom: 16 }} />
 
-                {/* ── Custom page tabs ── */}
-                <div
+                {/* ── Page tabs (antd editable tabs: keyboard navigation, overflow scroll, close) ── */}
+                <Tabs
+                  type="editable-card"
                   className="form-editor__pages"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    borderBottom: '2px solid var(--app-border)',
-                    gap: 0,
-                    flexWrap: isMobile ? 'nowrap' : 'wrap',
-                    // Many pages scroll sideways on a phone instead of stacking in rows
-                    overflowX: isMobile ? 'auto' : undefined,
-                    overflowY: isMobile ? 'hidden' : undefined,
-                    flexShrink: 0,
+                  size={isMobile ? 'middle' : 'small'}
+                  activeKey={activePageId ?? undefined}
+                  onChange={setActivePageId}
+                  onEdit={(targetKey, action) => {
+                    if (action === 'add') {
+                      handleAddPage();
+                    } else if (typeof targetKey === 'string') {
+                      setDeletePageId(targetKey);
+                    }
                   }}
-                >
-                  {pages.map((page, index) => {
-                    const isActive = activePageId === page.id;
-                    return (
-                      <div
-                        key={page.id}
-                        onClick={() => setActivePageId(page.id)}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 8,
-                          padding: isMobile ? '10px 12px' : '8px 16px',
-                          flexShrink: 0,
-                          whiteSpace: 'nowrap',
-                          cursor: 'pointer',
-                          borderBottom: isActive
-                            ? '2px solid var(--app-primary)'
-                            : '2px solid transparent',
-                          marginBottom: -2,
-                          color: isActive
-                            ? 'var(--app-text)'
-                            : 'var(--app-text-secondary)',
-                          fontWeight: isActive ? 600 : 400,
-                          fontSize: '0.875rem',
-                          userSelect: 'none',
-                          transition: 'border-color 150ms, color 150ms',
-                        }}
-                      >
-                        <span>Страница {index + 1}</span>
-                        {pages.length > 1 && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setDeletePageId(page.id);
-                            }}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              width: isMobile ? 28 : 20,
-                              height: isMobile ? 28 : 20,
-                              padding: 0,
-                              border: 'none',
-                              borderRadius: '50%',
-                              background: 'transparent',
-                              cursor: 'pointer',
-                              color: 'inherit',
-                              fontSize: 14,
-                              lineHeight: 1,
-                            }}
-                            aria-label={`Удалить страницу ${index + 1}`}
-                          >
-                            ×
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
-                  <span
-                    onClick={handleAddPage}
-                    style={{
-                      color: 'var(--app-link)',
-                      cursor: 'pointer',
-                      marginLeft: 8,
-                      userSelect: 'none',
-                      fontSize: 12,
-                      padding: isMobile ? '10px 8px' : '8px 4px',
-                      flexShrink: 0,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    Добавить страницу
-                  </span>
+                  tabBarStyle={{ margin: 0, padding: isMobile ? '0 12px' : '0 20px' }}
+                  items={pages.map((page, index) => ({
+                    key: page.id,
+                    label: `Страница ${index + 1}`,
+                    closable: pages.length > 1,
+                  }))}
+                />
                 </div>
 
-                <div style={{ marginBottom: 16 }} />
+                {/* Only the fields scroll */}
+                <div
+                  ref={canvasRef}
+                  style={{
+                    flex: 1,
+                    minHeight: 0,
+                    padding: isMobile ? 12 : 20,
+                    overflowY: 'auto',
+                    overflowX: 'hidden',
+                    display: 'flex',
+                    flexDirection: 'column',
+                  }}
+                >
                 <FormCanvas
                   fields={activeFields}
                   onFieldChange={handleFieldChange}
@@ -1270,7 +1243,6 @@ export const FormEditor = ({
                   onGroupChildDelete={handleGroupChildDelete}
                   onFieldMoveUp={handleFieldMoveUp}
                   onFieldMoveDown={handleFieldMoveDown}
-                  onFieldMoveBefore={handleFieldMoveBefore}
                   onAddToGroup={
                     isMobile
                       ? (groupId) => {
@@ -1280,6 +1252,7 @@ export const FormEditor = ({
                       : undefined
                   }
                 />
+                </div>
               </div>
 
               {/* Phone: the toolbox lives in a bottom sheet opened from this bar */}
@@ -1328,9 +1301,23 @@ export const FormEditor = ({
                 />
               )}
             </>
-          )}
+          }
         </div>
       </div>
+
+      <Modal
+        open={isPreviewMode}
+        onCancel={() => setIsPreviewMode(false)}
+        title="Предпросмотр"
+        footer={null}
+        width={800}
+        destroyOnHidden
+        styles={{ body: { padding: 0 } }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', height: '70vh' }}>
+          <InlinePreview formTitle={formTitle} pages={pages} compact={isMobile} />
+        </div>
+      </Modal>
 
       <DragOverlay dropAnimation={null}>{renderOverlay()}</DragOverlay>
 
@@ -1357,7 +1344,7 @@ export const FormEditor = ({
           </Drawer>
 
           <Drawer
-            open={isAiPanelOpen && !isPreviewMode}
+            open={isAiPanelOpen}
             placement="right"
             width="100%"
             closable={false}
@@ -1403,6 +1390,7 @@ export const FormEditor = ({
           Вы уверены, что хотите удалить страницу? Это действие нельзя отменить.
         </p>
       </Modal>
+      </PanelDropTargetContext.Provider>
     </DndContext>
   );
 };

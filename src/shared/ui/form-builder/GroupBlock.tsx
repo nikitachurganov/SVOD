@@ -10,7 +10,6 @@ import {
   type FormFieldInstance,
 } from '../../types/form-builder.types';
 import { FieldMoveControls } from './FieldMoveControls';
-import type { FieldSiblingPosition } from '../../utils/fieldMove.utils';
 
 interface GroupBlockProps {
   field: FormFieldInstance;
@@ -21,11 +20,9 @@ interface GroupBlockProps {
   onChildDelete: (childId: string) => void;
   onMoveUp?: (fieldId: string) => void;
   onMoveDown?: (fieldId: string) => void;
-  onMoveBefore?: (fieldId: string, beforeFieldId: string | null) => void;
   dragHandleProps: React.HTMLAttributes<HTMLDivElement>;
   canMoveUp?: boolean;
   canMoveDown?: boolean;
-  siblingPositions?: FieldSiblingPosition[];
   /** Touch layout: there is no dragging into a group, so a button adds a child instead */
   onAddChild?: () => void;
 }
@@ -39,11 +36,9 @@ export const GroupBlock = ({
   onChildDelete,
   onMoveUp,
   onMoveDown,
-  onMoveBefore,
   dragHandleProps,
   canMoveUp = false,
   canMoveDown = false,
-  siblingPositions = [],
   onAddChild,
 }: GroupBlockProps) => {
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -151,7 +146,6 @@ export const GroupBlock = ({
                     onDelete={() => onChildDelete(child.id)}
                     onMoveUp={onMoveUp}
                     onMoveDown={onMoveDown}
-                    onMoveBefore={onMoveBefore}
                   />
                 ))}
               </SortableContext>
@@ -175,14 +169,12 @@ export const GroupBlock = ({
             marginTop: 10,
           }}
         >
-          {onMoveUp && onMoveDown && onMoveBefore ? (
+          {onMoveUp && onMoveDown ? (
             <FieldMoveControls
               canMoveUp={canMoveUp}
               canMoveDown={canMoveDown}
-              siblingPositions={siblingPositions}
               onMoveUp={() => onMoveUp(field.id)}
               onMoveDown={() => onMoveDown(field.id)}
-              onMoveBefore={(beforeFieldId) => onMoveBefore(field.id, beforeFieldId)}
             />
           ) : (
             <span />

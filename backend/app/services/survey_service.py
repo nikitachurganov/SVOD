@@ -276,6 +276,7 @@ async def list_surveys(
     *,
     status_filter: str | None = None,
     mine: bool = False,
+    include_archived: bool = False,
     project_id: str | None = None,
 ) -> list[SurveyListItem]:
     await _ensure_member(session, organization_id, user)
@@ -289,6 +290,7 @@ async def list_surveys(
         organization_id=organization_id,
         status=status_filter,
         created_by_user_id=user.id if mine else None,
+        include_archived=include_archived,
         project_id=project.id if project else None,
     )
     ids = [s.id for s in surveys]

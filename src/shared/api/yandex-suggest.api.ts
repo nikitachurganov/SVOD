@@ -63,6 +63,9 @@ const mapBackendItem = (item: BackendYandexSuggestion): YandexAddressSuggestion 
   };
 };
 
+/** Suggestions are switched off on the server (no API key) — the field falls back to manual input. */
+export class AddressSuggestUnavailableError extends Error {}
+
 const extractErrorMessage = (error: unknown): string => {
   if (axios.isAxiosError(error)) {
     const detail = error.response?.data;
@@ -102,6 +105,9 @@ export const suggestYandexAddress = async (
       .map((item) => mapBackendItem(item))
       .filter((item): item is YandexAddressSuggestion => item !== null);
   } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.status === 503) {
+      throw new AddressSuggestUnavailableError(extractErrorMessage(error));
+    }
     throw new Error(extractErrorMessage(error));
   }
 };

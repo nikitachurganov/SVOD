@@ -89,32 +89,20 @@ const ChoiceOptionCard = ({
           {control}
         </span>
 
-        {showInlineOtherInput ? (
-          <Input
-            ref={otherInputRef}
-            variant="borderless"
-            className={[
-              'app-choice-field__other-input',
-              otherText ? '' : 'app-choice-field__other-input--empty',
-            ]
-              .filter(Boolean)
-              .join(' ')}
-            placeholder="Укажите свой вариант"
-            value={otherText}
-            onChange={(event) => {
-              event.stopPropagation();
-              onOtherTextChange?.(event.target.value);
-            }}
-            onClick={(event) => event.stopPropagation()}
-            onKeyDown={(event) => event.stopPropagation()}
-          />
-        ) : (
-          <span className="app-choice-field__label">{label}</span>
-        )}
+        <span className="app-choice-field__label">{label}</span>
       </div>
 
-      {showInlineOtherInput && otherError ? (
-        <div className="app-choice-field__other-error">{otherError}</div>
+      {showInlineOtherInput ? (
+        <div style={{ padding: '0 16px 12px' }}>
+          <Input
+            ref={otherInputRef}
+            status={otherError ? 'error' : undefined}
+            placeholder="Укажите свой вариант"
+            value={otherText}
+            onChange={(event) => onOtherTextChange?.(event.target.value)}
+          />
+          {otherError ? <div className="app-choice-field__other-error">{otherError}</div> : null}
+        </div>
       ) : null}
     </div>
   );

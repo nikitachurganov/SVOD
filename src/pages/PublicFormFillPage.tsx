@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Button, Form, Input, Spin } from 'antd';
+import { Alert, Button, Form, Input } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -30,6 +30,7 @@ import { PublicOrgHeader } from '../components/public/PublicOrgHeader';
 import { PhoneInput } from '../shared/ui/PhoneInput';
 import { requiredRule } from '../shared/utils/formRules';
 import { validateEmailValue, validatePhoneValue } from '../shared/utils/fieldValueValidation';
+import { PublicFormSkeleton } from '../shared/ui/skeletons/PageSkeletons';
 
 const EMPTY_CONTACTS: PublicContactFormValues = {
   fullName: '',
@@ -237,11 +238,7 @@ export const PublicFormFillPage = () => {
   }
 
   if (pageLoading) {
-    return (
-      <div className="public-form-flow public-form-flow--centered">
-        <Spin size="large" tip="Загрузка формы…" />
-      </div>
-    );
+    return <PublicFormSkeleton />;
   }
 
   if (!pageData || !selectedForm) {

@@ -15,13 +15,25 @@ export default defineConfig(({ mode }) => {
     build: {
       rollupOptions: {
         output: {
+          // Libraries every page needs live in long-cached vendor chunks. Each group has to be named
+          // explicitly: a manual chunk takes in the dependencies nobody else claimed, so a lone formily
+          // chunk used to swallow React and antd and was preloaded on every page.
           manualChunks(id) {
-            if (id.includes('node_modules/@formily')) {
+            // Vite's own helpers for dynamic imports and CommonJS: needed by the entry from the start
+            if (id.includes('vite/preload-helper') || id.includes('commonjsHelpers')) return 'react-vendor';
+            if (!id.includes('node_modules')) return undefined;
+            if (/node_modules\/(react|react-dom|react-router|react-router-dom|scheduler|cookie|set-cookie-parser)\//.test(id)) {
+              return 'react-vendor';
+            }
+            if (id.includes('node_modules/@formily/')) {
               return 'formily-runtime';
             }
-            if (id.includes('node_modules/@formily/antd-v5')) {
-              return 'formily-runtime';
+            if (
+              /node_modules\/(antd|@ant-design\/(icons|icons-svg|cssinjs|cssinjs-utils|colors|fast-color|react-slick)|@rc-component|rc-[^/]+|@babel\/runtime|@emotion|dayjs|classnames|throttle-debounce|compute-scroll-into-view|scroll-into-view-if-needed|stylis|json2mq|string-convert|copy-to-clipboard|toggle-selection|resize-observer-polyfill)\//.test(id)
+            ) {
+              return 'antd-vendor';
             }
+            return undefined;
           },
         },
       },

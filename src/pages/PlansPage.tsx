@@ -8,7 +8,7 @@ import { PlanActions } from '../components/billing/PlanActions';
 import {
   FEATURE_LABELS,
   collectsWithoutLimits,
-  formatNumber,
+  formatCredits,
   formatPrice,
 } from '../components/billing/billingFormat';
 import { getPlans } from '../shared/api/billing.api';
@@ -37,12 +37,12 @@ const buildRows = (start: PlanInfo, pack: PlanInfo, researcher: PlanInfo, packDa
   return [
     {
       key: 'ai_tokens',
-      label: 'Токены ИИ',
-      ...cells((plan) => formatNumber(plan.limits.ai_tokens_per_period)),
+      label: 'Кредиты ИИ',
+      ...cells((plan) => formatCredits(plan.limits.ai_tokens_per_period)),
     },
     {
       key: 'ai_window',
-      label: 'Как выдаются токены',
+      label: 'Как выдаются кредиты',
       start: 'Один раз при регистрации',
       pack: `На ${packDays} дней, потом сгорают`,
       researcher: 'Обновляются каждый месяц',
@@ -80,7 +80,7 @@ const TokensRow = ({ amount, when, hint }: { amount: number; when: string; hint:
     <ThunderboltOutlined className="plan-card__tokens-icon" aria-hidden />
     <div>
       <div className="plan-card__tokens-amount">
-        {formatNumber(amount)} <span>токенов ИИ {when}</span>
+        {formatCredits(amount)} <span>кредитов ИИ {when}</span>
       </div>
       <p className="plan-card__tokens-hint">{hint}</p>
     </div>
@@ -232,12 +232,6 @@ export const PlansPage = () => {
     <div className="plans-page">
       <div>
         <h1 className="plans-page__title">Тарифы</h1>
-        {user ? (
-          <p className="plans-page__lead">
-            Текущий тариф и остаток токенов доступны в разделе{' '}
-            <Link to="/profile?tab=subscription">«Подписка»</Link>.
-          </p>
-        ) : null}
       </div>
 
       <div className="plans-page__cards">
@@ -294,7 +288,7 @@ export const PlansPage = () => {
           <TokensRow
             amount={pack.limits.ai_tokens_per_period}
             when={`на ${plans.pack_days} дней`}
-            hint="Хватит примерно на 15–20 полных исследований с глубоким чатом"
+            hint="Хватит примерно на 25 полных исследований с глубоким чатом"
           />
           <div className="plan-card__cta">
             {user ? (
@@ -335,7 +329,7 @@ export const PlansPage = () => {
           <TokensRow
             amount={researcher.limits.ai_tokens_per_period}
             when="каждый месяц"
-            hint="Больше чем на 50 глубоких исследований в месяц"
+            hint="Около 80 полных исследований в месяц"
           />
           <div className="plan-card__cta">
             {user ? (
@@ -354,7 +348,7 @@ export const PlansPage = () => {
               {extraLines(pack, researcher).map((line) => (
                 <li key={line}>{line}</li>
               ))}
-              <li>Токены обновляются каждый месяц</li>
+              <li>Кредиты обновляются каждый месяц</li>
             </ul>
           </div>
         </article>

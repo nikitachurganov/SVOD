@@ -193,7 +193,7 @@ export const FieldPreview = ({ field, onOptionsChange }: FieldPreviewProps) => {
         <Select
           id={`${prefix}-location`}
           disabled
-          placeholder="Города и страны"
+          placeholder="Страна и город"
           style={{ width: '100%' }}
         />
       );

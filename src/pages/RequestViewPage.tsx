@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   Button,
   Alert,
-  Spin,
+  
   Modal,
   Tabs,
   Tag,
@@ -36,6 +36,7 @@ import { FieldLabel } from '../shared/ui/form-builder/FieldLabel';
 import { useBreadcrumbEntity } from '../shared/context/breadcrumb.context';
 import type { Field } from '../types/form';
 import { resolveFileDownloadUrl } from '../shared/api/files.api';
+import { DetailBodySkeleton, DetailPageSkeleton } from '../shared/ui/skeletons/PageSkeletons';
 
 interface StoredFileMeta {
   id?: string;
@@ -174,17 +175,7 @@ export const RequestViewPage = () => {
 
   if (!id) {
     return (
-      <div
-        style={{
-          display: 'flex',
-          flex: 1,
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: 'var(--app-bg)',
-        }}
-      >
-        <Spin size="large" />
-      </div>
+      <DetailPageSkeleton />
     );
   }
 
@@ -464,16 +455,7 @@ export const RequestViewPage = () => {
       {/* Content */}
       <div className="request-workspace__content">
         {loading ? (
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              minHeight: '60vh',
-            }}
-          >
-            <Spin size="large" />
-          </div>
+          <DetailBodySkeleton />
         ) : error ? (
           <div style={{ padding: 24 }}>
             <Alert type="error" message="Ошибка загрузки" description={error} showIcon />

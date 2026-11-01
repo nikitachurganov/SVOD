@@ -1,15 +1,19 @@
-import { useState, type FormEvent } from 'react';
-import { Alert, Button, Checkbox, Divider, Form, Input, Segmented } from 'antd';
+import { useEffect, useState, type FormEvent, type MouseEvent, type ReactNode } from 'react';
+import { Alert, Button, Checkbox, Divider, Form, Input, Segmented, Typography } from 'antd';
 import { MoonOutlined, SunOutlined } from '@ant-design/icons';
 import axios from 'axios';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useHref, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../shared/hooks/auth.hooks';
 import { useThemeMode } from '../shared/context/theme.context';
-import { requestPasswordReset } from '../shared/api/auth.api';
+import {
+  getOAuthProviders,
+  requestPasswordReset,
+  startOAuthSignIn,
+  type OAuthProvider,
+} from '../shared/api/auth.api';
 import { HOME_PATH, IS_SURVEYS_APP } from '../shared/config/appMode';
 import logoUrl from '../assets/logo.svg';
 import yandexLogoUrl from '../assets/logo-yandex.svg';
-import vkLogoUrl from '../assets/logo-vk.svg';
 import heroBgUrl from '../assets/auth-hero-bg.png';
 import './AuthPage.css';
 
@@ -39,6 +43,21 @@ const HEADINGS: Record<AuthMode, string> = {
   forgot: 'Восстановление пароля',
 };
 
+/** What the server puts into ?oauth_error= when the return from Yandex ID did not end in a sign-in */
+const OAUTH_ERRORS: Record<string, string> = {
+  denied: 'Вход отменён. Можно повторить попытку или войти по почте и паролю',
+  expired: 'Время входа истекло. Нажмите кнопку входа ещё раз',
+  no_email: 'Сервис не передал адрес почты. Разрешите доступ к почте или зарегистрируйтесь по адресу электронной почты',
+  inactive: 'Доступ для этой учётной записи закрыт',
+  failed: 'Не удалось войти через выбранный сервис. Повторите попытку позже',
+};
+
+const readOAuthError = (search: string): string | null => {
+  const code = new URLSearchParams(search).get('oauth_error');
+  if (!code) return null;
+  return OAUTH_ERRORS[code] ?? OAUTH_ERRORS.failed;
+};
+
 const mapAuthError = (error: unknown, mode: AuthMode): string => {
   if (axios.isAxiosError(error)) {
     if (!error.response) return 'Не удалось связаться с сервером. Проверьте подключение и повторите попытку';
@@ -60,14 +79,34 @@ const mapAuthError = (error: unknown, mode: AuthMode): string => {
   return 'Не удалось выполнить действие. Повторите попытку';
 };
 
+/** Ant Design link that still navigates through the router; keeps a real href for "open in new tab" */
+const RouteLink = ({ to, newTab, children }: { to: string; newTab?: boolean; children: ReactNode }) => {
+  const navigate = useNavigate();
+  const href = useHref(to);
+
+  const onClick = (e: MouseEvent<HTMLAnchorElement>) => {
+    if (newTab || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    navigate(to);
+  };
+
+  return (
+    <Typography.Link href={href} onClick={onClick} target={newTab ? '_blank' : undefined}>
+      {children}
+    </Typography.Link>
+  );
+};
+
 export const AuthPage = () => {
   const location = useLocation();
   const routeState = location.state as AuthRouteState | null;
 
   const [mode, setMode] = useState<AuthMode>(routeState?.mode === 'forgot' ? 'forgot' : 'signIn');
   const [loading, setLoading] = useState(false);
-  const [errorText, setErrorText] = useState<string | null>(null);
+  const [errorText, setErrorText] = useState<string | null>(() => readOAuthError(location.search));
   const [notice, setNotice] = useState<string | null>(routeState?.notice ?? null);
+  // The outside sign-in services the server has set up; the others stay disabled
+  const [oauthProviders, setOauthProviders] = useState<OAuthProvider[]>([]);
   const [forgotEmail, setForgotEmail] = useState('');
   const [resetSent, setResetSent] = useState(false);
 
@@ -83,7 +122,34 @@ export const AuthPage = () => {
   const { signIn, signUp } = useAuth();
   const { themeMode, toggleTheme } = useThemeMode();
   const navigate = useNavigate();
-  const redirectTo = typeof routeState?.from === 'string' ? routeState.from : HOME_PATH;
+  const [justRegistered, setJustRegistered] = useState(false);
+  const requestedPath = typeof routeState?.from === 'string' ? routeState.from : HOME_PATH;
+  // A new account owns nothing yet: the page the previous session came from (someone else's survey)
+  // would answer 403, so only the links that are meant for newcomers survive the sign-up
+  const redirectTo =
+    justRegistered && !/^\/(join|plans)(\/|\?|$)/.test(requestedPath) ? HOME_PATH : requestedPath;
+
+  useEffect(() => {
+    let cancelled = false;
+    getOAuthProviders()
+      .then((providers) => {
+        if (!cancelled) setOauthProviders(providers);
+      })
+      .catch(() => {
+        // The buttons simply stay disabled
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // The reason for a failed return is shown once; the address is cleaned so a reload does not repeat it
+  useEffect(() => {
+    if (new URLSearchParams(location.search).has('oauth_error')) {
+      navigate(location.pathname, { replace: true, state: location.state });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only the first arrival matters
+  }, []);
 
   const switchMode = (nextMode: AuthMode) => {
     setMode(nextMode);
@@ -157,6 +223,7 @@ export const AuthPage = () => {
         email: signUpFields.email.trim().toLowerCase(),
         password: signUpFields.password,
       });
+      setJustRegistered(true);
       switchMode('signIn');
     } catch (error) {
       setErrorText(mapAuthError(error, 'signUp'));
@@ -173,20 +240,58 @@ export const AuthPage = () => {
     });
   };
 
+  const startOAuth = (provider: OAuthProvider) => {
+    // A first sign-in through a provider creates an account, so the same consents are needed as for a form sign-up
+    if (mode === 'signUp') {
+      const errors: Record<string, string> = {};
+      if (!acceptedTerms) errors['su-terms'] = 'Нужно принять условия, чтобы создать аккаунт';
+      if (!acceptedData) errors['su-data'] = 'Нужно согласие на обработку персональных данных';
+      if (Object.keys(errors).length) { setFieldErrors(errors); return; }
+    }
+    setLoading(true);
+    startOAuthSignIn(provider, redirectTo);
+  };
+
+  const switchPrompt = mode === 'signIn' ? (
+    <>
+      У вас еще нет аккаунта?{' '}
+      <Button type="link" className="auth-page__switch-link" onClick={() => switchMode('signUp')}>
+        Создать аккаунт
+      </Button>
+    </>
+  ) : (
+    <>
+      {mode === 'forgot' ? 'Вспомнили пароль?' : 'Уже есть аккаунт?'}{' '}
+      <Button type="link" className="auth-page__switch-link" onClick={() => switchMode('signIn')}>
+        Войти
+      </Button>
+    </>
+  );
+
   const authSocialBlock = (
     <>
       <Divider plain className="auth-page__divider">Или</Divider>
 
       <div className="auth-page__social-row">
-        <Button disabled block>
+        <Button
+          block
+          className="auth-page__social-btn"
+          disabled={loading || !oauthProviders.includes('yandex')}
+          onClick={() => startOAuth('yandex')}
+        >
           <img src={yandexLogoUrl} alt="" className="auth-page__social-icon" />
           Войти с Яндекс ID
         </Button>
-        <Button disabled block>
-          <img src={vkLogoUrl} alt="" className="auth-page__social-icon" />
-          Войти с VK ID
-        </Button>
       </div>
+
+      {mode === 'signIn' && oauthProviders.length > 0 && (
+        <p className="auth-page__hint auth-page__social-hint">
+          Если вы входите через Яндекс ID впервые, мы создадим аккаунт — это значит, что вы принимаете{' '}
+          <RouteLink to="/legal#terms" newTab>пользовательское соглашение</RouteLink>,{' '}
+          <RouteLink to="/legal#offer" newTab>публичную оферту</RouteLink> и даёте{' '}
+          <RouteLink to="/legal#consent" newTab>согласие на обработку персональных данных</RouteLink>.
+        </p>
+      )}
     </>
   );
 
@@ -230,14 +335,16 @@ export const AuthPage = () => {
       </Form>
 
       <div className="auth-page__forgot-row">
-        <button type="button" className="auth-page__switch-link" onClick={openForgot}>
+        <Button type="link" className="auth-page__switch-link" onClick={openForgot}>
           Забыли пароль?
-        </button>
+        </Button>
       </div>
 
       <Button type="primary" htmlType="submit" loading={loading} block className="auth-page__submit">
         {loading ? 'Вход…' : 'Войти'}
       </Button>
+
+      <p className="auth-page__switch">{switchPrompt}</p>
 
       {authSocialBlock}
     </form>
@@ -314,8 +421,8 @@ export const AuthPage = () => {
           checked={acceptedTerms}
           onChange={(e) => { setAcceptedTerms(e.target.checked); clearError('su-terms'); }}
         >
-          Принимаю <Link to="/legal#terms" target="_blank">пользовательское соглашение</Link> и{' '}
-          <Link to="/legal#offer" target="_blank">публичную оферту</Link>
+          Принимаю <RouteLink to="/legal#terms" newTab>пользовательское соглашение</RouteLink> и{' '}
+          <RouteLink to="/legal#offer" newTab>публичную оферту</RouteLink>
         </Checkbox>
         {fieldErrors['su-terms'] && <div className="auth-page__consent-error" role="alert">{fieldErrors['su-terms']}</div>}
 
@@ -323,8 +430,8 @@ export const AuthPage = () => {
           checked={acceptedData}
           onChange={(e) => { setAcceptedData(e.target.checked); clearError('su-data'); }}
         >
-          Даю <Link to="/legal#consent" target="_blank">согласие на обработку персональных данных</Link>, с{' '}
-          <Link to="/legal#privacy" target="_blank">политикой конфиденциальности</Link> ознакомлен(а)
+          Даю <RouteLink to="/legal#consent" newTab>согласие на обработку персональных данных</RouteLink>, с{' '}
+          <RouteLink to="/legal#privacy" newTab>политикой конфиденциальности</RouteLink> ознакомлен(а)
         </Checkbox>
         {fieldErrors['su-data'] && <div className="auth-page__consent-error" role="alert">{fieldErrors['su-data']}</div>}
       </div>
@@ -368,6 +475,8 @@ export const AuthPage = () => {
         <h1 className="auth-page__heading">{HEADINGS[mode]}</h1>
 
         <div className="auth-page__panel-body">
+          {/* On a phone the bottom link is a long scroll away, so the same prompt is repeated under the heading */}
+          {mode !== 'signIn' && <p className="auth-page__switch auth-page__switch--top">{switchPrompt}</p>}
           {notice && (
             <Alert
               type="success"
@@ -391,30 +500,13 @@ export const AuthPage = () => {
 
           {mode === 'signIn' ? signInForm : mode === 'signUp' ? signUpForm : forgotForm}
 
-          <p className="auth-page__switch">
-            {mode === 'signIn' ? (
-              <>
-                У вас еще нет аккаунта?{' '}
-                <button type="button" className="auth-page__switch-link" onClick={() => switchMode('signUp')}>
-                  Создать аккаунт
-                </button>
-              </>
-            ) : (
-              <>
-                {mode === 'forgot' ? 'Вспомнили пароль?' : 'Уже есть аккаунт?'}{' '}
-                <button type="button" className="auth-page__switch-link" onClick={() => switchMode('signIn')}>
-                  Войти
-                </button>
-              </>
-            )}
-          </p>
-
-          <p className="auth-page__hint">
-            <Link to="/pricing">Тарифы</Link> · <Link to="/legal#offer">Оферта</Link> ·{' '}
-            <Link to="/legal#terms">Соглашение</Link> · <Link to="/legal#privacy">Конфиденциальность</Link> ·{' '}
-            <Link to="/legal#contacts">Контакты и реквизиты</Link>
-          </p>
+          {mode !== 'signIn' && <p className="auth-page__switch">{switchPrompt}</p>}
         </div>
+        <p className="auth-page__hint auth-page__legal">
+          <RouteLink to="/pricing">Тарифы</RouteLink> · <RouteLink to="/legal#offer">Оферта</RouteLink> ·{' '}
+          <RouteLink to="/legal#terms">Соглашение</RouteLink> · <RouteLink to="/legal#privacy">Конфиденциальность</RouteLink> ·{' '}
+          <RouteLink to="/legal#contacts">Контакты и реквизиты</RouteLink>
+        </p>
       </section>
     </div>
   );

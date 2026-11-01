@@ -15,6 +15,7 @@ import {
   MIN_PUBLIC_DESCRIPTION_LENGTH,
   savePublicDescriptionDraft,
 } from '../shared/utils/publicDescriptionDraft';
+import { PublicFormSkeleton } from '../shared/ui/skeletons/PageSkeletons';
 
 const { TextArea } = Input;
 
@@ -142,13 +143,7 @@ export const PublicFormLandingPage = () => {
     if (token) navigate(`/form/${token}`, { replace: true });
   }, [resetFlow, token, navigate]);
 
-  if (pageLoading) {
-    return (
-      <div className="public-form-flow public-form-flow--centered">
-        <Spin size="large" />
-      </div>
-    );
-  }
+  if (pageLoading) return <PublicFormSkeleton />;
 
   if (success) {
     return (

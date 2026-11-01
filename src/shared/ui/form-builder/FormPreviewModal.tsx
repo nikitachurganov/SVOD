@@ -656,7 +656,7 @@ export const PreviewField = ({ field }: PreviewFieldProps) => {
     }
   };
 
-  const hasInlineError = [
+  const hasLabelledControl = [
     'shortText',
     'longText',
     'number',
@@ -668,9 +668,11 @@ export const PreviewField = ({ field }: PreviewFieldProps) => {
     'date',
     'time',
   ].includes(field.type);
+  // Choice fields print their own error next to the options
+  const hasInlineError = hasLabelledControl || ['radio', 'checkbox', 'yesNo'].includes(field.type);
 
   const controlId = `field-${field.id}`;
-  const labelAssociatesControl = hasInlineError;
+  const labelAssociatesControl = hasLabelledControl;
 
   return (
     <div style={{ marginBottom: 24 }}>

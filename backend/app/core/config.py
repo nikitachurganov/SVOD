@@ -42,6 +42,14 @@ class Settings(BaseSettings):
     # Public URL of the standalone surveys service: password reset links for its users point here.
     # Empty — the links use APP_PUBLIC_URL.
     SURVEYS_APP_PUBLIC_URL: str = ""
+    # Sign-in through Yandex ID. Offered only when both the client id and the secret are set.
+    # Redirect URI to register at the provider:
+    #   <OAUTH_REDIRECT_BASE_URL>/auth/oauth/yandex/callback
+    OAUTH_YANDEX_CLIENT_ID: str = ""
+    OAUTH_YANDEX_CLIENT_SECRET: str = ""
+    # Public address of this API as the browser sees it. Empty: <APP_PUBLIC_URL>/api (nginx proxy).
+    OAUTH_REDIRECT_BASE_URL: str = ""
+    OAUTH_STATE_TTL_MINUTES: int = 10
     PASSWORD_RESET_TTL_MINUTES: int = 60
     # A new reset email for the same account is not sent more often than this
     PASSWORD_RESET_COOLDOWN_SECONDS: int = 60
@@ -126,6 +134,13 @@ class Settings(BaseSettings):
     @property
     def telegram_enabled(self) -> bool:
         return bool(self.TELEGRAM_BOT_TOKEN.strip() and self.TELEGRAM_BOT_USERNAME.strip())
+
+    @property
+    def oauth_providers(self) -> list[str]:
+        providers = []
+        if self.OAUTH_YANDEX_CLIENT_ID.strip() and self.OAUTH_YANDEX_CLIENT_SECRET.strip():
+            providers.append("yandex")
+        return providers
 
     @property
     def payments_enabled(self) -> bool:

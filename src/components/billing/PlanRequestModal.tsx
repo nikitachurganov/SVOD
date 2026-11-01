@@ -4,7 +4,7 @@ import { billingActionError, createPlanRequest, getPlans } from '../../shared/ap
 import { useAuth } from '../../shared/hooks/auth.hooks';
 import { useNotifications } from '../../shared/context/notifications.context';
 import type { PlanRequestTerm, PlansResponse } from '../../types/billing';
-import { formatPrice, formatTokens } from './billingFormat';
+import { formatCreditsWithWord, formatPrice } from './billingFormat';
 
 interface FormValues {
   billing_interval: PlanRequestTerm;
@@ -96,7 +96,7 @@ export const PlanRequestModal = ({ open, onClose, onSent, initialTerm = 'month' 
             <Radio value="one_off">
               Разовый доступ «Исследование»
               {plans
-                ? ` — ${formatPrice(plans.pack_price_kopecks)} на ${plans.pack_days} дней, ${formatTokens(plans.pack.limits.ai_tokens_per_period)} токенов ИИ, без продления`
+                ? ` — ${formatPrice(plans.pack_price_kopecks)} на ${plans.pack_days} дней, ${formatCreditsWithWord(plans.pack.limits.ai_tokens_per_period)} ИИ, без продления`
                 : ''}
             </Radio>
           </Radio.Group>

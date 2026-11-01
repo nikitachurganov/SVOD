@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Button, Modal, Spin, Tag } from 'antd';
+import { Alert, Button, Modal, Tag } from 'antd';
 import { ArrowLeftOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -18,6 +18,7 @@ import {
 } from '../shared/ui/form-fill/FormFillRenderer';
 import { FormFillWizardLayout } from '../shared/ui/form-fill/FormFillWizardLayout';
 import { useBreadcrumbEntity } from '../shared/context/breadcrumb.context';
+import { FormBodySkeleton } from '../shared/ui/skeletons/PageSkeletons';
 
 export const FormViewPage = () => {
   const navigate = useNavigate();
@@ -225,17 +226,7 @@ export const FormViewPage = () => {
 
       {/* ── Content ── */}
       {loading ? (
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            flex: 1,
-            minHeight: '60vh',
-          }}
-        >
-          <Spin size="large" tip="Загрузка формы…" />
-        </div>
+        <FormBodySkeleton />
       ) : error ? (
         <div style={{ padding: 24 }}>
           <Alert

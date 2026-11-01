@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 
-import { Alert, Spin } from 'antd';
+import { Alert } from 'antd';
 
 import { useNavigate, useParams } from 'react-router-dom';
 
@@ -22,6 +22,7 @@ import { FormEditor } from '../shared/ui/form-builder/FormEditor';
 
 import type { FormPageInstance } from '../shared/types/form-builder.types';
 import { useBreadcrumbEntity } from '../shared/context/breadcrumb.context';
+import { FormEditorSkeleton } from '../shared/ui/skeletons/PageSkeletons';
 
 
 
@@ -127,15 +128,7 @@ export const EditFormPage = () => {
 
   if (loading) {
 
-    return (
-
-      <div style={{ display: 'flex', flex: 1, alignItems: 'center', justifyContent: 'center', background: 'var(--app-bg)' }}>
-
-        <Spin />
-
-      </div>
-
-    );
+    return <FormEditorSkeleton />;
 
   }
 

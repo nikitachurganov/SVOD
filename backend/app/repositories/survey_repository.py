@@ -49,6 +49,7 @@ async def list_filtered(
     organization_id: uuid.UUID,
     status: str | None = None,
     created_by_user_id: uuid.UUID | None = None,
+    include_archived: bool = False,
     project_id: uuid.UUID | None = None,
 ) -> list[Survey]:
     stmt = _apply_filters(
@@ -56,6 +57,7 @@ async def list_filtered(
         organization_id=organization_id,
         status=status,
         created_by_user_id=created_by_user_id,
+        include_archived=include_archived,
         project_id=project_id,
     ).order_by(Survey.created_at.desc())
     result = await session.execute(stmt)

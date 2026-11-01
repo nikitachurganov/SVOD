@@ -21,15 +21,32 @@ export const formatTokens = (value: number): string => {
   return formatNumber(value);
 };
 
-/** «1 токен», «2 токена», «5 токенов» */
-export const tokensWord = (count: number): string => {
+/** The server counts the AI allowance in tokens; people see it in credits (docs/MONETIZATION_MODEL.md, 0) */
+export const TOKENS_PER_CREDIT = 1_000;
+
+/** Rounded up, so an allowance that is not used up never reads «0 credits» */
+export const toCredits = (tokens: number): number => Math.ceil(tokens / TOKENS_PER_CREDIT);
+
+/** «150», «2 000», «6 000» */
+export const formatCredits = (tokens: number): string => formatNumber(toCredits(tokens));
+
+/** «1 кредит», «2 кредита», «5 кредитов» */
+export const creditsWord = (count: number): string => {
   const rest100 = count % 100;
   const rest10 = count % 10;
-  if (rest100 >= 11 && rest100 <= 14) return 'токенов';
-  if (rest10 === 1) return 'токен';
-  if (rest10 >= 2 && rest10 <= 4) return 'токена';
-  return 'токенов';
+  if (rest100 >= 11 && rest100 <= 14) return 'кредитов';
+  if (rest10 === 1) return 'кредит';
+  if (rest10 >= 2 && rest10 <= 4) return 'кредита';
+  return 'кредитов';
 };
+
+/** «150 кредитов» for a size given in tokens */
+export const formatCreditsWithWord = (tokens: number): string =>
+  `${formatCredits(tokens)} ${creditsWord(toCredits(tokens))}`;
+
+/** What the AI actions cost, roughly; an estimate until it is replaced with the numbers of ai_usage_log */
+export const AI_ACTION_HINT =
+  'Создание анкеты стоит около 9 кредитов, резюме ответов — около 4, сообщение в чате — около 10.';
 
 export const formatDay = (iso: string | null | undefined): string =>
   iso

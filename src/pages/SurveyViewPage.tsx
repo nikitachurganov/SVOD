@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Alert, Button, Dropdown, Empty, Grid, Modal, Spin, Switch, Tabs, Tag } from 'antd';
 import type { MenuProps } from 'antd';
 import {
@@ -39,7 +39,11 @@ import { SurveyAnalyticsTab } from '../shared/ui/survey/SurveyAnalyticsTab';
 import { SurveyFormTab } from '../shared/ui/survey/SurveyFormTab';
 import { SurveyOverviewTab, type SurveyTabKey } from '../shared/ui/survey/SurveyOverviewTab';
 import { SurveyResponsesTab } from '../shared/ui/survey/SurveyResponsesTab';
+import { PublicFormSkeleton, SurveyViewSkeleton } from '../shared/ui/skeletons/PageSkeletons';
 import { SURVEY_STATUS_COLOR, SURVEY_STATUS_LABEL } from './surveyStatus';
+
+// The respondent form (and its form runtime) is needed only when the author opens the preview
+const PublicSurveyPage = lazy(() => import('./PublicSurveyPage').then((m) => ({ default: m.PublicSurveyPage })));
 
 const TAB_SEGMENTS: SurveyTabKey[] = ['form', 'responses', 'analytics'];
 const TAB_ORDER: SurveyTabKey[] = ['overview', 'form', 'responses', 'analytics'];
@@ -105,6 +109,7 @@ export const SurveyViewPage = () => {
   const [reportOpen, setReportOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [aiSummary, setAiSummary] = useState<SurveyAiSummary | null>(null);
   const { refresh: refreshSubscription } = useSubscription();
   const [aiLoading, setAiLoading] = useState(false);
@@ -144,7 +149,14 @@ export const SurveyViewPage = () => {
       setExcludeFlagged(true);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось загрузить опрос');
+      const status = axios.isAxiosError(err) ? err.response?.status : undefined;
+      setError(
+        status === 403 || status === 404
+          ? 'Опрос недоступен: он удалён или принадлежит другому аккаунту.'
+          : err instanceof Error
+            ? err.message
+            : 'Не удалось загрузить опрос',
+      );
     } finally {
       setLoading(false);
     }
@@ -269,13 +281,7 @@ export const SurveyViewPage = () => {
 
   if (!tabIsKnown) return <Navigate to={`/surveys/${id}`} replace />;
 
-  if (loading) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
-        <Spin size="large" />
-      </div>
-    );
-  }
+  if (loading) return <SurveyViewSkeleton />;
 
   if (error || !survey) {
     return (
@@ -343,7 +349,7 @@ export const SurveyViewPage = () => {
       <SurveyFormTab
         survey={survey}
         onEdit={() => navigate(`${base}/edit`)}
-        onPreview={() => navigate(`${base}/preview`)}
+        onPreview={() => setPreviewOpen(true)}
         onOpenReport={() => setReportOpen(true)}
       />
     ),
@@ -440,6 +446,18 @@ export const SurveyViewPage = () => {
             </Dropdown>
           </div>
         </div>
+        {survey.description?.trim() && (
+          <p
+            style={{
+              margin: '8px 0 0',
+              color: 'var(--app-text-secondary)',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+            }}
+          >
+            {survey.description.trim()}
+          </p>
+        )}
         </div>
 
         {/* The tab bar lives in the header (like the registry pages); the panels are below */}
@@ -464,6 +482,22 @@ export const SurveyViewPage = () => {
         </div>
       </div>
 
+      <Modal
+        open={previewOpen}
+        footer={null}
+        centered
+        destroyOnClose
+        width={1000}
+        className="survey-preview-modal"
+        title={null}
+        closable={false}
+        styles={{ container: { padding: 0, overflow: 'hidden' }, body: { padding: 0 } }}
+        onCancel={() => setPreviewOpen(false)}
+      >
+        <Suspense fallback={<PublicFormSkeleton embedded />}>
+          <PublicSurveyPage preview surveyId={survey.id} onClose={() => setPreviewOpen(false)} />
+        </Suspense>
+      </Modal>
       <ShareSurveyModal
         open={shareOpen}
         onClose={() => setShareOpen(false)}

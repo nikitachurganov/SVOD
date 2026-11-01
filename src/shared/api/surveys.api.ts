@@ -304,11 +304,17 @@ export interface PublicSurvey {
 
 export const getSurveys = async (
   organizationId: string,
-  filters: { status?: SurveyStatus; mine?: boolean; projectId?: string } = {},
+  filters: {
+    status?: SurveyStatus;
+    mine?: boolean;
+    projectId?: string;
+    includeArchived?: boolean;
+  } = {},
 ): Promise<SurveyListItem[]> => {
   const params: Record<string, string | boolean> = { organization_id: organizationId };
   if (filters.status) params.status = filters.status;
   if (filters.mine) params.mine = true;
+  if (filters.includeArchived) params.include_archived = true;
   if (filters.projectId) params.project_id = filters.projectId;
   const { data } = await api.get<SurveyListItem[]>('/surveys', { params });
   return data;

@@ -1,0 +1,285 @@
+/* Loading placeholders that repeat the frame of a page, so the layout does not jump when data arrives */
+
+:root {
+  --sk-base: color-mix(in srgb, var(--app-text, #1f1f1f) 7%, transparent);
+  --sk-shine: color-mix(in srgb, var(--app-text, #1f1f1f) 13%, transparent);
+}
+
+.sk {
+  display: block;
+  flex: none;
+  max-width: 100%;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--sk-base) 25%, var(--sk-shine) 37%, var(--sk-base) 63%);
+  background-size: 400% 100%;
+  animation: sk-shimmer 1.4s ease infinite;
+}
+
+@keyframes sk-shimmer {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sk {
+    animation: none;
+  }
+}
+
+.sk-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.sk-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.sk-row--wrap {
+  flex-wrap: wrap;
+}
+
+.sk-row__end {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.sk-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.sk-panel {
+  padding: 20px;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border-secondary);
+  border-radius: 12px;
+}
+
+.sk-tabs {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  height: 46px;
+}
+
+/* Registry table */
+.sk-table__row {
+  display: grid;
+  grid-template-columns: 2.4fr 1fr 1fr 0.8fr;
+  align-items: center;
+  gap: 24px;
+  padding: 14px 0;
+  border-top: 1px solid var(--app-border-secondary);
+}
+
+.sk-table__row:first-child {
+  border-top: 0;
+}
+
+/* Project folder on the surveys home page */
+.sk-folder {
+  display: flex;
+  flex-direction: column;
+  height: 210px;
+}
+
+.sk-folder__tab {
+  border-radius: 12px 12px 0 0;
+}
+
+.sk-folder__body {
+  flex: 1;
+  border-radius: 0 16px 16px 16px;
+}
+
+.survey-card.sk-card:hover {
+  border-color: var(--app-border-secondary);
+  box-shadow: none;
+}
+
+/* Survey page */
+.sk-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+/* Form editor */
+.sk-editor {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  background: var(--app-bg);
+}
+
+.sk-editor__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 24px 16px;
+  background: var(--app-surface);
+  border-bottom: 1px solid var(--app-border);
+}
+
+.sk-editor__body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.sk-editor__tools {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 280px;
+  padding: 20px 16px;
+  background: var(--app-surface);
+  border-right: 1px solid var(--app-border-secondary);
+}
+
+.sk-editor__canvas {
+  flex: 1;
+  min-width: 0;
+  padding: 20px;
+}
+
+.sk-editor__sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 820px;
+  margin: 0 auto;
+}
+
+/* Detail page (request, form) */
+.sk-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
+}
+
+/* Profile */
+.sk-profile {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 32px 24px;
+  background: var(--app-bg);
+}
+
+.sk-profile__layout {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  align-items: start;
+  gap: 24px 32px;
+  width: min(100%, 960px);
+  margin: 0 auto;
+}
+
+/* Public questionnaire */
+.sk-public {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 48px 16px;
+  background: var(--app-bg);
+}
+
+.sk-public--embedded {
+  min-height: 0;
+  height: 100%;
+}
+
+.sk-public__card {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
+  max-width: 720px;
+  height: fit-content;
+}
+
+/* Shell while the session is being checked */
+.sk-header {
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+}
+
+.sk-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 12px;
+  background: var(--app-surface);
+  border-right: 1px solid var(--app-border-secondary);
+}
+
+@media (max-width: 1055px) {
+  .sk-sidebar {
+    display: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .sk-hide-mobile {
+    display: none;
+  }
+
+  .sk-editor__header {
+    padding: 8px 12px;
+  }
+
+  .sk-editor__tools {
+    display: none;
+  }
+
+  .sk-editor__canvas {
+    padding: 12px;
+  }
+
+  .sk-detail,
+  .sk-profile__layout {
+    grid-template-columns: 1fr;
+  }
+
+  .sk-profile {
+    padding: 16px;
+  }
+
+  .sk-table__row {
+    grid-template-columns: 2fr 1fr;
+  }
+
+  .sk-table__row > :nth-child(n + 3) {
+    display: none;
+  }
+
+  .sk-header {
+    padding: 0 12px;
+  }
+
+  .sk-public {
+    padding: 16px 12px;
+  }
+}

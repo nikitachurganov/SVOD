@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Button, Card, Dropdown, Empty, Input, Modal, Result, Spin } from 'antd';
+import { Alert, Button, Card, Dropdown, Empty, Input, Modal, Result, Select } from 'antd';
 import type { MenuProps } from 'antd';
 import {
   EditOutlined,
@@ -17,6 +17,7 @@ import {
   moveSurveyToProject,
   updateSurveyProject,
   type SurveyListItem,
+  type SurveyStatus,
   type SurveyProject,
   type SurveyProjectPayload,
 } from '../shared/api/surveys.api';
@@ -26,36 +27,32 @@ import { useNotifications } from '../shared/context/notifications.context';
 import { useBreadcrumbEntity } from '../shared/context/breadcrumb.context';
 import { MoveSurveyModal } from '../shared/ui/survey/MoveSurveyModal';
 import { ProjectFormModal } from '../shared/ui/survey/ProjectFormModal';
+import { ProjectSurveysSkeleton, SurveyCardsSkeleton } from '../shared/ui/skeletons/PageSkeletons';
 import { SURVEY_STATUS_LABEL, formatSurveyDate, pluralizeResponses } from './surveyStatus';
 
-/** Active = still part of the work: collecting answers (open) or finished but not archived (closed) */
-type TabKey = 'active' | 'draft' | 'archived';
+/** "all" is every survey of the project, archived ones included (they carry the «В архиве» status) */
+type StatusFilter = 'all' | SurveyStatus;
 
-const TAB_ORDER: TabKey[] = ['active', 'draft', 'archived'];
+const STATUS_FILTERS: StatusFilter[] = ['all', 'open', 'draft', 'closed', 'archived'];
 
-const TAB_LABELS: Record<TabKey, string> = {
-  active: 'Активные',
+const STATUS_FILTER_LABELS: Record<StatusFilter, string> = {
+  all: 'Все',
+  open: 'Принимают ответы',
   draft: 'Черновики',
+  closed: 'Завершённые',
   archived: 'Архив',
 };
 
-const EMPTY_MESSAGE: Record<TabKey, string> = {
-  active: 'Нет активных опросов.',
-  draft: 'Нет черновиков.',
-  archived: 'Архив пуст.',
-};
+type SortKey = 'updated' | 'name' | 'responses';
 
-const tabOf = (survey: SurveyListItem): TabKey =>
-  survey.status === 'draft' ? 'draft' : survey.status === 'archived' ? 'archived' : 'active';
+const SORT_OPTIONS: { value: SortKey; label: string }[] = [
+  { value: 'updated', label: 'Сначала новые' },
+  { value: 'responses', label: 'По числу ответов' },
+  { value: 'name', label: 'По названию' },
+];
 
-/** Active first; with no active surveys the drafts; archive only when it is all there is */
-const defaultTab = (list: SurveyListItem[]): TabKey => {
-  const has = (tab: TabKey) => list.some((survey) => tabOf(survey) === tab);
-  if (has('active')) return 'active';
-  if (has('draft')) return 'draft';
-  if (has('archived')) return 'archived';
-  return 'active';
-};
+const matchesFilter = (survey: SurveyListItem, filter: StatusFilter): boolean =>
+  filter === 'all' || survey.status === filter;
 
 const questionsWord = (n: number): string => {
   const mod10 = n % 10;
@@ -81,8 +78,8 @@ export const ProjectSurveysPage = () => {
 
   const [surveys, setSurveys] = useState<SurveyListItem[]>([]);
   const [loading, setLoading] = useState(true);
-  // null until the project's surveys have loaded: the first tab is picked from what the project has
-  const [activeTab, setActiveTab] = useState<TabKey | null>(null);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [sortKey, setSortKey] = useState<SortKey>('updated');
   const [confirmArchiveId, setConfirmArchiveId] = useState<string | null>(null);
   const [archiving, setArchiving] = useState(false);
   const [movingSurvey, setMovingSurvey] = useState<SurveyListItem | null>(null);
@@ -120,21 +117,26 @@ export const ProjectSurveysPage = () => {
   const ready = projectState === 'ready' && !!project && !!organizationId && inActiveOrganization;
 
   const counts = useMemo(() => {
-    const result: Record<TabKey, number> = { active: 0, draft: 0, archived: 0 };
-    surveys.forEach((survey) => {
-      result[tabOf(survey)] += 1;
+    const result = {} as Record<StatusFilter, number>;
+    STATUS_FILTERS.forEach((key) => {
+      result[key] = surveys.filter((survey) => matchesFilter(survey, key)).length;
     });
     return result;
   }, [surveys]);
 
   const visibleSurveys = useMemo(() => {
     const needle = search.trim().toLowerCase();
-    return surveys
-      .filter((survey) => tabOf(survey) === (activeTab ?? 'active'))
+    const list = surveys
+      .filter((survey) => matchesFilter(survey, statusFilter))
       .filter((survey) => !needle || survey.name.toLowerCase().includes(needle));
-  }, [surveys, activeTab, search]);
+    return list.sort((a, b) => {
+      if (sortKey === 'name') return a.name.localeCompare(b.name, 'ru');
+      if (sortKey === 'responses') return b.responses_count - a.responses_count;
+      return b.created_at.localeCompare(a.created_at);
+    });
+  }, [surveys, statusFilter, sortKey, search]);
 
-  // One request for the whole project: the tabs and their counters are cut from it locally
+  // One request for the whole project: the filters and their counters are cut from it locally
   const loadSurveys = useCallback(() => {
     if (!organizationId || !projectId) {
       setSurveys([]);
@@ -142,10 +144,9 @@ export const ProjectSurveysPage = () => {
       return Promise.resolve();
     }
     setLoading(true);
-    return getSurveys(organizationId, { projectId })
+    return getSurveys(organizationId, { projectId, includeArchived: true })
       .then((list) => {
         setSurveys(list);
-        setActiveTab((current) => current ?? defaultTab(list));
       })
       .catch((err: unknown) =>
         notifyError('Не удалось загрузить опросы', err instanceof Error ? err.message : undefined),
@@ -153,9 +154,10 @@ export const ProjectSurveysPage = () => {
       .finally(() => setLoading(false));
   }, [organizationId, projectId, notifyError]);
 
-  // Another project starts from scratch: no leftovers of the previous tab or list
+  // Another project starts from scratch: no leftovers of the previous filters or list
   useEffect(() => {
-    setActiveTab(null);
+    setStatusFilter('all');
+    setSortKey('updated');
     setSurveys([]);
     setSearch('');
   }, [projectId]);
@@ -177,7 +179,7 @@ export const ProjectSurveysPage = () => {
     setArchiving(true);
     try {
       await archiveSurvey(id);
-      notifySuccess('Опрос перемещён в архив');
+      notifySuccess('Опрос перемещён в архив', 'Он остаётся в списке с пометкой «В архиве»');
       await loadSurveys();
     } catch (err) {
       notifyError(
@@ -219,11 +221,7 @@ export const ProjectSurveysPage = () => {
   });
 
   if (projectState === 'loading' || (projectState === 'ready' && !organizationId)) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
-        <Spin size="large" />
-      </div>
-    );
+    return <ProjectSurveysSkeleton />;
   }
 
   if (projectState === 'error') {
@@ -294,20 +292,6 @@ export const ProjectSurveysPage = () => {
             Создать опрос
           </Button>
         </div>
-        <div className="registry-page__tabs" role="tablist" aria-label="Фильтр опросов">
-          {TAB_ORDER.map((key) => (
-            <button
-              key={key}
-              type="button"
-              role="tab"
-              aria-selected={activeTab === key}
-              className={`registry-page__tab${activeTab === key ? ' registry-page__tab--active' : ''}`}
-              onClick={() => setActiveTab(key)}
-            >
-              {TAB_LABELS[key]} ({counts[key]})
-            </button>
-          ))}
-        </div>
       </div>
 
       <div className="registry-page__content">
@@ -332,23 +316,42 @@ export const ProjectSurveysPage = () => {
           </Card>
         ) : (
           <>
-            <Input
-              allowClear
-              prefix={<SearchOutlined />}
-              placeholder="Поиск по названию"
-              aria-label="Поиск опроса по названию"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              style={{ maxWidth: 360, marginBottom: 16 }}
-            />
+            <div className="project-page__toolbar">
+              <Input
+                allowClear
+                prefix={<SearchOutlined />}
+                placeholder="Поиск по названию"
+                aria-label="Поиск опроса по названию"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                className="project-page__search"
+              />
+              <Select
+                value={statusFilter}
+                onChange={setStatusFilter}
+                aria-label="Фильтр по статусу"
+                className="project-page__select"
+                options={STATUS_FILTERS.map((key) => ({
+                  value: key,
+                  label: `${STATUS_FILTER_LABELS[key]} (${counts[key]})`,
+                }))}
+              />
+              <Select
+                value={sortKey}
+                onChange={setSortKey}
+                aria-label="Сортировка"
+                className="project-page__select"
+                options={SORT_OPTIONS}
+              />
+            </div>
             {loading && surveys.length === 0 ? (
-              <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
-                <Spin />
-              </div>
+              <SurveyCardsSkeleton />
             ) : visibleSurveys.length === 0 ? (
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description={search.trim() ? 'Ничего не найдено' : EMPTY_MESSAGE[activeTab ?? 'active']}
+                description={
+                  search.trim() || statusFilter !== 'all' ? 'Ничего не найдено' : 'Нет опросов.'
+                }
               />
             ) : (
               <ul className="survey-grid" aria-label="Опросы" aria-busy={loading}>

@@ -41,8 +41,8 @@ const describeLimit = (detail: Record<string, unknown>): string => {
   switch (limit) {
     case 'ai_tokens': {
       const when =
-        typeof detail.resets_at === 'string' ? ` Токены обновятся ${formatDay(detail.resets_at)}.` : '';
-      return `Токены ИИ закончились. Опросы, сбор ответов и обычная аналитика работают как раньше.${when}`;
+        typeof detail.resets_at === 'string' ? ` Кредиты обновятся ${formatDay(detail.resets_at)}.` : '';
+      return `Кредиты ИИ закончились. Опросы, сбор ответов и обычная аналитика работают как раньше.${when}`;
     }
     case 'active_surveys':
       return `На вашем тарифе можно держать открытыми не больше ${max ?? 'нескольких'} опросов. Закройте один из них или повысьте тариф.`;

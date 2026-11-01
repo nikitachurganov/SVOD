@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState, type ReactNode } from 'react';
 
 import { useMediaQuery } from './shared/hooks/useMediaQuery';
 
@@ -45,27 +45,6 @@ import { BreadcrumbProvider, useBreadcrumbEntity } from './shared/context/breadc
 
 import { buildDisplayName } from './shared/utils/userName';
 
-import { CreateFormPage } from './pages/CreateFormPage';
-
-import { EditFormPage } from './pages/EditFormPage';
-
-import { ParticipantsPage } from './pages/ParticipantsPage';
-
-import { OrganizationSettingsPage } from './pages/OrganizationSettingsPage';
-
-import { FormViewPage } from './pages/FormViewPage';
-
-import { FormsPage } from './pages/FormsPage';
-import { SurveysPage } from './pages/SurveysPage';
-import { ProjectSurveysPage } from './pages/ProjectSurveysPage';
-import { CreateSurveyPage } from './pages/CreateSurveyPage';
-import { EditSurveyPage } from './pages/EditSurveyPage';
-import { SurveyViewPage } from './pages/SurveyViewPage';
-import { PublicSurveyPage } from './pages/PublicSurveyPage';
-import { ProfilePage } from './pages/ProfilePage';
-import { AdminPage } from './pages/AdminPage';
-import { PlansPage } from './pages/PlansPage';
-import { LegalPage } from './pages/LegalPage';
 import { PublicLegalLayout } from './components/legal/PublicLegalLayout';
 import { PaywallModalHost } from './components/billing/PaywallModalHost';
 import { SubscriptionProvider } from './shared/context/subscription.provider';
@@ -73,31 +52,54 @@ import { OnboardingGate } from './components/onboarding/OnboardingGate';
 import { EmailVerificationBanner } from './components/layout/EmailVerificationBanner';
 import { TourProvider } from './components/tour/TourProvider';
 
-import { RequestsPage } from './pages/RequestsPage';
-
-import { CreateRequestPage } from './pages/CreateRequestPage';
-
-import { RequestViewPage } from './pages/RequestViewPage';
-
-import { AuthPage } from './pages/AuthPage';
-import { ResetPasswordPage } from './pages/ResetPasswordPage';
-import { VerifyEmailPage } from './pages/VerifyEmailPage';
-import { ActivateAccountPage } from './pages/ActivateAccountPage';
-import { JoinOrganizationPage } from './pages/JoinOrganizationPage';
-
-import { PublicFormFillPage } from './pages/PublicFormFillPage';
-
-import { PublicFormLandingPage } from './pages/PublicFormLandingPage';
-
 import { PublicFormFlowProvider } from './shared/context/publicFormFlow.provider';
-
-import { PublicRequestLegacyRedirect } from './pages/PublicRequestLegacyRedirect';
-
-import { FormilyBuilderPage } from './dev/formily/FormilyBuilderPage';
 
 import { CreateOrganizationModal } from './components/layout/CreateOrganizationModal';
 import { NoOrganizationState } from './components/layout/NoOrganizationState';
 import { WorkspaceUnavailableState } from './components/layout/WorkspaceUnavailableState';
+import { lazyPage, preloadWhenIdle } from './shared/lib/lazyPage';
+import { AppShellSkeleton, PublicFormSkeleton, RouteSkeleton } from './shared/ui/skeletons/PageSkeletons';
+
+// Every page is a separate chunk: the first screen downloads only the shell and the page it shows
+
+const CreateFormPage = lazyPage(() => import('./pages/CreateFormPage'), 'CreateFormPage');
+const EditFormPage = lazyPage(() => import('./pages/EditFormPage'), 'EditFormPage');
+const ParticipantsPage = lazyPage(() => import('./pages/ParticipantsPage'), 'ParticipantsPage');
+const OrganizationSettingsPage = lazyPage(() => import('./pages/OrganizationSettingsPage'), 'OrganizationSettingsPage');
+const FormViewPage = lazyPage(() => import('./pages/FormViewPage'), 'FormViewPage');
+const FormsPage = lazyPage(() => import('./pages/FormsPage'), 'FormsPage');
+const SurveysPage = lazyPage(() => import('./pages/SurveysPage'), 'SurveysPage');
+const ProjectSurveysPage = lazyPage(() => import('./pages/ProjectSurveysPage'), 'ProjectSurveysPage');
+const CreateSurveyPage = lazyPage(() => import('./pages/CreateSurveyPage'), 'CreateSurveyPage');
+const EditSurveyPage = lazyPage(() => import('./pages/EditSurveyPage'), 'EditSurveyPage');
+const SurveyViewPage = lazyPage(() => import('./pages/SurveyViewPage'), 'SurveyViewPage');
+const PublicSurveyPage = lazyPage(() => import('./pages/PublicSurveyPage'), 'PublicSurveyPage');
+const ProfilePage = lazyPage(() => import('./pages/ProfilePage'), 'ProfilePage');
+const AdminPage = lazyPage(() => import('./pages/AdminPage'), 'AdminPage');
+const PlansPage = lazyPage(() => import('./pages/PlansPage'), 'PlansPage');
+const LegalPage = lazyPage(() => import('./pages/LegalPage'), 'LegalPage');
+const RequestsPage = lazyPage(() => import('./pages/RequestsPage'), 'RequestsPage');
+const CreateRequestPage = lazyPage(() => import('./pages/CreateRequestPage'), 'CreateRequestPage');
+const RequestViewPage = lazyPage(() => import('./pages/RequestViewPage'), 'RequestViewPage');
+const AuthPage = lazyPage(() => import('./pages/AuthPage'), 'AuthPage');
+const ResetPasswordPage = lazyPage(() => import('./pages/ResetPasswordPage'), 'ResetPasswordPage');
+const VerifyEmailPage = lazyPage(() => import('./pages/VerifyEmailPage'), 'VerifyEmailPage');
+const OAuthCallbackPage = lazyPage(() => import('./pages/OAuthCallbackPage'), 'OAuthCallbackPage');
+const ActivateAccountPage = lazyPage(() => import('./pages/ActivateAccountPage'), 'ActivateAccountPage');
+const JoinOrganizationPage = lazyPage(() => import('./pages/JoinOrganizationPage'), 'JoinOrganizationPage');
+const PublicFormFillPage = lazyPage(() => import('./pages/PublicFormFillPage'), 'PublicFormFillPage');
+const PublicFormLandingPage = lazyPage(() => import('./pages/PublicFormLandingPage'), 'PublicFormLandingPage');
+const PublicRequestLegacyRedirect = lazyPage(() => import('./pages/PublicRequestLegacyRedirect'), 'PublicRequestLegacyRedirect');
+const FormilyBuilderPage = lazyPage(() => import('./dev/formily/FormilyBuilderPage'), 'FormilyBuilderPage');
+
+// The pages one usually goes to from the start page: fetched in the background once it has rendered
+const LIKELY_NEXT_PAGES = IS_SURVEYS_APP
+  ? [SurveysPage, ProjectSurveysPage, SurveyViewPage, CreateSurveyPage, EditSurveyPage, ProfilePage]
+  : [RequestsPage, RequestViewPage, FormsPage, SurveysPage, ProjectSurveysPage, SurveyViewPage, ProfilePage];
+
+const withSkeleton = (element: ReactNode, fallback: ReactNode = <PublicFormSkeleton />) => (
+  <Suspense fallback={fallback}>{element}</Suspense>
+);
 
 
 
@@ -190,6 +192,8 @@ const AppLayoutContent = () => {
   }, [isDesktop, isSidebarCollapsed]);
 
 
+
+  useEffect(() => preloadWhenIdle(LIKELY_NEXT_PAGES), []);
 
   useEffect(() => {
 
@@ -386,15 +390,13 @@ const AppLayoutContent = () => {
             {isProfileRoute ? (
 
               // The account settings do not depend on an organization: a person without one can still change the password
-              <Outlet />
+              <Suspense fallback={<RouteSkeleton />}>
+                <Outlet />
+              </Suspense>
 
             ) : isOrgLoading ? (
 
-              <div className="app-shell-loading">
-
-                <Spin size="large" />
-
-              </div>
+              <RouteSkeleton />
 
             ) : !hasOrganizations ? (
 
@@ -411,7 +413,9 @@ const AppLayoutContent = () => {
 
             ) : (
 
-              <Outlet />
+              <Suspense fallback={<RouteSkeleton />}>
+                <Outlet />
+              </Suspense>
 
             )}
 
@@ -489,7 +493,7 @@ const ProtectedLayout = () => {
 
   const location = useLocation();
 
-  if (isAuthLoading) return <FullPageLoader />;
+  if (isAuthLoading) return <AppShellSkeleton />;
 
   if (!user) {
     return <Navigate to="/auth" replace state={{ from: `${location.pathname}${location.search}` }} />;
@@ -506,7 +510,7 @@ const ProtectedLayout = () => {
 const AdminRoute = () => {
   const { profile, isAuthLoading } = useAuth();
 
-  if (isAuthLoading || !profile) return <FullPageLoader />;
+  if (isAuthLoading || !profile) return <RouteSkeleton />;
 
   if (profile.role !== 'admin') return <Navigate to={HOME_PATH} replace />;
 
@@ -539,10 +543,10 @@ const PublicOnlyAuthPage = () => {
 const publicSurveyRoutes: RouteObject[] = [
 
   // Public: respondent page of a survey
-  { path: '/survey/:token', element: <PublicSurveyPage /> },
+  { path: '/survey/:token', element: withSkeleton(<PublicSurveyPage />) },
 
   // Author's preview of a survey: the same respondent form, nothing is saved
-  { path: '/surveys/:id/preview', element: <PublicSurveyPage preview /> },
+  { path: '/surveys/:id/preview', element: withSkeleton(<PublicSurveyPage preview />) },
 
 ];
 
@@ -566,6 +570,9 @@ const platformRoutes: RouteObject[] = [
 
   { path: '/auth', element: <PublicOnlyAuthPage /> },
 
+  // Public: the return from Yandex ID carries the token in the URL fragment
+  { path: '/auth/oauth', element: <OAuthCallbackPage /> },
+
   // Public: confirm the mailbox by the link from the sign-up email
   { path: '/verify-email/:token', element: <VerifyEmailPage /> },
 
@@ -582,8 +589,8 @@ const platformRoutes: RouteObject[] = [
     path: '/form/:token',
     element: <PublicFormFlowProvider />,
     children: [
-      { index: true, element: <PublicFormLandingPage /> },
-      { path: 'fill/:formId', element: <PublicFormFillPage /> },
+      { index: true, element: withSkeleton(<PublicFormLandingPage />) },
+      { path: 'fill/:formId', element: withSkeleton(<PublicFormFillPage />) },
     ],
   },
 
@@ -659,6 +666,8 @@ const surveysRoutes: RouteObject[] = [
 
   { path: '/auth', element: <PublicOnlyAuthPage /> },
 
+  { path: '/auth/oauth', element: <OAuthCallbackPage /> },
+
   { path: '/reset-password/:token', element: <ResetPasswordPage /> },
 
   ...publicLegalRoutes,
@@ -696,7 +705,12 @@ const router = createBrowserRouter(IS_SURVEYS_APP ? surveysRoutes : platformRout
 
 
 
-const App =() => <RouterProvider router={router} />;
+// Public pages outside the shell (sign-in, links from emails, the documents) wait for their chunk here
+const App = () => (
+  <Suspense fallback={<FullPageLoader />}>
+    <RouterProvider router={router} />
+  </Suspense>
+);
 
 export default App;
 

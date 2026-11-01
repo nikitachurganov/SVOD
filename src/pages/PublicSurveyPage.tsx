@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Button, Result, Spin, Tag } from 'antd';
-import { CheckCircleFilled } from '@ant-design/icons';
+import { Alert, Button, Result, Tag } from 'antd';
+import { CheckCircleFilled, CloseOutlined } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import {
@@ -20,6 +20,7 @@ import {
 import { FormFillWizardLayout } from '../shared/ui/form-fill/FormFillWizardLayout';
 import { useFormStore } from '../shared/hooks/useFormStore';
 import { LEGAL } from '../shared/config/legal';
+import { PublicFormSkeleton } from '../shared/ui/skeletons/PageSkeletons';
 
 type LoadState =
   | { status: 'loading' }
@@ -32,11 +33,20 @@ interface PublicSurveyPageProps {
    * draft alike) and nothing is ever sent — no response is created, the statistics stay as is.
    */
   preview?: boolean;
+  /** Preview inside a modal: the survey is given directly and "back" closes the modal instead of navigating */
+  surveyId?: string;
+  onClose?: () => void;
 }
 
-export const PublicSurveyPage = ({ preview = false }: PublicSurveyPageProps) => {
-  const { token, id: surveyId } = useParams<{ token: string; id: string }>();
+export const PublicSurveyPage = ({
+  preview = false,
+  surveyId: surveyIdProp,
+  onClose,
+}: PublicSurveyPageProps) => {
+  const { token, id: routeSurveyId } = useParams<{ token: string; id: string }>();
+  const surveyId = surveyIdProp ?? routeSurveyId;
   const navigate = useNavigate();
+  const goBack = () => (onClose ? onClose() : navigate(`/surveys/${surveyId}/form`));
   const source = preview ? surveyId : token;
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   const [pageIndex, setPageIndex] = useState(0);
@@ -102,8 +112,8 @@ export const PublicSurveyPage = ({ preview = false }: PublicSurveyPageProps) => 
   const isLast = pageIndex >= pages.length - 1;
 
   useEffect(() => {
-    if (survey) document.title = survey.name;
-  }, [survey]);
+    if (survey && !onClose) document.title = survey.name;
+  }, [survey, onClose]);
 
   const scrollToTop = () => {
     contentRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
@@ -112,7 +122,8 @@ export const PublicSurveyPage = ({ preview = false }: PublicSurveyPageProps) => 
   const handleNext = async () => {
     if (!currentPage) return;
     try {
-      await fillRef.current?.validateFields(collectFieldIds(currentPage.fields));
+      // The author only looks through the pages: nothing has to be filled in to go on
+      if (!preview) await fillRef.current?.validateFields(collectFieldIds(currentPage.fields));
       setPageIndex((idx) => Math.min(idx + 1, pages.length - 1));
       scrollToTop();
     } catch {
@@ -128,6 +139,11 @@ export const PublicSurveyPage = ({ preview = false }: PublicSurveyPageProps) => 
   const handleSubmit = useCallback(async () => {
     if (!token && !preview) return;
     setSubmitError(null);
+    if (preview) {
+      // The author only looks at the form: nothing is validated, sent or stored
+      setSubmitted(true);
+      return;
+    }
     try {
       await fillRef.current?.validateFields();
     } catch {
@@ -135,11 +151,6 @@ export const PublicSurveyPage = ({ preview = false }: PublicSurveyPageProps) => 
       return;
     }
 
-    if (preview) {
-      // The author only looks at the form: validation ran, but nothing is sent or stored
-      setSubmitted(true);
-      return;
-    }
     if (!token) return;
 
     setSubmitting(true);
@@ -161,7 +172,12 @@ export const PublicSurveyPage = ({ preview = false }: PublicSurveyPageProps) => 
     }
   }, [token, preview, pages]);
 
-  const previewBar = preview ? (
+  const previewBar = preview && onClose ? (
+    <div className="survey-preview-bar" role="status">
+      <strong style={{ fontSize: 16 }}>Предпросмотр</strong>
+      <Button type="text" icon={<CloseOutlined />} onClick={onClose} aria-label="Закрыть предпросмотр" />
+    </div>
+  ) : preview ? (
     <div className="survey-preview-bar" role="status">
       <span>
         <Tag color="blue" style={{ marginInlineEnd: 8 }}>
@@ -169,16 +185,12 @@ export const PublicSurveyPage = ({ preview = false }: PublicSurveyPageProps) => 
         </Tag>
         Так форму увидит респондент. Ответы не сохраняются и не попадают в статистику.
       </span>
-      <Button onClick={() => navigate(`/surveys/${surveyId}/form`)}>Вернуться к опросу</Button>
+      <Button onClick={goBack}>{onClose ? 'Закрыть' : 'Вернуться к опросу'}</Button>
     </div>
   ) : null;
 
   if (state.status === 'loading') {
-    return (
-      <div className="public-form-flow public-form-flow--centered">
-        <Spin size="large" tip="Загрузка опроса…" />
-      </div>
-    );
+    return <PublicFormSkeleton embedded={!!onClose} />;
   }
 
   if (state.status === 'error') {
@@ -190,7 +202,7 @@ export const PublicSurveyPage = ({ preview = false }: PublicSurveyPageProps) => 
           subTitle={state.error.message}
           extra={
             preview ? (
-              <Button onClick={() => navigate(`/surveys/${surveyId}/form`)}>Вернуться к опросу</Button>
+              <Button onClick={goBack}>{onClose ? 'Закрыть' : 'Вернуться к опросу'}</Button>
             ) : undefined
           }
         />
@@ -209,8 +221,8 @@ export const PublicSurveyPage = ({ preview = false }: PublicSurveyPageProps) => 
               title="Так выглядит завершение опроса"
               subTitle="Это предпросмотр: ответ не сохранён, статистика не изменилась."
               extra={
-                <Button type="primary" onClick={() => navigate(`/surveys/${surveyId}/form`)}>
-                  Вернуться к опросу
+                <Button type="primary" onClick={goBack}>
+                  {onClose ? 'Закрыть' : 'Вернуться к опросу'}
                 </Button>
               }
             />
@@ -289,7 +301,7 @@ export const PublicSurveyPage = ({ preview = false }: PublicSurveyPageProps) => 
             <p style={{ color: 'var(--app-text-secondary)' }}>В этом опросе пока нет вопросов.</p>
           )}
         </FormFillWizardLayout>
-        <footer
+        {!onClose && <footer
           style={{
             marginTop: 20,
             marginBottom: 20,
@@ -305,7 +317,7 @@ export const PublicSurveyPage = ({ preview = false }: PublicSurveyPageProps) => 
           >
             Пожаловаться на опрос
           </a>
-        </footer>
+        </footer>}
       </div>
     </div>
   );

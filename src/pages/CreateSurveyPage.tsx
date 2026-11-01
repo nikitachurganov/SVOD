@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, Button, Result, Spin } from 'antd';
+import { Alert, Button, Result } from 'antd';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { createSurvey, getSurveyProject } from '../shared/api/surveys.api';
@@ -11,6 +11,7 @@ import { useOrganization } from '../shared/hooks/organization.hooks';
 import { IS_SURVEYS_APP } from '../shared/config/appMode';
 import { useBreadcrumbEntity } from '../shared/context/breadcrumb.context';
 import { createInitialSurveyPages } from '../shared/utils/welcomePage';
+import { FormEditorSkeleton } from '../shared/ui/skeletons/PageSkeletons';
 
 type ProjectCheck = 'none' | 'loading' | 'ok' | 'missing';
 
@@ -63,11 +64,7 @@ export const CreateSurveyPage = () => {
   }
 
   if (check === 'loading') {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
-        <Spin size="large" />
-      </div>
-    );
+    return <FormEditorSkeleton />;
   }
 
   if (check === 'missing') {

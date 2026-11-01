@@ -5,7 +5,7 @@ import { PaymentHistory } from '../billing/PaymentHistory';
 import { PaymentReturnNotice } from '../billing/PaymentReturnNotice';
 import { PlanActions } from '../billing/PlanActions';
 import { UsageBar } from '../billing/UsageBar';
-import { formatDay, formatPrice, formatTokens, STATUS_LABELS } from '../billing/billingFormat';
+import { AI_ACTION_HINT, formatCredits, formatDay, formatPrice, STATUS_LABELS } from '../billing/billingFormat';
 import { useSubscription } from '../../shared/hooks/subscription.hooks';
 import '../billing/billing.css';
 
@@ -64,12 +64,12 @@ export const ProfileSubscriptionTab = () => {
   const monthlyPrice = plan.price_month_kopecks;
   const isPack = plan.code === 'pack';
   const aiResets = usage.ai_tokens.resets_at;
-  // The pack's tokens burn at the end of its term, the subscription's come back, the free ones are given once
+  // The pack's credits burn at the end of its term, the subscription's come back, the free ones are given once
   const aiNote = !aiResets
-    ? 'Бесплатные токены даются один раз и не обновляются.'
+    ? 'Бесплатные кредиты даются один раз и не обновляются.'
     : isPack
-      ? `Токены действуют до ${formatDay(aiResets)}.`
-      : `Токены обновятся ${formatDay(aiResets)}.`;
+      ? `Кредиты действуют до ${formatDay(aiResets)}.`
+      : `Кредиты обновятся ${formatDay(aiResets)}.`;
 
   return (
     <section className="profile-page__panel" aria-labelledby="profile-subscription-title">
@@ -116,7 +116,7 @@ export const ProfileSubscriptionTab = () => {
               <dd>{isPack ? 'Разово' : formatPrice(monthlyPrice)}</dd>
             </div>
             <div>
-              <dt>{paid ? 'Действует до' : 'Токены ИИ'}</dt>
+              <dt>{paid ? 'Действует до' : 'Кредиты ИИ'}</dt>
               <dd>
                 {paid
                   ? formatDay(subscription.current_period_end)
@@ -149,13 +149,17 @@ export const ProfileSubscriptionTab = () => {
             <h3 className="profile-page__section-title" style={{ marginTop: 24 }}>
               Использование
             </h3>
-            <UsageBar label="Токены ИИ" metric={usage.ai_tokens} format={formatTokens} />
-            <p className="billing-note" style={{ marginTop: 0 }}>
-              {aiNote} Когда токены закончатся, опросы и обычная аналитика продолжат работать.
-            </p>
-            <UsageBar label="Ответы" metric={usage.responses} />
-            <UsageBar label="Открытые опросы" metric={usage.active_surveys} />
-            <UsageBar label="Проекты" metric={usage.projects} />
+            <div className="billing-usage-group">
+              <UsageBar label="Кредиты ИИ" metric={usage.ai_tokens} format={formatCredits} />
+              <p className="billing-note billing-usage-group__note">
+                {aiNote} {AI_ACTION_HINT} Когда кредиты закончатся, опросы и обычная аналитика продолжат работать.
+              </p>
+            </div>
+            <div className="billing-usage-group billing-usage-group--rows">
+              <UsageBar label="Ответы" metric={usage.responses} />
+              <UsageBar label="Открытые опросы" metric={usage.active_surveys} />
+              <UsageBar label="Проекты" metric={usage.projects} />
+            </div>
             {usage.locked_responses > 0 ? (
               <Alert
                 className="billing-alert"

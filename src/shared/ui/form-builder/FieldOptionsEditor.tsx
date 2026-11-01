@@ -1,11 +1,11 @@
-import { Button } from 'antd';
+import { Button, Switch } from 'antd';
 import { AutoGrowInput } from './AutoGrowInput';
 
 import { PlusOutlined, CloseOutlined } from '@ant-design/icons';
 
 import type { FieldOption } from '../../types/form-builder.types';
 
-import { createOtherOption, hasOtherOption } from '../../utils/choiceField.utils';
+import { createOtherOption } from '../../utils/choiceField.utils';
 
 
 
@@ -153,11 +153,14 @@ export const FieldOptionsEditor = ({ fieldType, options, onChange }: FieldOption
 
   const handleAdd = () => {
 
+    // «Другое» always stays the last option
     onChange([
 
-      ...options,
+      ...regularOptions,
 
       { id: crypto.randomUUID(), label: `Вариант ${regularOptions.length + 1}` },
+
+      ...(otherOption ? [otherOption] : []),
 
     ]);
 
@@ -185,7 +188,7 @@ export const FieldOptionsEditor = ({ fieldType, options, onChange }: FieldOption
 
     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
 
-      {options.map((opt) => (
+      {regularOptions.map((opt) => (
 
         <div
 
@@ -309,7 +312,7 @@ export const FieldOptionsEditor = ({ fieldType, options, onChange }: FieldOption
 
 
 
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 2 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4, marginTop: 2 }}>
 
         <Button
 
@@ -329,21 +332,13 @@ export const FieldOptionsEditor = ({ fieldType, options, onChange }: FieldOption
 
         </Button>
 
-        <Button
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
 
-          type="text"
+          <Switch size="small" checked={Boolean(otherOption)} onChange={handleToggleOther} />
 
-          size="small"
+          Вариант «Другое»
 
-          onClick={handleToggleOther}
-
-          style={{ alignSelf: 'flex-start', paddingInline: 0 }}
-
-        >
-
-          {hasOtherOption(options) ? 'Убрать «Другое»' : 'Добавить «Другое»'}
-
-        </Button>
+        </label>
 
       </div>
 

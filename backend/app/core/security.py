@@ -19,6 +19,11 @@ def hash_password(plain: str) -> str:
 PENDING_ACTIVATION_HASH = "!pending-activation"
 
 
+# Accounts created through Yandex ID have no password until the person sets one by the
+# "forgot password" link. Starts with "!", so verify_password never accepts it.
+NO_PASSWORD_HASH = "!no-password"
+
+
 def is_pending_activation(password_hash: str) -> bool:
     return password_hash == PENDING_ACTIVATION_HASH
 

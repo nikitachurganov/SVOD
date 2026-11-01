@@ -134,10 +134,7 @@ export const moveFieldByOffset = (
   const nextIndex = placement.index + offset;
   if (nextIndex < 0 || nextIndex >= siblings.length) return fields;
 
-  const targetId = siblings[nextIndex]?.id;
-  if (!targetId) return fields;
-
-  return moveFieldBeforeTarget(fields, fieldId, targetId);
+  return moveFieldToIndex(fields, fieldId, placement.parentGroupId, nextIndex);
 };
 
 export const moveFieldBeforeTarget = (

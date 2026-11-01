@@ -7,7 +7,6 @@ import { FieldPreview } from './FieldPreview';
 import { FieldTypeSettings } from './FieldTypeSettings';
 import { FieldMoveControls } from './FieldMoveControls';
 import type { FieldOption, FormFieldInstance } from '../../types/form-builder.types';
-import type { FieldSiblingPosition } from '../../utils/fieldMove.utils';
 
 interface FieldBlockProps {
   field: FormFieldInstance;
@@ -17,10 +16,8 @@ interface FieldBlockProps {
   isDraggingOverlay?: boolean;
   canMoveUp?: boolean;
   canMoveDown?: boolean;
-  siblingPositions?: FieldSiblingPosition[];
   onMoveUp?: () => void;
   onMoveDown?: () => void;
-  onMoveBefore?: (beforeFieldId: string | null) => void;
 }
 
 export const FieldBlock = ({
@@ -31,10 +28,8 @@ export const FieldBlock = ({
   isDraggingOverlay = false,
   canMoveUp = false,
   canMoveDown = false,
-  siblingPositions = [],
   onMoveUp,
   onMoveDown,
-  onMoveBefore,
 }: FieldBlockProps) => {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const isMobile = useMediaQuery('(max-width: 1055px)');
@@ -113,33 +108,31 @@ export const FieldBlock = ({
             gap: 8,
           }}
         >
-          {isTextBlock ? (
-            <span />
-          ) : (
-            <label
-              htmlFor={`required-${field.id}`}
-              style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}
-            >
-              <Switch
-                id={`required-${field.id}`}
-                size="small"
-                checked={field.required}
-                onChange={(checked) => onChange({ required: checked })}
+          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+            {onMoveUp && onMoveDown && (
+              <FieldMoveControls
+                canMoveUp={canMoveUp}
+                canMoveDown={canMoveDown}
+                onMoveUp={onMoveUp}
+                onMoveDown={onMoveDown}
               />
-              {isMobile && 'Обязательный'}
-            </label>
-          )}
+            )}
 
-          {onMoveUp && onMoveDown && onMoveBefore && (
-            <FieldMoveControls
-              canMoveUp={canMoveUp}
-              canMoveDown={canMoveDown}
-              siblingPositions={siblingPositions}
-              onMoveUp={onMoveUp}
-              onMoveDown={onMoveDown}
-              onMoveBefore={onMoveBefore}
-            />
-          )}
+            {!isTextBlock && (
+              <label
+                htmlFor={`required-${field.id}`}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}
+              >
+                <Switch
+                  id={`required-${field.id}`}
+                  size="small"
+                  checked={field.required}
+                  onChange={(checked) => onChange({ required: checked })}
+                />
+                Обязательное поле
+              </label>
+            )}
+          </div>
 
           <Button
             type="text"

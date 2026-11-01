@@ -1,4 +1,10 @@
+import { useContext } from 'react';
 import { useDroppable } from '@dnd-kit/core';
+import {
+  DROP_SLOT_STYLE,
+  PANEL_DROP_PLACEHOLDER_HEIGHT,
+  PanelDropTargetContext,
+} from './panelDropTarget';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { DroppedFieldCard } from './DroppedFieldCard';
 import type { FormFieldInstance } from '../../types/form-builder.types';
@@ -13,7 +19,6 @@ interface FormCanvasProps {
   onGroupChildDelete: (groupId: string, childId: string) => void;
   onFieldMoveUp: (fieldId: string) => void;
   onFieldMoveDown: (fieldId: string) => void;
-  onFieldMoveBefore: (fieldId: string, beforeFieldId: string | null) => void;
   /** Touch layout: lets a group offer an "add field" button instead of drag-and-drop */
   onAddToGroup?: (groupId: string) => void;
 }
@@ -26,10 +31,10 @@ export const FormCanvas = ({
   onGroupChildDelete,
   onFieldMoveUp,
   onFieldMoveDown,
-  onFieldMoveBefore,
   onAddToGroup,
 }: FormCanvasProps) => {
   const { setNodeRef, isOver } = useDroppable({ id: CANVAS_DROPPABLE_ID });
+  const panelDropTargetId = useContext(PanelDropTargetContext);
   const isTouchLayout = Boolean(onAddToGroup);
 
   const isEmpty = fields.length === 0;
@@ -42,7 +47,7 @@ export const FormCanvas = ({
         minHeight: 240,
         borderRadius: 4,
         border: `2px dashed ${isOver ? 'var(--app-primary)' : isEmpty ? 'var(--app-border)' : 'transparent'}`,
-        background: isOver ? 'var(--app-highlight)' : 'var(--app-surface-elevated)',
+        background: isOver ? 'var(--app-highlight)' : 'transparent',
         transition: 'border-color 250ms, background 250ms',
         display: 'flex',
         flexDirection: 'column',
@@ -89,11 +94,16 @@ export const FormCanvas = ({
                 onChildDelete={(childId) => onGroupChildDelete(field.id, childId)}
                 onMoveUp={onFieldMoveUp}
                 onMoveDown={onFieldMoveDown}
-                onMoveBefore={onFieldMoveBefore}
                 onAddChild={onAddToGroup ? () => onAddToGroup(field.id) : undefined}
               />
             ))}
           </SortableContext>
+          {panelDropTargetId === CANVAS_DROPPABLE_ID && (
+            <div
+              aria-hidden
+              style={{ ...DROP_SLOT_STYLE, height: PANEL_DROP_PLACEHOLDER_HEIGHT, flexShrink: 0 }}
+            />
+          )}
         </div>
       )}
     </div>

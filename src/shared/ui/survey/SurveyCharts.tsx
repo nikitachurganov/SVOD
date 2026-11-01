@@ -1,10 +1,28 @@
-import { useMemo } from 'react';
-import { Column, Pie } from '@ant-design/charts';
+import { lazy, Suspense, useMemo } from 'react';
+import type { ColumnConfig, PieConfig } from '@ant-design/charts';
 
 import type { QuestionOptionStat, QuestionStat, ResponsesDay } from '../../api/surveys.api';
 import { useThemeMode } from '../../context/theme.context';
+import { ChartSkeleton } from '../skeletons/PageSkeletons';
 
 const CHART_HEIGHT = 220;
+
+// The chart library is the heaviest dependency of the app: it is fetched only when a chart is drawn,
+// a placeholder of the same height holds its place meanwhile
+const LazyColumn = lazy(() => import('@ant-design/charts').then((m) => ({ default: m.Column })));
+const LazyPie = lazy(() => import('@ant-design/charts').then((m) => ({ default: m.Pie })));
+
+const Column = (props: ColumnConfig) => (
+  <Suspense fallback={<ChartSkeleton height={props.height} />}>
+    <LazyColumn {...props} />
+  </Suspense>
+);
+
+const Pie = (props: PieConfig) => (
+  <Suspense fallback={<ChartSkeleton height={props.height} />}>
+    <LazyPie {...props} />
+  </Suspense>
+);
 
 const FONT_FAMILY = "Inter, system-ui, -apple-system, 'Segoe UI', sans-serif";
 

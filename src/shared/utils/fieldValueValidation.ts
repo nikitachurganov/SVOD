@@ -108,7 +108,8 @@ export const validateAddressValue = (
     return 'Это поле обязательно для заполнения';
   }
 
-  if (!config.allowManualInput && !parsed.providerPayload) {
+  // provider 'none' — suggestions were unavailable, so the address was typed by hand
+  if (!config.allowManualInput && parsed.provider !== 'none' && !parsed.providerPayload) {
     return 'Выберите адрес из списка подсказок';
   }
 

@@ -77,7 +77,7 @@
 }
 
 .auth-page__heading {
-  margin: 0 0 48px;
+  margin: auto 0 48px;
   width: 100%;
   max-width: 600px;
   font-size: 38px;
@@ -204,7 +204,7 @@
 
 .auth-page__social-row {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
 }
 
@@ -246,18 +246,39 @@
   color: var(--app-text-secondary);
 }
 
-.auth-page__switch-link {
+/* Ant "link" button that reads as an inline link inside a line of text */
+.auth-page__switch-link.ant-btn {
+  height: auto;
   padding: 0;
-  border: none;
-  background: none;
-  color: var(--app-primary);
-  font: inherit;
+  font-size: inherit;
   line-height: inherit;
-  cursor: pointer;
+  vertical-align: baseline;
 }
 
-.auth-page__switch-link:hover {
-  color: var(--app-link-hover);
+/* Links of the page are brand orange, not the default blue */
+.auth-page a,
+.auth-page .auth-page__switch-link.ant-btn {
+  color: #c2410c;
+}
+
+.auth-page a:hover,
+.auth-page .auth-page__switch-link.ant-btn:hover {
+  color: #9a3412;
+}
+
+html[data-theme='dark'] .auth-page a,
+html[data-theme='dark'] .auth-page .auth-page__switch-link.ant-btn {
+  color: #ff8a4c;
+}
+
+html[data-theme='dark'] .auth-page a:hover,
+html[data-theme='dark'] .auth-page .auth-page__switch-link.ant-btn:hover {
+  color: #ffa573;
+}
+
+/* The same prompt is repeated under the heading, on phones only */
+.auth-page__switch--top {
+  display: none;
 }
 
 .auth-page__forgot-row {
@@ -275,6 +296,19 @@
   color: var(--app-text-secondary);
 }
 
+/* Legal links sit at the very bottom of the panel */
+.auth-page__legal {
+  margin-top: auto;
+  padding-top: 24px;
+  width: 100%;
+  max-width: 600px;
+}
+
+.auth-page__social-hint {
+  font-size: 12px;
+  line-height: 18px;
+}
+
 /* Sign-up ticks: the terms and the offer, the consent to personal data processing */
 .auth-page__consents {
   display: flex;
@@ -284,10 +318,6 @@
   font-size: 13px;
   line-height: 20px;
   color: var(--app-text-secondary);
-}
-
-.auth-page__consents a {
-  color: var(--app-menu-active-text);
 }
 
 /* A long label wraps; the box itself keeps its size and sits by the first line */
@@ -336,9 +366,15 @@ html[data-theme='dark'] .auth-page {
   }
 
   .auth-page__heading {
-    margin-bottom: 32px;
+    margin-bottom: 16px;
     font-size: 28px;
     line-height: 36px;
+  }
+
+  .auth-page__switch--top {
+    display: block;
+    margin-bottom: 16px;
+    text-align: left;
   }
 
   .auth-page__field-row,

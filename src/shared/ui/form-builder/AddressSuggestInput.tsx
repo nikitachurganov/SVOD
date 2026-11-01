@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { AutoComplete, Input, Spin } from 'antd';
+import { AutoComplete, Spin } from 'antd';
 import type { FormFieldInstance } from '../../types/form-builder.types';
-import { suggestYandexAddress } from '../../api/yandex-suggest.api';
+import {
+  AddressSuggestUnavailableError,
+  suggestYandexAddress,
+} from '../../api/yandex-suggest.api';
 import { useDebouncedCallback } from '../../hooks/useDebouncedCallback';
 import { getAddressFillConfig } from '../../utils/fieldConfig';
 import {
@@ -42,6 +45,9 @@ export const AddressSuggestInput = ({ field, value, onChange, error }: AddressSu
   const [loading, setLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  // No API key on the server: hide the dropdown and let the user type the address by hand.
+  const [suggestUnavailable, setSuggestUnavailable] = useState(false);
+  const latestQueryRef = useRef(current.displayValue);
   const [selectedFromSuggestion, setSelectedFromSuggestion] = useState(
     Boolean(current.providerPayload) || current.provider === 'yandex',
   );
@@ -94,6 +100,11 @@ export const AddressSuggestInput = ({ field, value, onChange, error }: AddressSu
     } catch (err) {
       setOptions([]);
       setDropdownOpen(false);
+      if (err instanceof AddressSuggestUnavailableError) {
+        setSuggestUnavailable(true);
+        onChangeRef.current({ displayValue: latestQueryRef.current, provider: 'none' });
+        return;
+      }
       setSearchError(err instanceof Error ? err.message : 'Не удалось получить подсказки');
     } finally {
       setLoading(false);
@@ -144,7 +155,12 @@ export const AddressSuggestInput = ({ field, value, onChange, error }: AddressSu
 
   const handleInputChange = (text: string) => {
     setQuery(text);
+    latestQueryRef.current = text;
     setSelectedFromSuggestion(false);
+    if (suggestUnavailable) {
+      onChangeRef.current({ displayValue: text, provider: 'none' });
+      return;
+    }
     if (config.allowManualInput) {
       onChangeRef.current({ displayValue: text, provider: 'yandex' });
     }
@@ -173,20 +189,22 @@ export const AddressSuggestInput = ({ field, value, onChange, error }: AddressSu
         onBlur={() => {
           setTimeout(() => setDropdownOpen(false), 150);
         }}
+        id={`field-${field.id}`}
+        placeholder={config.placeholder ?? 'Начните вводить адрес...'}
+        status={error ? 'error' : undefined}
         style={{ width: '100%' }}
         notFoundContent={
           loading
             ? <Spin size="small" />
             : notReadyHint ?? searchError ?? 'Ничего не найдено'
         }
-      >
-        <Input
-          id={`field-${field.id}`}
-          placeholder={config.placeholder ?? 'Начните вводить адрес...'}
-          status={error ? 'error' : undefined}
-        />
-      </AutoComplete>
-      {notReadyHint ? (
+      />
+      {suggestUnavailable ? (
+        <div style={{ color: 'var(--app-text-helper)', fontSize: '0.75rem', marginTop: 4 }}>
+          Подсказки адреса сейчас недоступны — введите адрес вручную
+        </div>
+      ) : null}
+      {notReadyHint && !suggestUnavailable ? (
         <div style={{ color: 'var(--app-text-helper)', fontSize: '0.75rem', marginTop: 4 }}>
           {notReadyHint}
         </div>
@@ -206,7 +224,7 @@ export const AddressSuggestInput = ({ field, value, onChange, error }: AddressSu
           {error}
         </div>
       ) : null}
-      {!config.allowManualInput && !selectedFromSuggestion && query ? (
+      {!config.allowManualInput && !suggestUnavailable && !selectedFromSuggestion && query ? (
         <div style={{ color: 'var(--app-text-error)', fontSize: '0.75rem', marginTop: 4 }}>
           Выберите адрес из списка подсказок
         </div>

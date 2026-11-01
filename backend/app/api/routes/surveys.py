@@ -122,6 +122,7 @@ async def list_surveys(
     organization_id: uuid.UUID = Query(...),
     status_filter: str | None = Query(default=None, alias="status"),
     mine: bool = Query(default=False),
+    include_archived: bool = Query(default=False),
     project_id: str | None = Query(default=None),
 ) -> list[SurveyListItem]:
     return await survey_service.list_surveys(
@@ -130,6 +131,7 @@ async def list_surveys(
         organization_id,
         status_filter=status_filter,
         mine=mine,
+        include_archived=include_archived,
         project_id=project_id,
     )
 

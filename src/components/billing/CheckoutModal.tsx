@@ -4,7 +4,7 @@ import { useNotifications } from '../../shared/context/notifications.context';
 import { billingActionError, createCheckout, getPlans } from '../../shared/api/billing.api';
 import { useSubscription } from '../../shared/hooks/subscription.hooks';
 import type { PlanRequestTerm, PlansResponse } from '../../types/billing';
-import { formatPrice, formatTokens } from './billingFormat';
+import { formatCreditsWithWord, formatPrice } from './billingFormat';
 
 interface Props {
   open: boolean;
@@ -58,7 +58,7 @@ export const CheckoutModal = ({ open, onClose, initialTerm = 'month' }: Props) =
   const { subscription } = useSubscription();
   const researcher = plans?.plans.find((plan) => plan.code === 'researcher');
   const researcherTokens = researcher
-    ? `, ${formatTokens(researcher.limits.ai_tokens_per_period)} токенов ИИ в месяц`
+    ? `, ${formatCreditsWithWord(researcher.limits.ai_tokens_per_period)} ИИ в месяц`
     : '';
   // The pack would replace a running subscription that gives far more: the server refuses it too
   const subscribed =
@@ -123,14 +123,14 @@ export const CheckoutModal = ({ open, onClose, initialTerm = 'month' }: Props) =
         <Radio value="one_off" disabled={subscribed}>
           Разовый доступ «Исследование»
           {plans
-            ? ` — ${formatPrice(plans.pack_price_kopecks)} на ${plans.pack_days} дней, ${formatTokens(plans.pack.limits.ai_tokens_per_period)} токенов ИИ`
+            ? ` — ${formatPrice(plans.pack_price_kopecks)} на ${plans.pack_days} дней, ${formatCreditsWithWord(plans.pack.limits.ai_tokens_per_period)} ИИ`
             : ''}
         </Radio>
       </Radio.Group>
       <p className="billing-note">
         Подписка не продлевается сама: когда срок подойдёт к концу, мы напомним, и вы оплатите ещё раз. Если
         подписка уже действует, оплаченный срок добавится к ней. Разовый доступ не продлевается: новая
-        покупка начинает его заново. Опросы, сбор ответов и обычная аналитика не зависят от токенов.
+        покупка начинает его заново. Опросы, сбор ответов и обычная аналитика не зависят от кредитов ИИ.
       </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {CONSENTS.map(({ key, before, link, to }) => (

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Button, Card, Dropdown, Empty, Grid, Input, Modal, Skeleton } from 'antd';
+import { Alert, Button, Dropdown, Empty, Grid, Input, Modal } from 'antd';
 import type { MenuProps } from 'antd';
 import { FolderOutlined, MoreOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons';
 import axios from 'axios';
@@ -23,6 +23,7 @@ import { useNotifications } from '../shared/context/notifications.context';
 import { CreateSurveyModal } from '../shared/ui/survey/CreateSurveyModal';
 import { NewProjectFolder } from '../shared/ui/survey/NewProjectFolder';
 import { ProjectFormModal } from '../shared/ui/survey/ProjectFormModal';
+import { Bone, ProjectGridSkeleton } from '../shared/ui/skeletons/PageSkeletons';
 import {
   SURVEY_STATUS_LABEL,
   pluralizeResponses,
@@ -177,12 +178,9 @@ export const SurveysPage = () => {
     }
     if (loading) {
       return (
-        <div className="project-grid" aria-busy="true">
-          {Array.from({ length: SKELETON_CARDS }, (_, index) => (
-            <Card key={index} className="project-card project-card--skeleton">
-              <Skeleton active title paragraph={{ rows: 1 }} />
-            </Card>
-          ))}
+        <div role="status" aria-busy="true" aria-label="Загрузка проектов">
+          <Bone w={120} h={24} style={{ marginBottom: 16 }} />
+          <ProjectGridSkeleton count={SKELETON_CARDS} />
         </div>
       );
     }

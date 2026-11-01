@@ -1,6 +1,7 @@
 from app.models.user import User
 from app.models.password_reset import PasswordResetToken
 from app.models.email_verification import EmailVerificationToken
+from app.models.user_identity import UserIdentity
 from app.models.user_onboarding import UserOnboarding
 from app.models.subscription import Subscription, SubscriptionEvent
 from app.models.usage_counter import UsageCounter
@@ -42,6 +43,7 @@ __all__ = [
     "User",
     "PasswordResetToken",
     "EmailVerificationToken",
+    "UserIdentity",
     "UserOnboarding",
     "Subscription",
     "SubscriptionEvent",
