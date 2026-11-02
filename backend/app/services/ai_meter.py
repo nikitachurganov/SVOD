@@ -82,6 +82,12 @@ async def _check_daily_budget(session: AsyncSession) -> None:
         )
 
 
+async def check_service_budget() -> None:
+    """Only the cap of the whole service, for AI called without an account (the landing demo)."""
+    async with async_session_factory() as session:
+        await _check_daily_budget(session)
+
+
 async def _reserve(user_id: uuid.UUID) -> _Reservation | None:
     """Check that the user's allowance of AI tokens is not used up, before the LLM is called.
 

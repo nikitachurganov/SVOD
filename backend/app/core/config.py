@@ -101,6 +101,10 @@ class Settings(BaseSettings):
     AI_COST_RUB_PER_USD: float = 90.0
     # Cap on the AI spending of the whole service per rolling 24 hours, USD. 0 — no cap.
     AI_DAILY_BUDGET_USD: float = 0.0
+    # Survey drafts generated for anonymous visitors of the landing (svodservice.ru). 0 — no limit.
+    LANDING_DEMO_PER_IP_PER_HOUR: int = 5
+    LANDING_DEMO_PER_DAY: int = 300
+    LANDING_DEMO_MAX_QUESTIONS: int = 15
     DADATA_API_KEY: str = ""
     YANDEX_MAPS_API_KEY: str = ""
     # Telegram bot (python -m app.telegram_bot). Empty token disables the integration.

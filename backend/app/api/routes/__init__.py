@@ -4,6 +4,7 @@ from app.api.routes.admin import router as admin_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.billing import router as billing_router
 from app.api.routes.forms import router as forms_router
+from app.api.routes.landing_demo import router as landing_demo_router
 from app.api.routes.requests import router as requests_router
 from app.api.routes.files import router as files_router
 from app.api.routes.organizations import router as organizations_router
@@ -28,6 +29,7 @@ api_router.include_router(requests_router, prefix="/requests", tags=["requests"]
 api_router.include_router(files_router, tags=["files"])
 api_router.include_router(organizations_router, prefix="/organizations", tags=["organizations"])
 api_router.include_router(public_router, prefix="/public/request", tags=["public"])
+api_router.include_router(landing_demo_router, prefix="/public/demo", tags=["public"])
 api_router.include_router(suggest_router, prefix="/suggest", tags=["suggest"])
 api_router.include_router(notifications_router, prefix="/notifications", tags=["notifications"])
 api_router.include_router(join_router, prefix="/join", tags=["join"])
