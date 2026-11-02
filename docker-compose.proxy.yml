@@ -1,12 +1,12 @@
 # Optional override: send outgoing HTTPS requests of api/worker (OpenRouter etc.) through an HTTP proxy
-# outside Russia (tinyproxy on 109.120.150.82:8888, which only accepts this server's IP).
+# outside Russia (tinyproxy on 82.47.155.186:8888, which only accepts this server's IP).
 #   docker compose -f docker-compose.surveys.yml -f docker-compose.proxy.yml up -d
 
 services:
   api:
     environment: &proxy_env
-      HTTPS_PROXY: http://109.120.150.82:8888
-      HTTP_PROXY: http://109.120.150.82:8888
+      HTTPS_PROXY: http://82.47.155.186:8888
+      HTTP_PROXY: http://82.47.155.186:8888
       NO_PROXY: db,api,localhost,127.0.0.1
 
   worker:

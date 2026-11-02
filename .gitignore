@@ -84,3 +84,6 @@ docker-compose.yml
 coverage/
 # VLESS proxy config contains secrets
 deploy/xray/config.json
+# Local editor/agent settings
+.claude/settings.local.json
+docs/.obsidian/
