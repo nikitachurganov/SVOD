@@ -65,9 +65,12 @@ def _select_prompt(allowed: frozenset[str] | None = None) -> str:
 - goals — 1–4 коротких цели опроса на русском.
 - subject — что оценивается, в форме родительного падежа без предлога, чтобы подставить в «оценка …» \
 (например: «работы вуза», «сервиса доставки», «сайта кафедры»). Если неясно — пустая строка.
+- nps_object — что респондент может порекомендовать другу или коллеге, в винительном падеже, \
+чтобы подставить в «порекомендуете …» (например: «наш вуз», «сервис доставки», \
+«компанию как место работы»). Если неясно — пустая строка.
 
 Отвечай ТОЛЬКО валидным JSON без markdown:
-{{"category": "<id>", "goals": ["..."], "methodologies": ["<id>", ...], "subject": "..."}}
+{{"category": "<id>", "goals": ["..."], "methodologies": ["<id>", ...], "subject": "...", "nps_object": "..."}}
 """
 
 
@@ -223,6 +226,7 @@ async def select_methodologies(
         "goals": goals,
         "methodologies": method_ids,
         "subject": _str(parsed.get("subject"), 120),
+        "nps_object": _str(parsed.get("nps_object"), 120),
     }
 
 
@@ -285,7 +289,7 @@ def _present_template_ids(pages: list[dict[str, Any]]) -> set[str]:
 
 
 def insert_templates(
-    pages: list[dict[str, Any]], method_ids: list[str], subject: str
+    pages: list[dict[str, Any]], method_ids: list[str], subject: survey_templates.Subject
 ) -> list[dict[str, Any]]:
     """Add the fixed blocks of selected methodologies that are not in the survey yet."""
     pages = copy.deepcopy(pages)
@@ -366,6 +370,7 @@ async def build_survey(
     category: str | None = existing_meta.get("category")
     goals: list[str] = [g for g in existing_meta.get("goals", []) if isinstance(g, str)]
     subject = _str(existing_meta.get("subject"), 120)
+    nps_object = _str(existing_meta.get("nps_object"), 120)
 
     if explicit_ids:
         method_ids = explicit_ids
@@ -379,6 +384,7 @@ async def build_survey(
         category = selected["category"]
         goals = selected["goals"]
         subject = selected["subject"]
+        nps_object = selected["nps_object"]
 
     # Academic surveys always get an attention check
     if (
@@ -423,7 +429,9 @@ async def build_survey(
     templates_added = False
     if pages is not None:
         before = _present_template_ids(pages)
-        pages = insert_templates(pages, method_ids, subject)
+        pages = insert_templates(
+            pages, method_ids, survey_templates.Subject(of=subject, recommended=nps_object)
+        )
         templates_added = _present_template_ids(pages) != before
 
     title_raw = parsed.get("title")
@@ -446,6 +454,7 @@ async def build_survey(
         "category": category,
         "goals": goals,
         "subject": subject,
+        "nps_object": nps_object,
         "methodologies": method_ids,
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }

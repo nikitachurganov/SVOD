@@ -26,6 +26,7 @@ def _select(**overrides):
         "goals": ["Оценить лояльность студентов"],
         "methodologies": ["likert", "nps"],
         "subject": "вуза",
+        "nps_object": "наш вуз",
     }
     data.update(overrides)
     return json.dumps(data, ensure_ascii=False)
@@ -66,12 +67,29 @@ class CatalogueTests(unittest.TestCase):
     def test_standardised_blocks(self):
         self.assertEqual(len(survey_templates.SUS_ITEMS), 10)
         self.assertEqual(len(survey_templates.UEQ_PAIRS), 26)
-        nps = survey_templates.nps("вуза")
+        nps = survey_templates.nps(survey_templates.Subject(of="вуза", recommended="наш вуз"))
         self.assertEqual(nps[0]["config"]["ratingVariant"], "nps")
         self.assertTrue(nps[1]["required"])
-        check = survey_templates.attention_check("")[0]
+        check = survey_templates.attention_check(survey_templates.Subject())[0]
         self.assertTrue(check["config"]["attentionCheck"])
         self.assertIn(survey_templates.ATTENTION_CORRECT, [o["label"] for o in check["options"]])
+
+    def test_template_wording_fits_the_case_of_each_subject_form(self):
+        subject = survey_templates.Subject(of="работы вуза", recommended="наш вуз")
+        self.assertEqual(
+            survey_templates.nps(subject)[0]["label"],
+            "С какой вероятностью вы порекомендуете наш вуз другу или коллеге?",
+        )
+        self.assertEqual(
+            survey_templates.csat(subject)[0]["label"],
+            "Насколько вы удовлетворены качеством работы вуза?",
+        )
+        self.assertEqual(survey_templates.sus(subject)[0]["label"], "Оценка работы вуза")
+        self.assertIn("впечатление от работы вуза", survey_templates.ueq(subject)[0]["placeholder"])
+        # Without a subject the wording stays a complete sentence
+        empty = survey_templates.Subject()
+        self.assertIn("порекомендуете нас другу", survey_templates.nps(empty)[0]["label"])
+        self.assertEqual(survey_templates.csat(empty)[0]["label"], "Насколько вы удовлетворены в целом?")
 
 
 class LinterTests(unittest.TestCase):
@@ -234,7 +252,8 @@ class AiBuilderTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(tags.count("nps"), 2)
         self.assertEqual(tags.count("attention_check"), 1)
         nps = next(f for f in fields if f.get("config", {}).get("ratingVariant") == "nps")
-        self.assertIn("вуза", nps["label"])
+        self.assertIn("порекомендуете наш вуз другу", nps["label"])
+        self.assertEqual(result.methodology_meta["nps_object"], "наш вуз")
         counts = {m.id: m.questions_count for m in result.methodology_summary.methodologies}
         self.assertEqual(counts["likert"], 1)
         self.assertEqual(counts["nps"], 2)

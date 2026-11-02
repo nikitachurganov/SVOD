@@ -44,9 +44,9 @@ def _pages(*blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
 class NpsCsatCesTests(unittest.TestCase):
     def setUp(self) -> None:
         self.pages = _pages(
-            _with_ids(tpl.nps("сервис"), "nps"),
-            _with_ids(tpl.csat("сервисом"), "csat"),
-            _with_ids(tpl.ces("сервис"), "ces"),
+            _with_ids(tpl.nps(tpl.Subject(of="сервиса", recommended="сервис")), "nps"),
+            _with_ids(tpl.csat(tpl.Subject(of="сервиса")), "csat"),
+            _with_ids(tpl.ces(tpl.Subject(of="сервиса")), "ces"),
         )
 
     def test_nps_counts_promoters_and_detractors(self):
@@ -80,7 +80,7 @@ class NpsCsatCesTests(unittest.TestCase):
 
 class SusTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.pages = _pages(_with_ids(tpl.sus("система"), "sus"))
+        self.pages = _pages(_with_ids(tpl.sus(tpl.Subject(of="системы")), "sus"))
         self.items = self.pages[0]["fields"][0]["children"]
 
     def _answers(self, picks: list[int]) -> dict[str, Any]:
@@ -117,7 +117,7 @@ class SusTests(unittest.TestCase):
 
 class UeqTests(unittest.TestCase):
     def test_polarity_per_item(self):
-        pages = _pages(_with_ids(tpl.ueq("продукт"), "ueq"))
+        pages = _pages(_with_ids(tpl.ueq(tpl.Subject(of="продукта")), "ueq"))
         items = pages[0]["fields"][0]["children"]
         # Always pick the right-hand pole (7): positive only where the right pole is positive
         answers = {item["id"]: 7 for item in items}

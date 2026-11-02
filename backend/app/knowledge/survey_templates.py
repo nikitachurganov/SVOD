@@ -8,7 +8,20 @@ publication of results.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, Callable
+
+
+@dataclass(frozen=True)
+class Subject:
+    """What the survey is about, in the grammatical forms the fixed wording needs.
+
+    ``of`` fits «оценка …» (genitive: «работы вуза»); ``recommended`` fits «порекомендуете …»
+    (accusative: «наш вуз», «компанию как место работы»). Either may be empty.
+    """
+
+    of: str = ""
+    recommended: str = ""
 
 AGREE_LABELS = [
     "Полностью не согласен",
@@ -62,11 +75,12 @@ def _open(label: str, methodology: str, *, required: bool = False) -> dict[str, 
     }
 
 
-def nps(subject: str) -> list[dict[str, Any]]:
+def nps(subject: Subject) -> list[dict[str, Any]]:
+    target = subject.recommended or "нас"
     return [
         {
             "type": "rating",
-            "label": f"С какой вероятностью вы порекомендуете {subject} другу или коллеге?",
+            "label": f"С какой вероятностью вы порекомендуете {target} другу или коллеге?",
             "placeholder": "0 — точно не порекомендую, 10 — точно порекомендую",
             "required": True,
             "config": {
@@ -81,10 +95,12 @@ def nps(subject: str) -> list[dict[str, Any]]:
     ]
 
 
-def csat(subject: str) -> list[dict[str, Any]]:
+def csat(subject: Subject) -> list[dict[str, Any]]:
     return [
         _scale(
-            f"Насколько вы удовлетворены {subject}?",
+            f"Насколько вы удовлетворены качеством {subject.of}?"
+            if subject.of
+            else "Насколько вы удовлетворены в целом?",
             "csat",
             min_=1,
             max_=5,
@@ -95,7 +111,7 @@ def csat(subject: str) -> list[dict[str, Any]]:
     ]
 
 
-def ces(subject: str) -> list[dict[str, Any]]:
+def ces(subject: Subject) -> list[dict[str, Any]]:
     return [
         _scale(
             "Насколько легко вам было решить свою задачу?",
@@ -104,7 +120,7 @@ def ces(subject: str) -> list[dict[str, Any]]:
             max_=7,
             left="Очень сложно",
             right="Очень легко",
-            description=subject and f"Речь о взаимодействии: {subject}",
+            description=subject.of and f"Оценка {subject.of}",
         ),
         _open("Что можно было сделать проще?", "ces"),
     ]
@@ -124,8 +140,8 @@ SUS_ITEMS = [
 ]
 
 
-def sus(subject: str) -> list[dict[str, Any]]:
-    group_label = "Оценка системы" if not subject else f"Оценка: {subject}"
+def sus(subject: Subject) -> list[dict[str, Any]]:
+    group_label = f"Оценка {subject.of or 'системы'}"
     return [
         {
             "type": "group",
@@ -178,13 +194,13 @@ UEQ_PAIRS = [
 ]
 
 
-def ueq(subject: str) -> list[dict[str, Any]]:
-    target = subject or "продукт"
+def ueq(subject: Subject) -> list[dict[str, Any]]:
+    target = subject.of or "продукта"
     return [
         {
             "type": "group",
             "label": "Впечатления от продукта",
-            "placeholder": f"Оцените {target}: выберите точку между двумя противоположными "
+            "placeholder": f"Оцените впечатление от {target}: выберите точку между двумя противоположными "
             "прилагательными, ближе к тому, которое точнее описывает ваше впечатление.",
             "required": False,
             "config": {"methodology": "ueq"},
@@ -196,7 +212,7 @@ def ueq(subject: str) -> list[dict[str, Any]]:
     ]
 
 
-def attention_check(subject: str) -> list[dict[str, Any]]:
+def attention_check(subject: Subject) -> list[dict[str, Any]]:
     return [
         {
             "type": "radio",
@@ -216,7 +232,7 @@ def attention_check(subject: str) -> list[dict[str, Any]]:
     ]
 
 
-TEMPLATES: dict[str, Callable[[str], list[dict[str, Any]]]] = {
+TEMPLATES: dict[str, Callable[[Subject], list[dict[str, Any]]]] = {
     "nps": nps,
     "csat": csat,
     "ces": ces,
