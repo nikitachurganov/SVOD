@@ -35,6 +35,7 @@ from app.schemas.survey import (
     UpdateProjectRequest,
     UpdateSurveyRequest,
 )
+from app.schemas.landing_demo import CreateSurveyFromDemoRequest
 from app.schemas.survey_demo import (
     DemoResponsesRemoved,
     DemoResponsesRequest,
@@ -44,6 +45,7 @@ from app.services import (
     ai_meter,
     billing_guard,
     email_service,
+    landing_demo_service,
     survey_ai_builder_service,
     survey_demo_service,
     survey_methodology_service,
@@ -171,6 +173,16 @@ async def create_survey(
     payload: CreateSurveyRequest, session: DbSession, user: CurrentUser
 ) -> SurveyDetail:
     return await survey_service.create_survey(session, user, payload)
+
+
+@router.post("/from-demo", response_model=SurveyDetail, status_code=201)
+async def create_survey_from_demo(
+    payload: CreateSurveyFromDemoRequest, session: DbSession, user: CurrentUser
+) -> SurveyDetail:
+    """The survey the AI built on the landing, taken into the account after signing in."""
+    return await landing_demo_service.create_survey_from_draft(
+        session, user, payload.draft_id, payload.organization_id
+    )
 
 
 @router.get("/{survey_id}", response_model=SurveyDetail)

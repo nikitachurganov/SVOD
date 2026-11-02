@@ -7,6 +7,11 @@ class LandingDemoRequest(BaseModel):
     client_session_id: str | None = Field(default=None, max_length=100)
 
 
+class CreateSurveyFromDemoRequest(BaseModel):
+    organization_id: str
+    draft_id: str = Field(..., min_length=1, max_length=32)
+
+
 class LandingDemoScaleLabels(BaseModel):
     min: str
     max: str

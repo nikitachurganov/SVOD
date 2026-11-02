@@ -101,7 +101,11 @@ export const AuthPage = () => {
   const location = useLocation();
   const routeState = location.state as AuthRouteState | null;
 
-  const [mode, setMode] = useState<AuthMode>(routeState?.mode === 'forgot' ? 'forgot' : 'signIn');
+  // Links from the landing open the sign-up with ?mode=register
+  const [mode, setMode] = useState<AuthMode>(() => {
+    if (routeState?.mode === 'forgot' || routeState?.mode === 'signUp') return routeState.mode;
+    return new URLSearchParams(location.search).get('mode') === 'register' ? 'signUp' : 'signIn';
+  });
   const [loading, setLoading] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(() => readOAuthError(location.search));
   const [notice, setNotice] = useState<string | null>(routeState?.notice ?? null);
@@ -126,8 +130,11 @@ export const AuthPage = () => {
   const requestedPath = typeof routeState?.from === 'string' ? routeState.from : HOME_PATH;
   // A new account owns nothing yet: the page the previous session came from (someone else's survey)
   // would answer 403, so only the links that are meant for newcomers survive the sign-up
+  // (an invitation, the plans, the survey built on the landing)
   const redirectTo =
-    justRegistered && !/^\/(join|plans)(\/|\?|$)/.test(requestedPath) ? HOME_PATH : requestedPath;
+    justRegistered && !/^\/(join|plans|surveys\/from-demo)(\/|\?|$)/.test(requestedPath)
+      ? HOME_PATH
+      : requestedPath;
 
   useEffect(() => {
     let cancelled = false;

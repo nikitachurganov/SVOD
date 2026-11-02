@@ -406,6 +406,18 @@ export const createSurvey = async (
   return data;
 };
 
+/** The survey the AI built on the landing becomes a survey of this account; again — the same survey */
+export const createSurveyFromDemo = async (
+  organizationId: string,
+  draftId: string,
+): Promise<SurveyDetail> => {
+  const { data } = await api.post<SurveyDetail>('/surveys/from-demo', {
+    organization_id: organizationId,
+    draft_id: draftId,
+  });
+  return data;
+};
+
 export const updateSurvey = async (id: string, payload: SurveyPayload): Promise<SurveyDetail> => {
   const { data } = await api.put<SurveyDetail>(`/surveys/${id}`, {
     name: payload.name,

@@ -74,6 +74,8 @@ const CreateSurveyPage = lazyPage(() => import('./pages/CreateSurveyPage'), 'Cre
 const EditSurveyPage = lazyPage(() => import('./pages/EditSurveyPage'), 'EditSurveyPage');
 const SurveyViewPage = lazyPage(() => import('./pages/SurveyViewPage'), 'SurveyViewPage');
 const PublicSurveyPage = lazyPage(() => import('./pages/PublicSurveyPage'), 'PublicSurveyPage');
+const SurveyFromDemoPage = lazyPage(() => import('./pages/DemoDraftPage'), 'SurveyFromDemoPage');
+const DemoDraftEntryPage = lazyPage(() => import('./pages/DemoDraftPage'), 'DemoDraftEntryPage');
 const ProfilePage = lazyPage(() => import('./pages/ProfilePage'), 'ProfilePage');
 const AdminPage = lazyPage(() => import('./pages/AdminPage'), 'AdminPage');
 const PlansPage = lazyPage(() => import('./pages/PlansPage'), 'PlansPage');
@@ -557,6 +559,9 @@ const surveyRoutes: RouteObject[] = [
 
   { path: 'surveys/create', element: <CreateSurveyPage /> },
 
+  // The survey the AI built on svodservice.ru, taken into the account after signing in
+  { path: 'surveys/from-demo/:token', element: <SurveyFromDemoPage /> },
+
   { path: 'surveys/projects/:projectId', element: <ProjectSurveysPage /> },
 
   // One route for the survey page and its tabs (/form, /responses[/:responseId], /analytics)
@@ -663,6 +668,9 @@ const publicLegalRoutes: RouteObject[] = [
 const surveysRoutes: RouteObject[] = [
 
   { path: '/verify-email/:token', element: <VerifyEmailPage /> },
+
+  // «Continue in the service» on svodservice.ru: a guest signs up (or in) first, then gets the survey
+  { path: '/demo/:token', element: <DemoDraftEntryPage /> },
 
   { path: '/auth', element: <PublicOnlyAuthPage /> },
 

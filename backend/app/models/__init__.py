@@ -31,6 +31,7 @@ from app.models.request_ai_stage_plan import RequestAIStagePlan
 from app.models.request_stage_handoff import RequestStageHandoff
 from app.models.request_stage_specification import RequestStageSpecification
 from app.models.survey import Survey, SurveyProject, SurveyResponse
+from app.models.landing_demo_draft import LandingDemoDraft
 from app.models.telegram import (
     TelegramAccount,
     TelegramChat,
@@ -77,6 +78,7 @@ __all__ = [
     "TelegramChat",
     "TelegramMessage",
     "Survey",
+    "LandingDemoDraft",
     "SurveyProject",
     "SurveyResponse",
 ]

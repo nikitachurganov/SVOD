@@ -2,21 +2,31 @@
 
 The landing draws only a few kinds of questions (one / several options, a 1–5 or 0–10 scale, a text
 answer), so the generated fields are flattened out of pages and groups and mapped onto those kinds.
+
+The survey itself (pages as the editor needs them) is kept as a draft under a random token. The
+button «continue in the service» leads to that token; after signing in (or up) the person takes the
+draft into their account as an ordinary survey, once.
 """
 
 from __future__ import annotations
 
+import secrets
 import uuid
 from collections.abc import Iterator
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import HTTPException, status
+from sqlalchemy import delete
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.knowledge.methodologies import METHODOLOGIES
+from app.models.landing_demo_draft import LandingDemoDraft
+from app.models.user import User
 from app.schemas.landing_demo import LandingDemoQuestion, LandingDemoResponse, LandingDemoScaleLabels
-from app.schemas.survey import SurveyAiBuildRequest
-from app.services import survey_ai_builder_service
+from app.schemas.survey import CreateSurveyRequest, SurveyAiBuildRequest, SurveyDetail
+from app.services import survey_ai_builder_service, survey_service
 
 _SINGLE = ("single_choice", "Один вариант из списка")
 _MULTIPLE = ("multiple_choice", "Несколько вариантов")
@@ -93,9 +103,34 @@ def to_landing_questions(pages: list[dict[str, Any]]) -> list[LandingDemoQuestio
     return [_question(field, number) for number, field in enumerate(fields, start=1)]
 
 
-async def generate(prompt: str) -> LandingDemoResponse:
+def _ttl() -> timedelta:
+    return timedelta(days=settings.LANDING_DEMO_DRAFT_TTL_DAYS)
+
+
+async def _save_draft(
+    session: AsyncSession, prompt: str, title: str, pages: list[Any], meta: dict[str, Any] | None
+) -> str:
+    now = datetime.now(timezone.utc)
+    # Expired drafts nobody took are of no use; each new one sweeps them away
+    await session.execute(
+        delete(LandingDemoDraft).where(
+            LandingDemoDraft.created_at < now - _ttl(), LandingDemoDraft.survey_id.is_(None)
+        )
+    )
+    token = secrets.token_urlsafe(18)
+    session.add(
+        LandingDemoDraft(
+            id=token, prompt=prompt, title=title, pages=pages, methodology_meta=meta, created_at=now
+        )
+    )
+    await session.commit()
+    return token
+
+
+async def generate(session: AsyncSession, prompt: str) -> LandingDemoResponse:
+    prompt = prompt.strip()
     built = await survey_ai_builder_service.build_survey(
-        SurveyAiBuildRequest(messages=[{"role": "user", "content": prompt.strip()}]),
+        SurveyAiBuildRequest(messages=[{"role": "user", "content": prompt}]),
         max_questions=settings.LANDING_DEMO_MAX_QUESTIONS,
     )
     questions = to_landing_questions(built.pages or [])
@@ -105,12 +140,14 @@ async def generate(prompt: str) -> LandingDemoResponse:
             detail="ИИ не смог составить анкету. Попробуйте переформулировать запрос.",
         )
 
+    title = built.title or prompt[:120]
+    draft_id = await _save_draft(session, prompt, title, built.pages or [], built.methodology_meta)
     meta = built.methodology_meta or {}
     names = [METHODOLOGIES[m].name for m in meta.get("methodologies", []) if m in METHODOLOGIES]
     summary = built.methodology_summary
     return LandingDemoResponse(
-        draft_id=f"draft_{uuid.uuid4().hex[:12]}",
-        title=built.title or prompt.strip()[:120],
+        draft_id=draft_id,
+        title=title,
         methodology=", ".join(names) or "Методология СВОД",
         description=(summary.standards_note if summary else "")
         or "Анкета составлена ИИ-методологом СВОД.",
@@ -118,3 +155,37 @@ async def generate(prompt: str) -> LandingDemoResponse:
         questions=questions,
         ai_summary=built.reply,
     )
+
+
+async def create_survey_from_draft(
+    session: AsyncSession, user: User, draft_id: str, organization_id: str
+) -> SurveyDetail:
+    """The draft becomes a survey of the person; opening the link again leads to the same survey."""
+    draft = await session.get(LandingDemoDraft, draft_id)
+    if draft is not None and draft.survey_id is not None:
+        if draft.claimed_by_user_id == user.id:
+            return await survey_service.get_survey(session, user, str(draft.survey_id))
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Этот черновик уже перенесён в другой аккаунт.",
+        )
+    if draft is None or draft.created_at < datetime.now(timezone.utc) - _ttl():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Черновик не найден или устарел. Составьте опрос заново.",
+        )
+
+    survey = await survey_service.create_survey(
+        session,
+        user,
+        CreateSurveyRequest(
+            organization_id=organization_id,
+            name=draft.title,
+            pages=draft.pages,
+            methodology_meta=draft.methodology_meta,
+        ),
+    )
+    draft.survey_id = uuid.UUID(survey.id)
+    draft.claimed_by_user_id = user.id
+    await session.commit()
+    return survey

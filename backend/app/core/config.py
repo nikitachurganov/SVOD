@@ -105,6 +105,8 @@ class Settings(BaseSettings):
     LANDING_DEMO_PER_IP_PER_HOUR: int = 5
     LANDING_DEMO_PER_DAY: int = 300
     LANDING_DEMO_MAX_QUESTIONS: int = 15
+    # How long the link «continue in the service» keeps a generated draft
+    LANDING_DEMO_DRAFT_TTL_DAYS: int = 7
     DADATA_API_KEY: str = ""
     YANDEX_MAPS_API_KEY: str = ""
     # Telegram bot (python -m app.telegram_bot). Empty token disables the integration.
