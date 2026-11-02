@@ -36,6 +36,8 @@ export const MethodologySummaryCard = ({
         borderRadius: 12,
         padding: white ? '20px 24px' : 12,
         background: white ? 'var(--app-surface)' : 'var(--app-bg)',
+        // The card sits outside antd typography: without its own colour the text stays black in the dark theme
+        color: 'var(--app-text)',
         display: 'flex',
         flexDirection: 'column',
         gap: white ? 14 : 8,

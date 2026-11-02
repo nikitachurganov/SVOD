@@ -54,7 +54,8 @@ export const SurveyFromDemoPage = () => {
     if (!activeOrganization || started.current) return;
     started.current = true;
     createSurveyFromDemo(activeOrganization.id, token)
-      .then((survey) => navigate(`/surveys/${survey.id}`, { replace: true }))
+      // Straight into the form builder: the person came to edit the questions the AI wrote
+      .then((survey) => navigate(`/surveys/${survey.id}/edit`, { replace: true }))
       .catch((err: unknown) => {
         const detail = axios.isAxiosError(err) ? err.response?.data?.detail : null;
         setError(typeof detail === 'string' ? detail : 'Не удалось перенести опрос. Попробуйте ещё раз.');
