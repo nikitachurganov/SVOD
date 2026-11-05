@@ -1,0 +1,1807 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>СВОД Агент</title>
+<!-- Прототип агентного режима. Решения: docs/AGENT_MODE_DECISIONS.md, сценарий теста: docs/prototypes/agent-ui-interview.md
+     Визуальный язык — по мотивам мобильного Gemini (референсы Mobbin): холодные поверхности, ответ ИИ без пузыря, лист-композер, пилюли. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --canvas: #fbf1e8;         /* page base under the aurora */
+  --main: #ffffff;            /* opaque white (icons, tooltips) */
+  --bg: #f6efe8;              /* opaque warm fallback */
+  --surface: rgba(255,255,255,.66);    /* glass: cards on the panel */
+  --surface-2: rgba(255,255,255,.56);  /* glass: bubble, cards on the chat */
+  --surface-3: rgba(255,255,255,.84);  /* glass: hover */
+  --shell: rgba(255,255,255,.42);      /* glass: composer frame with the context bar */
+  --field: rgba(255,255,255,.80);      /* glass: composer input card */
+  --inset: rgba(90,45,15,.06);         /* wells inside glass cards */
+  --hover: rgba(60, 30, 10, 0.06);
+  --outline: #cfc4ba;
+  --outline-2: rgba(120,70,30,.14);
+  --text: #1f1b18;
+  --text-2: #4d4640;
+  --muted: #6f675f;
+  /* glass + aurora */
+  --glass-side: rgba(255,250,245,.52);
+  --glass-pop: rgba(255,252,249,.84);
+  --glass-brd: rgba(255,255,255,.78);
+  --glass-hi: rgba(255,255,255,.95);
+  --glass-drop: 0 8px 28px rgba(140,60,10,.10);
+  --glass-edge: inset 0 0 0 1px var(--glass-brd), inset 0 1px 0 var(--glass-hi);
+  --grad-primary: linear-gradient(135deg, #e8591d, #c2410c);
+  --h-1: #ea580c; --h-2: #f59e0b;
+  --edge: rgba(255,120,50,.85); --edge-soft: rgba(255,255,255,.95); --tile-glow: rgba(255,130,60,.26);
+  --amb-1: rgba(255,126,60,.40); --amb-1-mid: rgba(255,150,86,.26);
+  --amb-2: rgba(255,186,110,.34); --amb-core: rgba(255,140,72,.34); --amb-floor: rgba(255,160,100,.30);
+  --grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .25  0 0 0 0 .1  0 0 0 0 0  0 0 0 .9 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  --grain-o: .10; --halo: 0 0 0 transparent; --scrim: rgba(90,45,15,.18);
+  --primary: #c2410c;
+  --primary-hover: #9a3412;
+  --on-primary: #ffffff;
+  --tonal: #fde3d6;
+  --on-tonal: #7a2605;
+  --good: #188038;
+  --danger: #b3261e;
+  --warn-bg: #fef4e0;
+  --spark-a: #c2410c;
+  --spark-b: #f59e0b;
+  --spark-c: #e11d74;
+  --shadow-sheet: 0 -2px 12px rgba(0,0,0,.06), 0 1px 3px rgba(0,0,0,.08);
+  --shadow: 0 1px 3px rgba(0,0,0,.1), 0 4px 12px rgba(0,0,0,.06);
+  /* chart tokens — validated: diverging red / neutral / blue */
+  --c-d: #e34948;
+  --c-pa: #a9a7a0;
+  --c-p: #2a78d6;
+  --c-pa-ink: #1c1b19;
+  --c-seq: #2a78d6;
+  --c-track: rgba(90,45,15,.10);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --canvas: #0b0809; --main: #121011; --bg: #1a1614; --surface: rgba(255,255,255,.055); --surface-2: rgba(255,255,255,.06); --surface-3: rgba(255,255,255,.11); --shell: rgba(255,255,255,.045); --field: rgba(18,12,10,.55); --inset: rgba(255,255,255,.06);
+    --hover: rgba(255,255,255,.07); --outline: rgba(255,255,255,.28); --outline-2: rgba(255,255,255,.12);
+    --text: #f0eae5; --text-2: #d0c7c0; --muted: #a59c94;
+    --glass-side: rgba(18,12,10,.46); --glass-pop: rgba(30,22,19,.80); --glass-brd: rgba(255,255,255,.10); --glass-hi: rgba(255,255,255,.20);
+    --glass-drop: 0 10px 34px rgba(0,0,0,.45); --glass-edge: inset 0 0 0 1px var(--glass-brd), inset 0 1px 0 var(--glass-hi);
+    --grad-primary: linear-gradient(180deg, #ef7430, #d0501a); --h-1: #ff8a50; --h-2: #ffc46b;
+    --edge: rgba(255,170,110,.95); --edge-soft: rgba(255,255,255,.38); --tile-glow: rgba(255,120,50,.30);
+    --amb-1: rgba(255,104,28,.42); --amb-1-mid: rgba(255,120,50,.18); --amb-2: rgba(255,170,96,.26); --amb-core: rgba(255,132,60,.46); --amb-floor: rgba(255,96,30,.18);
+    --grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 .8  0 0 0 0 .6  0 0 0 .9 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); --grain-o: .09; --halo: 0 0 18px rgba(8,5,4,.75), 0 1px 2px rgba(8,5,4,.5); --scrim: rgba(0,0,0,.42);
+    --primary: #ff9e72; --primary-hover: #ffb894; --on-primary: #3a1100; --tonal: rgba(255,140,90,.18); --on-tonal: #ffc4a8;
+    --good: #6dd58c; --danger: #f2b8b5; --warn-bg: rgba(250,178,25,.12);
+    --spark-a: #ff8a50; --spark-b: #fbbf24; --spark-c: #f472b6;
+    --shadow-sheet: 0 -2px 12px rgba(0,0,0,.4); --shadow: 0 1px 3px rgba(0,0,0,.5), 0 4px 12px rgba(0,0,0,.4);
+    --c-d: #e66767; --c-pa: #6b6a65; --c-p: #3987e5; --c-pa-ink: #ffffff; --c-seq: #3987e5; --c-track: rgba(255,255,255,.12);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --canvas: #0b0809; --main: #121011; --bg: #1a1614; --surface: rgba(255,255,255,.055); --surface-2: rgba(255,255,255,.06); --surface-3: rgba(255,255,255,.11); --shell: rgba(255,255,255,.045); --field: rgba(18,12,10,.55); --inset: rgba(255,255,255,.06);
+  --hover: rgba(255,255,255,.07); --outline: rgba(255,255,255,.28); --outline-2: rgba(255,255,255,.12);
+  --text: #f0eae5; --text-2: #d0c7c0; --muted: #a59c94;
+  --glass-side: rgba(18,12,10,.46); --glass-pop: rgba(30,22,19,.80); --glass-brd: rgba(255,255,255,.10); --glass-hi: rgba(255,255,255,.20);
+  --glass-drop: 0 10px 34px rgba(0,0,0,.45); --glass-edge: inset 0 0 0 1px var(--glass-brd), inset 0 1px 0 var(--glass-hi);
+  --grad-primary: linear-gradient(180deg, #ef7430, #d0501a); --h-1: #ff8a50; --h-2: #ffc46b;
+  --edge: rgba(255,170,110,.95); --edge-soft: rgba(255,255,255,.38); --tile-glow: rgba(255,120,50,.30);
+  --amb-1: rgba(255,104,28,.42); --amb-1-mid: rgba(255,120,50,.18); --amb-2: rgba(255,170,96,.26); --amb-core: rgba(255,132,60,.46); --amb-floor: rgba(255,96,30,.18);
+  --grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 .8  0 0 0 0 .6  0 0 0 .9 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); --grain-o: .09; --halo: 0 0 18px rgba(8,5,4,.75), 0 1px 2px rgba(8,5,4,.5); --scrim: rgba(0,0,0,.42);
+  --primary: #ff9e72; --primary-hover: #ffb894; --on-primary: #3a1100; --tonal: rgba(255,140,90,.18); --on-tonal: #ffc4a8;
+  --good: #6dd58c; --danger: #f2b8b5; --warn-bg: rgba(250,178,25,.12);
+  --spark-a: #ff8a50; --spark-b: #fbbf24; --spark-c: #f472b6;
+  --shadow-sheet: 0 -2px 12px rgba(0,0,0,.4); --shadow: 0 1px 3px rgba(0,0,0,.5), 0 4px 12px rgba(0,0,0,.4);
+  --c-d: #e66767; --c-pa: #6b6a65; --c-p: #3987e5; --c-pa-ink: #ffffff; --c-seq: #3987e5; --c-track: rgba(255,255,255,.12);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  background: transparent; color: var(--text); font-size: 14px; line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; }
+input, textarea, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 8px; }
+.i { flex: none; }
+.spacer { flex: 1; }
+
+/* ── layout ───────────────────────────────────────── */
+.app { display: grid; height: 100dvh; grid-template-columns: 280px minmax(0, 1fr) 0; transition: grid-template-columns .25s ease; }
+.app.panel-open { grid-template-columns: 280px minmax(0, 1fr) 440px; }
+.app.panel-open.panel-wide { grid-template-columns: 280px minmax(0, 1fr) min(60vw, 880px); }
+
+/* ── drawer ───────────────────────────────────────── */
+.sidebar { background: var(--glass-side); display: flex; flex-direction: column; min-height: 0; z-index: 40; }
+.sb-top { display: flex; align-items: center; gap: 8px; padding: 14px 12px 8px 16px; }
+.logo { display: flex; align-items: center; color: var(--text); }
+.logo-svg { height: 24px; width: auto; display: block; }
+.icon-btn { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; color: var(--text-2); }
+.icon-btn:hover { background: var(--hover); color: var(--text); }
+.icon-btn.sm { width: 28px; height: 28px; }
+.icon-btn:disabled { opacity: .3; cursor: default; background: none; }
+.sb-search { margin: 4px 12px 8px; position: relative; }
+.sb-search input { width: 100%; height: 44px; border-radius: 999px; border: 0; background: var(--surface); padding: 0 16px 0 44px; outline: none; font-size: 15px; box-shadow: 0 1px 2px rgba(0,0,0,.06); }
+.sb-search input::placeholder { color: var(--muted); }
+.sb-search input:focus { box-shadow: 0 0 0 2px var(--primary); }
+.sb-search .i { position: absolute; left: 16px; top: 14px; color: var(--text-2); }
+.nav-row { width: calc(100% - 16px); margin: 0 8px; display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 12px; border-radius: 999px; text-align: left; font-size: 15px; color: var(--text); }
+.nav-row:hover { background: var(--hover); }
+.nav-row.active { background: var(--tonal); color: var(--on-tonal); font-weight: 500; }
+.sb-scroll { flex: 1; overflow-y: auto; padding: 0 0 12px; }
+.sb-h { display: flex; align-items: center; padding: 18px 12px 6px 20px; font-size: 15px; font-weight: 500; color: var(--text); }
+.row { width: 100%; display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 12px; border-radius: 999px; text-align: left; color: var(--text); font-size: 14px; }
+.row:hover { background: var(--hover); }
+.row.active { background: var(--tonal); color: var(--on-tonal); font-weight: 500; }
+.row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .count { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.row.active .count { color: inherit; opacity: .8; }
+.row .typing { font-size: 12px; color: var(--on-tonal); white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
+.proj { padding: 0 8px; }
+.proj-row { padding-right: 4px; }
+.proj-row .chev { transition: transform .15s; color: var(--muted); display: inline-flex; }
+.proj-row.open .chev { transform: rotate(90deg); }
+.proj-row .add { opacity: 0; }
+.proj-row:hover .add, .proj-row:focus-within .add { opacity: 1; }
+.proj-row .name { font-weight: 500; }
+.proj-toggle { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; text-align: left; min-height: 40px; }
+.survey-row { padding-left: 38px; }
+.survey-row.flat { padding-left: 16px; }
+.sb-n { margin-left: 8px; font-size: 12px; font-weight: 500; color: var(--muted); }
+.dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.dot.open { background: var(--good); }
+.dot.draft { background: transparent; border: 1.5px solid var(--muted); }
+.dot.closed { background: var(--muted); }
+.sb-empty { padding: 6px 20px; color: var(--muted); font-size: 13px; }
+.sb-foot { padding: 8px 8px 12px; display: flex; flex-direction: column; gap: 2px; }
+.ava { width: 32px; height: 32px; border-radius: 50%; background: var(--surface-3); display: grid; place-items: center; font-size: 11px; font-weight: 600; flex: none; color: var(--text-2); }
+.ava.sm { width: 24px; height: 24px; font-size: 9px; }
+.me { display: flex; align-items: center; gap: 12px; padding: 6px 12px; }
+.me-name { font-weight: 500; font-size: 14px; }
+.me-plan { font-size: 12px; color: var(--muted); }
+
+/* ── chat ─────────────────────────────────────────── */
+.chat { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: transparent; position: relative; }
+.chat-h { height: 60px; display: flex; align-items: center; gap: 4px; padding: 0 8px 0 16px; flex: none; }
+.crumbs { min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.crumbs .proj-l { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.crumbs strong { font-weight: 500; font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.menu-btn { display: none; }
+.people { display: flex; align-items: center; padding: 0 8px 0 6px; }
+.people .ava { margin-left: -6px; box-shadow: 0 0 0 2px var(--main); }
+.icon-btn.on { background: var(--tonal); color: var(--on-tonal); }
+.messages { flex: 1; overflow-y: auto; }
+.col { max-width: 760px; margin: 0 auto; padding: 12px 20px 32px; }
+.msg { margin: 0 0 28px; }
+.msg.user { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.who { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; padding-right: 4px; }
+.bubble { background: var(--surface-2); border-radius: 22px 6px 22px 22px; padding: 12px 18px; max-width: 80%; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 16px; line-height: 1.5; }
+.msg.user.other .bubble { background: transparent; box-shadow: inset 0 0 0 1px var(--outline-2); }
+.agent-head { display: flex; align-items: center; gap: 10px; min-height: 32px; margin: 0 0 8px -8px; }
+.think { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text-2); padding: 4px 10px 4px 8px; border-radius: 999px; }
+.think:hover { background: var(--hover); }
+.think .chev { transition: transform .15s; display: inline-flex; transform: rotate(90deg); }
+.think[aria-expanded="true"] .chev { transform: rotate(-90deg); }
+.steps { list-style: none; margin: 0 0 14px; padding: 12px 16px; background: var(--surface-2); border-radius: 18px; font-size: 14px; }
+.steps li { display: flex; align-items: baseline; gap: 10px; padding: 3px 0; flex-wrap: wrap; }
+.steps li .st-ico { width: 14px; height: 14px; display: inline-grid; place-items: center; align-self: center; color: var(--good); }
+.steps li.run { color: var(--text); }
+.steps li.done { color: var(--text-2); }
+.st-detail { color: var(--muted); }
+.st-detail::before { content: '· '; }
+.spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--outline); border-top-color: var(--primary); animation: spin .8s linear infinite; display: inline-block; flex: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.text { font-size: 16px; line-height: 1.65; }
+.text p { margin: 0 0 12px; }
+.text p:last-child { margin-bottom: 0; }
+.caret { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--spark-a); vertical-align: middle; margin-left: 4px; animation: pulse 1s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .25; transform: scale(.7); } }
+.msg-actions { display: flex; gap: 2px; margin: 10px 0 0 -8px; }
+.msg-actions .icon-btn { width: 36px; height: 36px; color: var(--text-2); }
+.event { display: flex; gap: 10px; align-items: flex-start; margin: 0 auto 28px; max-width: 560px; font-size: 13px; color: var(--text-2); background: var(--inset); border-radius: 16px; padding: 10px 14px; }
+.chat .event { background: var(--surface-2); }
+.event .i { margin-top: 2px; color: var(--muted); }
+.event b { font-weight: 500; color: var(--text); }
+
+.card { margin-top: 14px; display: flex; align-items: center; gap: 14px; width: 100%; max-width: 480px; text-align: left; padding: 14px 16px; border-radius: 18px; background: var(--surface-2); }
+.card:hover { background: var(--surface-3); }
+.card-ico { width: 36px; height: 36px; border-radius: 12px; background: var(--main); color: var(--primary); display: grid; place-items: center; flex: none; }
+.card-title { font-weight: 600; font-size: 15px; }
+.card-meta { color: var(--text-2); font-size: 13px; }
+.card .go { margin-left: auto; color: var(--text-2); display: inline-flex; }
+.confirm { margin-top: 14px; border-radius: 20px; padding: 16px 18px; max-width: 500px; background: var(--surface-2); }
+.confirm.warn { background: var(--warn-bg); }
+.confirm-title { font-weight: 600; font-size: 15px; margin-bottom: 2px; }
+.confirm-text { color: var(--text-2); font-size: 14px; margin-bottom: 14px; }
+.resolved { margin-top: 12px; font-size: 14px; color: var(--text-2); display: flex; gap: 8px; align-items: center; }
+.resolved .i { color: var(--good); }
+.btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn { height: 40px; padding: 0 20px; border-radius: 999px; background: transparent; box-shadow: inset 0 0 0 1px var(--outline); font-weight: 500; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; color: var(--primary); }
+.btn:hover { background: var(--hover); }
+.btn.primary { background: var(--primary); box-shadow: none; color: var(--on-primary); }
+.btn.primary:hover { background: var(--primary-hover); }
+.btn.tonal { background: var(--tonal); box-shadow: none; color: var(--on-tonal); }
+.btn.danger { color: var(--danger); }
+.btn.sm { height: 34px; padding: 0 14px; font-size: 13px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.chip { height: 36px; padding: 0 16px; border-radius: 999px; font-size: 14px; color: var(--text); box-shadow: inset 0 0 0 1px var(--outline); text-align: left; display: inline-flex; align-items: center; gap: 6px; }
+.chip:hover { background: var(--hover); }
+.quotes { margin-top: 14px; display: grid; gap: 10px; }
+.quote { border-left: 3px solid var(--spark-b); padding: 2px 0 2px 14px; }
+.quote-text { font-style: italic; }
+.quote-meta { font-size: 12px; color: var(--muted); }
+.inline-block { margin-top: 14px; border-radius: 18px; padding: 14px 16px; max-width: 540px; background: var(--surface-2); }
+.inline-block h4 { margin: 0 0 8px; font-size: 14px; font-weight: 600; }
+.link-box { display: flex; align-items: center; gap: 8px; margin-top: 10px; border-radius: 999px; padding: 4px 4px 4px 16px; background: var(--inset); }
+.link-box code { flex: 1; min-width: 0; font-family: ui-monospace, Consolas, monospace; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* home (new survey) */
+.home { min-height: 100%; display: flex; flex-direction: column; justify-content: center; max-width: 760px; margin: 0 auto; padding: 24px 20px; }
+.home .hello { font-size: 20px; color: var(--text-2); margin: 0 0 2px; }
+.home h1 { font-size: 34px; font-weight: 400; margin: 0 0 28px; letter-spacing: -.02em; line-height: 1.2; }
+.home h1 span { background: linear-gradient(90deg, var(--h-1), var(--h-2), var(--h-1)); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: pan 9s ease-in-out infinite alternate; }
+@keyframes pan { to { background-position: 100% 0; } }
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.tile { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-height: 132px; padding: 16px; border-radius: 20px; background: var(--surface-2); text-align: left; transition: background .15s, transform .15s; }
+.tile:hover { background: var(--surface-3); }
+.tile:active { transform: scale(.98); }
+.tile .t-ico { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--tonal); color: var(--on-tonal); margin-bottom: 6px; }
+.tile b { font-weight: 500; font-size: 15px; line-height: 1.3; }
+.tile small { font-size: 12px; color: var(--muted); margin-top: auto; }
+.home-note { margin: 20px 0 0; color: var(--muted); font-size: 13px; }
+.thread-intro { border-radius: 24px; padding: 18px 20px; background: var(--surface-2); margin-bottom: 28px; }
+.thread-intro h2 { margin: 0 0 4px; font-size: 18px; font-weight: 500; }
+.thread-intro p { margin: 0; color: var(--text-2); }
+
+/* composer sheet */
+.composer-wrap { flex: none; padding: 0 20px 12px; }
+.lock { max-width: 760px; margin: 0 auto 10px; display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--on-tonal); background: var(--tonal); border-radius: 999px; padding: 10px 16px; }
+.composer-shell { max-width: 760px; margin: 0 auto; border-radius: 30px; background: var(--shell); padding: 4px; box-shadow: 0 0 0 1px var(--outline-2), 0 4px 16px rgba(0,0,0,.05); }
+.ctx-bar { display: flex; align-items: center; gap: 4px; min-height: 36px; padding: 2px 8px 4px; }
+.ctx-btn { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 999px; color: var(--text-2); font-size: 14px; min-width: 0; }
+.ctx-btn:hover { background: var(--hover); color: var(--text); }
+.ctx-btn .i { flex: none; }
+.ctx-btn .pc-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px; }
+.ctx-btn[aria-expanded="true"] .i:last-child, .link-btn[aria-expanded="true"] .i:last-child { transform: rotate(180deg); }
+.ctx-meta { display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; font-size: 13px; color: var(--muted); white-space: nowrap; }
+.composer { border-radius: 26px; background: var(--field); box-shadow: 0 0 0 1px var(--outline-2); padding: 14px 10px 10px 20px; }
+.composer.locked { opacity: .6; }
+.composer textarea { width: 100%; border: 0; outline: none; resize: none; background: transparent; min-height: 26px; max-height: 200px; padding: 2px 10px 8px 0; font-size: 16px; line-height: 1.5; display: block; }
+.composer textarea::placeholder { color: var(--muted); }
+.comp-row { display: flex; align-items: center; gap: 4px; margin-left: -10px; }
+.comp-row > button { flex: none; }
+.link-btn { display: inline-flex; align-items: center; gap: 6px; height: 30px; margin: -5px 0 -5px -10px; padding: 0 8px 0 10px; border-radius: 999px; color: var(--text); font-weight: 500; }
+.link-btn:hover { background: var(--hover); }
+.link-btn .i:first-child { color: var(--muted); }
+
+/* menu (project picker) */
+.menu { position: fixed; z-index: 160; min-width: 260px; max-width: calc(100vw - 16px); max-height: min(420px, calc(100dvh - 16px)); overflow-y: auto; border-radius: 20px; padding: 8px; }
+.menu[hidden] { display: none; }
+.menu-h { padding: 8px 12px 4px; font-size: 12px; font-weight: 500; color: var(--muted); }
+.menu-item { width: 100%; display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 6px 12px; border-radius: 12px; text-align: left; font-size: 14px; color: var(--text); }
+.menu-item:hover, .menu-item:focus-visible { background: var(--hover); outline: none; }
+.menu-item[aria-checked="true"] { background: var(--tonal); color: var(--on-tonal); }
+.menu-item .i { color: var(--muted); }
+.menu-item[aria-checked="true"] .i { color: inherit; }
+.menu-item .mi-text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
+.menu-item .mi-text small { color: var(--muted); font-size: 12px; }
+.menu-item[aria-checked="true"] .mi-text small { color: inherit; opacity: .75; }
+.menu-div { height: 1px; background: var(--outline-2); margin: 6px 8px; }
+.send { width: 44px; height: 44px; border-radius: 50%; background: var(--surface-2); color: var(--text); display: grid; place-items: center; transition: background .15s; }
+.send:not(:disabled) { background: var(--primary); color: var(--on-primary); }
+.send:disabled { color: var(--muted); cursor: default; }
+.hint { font-size: 12px; color: var(--muted); text-align: center; margin-top: 8px; }
+.to-bottom { position: absolute; left: 50%; transform: translateX(-50%) scale(.8); width: 40px; height: 40px; border-radius: 50%; background: var(--main); box-shadow: var(--shadow); color: var(--text-2); display: grid; place-items: center; opacity: 0; pointer-events: none; transition: all .15s; z-index: 5; }
+.to-bottom.show { opacity: 1; pointer-events: auto; transform: translateX(-50%) scale(1); }
+
+/* ── panel ────────────────────────────────────────── */
+.panel { background: var(--glass-side); display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; z-index: 30; border-radius: 24px 0 0 24px; }
+.app:not(.panel-open) .panel { visibility: hidden; }
+.panel-h { flex: none; padding: 12px 8px 0 20px; }
+.panel-title-row { display: flex; align-items: center; gap: 8px; min-height: 40px; }
+.panel-title { font-weight: 500; font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.status { font-size: 12px; display: inline-flex; align-items: center; gap: 6px; color: var(--text-2); white-space: nowrap; }
+.tabs { display: flex; gap: 6px; margin: 10px 12px 4px 0; overflow-x: auto; scrollbar-width: none; }
+.tab { height: 36px; padding: 0 14px; font-size: 14px; font-weight: 500; color: var(--text-2); border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; box-shadow: inset 0 0 0 1px var(--outline); }
+.tab:hover { background: var(--hover); }
+.tab[aria-selected="true"] { background: var(--tonal); color: var(--on-tonal); box-shadow: none; }
+.tab:disabled { opacity: .4; cursor: default; background: none; }
+.panel-body { flex: 1; overflow-y: auto; padding: 12px 16px 16px; }
+.panel-foot { flex: none; padding: 10px 16px 14px; display: flex; gap: 8px; flex-wrap: wrap; }
+
+.meta-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; color: var(--muted); font-size: 13px; }
+.badge { font-size: 12px; font-weight: 500; padding: 3px 10px; border-radius: 999px; background: var(--surface); color: var(--text-2); }
+.q { background: var(--surface); border-radius: 20px; padding: 12px 12px 14px 16px; margin-bottom: 10px; }
+.q.flash, .block.flash { animation: flash 1.8s ease; }
+@keyframes flash { 0%, 30% { box-shadow: 0 0 0 2px var(--primary); } 100% { box-shadow: 0 0 0 0 transparent; } }
+.q-top { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.q-num { font-weight: 600; color: var(--text-2); margin-right: 4px; }
+.req-toggle { font-size: 12px; height: 26px; padding: 0 10px; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--outline); color: var(--muted); white-space: nowrap; }
+.req-toggle[aria-pressed="true"] { color: var(--on-tonal); box-shadow: none; background: var(--tonal); }
+.q-title, .opt-t { outline: none; border-radius: 6px; padding: 1px 3px; margin: 0 -3px; }
+.q-title { font-weight: 500; font-size: 15px; }
+.q-title:hover, .opt-t:hover { background: var(--hover); cursor: text; }
+.q-title:focus, .opt-t:focus { background: var(--inset); box-shadow: 0 0 0 1px var(--outline); }
+.q-prev { margin-top: 10px; }
+.scale { display: grid; grid-template-columns: repeat(11, 1fr); gap: 3px; }
+.scale span { height: 28px; background: var(--inset); border-radius: 8px; display: grid; place-items: center; font-size: 12px; color: var(--text-2); }
+.scale-l { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 4px; }
+.stars { color: var(--outline); font-size: 20px; letter-spacing: 4px; }
+.opt { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--text-2); padding: 3px 0; }
+.opt i { width: 16px; height: 16px; border: 2px solid var(--outline); border-radius: 50%; flex: none; }
+.opt i.sq { border-radius: 4px; }
+.fake-input { height: 54px; background: var(--inset); border-radius: 12px; padding: 8px 12px; color: var(--muted); font-size: 13px; }
+.edit-hint { font-size: 12px; color: var(--muted); margin: 0 0 12px; }
+
+.kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; }
+.kpi { background: var(--surface); border-radius: 20px; padding: 12px 14px; min-width: 0; }
+.kpi-l { font-size: 12px; color: var(--muted); }
+.kpi-v { font-size: 24px; font-weight: 500; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.kpi-s { font-size: 12px; color: var(--text-2); }
+.block { background: var(--surface); border-radius: 20px; padding: 14px 16px; margin-bottom: 10px; }
+.block-h { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+.block-h h3 { margin: 0; font-size: 14px; font-weight: 600; }
+.block-h .sub { font-size: 12px; color: var(--muted); }
+.block p.muted { margin: 0 0 12px; color: var(--text-2); font-size: 13px; }
+.ask { margin-left: auto; font-size: 12px; color: var(--primary); display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; padding: 4px 8px; border-radius: 999px; font-weight: 500; }
+.ask:hover { background: var(--tonal); }
+.ov-list { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; margin: 0; font-size: 14px; }
+.ov-list dt { color: var(--muted); }
+.ov-list dd { margin: 0; }
+.inline-confirm { margin-top: 10px; padding: 12px 14px; border-radius: 16px; background: var(--inset); font-size: 13px; }
+.inline-confirm p { margin: 0 0 10px; color: var(--text-2); }
+.stack { display: flex; gap: 2px; height: 28px; }
+.stack.sm { height: 10px; }
+.seg { display: grid; place-items: center; font-size: 12px; font-weight: 600; color: #fff; min-width: 2px; }
+.seg:first-child { border-radius: 6px 0 0 6px; }
+.seg:last-child { border-radius: 0 6px 6px 0; }
+.stack.sm .seg:first-child { border-radius: 4px 0 0 4px; }
+.stack.sm .seg:last-child { border-radius: 0 4px 4px 0; }
+.seg.d { background: var(--c-d); }
+.seg.pa { background: var(--c-pa); color: var(--c-pa-ink); }
+.seg.p { background: var(--c-p); }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--text-2); margin-top: 8px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.hist { display: grid; grid-template-columns: repeat(11, 1fr); gap: 2px; align-items: end; height: 110px; margin-top: 14px; }
+.hist .bar-hit { height: 100%; display: flex; align-items: flex-end; }
+.hist .bar { width: 100%; border-radius: 4px 4px 0 0; min-height: 2px; }
+.hist .bar-hit:hover .bar { filter: brightness(1.1); }
+.hist-x { display: grid; grid-template-columns: repeat(11, 1fr); gap: 2px; font-size: 11px; color: var(--muted); text-align: center; border-top: 1px solid var(--outline-2); padding-top: 4px; }
+.theme-row { margin-bottom: 10px; }
+.theme-top { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 4px; }
+.theme-top .lbl { flex: 1; min-width: 0; }
+.theme-top .cnt { font-variant-numeric: tabular-nums; color: var(--text-2); }
+.tag { font-size: 11px; padding: 1px 8px; border-radius: 999px; background: var(--inset); color: var(--muted); white-space: nowrap; }
+.track { height: 8px; background: var(--c-track); border-radius: 4px; overflow: hidden; }
+.track > div { height: 100%; background: var(--c-seq); border-radius: 0 4px 4px 0; }
+.seg-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.seg-table td { padding: 6px 0; vertical-align: middle; }
+.seg-table td.n { color: var(--muted); width: 60px; text-align: right; padding-right: 10px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.seg-table td.v { width: 48px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.seg-table td.bar { width: 40%; }
+.seg-table td.l { padding-right: 8px; }
+.filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.filters .chip { height: 32px; padding: 0 12px; font-size: 13px; }
+.filters .chip[aria-pressed="true"] { background: var(--tonal); color: var(--on-tonal); box-shadow: none; }
+.resp { background: var(--surface); border-radius: 20px; overflow: hidden; }
+.resp-row { display: grid; grid-template-columns: 44px 1fr; gap: 10px; padding: 12px 14px; border-top: 1px solid var(--outline-2); }
+.resp-row:first-child { border-top: 0; }
+.score { font-weight: 600; font-variant-numeric: tabular-nums; display: flex; align-items: center; gap: 6px; }
+.score i { width: 8px; height: 8px; border-radius: 2px; }
+.resp-meta { font-size: 12px; color: var(--muted); }
+.note { font-size: 12px; color: var(--muted); margin-top: 8px; }
+
+.tip { position: fixed; pointer-events: none; z-index: 100; background: var(--text); color: var(--main); font-size: 12px; padding: 6px 10px; border-radius: 8px; white-space: nowrap; opacity: 0; transition: opacity .1s; left: 0; top: 0; }
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px); opacity: 0; background: var(--text); color: var(--main); padding: 12px 18px; border-radius: 12px; font-size: 14px; z-index: 200; transition: all .2s; max-width: calc(100vw - 32px); text-align: center; pointer-events: none; }
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.scrim { position: fixed; inset: 0; background: var(--scrim); z-index: 25; opacity: 0; pointer-events: none; transition: opacity .2s; }
+.modal-back { position: fixed; inset: 0; background: var(--scrim); z-index: 150; display: grid; place-items: center; padding: 16px; }
+.modal-back[hidden] { display: none; }
+.modal { border-radius: 28px; width: min(480px, 100%); padding: 24px; max-height: calc(100dvh - 32px); overflow-y: auto; }
+.modal h2 { margin: 0 0 12px; font-size: 22px; font-weight: 400; }
+.modal p, .modal li { color: var(--text-2); font-size: 14px; }
+.modal ul { padding-left: 20px; margin: 8px 0; }
+.modal .btns { justify-content: flex-end; margin-top: 20px; }
+
+/* ── aurora + glass ───────────────────────────────── */
+.ambient { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; background: var(--canvas); }
+.ambient i { position: absolute; display: block; will-change: transform, opacity; }
+.amb-beam { width: 135vmax; height: 36vmax; left: -44vmax; top: -4vmax; background: radial-gradient(closest-side, var(--amb-1), var(--amb-1-mid) 55%, transparent); transform: rotate(-31deg); animation: beam 26s ease-in-out infinite alternate; }
+.amb-streak { width: 120vmax; height: 10vmax; left: -6vmax; top: -6vmax; background: radial-gradient(closest-side, var(--amb-2), transparent); transform: rotate(-31deg); animation: streak 34s ease-in-out infinite alternate; }
+.amb-core { width: 46vmax; height: 28vmax; left: -12vmax; top: 6vmax; background: radial-gradient(closest-side, var(--amb-core), transparent); animation: core 19s ease-in-out infinite alternate; }
+.amb-floor { width: 90vmax; height: 50vmax; right: -44vmax; bottom: -32vmax; background: radial-gradient(closest-side, var(--amb-floor), transparent); animation: floor 31s ease-in-out infinite alternate; }
+.ambient::after { content: ''; position: absolute; inset: 0; background-image: var(--grain); background-size: 160px; opacity: var(--grain-o); }
+@keyframes beam { 0% { transform: translate3d(0,0,0) rotate(-31deg) scaleY(1); opacity: .85; } 50% { transform: translate3d(7vmax,3vmax,0) rotate(-27deg) scaleY(1.18); opacity: 1; } 100% { transform: translate3d(2vmax,10vmax,0) rotate(-35deg) scaleY(.92); opacity: .8; } }
+@keyframes streak { 0% { transform: translate3d(0,0,0) rotate(-31deg); opacity: .6; } 100% { transform: translate3d(10vmax,12vmax,0) rotate(-26deg); opacity: 1; } }
+@keyframes core { 0% { transform: translate3d(0,0,0) scale(1); opacity: .7; } 100% { transform: translate3d(18vmax,10vmax,0) scale(1.25); opacity: 1; } }
+@keyframes floor { 0% { transform: translate3d(0,0,0) scale(1); opacity: .6; } 100% { transform: translate3d(-12vmax,-6vmax,0) scale(1.15); opacity: 1; } }
+
+.sidebar, .panel { -webkit-backdrop-filter: blur(28px) saturate(1.5); backdrop-filter: blur(28px) saturate(1.5); }
+.sidebar { box-shadow: inset -1px 0 0 var(--glass-brd); }
+.panel { box-shadow: inset 1px 0 0 var(--glass-brd); }
+.tile, .card, .confirm, .inline-block, .thread-intro, .steps, .bubble, .event, .composer-shell, .lock { -webkit-backdrop-filter: blur(16px) saturate(1.4); backdrop-filter: blur(16px) saturate(1.4); }
+.tile, .card, .confirm, .inline-block, .thread-intro, .steps, .bubble, .composer-shell { box-shadow: var(--glass-edge), var(--glass-drop); }
+.msg.user.other .bubble { box-shadow: var(--glass-edge); }
+/* text that sits straight on the aurora needs a denser backing */
+.bubble, .event, .chat .event, .chip { background: var(--glass-pop); }
+.chip { -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); box-shadow: var(--glass-edge); }
+.chip:hover { background: var(--surface-3); }
+.text, .home h1, .home .hello, .chat-h, .who { text-shadow: var(--halo); }
+.home h1 span { text-shadow: none; }
+.composer, .q, .kpi, .block, .resp, .badge, .sb-search input { box-shadow: var(--glass-edge); }
+.sb-search input:focus { box-shadow: var(--glass-edge), 0 0 0 2px var(--primary); }
+.composer-shell:focus-within { box-shadow: var(--glass-edge), 0 0 0 1px rgba(255,130,70,.5), 0 0 40px rgba(255,110,40,.24), var(--glass-drop); }
+.menu, .modal { background: var(--glass-pop); -webkit-backdrop-filter: blur(28px) saturate(1.6); backdrop-filter: blur(28px) saturate(1.6); box-shadow: var(--glass-edge), 0 18px 48px rgba(0,0,0,.26); }
+.modal-back { -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+.scrim { -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+.btn.primary, .send:not(:disabled) { color: #fff; background: var(--grad-primary); box-shadow: inset 0 1px 0 rgba(255,255,255,.28), 0 1px 3px rgba(0,0,0,.25); }
+.btn.primary { font-weight: 600; }
+.btn.primary:hover { background: var(--grad-primary); filter: brightness(1.08); }
+
+/* manual question builder (panel → Вопросы) */
+.opt-t { flex: 1; min-width: 0; }
+.opt-x { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; color: var(--muted); opacity: 0; flex: none; }
+.opt:hover .opt-x, .opt:focus-within .opt-x, .opt-x:focus-visible { opacity: 1; }
+.opt-x:hover { background: var(--hover); color: var(--text); }
+@media (hover: none) { .opt-x { opacity: 1; } }
+.add-opt { display: inline-flex; align-items: center; gap: 6px; margin: 4px 0 0 -6px; padding: 4px 10px 4px 8px; border-radius: 999px; font-size: 13px; font-weight: 500; color: var(--primary); }
+.add-opt:hover { background: var(--tonal); }
+.add-q { width: 100%; min-height: 52px; border-radius: 20px; display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 500; color: var(--primary); border: 1.5px dashed var(--outline); background: transparent; }
+.add-q:hover { background: var(--tonal); border-color: transparent; }
+.type-pick { border-radius: 20px; padding: 12px; background: var(--surface); box-shadow: var(--glass-edge); }
+.type-pick-h { display: flex; align-items: center; margin: 0 0 8px 4px; font-size: 13px; font-weight: 600; }
+.type-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.type-btn { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 0 12px; border-radius: 14px; background: var(--inset); text-align: left; font-size: 14px; }
+.type-btn:hover { background: var(--tonal); color: var(--on-tonal); }
+.type-btn .i { color: var(--primary); }
+.q-del:disabled { display: none; }
+
+/* lit edges on the home tiles: a slow glint walks across them, the pointer drags a spotlight */
+.tile { position: relative; isolation: isolate; overflow: hidden; }
+.tile::before { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: .45;
+  box-shadow: inset 1.5px 1.5px 0 0 var(--edge), inset -1px -1px 0 0 var(--edge-soft), inset 0 0 26px -10px var(--edge);
+  animation: glint 8s ease-in-out infinite; }
+.tile::after { content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: 0;
+  background: radial-gradient(260px 200px at var(--mx, 30%) var(--my, 100%), var(--tile-glow), transparent 70%);
+  animation: tileglow 8s ease-in-out infinite; }
+.tile:nth-child(2)::before, .tile:nth-child(2)::after { animation-delay: -2s; }
+.tile:nth-child(3)::before, .tile:nth-child(3)::after { animation-delay: -4s; }
+.tile:nth-child(4)::before, .tile:nth-child(4)::after { animation-delay: -6s; }
+.tile:hover::before { opacity: 1; animation: none; }
+.tile:hover::after { opacity: 1; animation: none; }
+@keyframes glint { 0%, 100% { opacity: .35; } 25% { opacity: .95; } 55% { opacity: .35; } }
+@keyframes tileglow { 0%, 100% { opacity: 0; } 25% { opacity: .75; } 55% { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient i, .tile::before, .tile::after, .home h1 span { animation: none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .sidebar, .panel, .tile, .card, .confirm, .inline-block, .thread-intro, .steps, .bubble, .event, .composer-shell, .lock, .menu, .modal, .modal-back, .scrim { -webkit-backdrop-filter: none; backdrop-filter: none; }
+  :root { --glass-side: var(--bg); --glass-pop: var(--bg); }
+}
+
+/* ── responsive ───────────────────────────────────── */
+@media (max-width: 1180px) {
+  .app, .app.panel-open, .app.panel-open.panel-wide { grid-template-columns: 260px minmax(0, 1fr); }
+  .panel { position: fixed; top: 0; right: 0; bottom: 0; width: min(460px, 92vw); transform: translateX(100%); transition: transform .25s ease, visibility .25s; box-shadow: var(--shadow); }
+  .app.panel-wide .panel { width: min(860px, 96vw); }
+  .app.panel-open .panel { transform: none; }
+  .app.panel-open ~ .scrim { opacity: 1; pointer-events: auto; }
+}
+@media (max-width: 820px) {
+  .app, .app.panel-open, .app.panel-open.panel-wide { grid-template-columns: minmax(0, 1fr); }
+  .sidebar { position: fixed; top: 0; left: 0; bottom: 0; width: min(320px, 86vw); transform: translateX(-100%); transition: transform .25s ease; border-radius: 0 24px 24px 0; }
+  .app.sb-open .sidebar { transform: none; }
+  .app.sb-open ~ .scrim { opacity: 1; pointer-events: auto; }
+  .panel, .app.panel-wide .panel { width: 100vw; border-radius: 0; }
+  .menu-btn { display: grid; }
+  .chat-h { padding: 0 4px; }
+  .crumbs .proj-l, .people, .wide-btn, .hide-m { display: none; }
+  .bubble { max-width: 88%; }
+  .col { padding: 8px 16px 24px; }
+  .home { padding: 16px; }
+  .home h1 { font-size: 28px; }
+  .tiles { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .tile { min-height: 116px; }
+  .composer-wrap { padding: 0; }
+  .composer-shell { border-radius: 28px 28px 0 0; padding-bottom: calc(4px + env(safe-area-inset-bottom)); box-shadow: var(--glass-edge), var(--shadow-sheet); }
+  .composer { border-radius: 24px; }
+  .ctx-meta { display: none; }
+  .lock { margin: 0 12px 8px; }
+  .hint { display: none; }
+}
+@media (max-width: 420px) {
+  .kpis { grid-template-columns: 1fr 1fr; }
+  .kpis .kpi:last-child { grid-column: span 2; }
+}
+</style>
+</head>
+<body>
+<div class="ambient" aria-hidden="true"><i class="amb-beam"></i><i class="amb-streak"></i><i class="amb-core"></i><i class="amb-floor"></i></div>
+<div class="app" id="app">
+  <aside class="sidebar" id="sidebar" aria-label="Проекты и опросы">
+    <div class="sb-top">
+      <div class="logo" role="img" aria-label="СВОД"><svg class="logo-svg" aria-hidden="true" focusable="false" viewBox="0 0 4746 1060" fill="none" xmlns="http://www.w3.org/2000/svg"> <path d="M63.7549 616.976C125.736 223.891 466.042 -49.0321 823.851 7.38574C1111.19 52.693 1322.44 296.617 1362.4 594.515C1419.68 628.604 1458.06 691.136 1458.06 762.634C1458.06 870.605 1370.53 958.134 1262.56 958.134C1154.59 958.134 1067.06 870.605 1067.06 762.634C1067.06 700.438 1096.11 645.027 1141.37 609.221C1115.36 375.566 975.262 184.243 772.047 138.312C500.394 76.9144 218.827 298.576 143.148 633.407C138.924 652.097 135.43 670.745 132.646 689.308C120.32 685.3 107.163 683.134 93.5 683.134C80.3398 683.134 67.6491 685.144 55.7178 688.873C57.2911 665.058 59.9557 641.071 63.7549 616.976ZM93.5 716.134C105.827 716.134 117.597 718.52 128.373 722.854V722.855C151.444 732.135 169.96 750.348 179.64 773.211C179.776 773.534 179.911 773.858 180.044 774.183C180.229 774.635 180.411 775.088 180.59 775.544C180.961 776.492 181.317 777.447 181.658 778.41C181.691 778.504 181.724 778.598 181.757 778.691C182.088 779.637 182.405 780.589 182.707 781.548C182.767 781.737 182.825 781.927 182.884 782.117C183.071 782.726 183.254 783.338 183.429 783.952C183.665 784.781 183.889 785.615 184.103 786.453C184.266 787.094 184.423 787.738 184.573 788.385C184.757 789.178 184.933 789.974 185.097 790.774C185.168 791.121 185.237 791.468 185.304 791.815C186.061 795.742 186.573 799.756 186.822 803.841C186.886 804.889 186.934 805.942 186.963 807C186.977 807.522 186.986 808.045 186.992 808.569C186.996 808.924 187 809.279 187 809.634C187 810.037 186.997 810.44 186.992 810.842C186.987 811.244 186.98 811.646 186.97 812.047C186.939 813.25 186.886 814.447 186.811 815.639C186.785 816.036 186.758 816.432 186.728 816.827C186.487 819.993 186.088 823.115 185.54 826.185C185.266 827.719 184.954 829.241 184.605 830.749C184.17 832.634 183.678 834.497 183.131 836.337C182.803 837.441 182.454 838.536 182.087 839.622C181.474 841.432 180.808 843.218 180.09 844.977C179.659 846.032 179.208 847.077 178.74 848.112C178.272 849.148 177.786 850.173 177.281 851.188C177.113 851.527 176.943 851.864 176.771 852.199C176.083 853.543 175.363 854.868 174.612 856.174C174.049 857.153 173.469 858.121 172.872 859.077C172.474 859.714 172.069 860.347 171.656 860.974C171.244 861.601 170.824 862.223 170.396 862.839C169.969 863.455 169.534 864.066 169.093 864.672C168.651 865.277 168.202 865.877 167.746 866.472C166.835 867.66 165.896 868.827 164.93 869.97C164.447 870.541 163.956 871.107 163.46 871.666C162.964 872.225 162.461 872.779 161.951 873.326C160.932 874.421 159.887 875.491 158.816 876.536C158.281 877.059 157.741 877.575 157.193 878.085C156.92 878.34 156.644 878.592 156.367 878.844C155.814 879.347 155.254 879.843 154.688 880.333C153.275 881.558 151.824 882.741 150.338 883.88C149.743 884.336 149.144 884.785 148.538 885.227C147.63 885.889 146.709 886.535 145.776 887.165C145.155 887.585 144.528 887.998 143.896 888.403C142.947 889.011 141.987 889.603 141.016 890.178C140.368 890.561 139.715 890.935 139.058 891.303C138.729 891.487 138.399 891.669 138.067 891.849C137.405 892.208 136.738 892.561 136.066 892.905C134.386 893.766 132.676 894.576 130.939 895.336C130.245 895.64 129.546 895.936 128.843 896.224C128.491 896.367 128.138 896.509 127.784 896.648C127.076 896.927 126.364 897.198 125.648 897.46C122.784 898.509 119.855 899.422 116.867 900.19C116.12 900.383 115.37 900.565 114.616 900.739C113.108 901.087 111.586 901.399 110.051 901.673C108.516 901.947 106.968 902.185 105.408 902.383C101.509 902.878 97.5342 903.134 93.5 903.134C89.4658 903.134 85.4913 902.878 81.5918 902.383C80.0319 902.185 78.4841 901.947 76.9492 901.673C75.4141 901.399 73.8919 901.087 72.3838 900.739C71.63 900.565 70.8795 900.383 70.1328 900.19C67.1453 899.422 64.2157 898.509 61.3516 897.46C60.6356 897.198 59.9235 896.927 59.2158 896.648C58.8619 896.509 58.509 896.367 58.1572 896.224C57.4539 895.936 56.7552 895.64 56.0605 895.336C54.3235 894.576 52.6136 893.766 50.9336 892.905C50.2617 892.561 49.5949 892.208 48.9326 891.849C48.6013 891.669 48.2713 891.487 47.9424 891.303C47.2849 890.935 46.6319 890.561 45.9844 890.178C45.0129 889.603 44.053 889.011 43.1045 888.403C42.4723 887.998 41.8453 887.585 41.2236 887.165C40.291 886.535 39.3701 885.889 38.4619 885.227C37.8563 884.785 37.2566 884.336 36.6621 883.88C35.1761 882.741 33.7253 881.558 32.3115 880.333C31.746 879.843 31.1863 879.347 30.6328 878.844C30.3561 878.592 30.0803 878.34 29.8066 878.085C29.2592 877.575 28.7186 877.059 28.1836 876.536C27.1134 875.491 26.068 874.421 25.0488 873.326C24.5394 872.779 24.0364 872.225 23.54 871.666C23.0435 871.107 22.5535 870.541 22.0703 869.97C21.1041 868.827 20.1653 867.66 19.2539 866.472C18.7981 865.877 18.3489 865.277 17.9072 864.672C17.4656 864.066 17.0309 863.455 16.6035 862.839C16.1763 862.223 15.7564 861.601 15.3438 860.974C14.9311 860.347 14.5258 859.714 14.1279 859.077C13.5309 858.121 12.9507 857.153 12.3877 856.174C11.6371 854.868 10.9169 853.543 10.2285 852.199C10.0566 851.864 9.88674 851.527 9.71875 851.188C9.21433 850.173 8.72797 849.148 8.25977 848.112C7.79163 847.077 7.34125 846.032 6.91016 844.977C6.19161 843.218 5.52568 841.432 4.91309 839.622C4.5455 838.536 4.19747 837.441 3.86914 836.337C3.32191 834.497 2.82968 832.634 2.39453 830.749C2.04645 829.241 1.73411 827.719 1.45996 826.185C0.911619 823.115 0.513327 819.993 0.272461 816.827C0.242372 816.432 0.214606 816.036 0.189453 815.639C0.11394 814.447 0.0607519 813.25 0.0302734 812.047C0.0201136 811.646 0.012906 811.244 0.0078125 810.842C0.00272116 810.44 5.23516e-07 810.037 0 809.634C0 809.266 0.00259618 808.898 0.00683594 808.531C0.0171141 807.642 0.039268 806.755 0.0742188 805.872C0.101019 805.195 0.135621 804.519 0.176758 803.846C0.233026 802.924 0.302005 802.007 0.384766 801.093C0.447221 800.403 0.517374 799.716 0.594727 799.03C0.650231 798.539 0.709359 798.048 0.772461 797.559C0.857744 796.897 0.950774 796.238 1.0498 795.581C1.06969 795.449 1.08991 795.317 1.11035 795.186C1.21285 794.525 1.32124 793.866 1.4375 793.21C1.52189 792.734 1.61058 792.259 1.70215 791.785C1.83182 791.114 1.96837 790.446 2.1123 789.78C2.21069 789.325 2.31202 788.871 2.41699 788.419C2.49958 788.063 2.58523 787.708 2.67188 787.354C2.96071 786.172 3.2722 784.999 3.60547 783.836C3.7752 783.243 3.9498 782.653 4.13086 782.065C10.7998 760.421 25.1156 742.131 43.9238 730.346C43.987 730.306 44.05 730.266 44.1133 730.227C47.3213 728.227 50.659 726.416 54.1113 724.811C66.082 719.242 79.4279 716.134 93.5 716.134Z" fill="url(#paint0_linear_30_392)"/> <path d="M2205.33 787.26C2134 787.26 2068.92 769.874 2010.11 735.101C1951.65 699.981 1905.19 653.559 1870.74 595.836C1836.29 537.766 1819.06 473.61 1819.06 403.369C1819.06 333.128 1836.29 268.973 1870.74 210.902C1905.19 152.832 1951.65 106.584 2010.11 72.1591C2068.92 37.3864 2134 20 2205.33 20C2250.57 20 2293.38 27.1284 2333.74 41.3852C2374.11 55.642 2413.78 78.0705 2452.76 108.67L2365.06 221.334C2313.91 180.302 2260.67 159.786 2205.33 159.786C2161.49 159.786 2121.29 170.566 2084.75 192.125C2048.56 213.684 2019.51 243.067 1997.58 280.274C1975.66 317.133 1964.7 358.165 1964.7 403.369C1964.7 448.574 1975.66 489.606 1997.58 526.465C2019.51 563.324 2048.56 592.533 2084.75 614.092C2121.29 635.651 2161.49 646.431 2205.33 646.431C2235.61 646.431 2264.15 641.215 2290.94 630.783C2317.74 620.351 2345.75 602.269 2374.98 576.538L2468.42 683.464C2428.75 718.584 2387.16 744.664 2343.66 761.702C2300.16 778.741 2254.05 787.26 2205.33 787.26Z" fill="currentColor"/> <path d="M2896.47 777.35H2556.65V29.9102H2819.74C2850.36 29.9102 2878.2 35.9955 2903.25 48.1659C2928.66 59.9886 2950.23 75.1148 2967.98 93.5443C2986.08 111.626 3000 131.273 3009.74 152.484C3019.48 173.695 3024.36 193.864 3024.36 212.989C3024.36 244.284 3011.31 280.274 2985.21 320.958C3087.86 367.206 3139.19 439.185 3139.19 536.897C3139.19 579.667 3130.84 616.352 3114.14 646.952C3097.78 677.552 3076.9 702.589 3051.5 722.061C3026.44 741.186 3000 755.269 2972.16 764.31C2944.32 773.004 2919.09 777.35 2896.47 777.35ZM2895.95 640.172C2923.09 640.172 2946.58 630.261 2966.42 610.441C2986.6 590.62 2996.69 566.106 2996.69 536.897C2996.69 508.383 2987.12 484.39 2967.98 464.917C2949.19 445.444 2926.05 435.013 2898.56 433.622L2736.74 433.1C2758.66 411.193 2774.5 395.719 2784.24 386.678C2799.9 372.074 2815.21 356.774 2830.18 340.778C2845.14 324.435 2857.49 307.397 2867.24 289.663C2876.98 271.581 2881.85 252.282 2881.85 231.766C2881.85 213.336 2875.59 197.863 2863.06 185.344C2850.53 172.826 2835.92 166.567 2819.21 166.567H2699.16V640.172H2895.95Z" fill="currentColor"/> <path d="M3568.81 782.044C3497.82 782.044 3433.27 764.832 3375.15 730.407C3317.39 695.982 3271.28 650.082 3236.83 592.707C3202.72 534.984 3185.67 471.35 3185.67 401.805C3185.67 332.259 3202.72 268.799 3236.83 211.424C3271.28 154.049 3317.39 108.149 3375.15 73.7239C3433.27 38.9511 3497.82 21.5648 3568.81 21.5648C3639.45 21.5648 3703.83 38.9511 3761.95 73.7239C3820.06 108.149 3866.17 154.049 3900.27 211.424C3934.73 268.799 3951.95 332.259 3951.95 401.805C3951.95 471.35 3934.73 534.984 3900.27 592.707C3866.17 650.082 3820.06 695.982 3761.95 730.407C3703.83 764.832 3639.45 782.044 3568.81 782.044ZM3568.81 642.78C3612.31 642.78 3651.98 632.174 3687.82 610.963C3724.02 589.403 3752.9 560.368 3774.47 523.857C3796.4 487.346 3807.36 446.661 3807.36 401.805C3807.36 356.948 3796.4 316.264 3774.47 279.752C3752.9 243.241 3724.02 214.38 3687.82 193.168C3651.98 171.957 3612.31 161.351 3568.81 161.351C3524.96 161.351 3485.12 171.957 3449.28 193.168C3413.43 214.38 3384.55 243.241 3362.63 279.752C3341.05 316.264 3330.26 356.948 3330.26 401.805C3330.26 446.661 3341.05 487.346 3362.63 523.857C3384.55 560.368 3413.43 589.403 3449.28 610.963C3485.12 632.174 3524.96 642.78 3568.81 642.78Z" fill="currentColor"/> <path d="M4745.39 938H4602.89V776.828H4067.85V938H3925.35V639.65H4059.5L4204.61 29.3886H4612.29V639.65H4745.39V938ZM4469.78 639.65V166.045H4315.28L4202.53 639.65H4469.78Z" fill="currentColor"/> <defs> <linearGradient id="paint0_linear_30_392" x1="1490.64" y1="524.934" x2="43.0001" y2="524.934" gradientUnits="userSpaceOnUse"> <stop stop-color="#FD6A12"/> <stop offset="1" stop-color="#FBA674"/> </linearGradient> </defs> </svg></div>
+      <span class="spacer"></span>
+      <button class="icon-btn" id="themeBtn" title="Тема" aria-label="Сменить тему"></button>
+    </div>
+    <div class="sb-search" id="sbSearch"></div>
+    <button class="nav-row" id="newBtn" data-act="new-survey"></button>
+    <nav class="sb-scroll" id="sbScroll"></nav>
+    <div class="sb-foot">
+      <button class="nav-row" id="classicBtn"></button>
+      <div class="me">
+        <div class="ava">Вы</div>
+        <div><div class="me-name">Моя команда</div><div class="me-plan">Тариф Pro · 3 участника</div></div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="chat" id="chat">
+    <header class="chat-h" id="chatH"></header>
+    <div class="messages" id="messages"></div>
+    <button class="to-bottom" id="toBottom" aria-label="Прокрутить вниз"></button>
+    <div class="composer-wrap" id="composerWrap">
+      <div id="lock"></div>
+      <div class="composer-shell" id="composerShell">
+        <div class="ctx-bar" id="ctxBar"></div>
+        <div class="composer" id="composer">
+          <textarea id="input" rows="1" aria-label="Сообщение агенту"></textarea>
+          <div class="comp-row">
+            <button class="icon-btn" id="plusBtn" data-act="toast" data-msg="Загрузка файлов и выгрузок CRM — в следующих версиях" aria-label="Добавить файл"></button>
+            <span class="spacer"></span>
+            <button class="icon-btn" id="micBtn" data-act="toast" data-msg="Голосовой ввод появится в продукте" aria-label="Голосовой ввод"></button>
+            <button class="send" id="sendBtn" aria-label="Отправить"></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <aside class="panel" id="panel" aria-label="Панель опроса"></aside>
+</div>
+<div class="scrim" id="scrim"></div>
+<div class="modal-back" id="consent" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="consentTitle">
+    <h2 id="consentTitle">Передать данные опроса ИИ?</h2>
+    <p style="margin-top:0">ИИ-помощник работает через внешний сервис (OpenRouter). Ему будут переданы:</p>
+    <ul>
+      <li>сводные цифры по вопросам и показатели опроса;</li>
+      <li>до 30 цитат из открытых ответов, телефоны и e-mail в них заменяются метками;</li>
+      <li>тексты вопросов анкеты.</li>
+    </ul>
+    <p style="margin-bottom:0">Продолжая, вы подтверждаете, что вправе передавать эти данные: опрос анонимный или респонденты согласились на такую обработку. Решение запоминается для этого опроса.</p>
+    <div class="btns"><button class="btn" data-act="consent-no">Отмена</button><button class="btn primary" data-act="consent-yes">Да, продолжить</button></div>
+  </div>
+</div>
+<div class="tip" id="tip" role="tooltip"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="menu" id="menu" role="menu" hidden></div>
+
+<script>
+/* ════════════ icons ════════════ */
+const P = {
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>',
+  star: '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>',
+  radio: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3" fill="currentColor"/>',
+  checkbox: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12l3 3 5-6"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',
+  folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  chev: '<path d="M9 6l6 6-6 6"/>',
+  panel: '<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M15 4v16"/>',
+  close: '<path d="M6 6l12 12M18 6L6 18"/>',
+  send: '<path d="M5 12h13M13 6l6 6-6 6"/>',
+  up: '<path d="M12 19V5M6 11l6-6 6 6"/>',
+  down: '<path d="M12 5v14M6 13l6 6 6-6"/>',
+  menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+  pen: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
+  newchat: '<path d="M12 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6"/><path d="M18.5 3.5a2.1 2.1 0 0 1 3 3L13 15l-4 1 1-4z"/>',
+  share: '<path d="M12 3v13M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/>',
+  more: '<circle cx="5" cy="12" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="19" cy="12" r="1.4" fill="currentColor"/>',
+  mic: '<rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
+  thumbUp: '<path d="M7 11v9H4v-9zM7 11l4-8a2 2 0 0 1 2 2v4h6a2 2 0 0 1 2 2.3l-1.2 6.5A2 2 0 0 1 17.8 20H7"/>',
+  thumbDown: '<path d="M17 13V4h3v9zM17 13l-4 8a2 2 0 0 1-2-2v-4H5a2 2 0 0 1-2-2.3l1.2-6.5A2 2 0 0 1 6.2 4H17"/>',
+  redo: '<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  moon: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
+  auto: '<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/>',
+  chart: '<path d="M5 20v-6M12 20V6M19 20V10"/>',
+  list: '<path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/>',
+  table: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
+  copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/>',
+  ext: '<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
+  expand: '<path d="M4 9V4h5M20 15v5h-5M4 4l6 6M20 20l-6-6"/>',
+  shrink: '<path d="M10 4v6H4M14 20v-6h6M4 10l6-6M20 14l-6 6"/>',
+  check: '<path d="M5 12l5 5 9-10"/>',
+  edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
+  grid: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
+  eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  rocket: '<path d="M5 19l3-3M14 4c3 0 6 3 6 6l-6 6-6-6z"/><path d="M8 10l-3 1 4 4 1-3M14 16l-1 3-4-4 3-1"/>',
+  chevDown: '<path d="M6 9l6 6 6-6"/>',
+  draft: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/>',
+  package: '<path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>',
+  users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/>',
+  card: '<rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3 10h18M7 15h4"/>',
+  headset: '<path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/>',
+};
+const icon = (n, s = 20) => `<svg class="i" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[n]}</svg>`;
+const SPARK_PATH = 'M12 2c.7 5.2 4.3 9 10 10-5.7 1-9.3 4.8-10 10-.7-5.2-4.3-9-10-10 5.7-1 9.3-4.8 10-10z';
+
+/* ════════════ utils ════════════ */
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const md = (s) => esc(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').split(/\n\n/).map((p) => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('');
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+let uidN = 0; const uid = (p = 'id') => `${p}${++uidN}`;
+const plural = (n, f) => { const a = Math.abs(n) % 100, b = a % 10; return f[a > 10 && a < 20 ? 2 : b === 1 ? 0 : b >= 2 && b <= 4 ? 1 : 2]; };
+const fmtNps = (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v);
+const qWord = (n) => `${n} ${plural(n, ['вопрос', 'вопроса', 'вопросов'])}`;
+const rWord = (n) => `${n} ${plural(n, ['ответ', 'ответа', 'ответов'])}`;
+const cap = (s) => s[0].toUpperCase() + s.slice(1);
+const short = (s, n = 44) => (s.length > n ? s.slice(0, n - 2) + '…' : s);
+
+/* ════════════ data ════════════ */
+const PEOPLE = {
+  me: { name: 'Вы', short: 'вы', ini: 'Вы', dat: 'вам' },
+  anya: { name: 'Аня Смирнова', short: 'Аня', ini: 'АС', dat: 'Ане' },
+  dima: { name: 'Дмитрий Орлов', short: 'Дмитрий', ini: 'ДО', dat: 'Дмитрию' },
+};
+const STATUS = { draft: 'Черновик', open: 'Идёт сбор', closed: 'Приём закрыт' };
+const TYPE = { nps: 'Шкала NPS 0–10', csat: 'Оценка 1–5', single: 'Один вариант', multi: 'Несколько вариантов', text: 'Открытый ответ' };
+const Q = (type, title, options, req = true) => ({ id: uid('q'), type, title, options: options ? [...options] : null, req });
+
+const state = {
+  projects: [
+    { id: 'p1', name: 'Онбординг клиентов', surveys: ['s1', 's2'] },
+    { id: 'p2', name: 'HR · вовлечённость', surveys: ['s3', 's4'] },
+    { id: 'p3', name: 'Исследование тарифов', surveys: ['s5'] },
+  ],
+  surveys: {
+    s1: {
+      id: 's1', project: 'p1', name: 'NPS после онбординга', status: 'open', methods: ['NPS', 'CSAT'], author: 'anya', created: '2 окт 2026',
+      pending: [{ who: 'dima', what: 'переформулирован вопрос 4', when: 'сегодня 11:05' }],
+      questions: [
+        Q('nps', 'Насколько вероятно, что вы порекомендуете СВОД коллегам?'),
+        Q('single', 'Как давно вы пользуетесь сервисом?', ['Меньше 3 месяцев', '3–12 месяцев', 'Больше года']),
+        Q('multi', 'Что было самым сложным при старте?', ['Подключение интеграций', 'Настройка форм', 'Приглашение команды', 'Ничего сложного'], false),
+        Q('csat', 'Насколько вы довольны помощью команды СВОД в первые недели?'),
+        Q('text', 'Что бы вы изменили в первые дни работы с сервисом?', null, false),
+      ],
+      a: {
+        n: 248, completion: 71, flagged: 6, openN: 176, segBy: 'стажу',
+        hist: [4, 3, 5, 7, 9, 12, 20, 38, 46, 52, 52],
+        segments: [
+          { label: 'Меньше 3 месяцев', n: 96, d: 27, pa: 42, p: 31 },
+          { label: '3–12 месяцев', n: 88, d: 23, pa: 32, p: 45 },
+          { label: 'Больше года', n: 64, d: 21, pa: 26, p: 53 },
+        ],
+        themes: [
+          { label: 'Долгое подключение интеграций', count: 41, neg: true, hint: 'ускорить подключение интеграций в первые дни: мастер настройки или помощь менеджера' },
+          { label: 'Понятный интерфейс', count: 34 },
+          { label: 'Быстрая поддержка', count: 29 },
+          { label: 'Не хватает готовых шаблонов', count: 22, neg: true, hint: 'дать набор готовых шаблонов на старте' },
+          { label: 'Непонятные тарифы', count: 14, neg: true, hint: 'упростить страницу тарифов' },
+        ],
+        rows: [
+          { s: 3, seg: 'Меньше 3 месяцев', t: 'Две недели не могли подключить amoCRM, без этого форма бесполезна.', w: '2 ч назад' },
+          { s: 10, seg: 'Больше года', t: 'Поддержка ответила за 10 минут и сама всё настроила.', w: '3 ч назад' },
+          { s: 6, seg: 'Меньше 3 месяцев', t: 'Интерфейс понятный, но на старте не хватило готовых шаблонов.', w: '5 ч назад' },
+          { s: 8, seg: '3–12 месяцев', t: 'В целом удобно, тарифы можно было бы объяснить понятнее.', w: 'вчера' },
+          { s: 9, seg: '3–12 месяцев', t: 'Сэкономили кучу времени на сборе заявок.', w: 'вчера' },
+          { s: 2, seg: 'Меньше 3 месяцев', t: 'Интеграция с 1С так и не заработала.', w: 'вчера' },
+          { s: 7, seg: 'Больше года', t: '—', w: '2 дня назад' },
+          { s: 10, seg: 'Больше года', t: 'Лучший сервис форм, что мы пробовали.', w: '3 дня назад' },
+        ],
+      },
+    },
+    s2: {
+      id: 's2', project: 'p1', name: 'CSAT поддержки', status: 'closed', methods: ['NPS', 'CSAT'], author: 'dima', created: '1 сен 2026', pending: [],
+      questions: [
+        Q('nps', 'Насколько вероятно, что вы порекомендуете нашу поддержку?'),
+        Q('single', 'Как вы обращались в поддержку?', ['Чат', 'Почта', 'Телефон']),
+        Q('csat', 'Насколько вы довольны решением вопроса?'),
+        Q('single', 'Вопрос решили с первого обращения?', ['Да', 'Нет', 'Частично']),
+        Q('text', 'Что можно улучшить в работе поддержки?', null, false),
+      ],
+      a: {
+        n: 512, completion: 84, flagged: 11, openN: 301, segBy: 'каналу обращения',
+        hist: [5, 4, 6, 8, 12, 22, 30, 58, 70, 120, 177],
+        segments: [
+          { label: 'Чат', n: 280, d: 14, pa: 22, p: 64 },
+          { label: 'Почта', n: 168, d: 20, pa: 28, p: 52 },
+          { label: 'Телефон', n: 64, d: 23, pa: 31, p: 46 },
+        ],
+        themes: [
+          { label: 'Быстро решили вопрос', count: 96 },
+          { label: 'Долго ждать ответа по почте', count: 58, neg: true, hint: 'сократить время первого ответа по почте' },
+          { label: 'Вежливые специалисты', count: 51 },
+          { label: 'Приходится повторять проблему', count: 33, neg: true, hint: 'передавать историю обращения между специалистами' },
+          { label: 'Нет поддержки ночью', count: 19, neg: true, hint: 'добавить дежурную смену' },
+        ],
+        rows: [
+          { s: 5, seg: 'Почта', t: 'По почте ответили только через два дня, в чате — за пять минут.', w: '12 окт' },
+          { s: 10, seg: 'Телефон', t: 'Специалист сам всё проверил и перезвонил, очень приятно.', w: '12 окт' },
+          { s: 4, seg: 'Чат', t: 'Каждый раз объясняю проблему заново новому сотруднику.', w: '11 окт' },
+          { s: 9, seg: 'Чат', t: 'Быстро и по делу.', w: '11 окт' },
+          { s: 8, seg: 'Почта', t: 'Помогли, но пришлось подождать.', w: '10 окт' },
+          { s: 10, seg: 'Чат', t: 'Решили за одно сообщение!', w: '10 окт' },
+        ],
+      },
+    },
+    s3: {
+      id: 's3', project: 'p2', name: 'Пульс-опрос Q4', status: 'open', methods: ['eNPS'], author: 'anya', created: '20 окт 2026', pending: [],
+      questions: [
+        Q('nps', 'Насколько вероятно, что вы порекомендуете компанию как место работы?'),
+        Q('single', 'В каком вы отделе?', ['Продажи', 'Разработка', 'Поддержка', 'Другое']),
+        Q('csat', 'Насколько вам комфортна текущая нагрузка?'),
+        Q('text', 'Что мешает работать эффективнее?', null, false),
+      ],
+      a: {
+        n: 87, completion: 92, flagged: 0, openN: 54, segBy: 'отделам',
+        hist: [1, 1, 2, 2, 3, 5, 7, 17, 20, 15, 14],
+        segments: [
+          { label: 'Продажи', n: 31, d: 35, pa: 39, p: 26 },
+          { label: 'Разработка', n: 34, d: 15, pa: 47, p: 38 },
+          { label: 'Поддержка', n: 22, d: 23, pa: 41, p: 36 },
+        ],
+        themes: [
+          { label: 'Перегруз задачами в конце квартала', count: 17, neg: true, hint: 'разгрузить отдел продаж в конце квартала: пересмотреть планы или добавить людей' },
+          { label: 'Хорошая команда', count: 14 },
+          { label: 'Непрозрачные цели', count: 11, neg: true, hint: 'проговорить цели квартала на общей встрече' },
+          { label: 'Гибкий график', count: 8 },
+          { label: 'Мало обратной связи', count: 6, neg: true, hint: 'ввести регулярные встречи один на один' },
+        ],
+        rows: [
+          { s: 3, seg: 'Продажи', t: 'В конце квартала работаем без выходных, это выматывает.', w: '1 ч назад' },
+          { s: 7, seg: 'Разработка', t: 'Команда классная, но не понимаю, куда мы движемся.', w: '4 ч назад' },
+          { s: 9, seg: 'Поддержка', t: 'Гибкий график — главное, за что держусь.', w: 'вчера' },
+          { s: 5, seg: 'Продажи', t: 'Планы растут быстрее, чем команда.', w: 'вчера' },
+          { s: 8, seg: 'Разработка', t: 'Нравятся задачи, не хватает обратной связи.', w: '2 дня назад' },
+          { s: 10, seg: 'Поддержка', t: 'Лучшая команда, в которой я работал.', w: '2 дня назад' },
+        ],
+      },
+    },
+    s4: {
+      id: 's4', project: 'p2', name: 'eNPS 2026', status: 'draft', methods: ['eNPS'], author: 'anya', created: '1 ноя 2026', pending: [],
+      questions: [
+        Q('nps', 'Насколько вероятно, что вы порекомендуете компанию как место работы?'),
+        Q('multi', 'Что вам нравится больше всего?', ['Команда', 'Задачи', 'Условия', 'Возможности роста']),
+        Q('text', 'Что бы вы изменили в первую очередь?', null, false),
+      ],
+    },
+    s5: {
+      id: 's5', project: 'p3', name: 'Ценность Pro-тарифа', status: 'draft', methods: ['CSAT'], author: 'me', created: '3 ноя 2026', pending: [],
+      questions: [
+        Q('single', 'Какой тариф вы используете?', ['Free', 'Team', 'Pro']),
+        Q('multi', 'Какие функции Pro для вас важнее всего?', ['ИИ-анализ', 'Брендирование', 'Экспорт', 'Командный доступ']),
+        Q('csat', 'Насколько цена соответствует ценности?'),
+        Q('text', 'Чего не хватает в Pro?', null, false),
+      ],
+    },
+    s6: {
+      id: 's6', project: 'drafts', name: 'Опрос после вебинара', status: 'draft', methods: ['CSAT'], author: 'me', created: 'вчера', pending: [],
+      questions: [
+        Q('csat', 'Насколько вам был полезен вебинар?'),
+        Q('single', 'Что было самым ценным?', ['Примеры из практики', 'Ответы на вопросы', 'Материалы после эфира']),
+        Q('text', 'О чём сделать следующий вебинар?', null, false),
+      ],
+    },
+  },
+  threads: {},
+  active: null,
+  newThread: null,
+  drafts: { id: 'drafts', name: 'Черновики', surveys: ['s6'], system: true },
+  lastProject: 'drafts',
+  expanded: new Set(['p1', 'p2', 'p3']),
+  search: '',
+  panel: { open: false, tab: 'overview', sid: null, filter: 'all', flash: null, wide: false, confirm: null },
+  simDone: false,
+  consentCb: null,
+};
+
+const hasResp = (s) => !!(s.a && s.a.n > 0);
+function analytics(s) {
+  const a = s.a; if (!a) return null;
+  const d = a.hist.slice(0, 7).reduce((x, y) => x + y, 0);
+  const pa = a.hist[7] + a.hist[8];
+  const p = a.hist[9] + a.hist[10];
+  const pct = (v) => Math.round((v / a.n) * 100);
+  return { ...a, dN: d, paN: pa, pN: p, dP: pct(d), paP: pct(pa), pP: pct(p), nps: Math.round(((p - d) / a.n) * 100) };
+}
+const link = (s) => `svod.app/s/${s.id}k3f${s.name.length.toString(36)}`;
+const projOf = (id) => (id === 'drafts' ? state.drafts : state.projects.find((p) => p.id === id));
+const where = (pid) => (pid === 'drafts' ? 'в черновиках' : `в проекте «${projOf(pid).name}»`);
+const whereTo = (pid) => (pid === 'drafts' ? 'в черновики' : `в проект «${projOf(pid).name}»`);
+function moveSurvey(s, pid) {
+  if (s.project === pid) return;
+  const from = projOf(s.project); from.surveys.splice(from.surveys.indexOf(s.id), 1);
+  const to = projOf(pid); to.surveys.unshift(s.id);
+  s.project = pid; state.threads[s.id].project = pid; state.expanded.add(pid);
+  statusEvent(s, `<b>Вы перенесли опрос ${esc(whereTo(pid))}</b> · только что`, 'folder');
+  renderAll(); toast(`Опрос перенесён ${whereTo(pid)}`);
+}
+
+/* ════════════ threads ════════════ */
+const mkThread = (sid, project) => ({ sid, project, messages: [], busyBy: null });
+const freshNew = (project) => mkThread(null, project);
+const cur = () => (state.active ? state.threads[state.active] : state.newThread);
+const curSurvey = () => (state.active ? state.surveys[state.active] : null);
+const isVisible = (t) => cur() === t;
+
+function openSurvey(sid) {
+  const s = state.surveys[sid];
+  state.active = sid; state.lastProject = s.project;
+  setPanel({ open: window.innerWidth > 1180, sid, tab: 'overview', filter: 'all', confirm: null });
+  closeSidebarMobile();
+  renderAll(true);
+  if (sid === 's3' && !state.simDone) { state.simDone = true; setTimeout(simTeammate, 500); }
+}
+
+function openNew(project) {
+  state.active = null;
+  state.lastProject = project || 'drafts';
+  if (!state.newThread || state.newThread.messages.length) state.newThread = freshNew(state.lastProject);
+  state.newThread.project = state.lastProject;
+  setPanel({ open: false, sid: null });
+  closeSidebarMobile();
+  renderAll();
+  $('#input').focus();
+}
+
+function eventMsg(html, ic = 'edit') { return { id: uid('m'), role: 'event', html, ic }; }
+const whoName = (w) => (w === 'me' ? 'вы' : PEOPLE[w].short);
+function pushPendingChange(s, what) {
+  if (!s.pending.some((c) => c.what === what && c.who === 'me')) s.pending.push({ who: 'me', what, when: 'только что' });
+}
+
+/* ════════════ agent engine ════════════ */
+async function send(text) {
+  text = text.trim();
+  const t = cur();
+  if (!text || t.busyBy) return;
+  const s = t.sid ? state.surveys[t.sid] : null;
+  if (s && hasResp(s) && !s.consent) { askConsent(s, () => send(text)); return; }
+  if (s && s.pending.length) {
+    t.messages.push(eventMsg(`<b>С прошлого раза в конструкторе и панели:</b> ${s.pending.map((c) => `${esc(c.what)} (${esc(whoName(c.who))}, ${esc(c.when)})`).join('; ')}`));
+    s.pending = [];
+  }
+  t.messages.push({ id: uid('m'), role: 'user', who: 'me', when: 'только что', text });
+  $('#input').value = ''; autoGrow();
+  renderAll(true);
+  await runAs(t, 'me', () => route(t, text));
+}
+
+async function runAs(t, who, fn) {
+  t.busyBy = who; renderComposer(); renderSidebar();
+  try { await fn(); } finally { t.busyBy = null; renderComposer(); renderSidebar(); renderChatHeader(); }
+}
+
+function intent(text) {
+  const x = text.toLowerCase();
+  if (/(копи|дублир)/.test(x)) return 'copy';
+  if (/(опублик|запусти|закрой|останови|приём|прием)/.test(x)) return 'publish';
+  if (/(отч[её]т|итог|сводк|резюм)/.test(x)) return 'report';
+  if (/обязательн/.test(x)) return 'required';
+  if (/(добав|ещё вопрос|еще вопрос)/.test(x)) return 'add';
+  if (/(убер|удали|убрать)/.test(x)) return 'remove';
+  if (/(созда|новый опрос|новую анкет)/.test(x)) return 'create';
+  if (/(критик|детрактор|покажи ответ|сырые|недовольн)/.test(x)) return 'responses';
+  if (/(почему|анализ|nps|сегмент|сравн|причин|что не так|упал|низк|тем[аы]|проблем|подробнее|выгора|разбер)/.test(x)) return 'analyze';
+  return 'fallback';
+}
+const findSurveyByText = (text) => Object.values(state.surveys).find((s) => text.toLowerCase().includes(s.name.toLowerCase()));
+
+async function route(t, text) {
+  const kind = intent(text);
+  const s = t.sid ? state.surveys[t.sid] : null;
+  if (!s) {
+    const ex = findSurveyByText(text);
+    if (ex && kind !== 'create') {
+      return agent(t, { build: () => ({
+        text: `Похоже, это про существующий опрос «${ex.name}». У каждого опроса свой чат — откройте его, там вся история и данные.`,
+        card: { act: 'open-survey', sid: ex.id, title: ex.name, meta: `${STATUS[ex.status]} · ${projOf(ex.project).name}`, ic: 'list' },
+      }) });
+    }
+    return flowCreate(t, text);
+  }
+  if (kind === 'create') {
+    return agent(t, { build: () => ({
+      text: `Этот чат — про опрос «${s.name}». Новый опрос создаётся кнопкой «Новый опрос» в меню слева, там же выбирается проект.`,
+      actions: [{ label: 'Новый опрос', act: 'new-survey', primary: true }],
+    }) });
+  }
+  const needsData = ['analyze', 'report', 'responses'].includes(kind);
+  if (needsData && !hasResp(s)) {
+    return agent(t, { build: () => ({ text: `У опроса «${s.name}» пока нет ответов — анализировать нечего. Опубликовать его можно на вкладке «Обзор» в панели.`, after: () => panelFor(s, { open: true, tab: 'overview', flash: 'b-status' }) }) });
+  }
+  const flows = { copy: flowCopy, publish: flowPublishInfo, report: flowReport, required: flowRequired, add: flowAdd, remove: flowRemove, responses: flowResponses, analyze: flowAnalyze, fallback: flowFallback };
+  return flows[kind](t, text, s);
+}
+
+function panelFor(s, patch) {
+  if (state.active !== s.id) return;
+  // On tablet/phone the panel covers the chat, so the agent never pops it open there: it only switches the tab
+  if (window.innerWidth <= 1180) { const { open, ...rest } = patch; patch = rest; }
+  setPanel({ sid: s.id, ...patch });
+}
+
+async function agent(t, spec) {
+  const m = { id: uid('m'), role: 'agent', steps: [], text: '', partial: '', done: false };
+  t.messages.push(m);
+  if (isVisible(t)) { renderMessages(); scrollDown(); }
+  await sleep(250);
+  for (const st of spec.steps || []) {
+    const s = { label: st.label, detail: '', state: 'run' };
+    m.steps.push(s); updateMsg(m); if (isVisible(t)) scrollDown();
+    if (st.run) await st.run();
+    await sleep(st.ms || 650);
+    s.detail = typeof st.detail === 'function' ? st.detail() : st.detail || '';
+    s.state = 'done'; updateMsg(m);
+  }
+  const out = spec.build();
+  const words = out.text.split(/(\s+)/);
+  for (let i = 0; i < words.length; i += 4) {
+    m.partial = words.slice(0, i + 4).join('');
+    if (isVisible(t)) { updateMsg(m); scrollDown(); await sleep(26); }
+  }
+  Object.assign(m, out, { done: true });
+  updateMsg(m); if (isVisible(t)) scrollDown();
+  if (out.after) out.after();
+}
+
+/* ── flows ───────────────────────────────────── */
+async function flowCreate(t, text) {
+  const x = text.toLowerCase();
+  const mt = text.match(/(?:^|\s)(про|о|об|по|после|для)\s+([^.,!?\n]+)/i);
+  const name = short(mt ? `Опрос ${mt[1].toLowerCase()} ${mt[2].trim()}` : 'Новый опрос', 54);
+  const enps = /(enps|сотрудник|персонал)/.test(x);
+  const methods = enps ? ['eNPS'] : /nps/.test(x) && !/csat|удовлетв/.test(x) ? ['NPS'] : /csat|удовлетв/.test(x) && !/nps/.test(x) ? ['CSAT'] : ['NPS', 'CSAT'];
+  const proj = projOf(t.project);
+  const qs = [];
+  if (methods.some((m) => /NPS/.test(m))) qs.push(Q('nps', enps ? 'Насколько вероятно, что вы порекомендуете компанию как место работы?' : 'Насколько вероятно, что вы порекомендуете нас друзьям или коллегам?'));
+  qs.push(Q('single', 'Что сильнее всего повлияло на вашу оценку?', enps ? ['Команда', 'Задачи', 'Нагрузка', 'Руководитель', 'Другое'] : ['Качество', 'Скорость', 'Цена', 'Поддержка', 'Другое']));
+  if (methods.includes('CSAT')) qs.push(Q('csat', 'Насколько вы довольны в целом?'));
+  qs.push(enps ? Q('single', 'В каком вы отделе?', ['Продажи', 'Разработка', 'Поддержка', 'Другое']) : Q('single', 'Как давно вы с нами?', ['Меньше месяца', '1–6 месяцев', 'Больше полугода']));
+  qs.push(Q('text', 'Что нам стоит улучшить в первую очередь?', null, false));
+  const segWord = enps ? 'отделам' : 'стажу';
+  let s;
+  await agent(t, {
+    steps: [
+      { label: 'Определяю цель и аудиторию', detail: name.replace(/^Опрос\s*/, '') || 'общий опрос', ms: 700 },
+      { label: 'Подбираю методику', detail: `${methods.join(' + ')} · сегмент по ${segWord}`, ms: 800 },
+      {
+        label: 'Составляю вопросы', detail: () => qWord(qs.length), ms: 300,
+        run: async () => {
+          const id = uid('s');
+          s = { id, project: proj.id, name, status: 'draft', methods, questions: [], author: 'me', created: 'сегодня', pending: [] };
+          state.surveys[id] = s; proj.surveys.unshift(id); state.expanded.add(proj.id);
+          t.sid = id; state.threads[id] = t;
+          if (isVisible(t)) { state.active = id; state.newThread = freshNew(proj.id); }
+          panelFor(s, { open: true, tab: 'form' });
+          renderSidebar(); renderChatHeader(); renderComposer(); applyHome();
+          for (const q of qs) { s.questions.push(q); panelFor(s, { flash: q.id }); await sleep(380); }
+        },
+      },
+      { label: 'Проверяю формулировки', detail: 'наводящих и двойных вопросов нет', ms: 700 },
+    ],
+    build: () => ({
+      text: `Собрал черновик **«${name}»** — ${qWord(qs.length)}, ${where(proj.id)}.${proj.id === 'drafts' ? ' Проект можно выбрать позже на вкладке «Обзор».' : ''}\n\nСначала идёт ${methods.join(' и ')}, потом вопрос о причине оценки и сегмент по ${segWord}: так потом можно будет сравнить группы. Открытый вопрос в конце нужен, чтобы выделить темы.\n\nТекст вопросов можно поправить прямо в панели или написать мне, что поменять. Когда будете готовы, опубликуйте опрос на вкладке «Обзор».`,
+      chips: ['Добавь вопрос про поддержку', 'Убери вопрос', 'Сделай все вопросы обязательными'],
+    }),
+  });
+}
+
+function pickNewQuestion(text) {
+  const x = text.toLowerCase();
+  if (/поддерж/.test(x)) return Q('csat', 'Насколько вы довольны работой поддержки?');
+  if (/цен|стоим|тариф/.test(x)) return Q('single', 'Как вы оцениваете стоимость относительно пользы?', ['Дорого', 'В самый раз', 'Дёшево']);
+  if (/интеграц/.test(x)) return Q('single', 'Какую интеграцию вы подключали первой?', ['amoCRM', 'Битрикс24', '1С', 'Другую', 'Не подключали']);
+  if (/возраст/.test(x)) return Q('single', 'Сколько вам лет?', ['До 25', '25–34', '35–44', '45 и старше']);
+  return Q('text', 'Что ещё вы хотели бы нам рассказать?', null, false);
+}
+
+function insertQuestion(s, q) {
+  const last = s.questions[s.questions.length - 1];
+  const pos = last && last.type === 'text' && q.type !== 'text' ? s.questions.length - 1 : s.questions.length;
+  s.questions.splice(pos, 0, q);
+  return pos;
+}
+
+const copyOffer = (s, reason) => ({
+  text: `${reason}\n\nМожно сделать копию опроса новым черновиком — в ней менять можно всё, а собранные ответы останутся в исходном.`,
+  confirm: { title: 'Сделать копию опроса?', text: `Появится черновик «${s.name} (копия)» ${where(s.project)}.`, ok: 'Сделать копию', act: 'do-copy', warn: true },
+});
+
+async function flowAdd(t, text, s) {
+  const q = pickNewQuestion(text);
+  if (s.status === 'closed') return agent(t, { build: () => copyOffer(s, `Приём ответов в «${s.name}» закрыт — новый вопрос никто не увидит.`) });
+  if (hasResp(s)) {
+    return agent(t, {
+      steps: [{ label: 'Проверяю, можно ли менять опрос', detail: 'добавлять вопросы можно', ms: 600 }],
+      build: () => ({
+        text: `В опросе уже ${rWord(s.a.n)}. Добавить вопрос можно, но его увидят только новые респонденты — в прежних ${s.a.n} ответах его не будет, и в аналитике у него будет своё, меньшее n.`,
+        confirm: { title: 'Добавить вопрос?', text: `«${q.title}» · ${TYPE[q.type].toLowerCase()}. Встанет перед открытым вопросом в конце.`, ok: 'Добавить', act: 'apply-add', q },
+      }),
+    });
+  }
+  let pos;
+  await agent(t, {
+    steps: [{ label: 'Добавляю вопрос', detail: TYPE[q.type], ms: 500, run: async () => { pos = insertQuestion(s, q); panelFor(s, { open: true, tab: 'form', flash: q.id }); } }],
+    build: () => ({
+      text: `Добавил вопрос ${pos + 1}: **«${q.title}»** (${TYPE[q.type].toLowerCase()}).${pos < s.questions.length - 1 ? ' Поставил его перед открытым вопросом, чтобы тот остался последним.' : ''}`,
+      chips: ['Сделай все вопросы обязательными', 'Убери вопрос'],
+    }),
+  });
+}
+
+async function flowRemove(t, text, s) {
+  if (hasResp(s)) {
+    return agent(t, {
+      steps: [{ label: 'Проверяю, можно ли менять опрос', detail: 'удалять вопросы нельзя', ms: 600 }],
+      build: () => copyOffer(s, `Удалить вопрос не получится: в опросе уже ${rWord(s.a.n)}, и ответы на этот вопрос потеряют смысл. Переформулировать вопрос или добавить новый — можно.`),
+    });
+  }
+  return agent(t, { build: () => ({
+    text: 'Какой вопрос убрать?',
+    removeList: s.questions.map((q, i) => ({ qid: q.id, label: `${i + 1}. ${short(q.title, 46)}` })),
+  }) });
+}
+
+async function flowRequired(t, text, s) {
+  if (hasResp(s)) {
+    return agent(t, { build: () => ({
+      text: 'Сделать вопросы обязательными можно и сейчас — это коснётся только новых респондентов. Учтите: обязательный открытый вопрос обычно снижает доходимость на 5–10%.',
+      confirm: { title: 'Сделать все вопросы обязательными?', text: `${qWord(s.questions.length)} в опросе «${s.name}».`, ok: 'Сделать обязательными', act: 'apply-required' },
+    }) });
+  }
+  await agent(t, {
+    steps: [{ label: 'Обновляю настройки вопросов', ms: 450, run: async () => { s.questions.forEach((q) => (q.req = true)); panelFor(s, { open: true, tab: 'form' }); } }],
+    build: () => ({ text: `Готово: все ${qWord(s.questions.length)} обязательные. Обязательный открытый вопрос обычно снижает доходимость на 5–10% — могу оставить его необязательным.` }),
+  });
+}
+
+async function flowPublishInfo(t, text, s) {
+  const closing = /(закрой|останови)/i.test(text);
+  const flash = () => panelFor(s, { open: true, tab: 'overview', flash: 'b-status' });
+  if (s.status === 'draft') {
+    return agent(t, {
+      steps: [{ label: 'Проверяю опрос перед публикацией', detail: 'ошибок нет', ms: 700 }],
+      build: () => ({
+        text: `Проверил «${s.name}»: ${qWord(s.questions.length)}, заполнение займёт около ${Math.max(1, Math.round(s.questions.length * 0.4))} мин, ошибок нет.\n\nПубликуете вы сами — кнопка **«Опубликовать»** на вкладке «Обзор» в панели. Я подсветил её.`,
+        after: flash,
+      }),
+    });
+  }
+  if (s.status === 'open') {
+    return agent(t, { build: () => ({
+      text: closing ? 'Остановить приём ответов можно кнопкой **«Остановить приём»** на вкладке «Обзор» — я подсветил её.' : `Опрос «${s.name}» уже опубликован, ссылка — на вкладке «Обзор».`,
+      after: flash,
+    }) });
+  }
+  return agent(t, { build: () => ({ text: 'Приём ответов уже закрыт. Открыть его снова можно на вкладке «Обзор».', after: flash }) });
+}
+
+async function flowCopy(t, text, s) {
+  let c;
+  await agent(t, {
+    steps: [{ label: 'Копирую вопросы в новый черновик', ms: 600, run: async () => { c = makeCopy(s); renderSidebar(); }, detail: () => qWord(c.questions.length) }],
+    build: () => ({
+      text: `Сделал копию **«${c.name}»** ${where(c.project)}. Ответов в ней нет, поэтому можно удалять вопросы и менять их типы.`,
+      card: { act: 'open-survey', sid: c.id, title: c.name, meta: `Черновик · ${qWord(c.questions.length)}`, ic: 'copy' },
+    }),
+  });
+}
+
+function makeCopy(s) {
+  const id = uid('s');
+  const c = { id, project: s.project, name: `${s.name} (копия)`, status: 'draft', methods: [...s.methods], author: 'me', created: 'сегодня', pending: [],
+    questions: s.questions.map((q) => ({ ...q, id: uid('q'), options: q.options ? [...q.options] : null })) };
+  state.surveys[id] = c;
+  const p = projOf(s.project); p.surveys.splice(p.surveys.indexOf(s.id) + 1, 0, id);
+  const th = mkThread(id, s.project);
+  th.messages.push(eventMsg(`<b>Копия опроса «${esc(s.name)}»</b> · создали вы, только что. Ответов нет — менять можно всё.`, 'copy'));
+  state.threads[id] = th;
+  return c;
+}
+
+function buildAnalysis(s, why) {
+  const a = analytics(s);
+  const segs = a.segments.map((g) => ({ ...g, nps: g.p - g.d })).sort((x, y) => x.nps - y.nps);
+  const low = segs[0], high = segs[segs.length - 1];
+  const neg = a.themes.filter((x) => x.neg).sort((x, y) => y.count - x.count)[0];
+  const lowQuotes = a.rows.filter((r) => r.s <= 6 && r.t !== '—').slice(0, 2);
+  const posQuote = a.rows.find((r) => r.s >= 9 && r.t !== '—');
+  const text = why
+    ? `Разницу в основном даёт группа **«${low.label}»**: у неё NPS ${fmtNps(low.nps)}, а у группы «${high.label}» — ${fmtNps(high.nps)}. Критиков в ней ${low.d}%.\n\nВ их открытых ответах чаще всего встречается тема **«${neg.label}»** — ${neg.count} упоминаний из ${a.openN}. Похоже, главный рычаг — ${neg.hint}.`
+    : `NPS **${fmtNps(a.nps)}** по ${a.n} ${plural(a.n, ['ответу', 'ответам', 'ответам'])}: ${a.pP}% промоутеров и ${a.dP}% критиков.${a.flagged ? ` Исключил ${a.flagged} подозрительных ответов: их заполнили слишком быстро.` : ''}\n\nСлабее всего группа «${low.label}» (${fmtNps(low.nps)}). Главная тема недовольства — **«${neg.label}»** (${neg.count} упоминаний).`;
+  return {
+    text,
+    crosstab: { sid: s.id, title: `NPS по ${a.segBy}` },
+    quotes: [...lowQuotes, posQuote].filter(Boolean),
+    chips: ['Покажи ответы критиков', 'Подведи итоги', 'Расскажи подробнее про главную проблему'],
+  };
+}
+
+const analysisSteps = (s, why, slow = 1, quiet = false) => {
+  const a = analytics(s);
+  const pf = (patch) => { if (!quiet) panelFor(s, patch); };
+  return [
+    { label: `Загружаю ${rWord(a.n)}`, detail: `доходимость ${a.completion}%`, ms: 600 * slow, run: async () => pf({ open: true, tab: 'analytics' }) },
+    { label: 'Проверяю качество ответов', detail: a.flagged ? `исключено ${a.flagged}` : 'подозрительных нет', ms: 600 * slow },
+    { label: `Считаю NPS по ${a.segBy}`, detail: `${a.segments.length} ${plural(a.segments.length, ['группа', 'группы', 'групп'])}`, ms: 700 * slow },
+    { label: 'Группирую открытые ответы по темам', detail: `${a.openN} ответов → ${a.themes.length} тем`, ms: 800 * slow, run: async () => pf({ flash: why ? 'b-seg' : 'b-nps' }) },
+  ];
+};
+
+async function flowAnalyze(t, text, s) {
+  const why = /(почему|причин|что не так|упал|низк|отлича|подробнее|проблем|выгора|разбер)/i.test(text);
+  await agent(t, { steps: analysisSteps(s, why), build: () => buildAnalysis(s, why) });
+}
+
+async function flowReport(t, text, s) {
+  const a = analytics(s);
+  const neg = a.themes.filter((x) => x.neg).sort((x, y) => y.count - x.count);
+  const pos = a.themes.filter((x) => !x.neg)[0];
+  const segs = a.segments.map((g) => ({ ...g, nps: g.p - g.d })).sort((x, y) => x.nps - y.nps);
+  await agent(t, {
+    steps: [
+      { label: 'Собираю ключевые метрики', ms: 600, run: async () => panelFor(s, { open: true, tab: 'analytics' }) },
+      { label: 'Формулирую выводы', ms: 800 },
+    ],
+    build: () => ({
+      text: `**Итоги: ${s.name}**\n\n• Ответов: ${a.n}, доходимость ${a.completion}%\n• NPS ${fmtNps(a.nps)}: ${a.pP}% промоутеров, ${a.dP}% критиков\n• Слабое место: группа «${segs[0].label}» (${fmtNps(segs[0].nps)})\n• Сильная сторона: «${pos.label}» (${pos.count} упоминаний)\n\n**Что сделать**\n1. ${cap(neg[0].hint)}.\n2. ${cap(neg[1].hint)}.\n3. Повторить замер через 4–6 недель и сравнить группу «${segs[0].label}».`,
+      chips: ['Почему так вышло?', 'Покажи ответы критиков'],
+    }),
+  });
+}
+
+async function flowResponses(t, text, s) {
+  const a = analytics(s);
+  const neg = a.themes.filter((x) => x.neg).sort((x, y) => y.count - x.count)[0];
+  await agent(t, {
+    steps: [{ label: 'Фильтрую ответы', detail: 'оценка 0–6', ms: 500, run: async () => panelFor(s, { open: true, tab: 'responses', filter: 'd' }) }],
+    build: () => ({
+      text: `Открыл в панели ответы критиков — их ${a.dN} (${a.dP}%). Чаще всего они пишут про «${neg.label.toLowerCase()}».`,
+      chips: ['Почему так вышло?', 'Подведи итоги'],
+    }),
+  });
+}
+
+async function flowFallback(t, text, s) {
+  await agent(t, { build: () => ({
+    text: 'Я могу разобрать ответы, предложить и внести правки в вопросы или сделать копию опроса. Публикуете и закрываете опрос вы — кнопками на вкладке «Обзор».',
+    chips: hasResp(s) ? ['Почему NPS такой?', 'Подведи итоги', 'Покажи ответы критиков'] : ['Добавь вопрос про цену', 'Убери вопрос', 'Сделай копию опроса'],
+  }) });
+}
+
+/* ── teammate simulation: shared chat + one agent run per survey ── */
+async function simTeammate() {
+  const s = state.surveys.s3, t = state.threads.s3;
+  t.messages.push({ id: uid('m'), role: 'user', who: 'anya', when: 'только что', text: 'Какие отделы выгорают сильнее и почему?' });
+  if (isVisible(t)) renderMessages(true);
+  await runAs(t, 'anya', () => agent(t, { steps: analysisSteps(s, true, 2.2, true), build: () => buildAnalysis(s, true) }));
+}
+
+/* ════════════ rendering: drawer ════════════ */
+function surveyRow(s, flat = false) {
+  const th = state.threads[s.id];
+  const other = th && th.busyBy && th.busyBy !== 'me';
+  const right = other ? `<span class="typing"><span class="spin"></span>${esc(PEOPLE[th.busyBy].short)}</span>` : `<span class="count">${s.status === 'draft' ? (flat ? '' : 'черновик') : s.a ? s.a.n : 0}</span>`;
+  return `<button class="row survey-row ${flat ? 'flat' : ''} ${state.active === s.id ? 'active' : ''}" data-act="open-survey" data-id="${s.id}" title="${esc(s.name)} — ${STATUS[s.status]}">
+    <span class="dot ${s.status}" aria-label="${STATUS[s.status]}"></span><span class="name">${esc(s.name)}</span>${right}</button>`;
+}
+
+function renderSidebar() {
+  const q = state.search.toLowerCase();
+  const drafts = state.drafts.surveys.map((id) => state.surveys[id]).filter((s) => !q || s.name.toLowerCase().includes(q));
+  const draftsHtml = `<div class="sb-h">Черновики${drafts.length ? `<span class="sb-n">${drafts.length}</span>` : ''}</div>
+    ${drafts.length ? `<div class="proj">${drafts.map((s) => surveyRow(s, true)).join('')}</div>` : `<div class="sb-empty">${q ? 'Ничего не найдено' : 'Здесь будут опросы без проекта'}</div>`}`;
+  const projHtml = state.projects.map((p) => {
+    const surveys = p.surveys.map((id) => state.surveys[id]).filter((s) => !q || s.name.toLowerCase().includes(q) || p.name.toLowerCase().includes(q));
+    if (q && !surveys.length) return '';
+    const open = state.expanded.has(p.id) || !!q;
+    return `<div class="proj">
+      <div class="row proj-row ${open ? 'open' : ''}">
+        <button class="proj-toggle" data-act="toggle-proj" data-id="${p.id}" aria-expanded="${open}">
+          <span class="chev">${icon('chev', 16)}</span><span class="name">${esc(p.name)}</span>
+        </button>
+        <button class="icon-btn sm add" data-act="new-in-proj" data-id="${p.id}" title="Новый опрос в проекте" aria-label="Новый опрос в проекте ${esc(p.name)}">${icon('plus', 16)}</button>
+      </div>
+      ${open ? surveys.map((s) => surveyRow(s)).join('') : ''}
+    </div>`;
+  }).join('');
+  $('#sbScroll').innerHTML = `${draftsHtml}<div class="sb-h">Проекты<span class="spacer"></span><button class="icon-btn sm" data-act="toast" data-msg="Здесь откроется создание проекта" title="Новый проект" aria-label="Новый проект">${icon('plus', 16)}</button></div>
+    ${projHtml || '<div class="sb-empty">Ничего не найдено</div>'}`;
+  $('#newBtn').classList.toggle('active', !state.active);
+}
+
+/* ════════════ rendering: chat ════════════ */
+function renderChatHeader() {
+  const t = cur();
+  const s = curSurvey();
+  $('#chatH').innerHTML = `
+    <button class="icon-btn menu-btn" data-act="sb-open" aria-label="Открыть меню">${icon('menu', 22)}</button>
+    <div class="crumbs"><strong>${esc(s ? s.name : 'Новый опрос')}</strong></div>
+    <span class="spacer"></span>
+    ${s ? `<button class="icon-btn ${state.panel.open ? 'on' : ''}" data-act="toggle-panel" aria-pressed="${state.panel.open}" title="Панель опроса" aria-label="Панель опроса">${icon('panel', 20)}</button>` : ''}
+    <button class="icon-btn" data-act="new-survey" title="Новый опрос" aria-label="Новый опрос">${icon('newchat', 20)}</button>
+    ${s ? `<button class="icon-btn hide-m" data-act="toast" data-msg="В продукте — пригласить коллегу в чат опроса" title="Поделиться" aria-label="Поделиться">${icon('share', 20)}</button>` : ''}
+  `;
+}
+
+function applyHome() { $('#chat').classList.toggle('is-home', !curSurvey() && !cur().messages.length); }
+
+function renderMessages(scroll) {
+  const t = cur();
+  const s = curSurvey();
+  const el = $('#messages');
+  applyHome();
+  if (!s && !t.messages.length) {
+    el.innerHTML = `<div class="home">
+      <p class="hello">Привет!</p>
+      <h1>Какой опрос <span>соберём</span>?</h1>
+      <div class="tiles">
+        ${[
+          ['package', 'Качество доставки', 'NPS + CSAT', 'Опрос о качестве доставки для клиентов'],
+          ['users', 'Вовлечённость команды', 'eNPS', 'eNPS для сотрудников после переезда в офис'],
+          ['card', 'Ценность тарифа', 'NPS + CSAT', 'Опрос о ценности тарифа Pro'],
+          ['headset', 'Работа поддержки', 'CSAT', 'CSAT поддержки после обращения'],
+        ].map(([ic, title, tag, prompt]) => `<button class="tile" data-act="say" data-text="${esc(prompt)}" aria-label="${esc(prompt)}"><span class="t-ico">${icon(ic, 22)}</span><b>${esc(title)}</b><small>${esc(tag)}</small></button>`).join('')}
+      </div>    </div>`;
+    return;
+  }
+  let intro = '';
+  if (s && !t.messages.some((m) => m.role !== 'event')) {
+    const chips = hasResp(s) ? ['Почему NPS такой?', 'Подведи итоги'] : ['Добавь вопрос про цену', 'Убери вопрос', 'Сделай все вопросы обязательными'];
+    intro = `<div class="thread-intro"><h2>${esc(s.name)}</h2><p>${STATUS[s.status]} · ${qWord(s.questions.length)} · ${esc(s.methods.join(' + '))}. ${hasResp(s) ? 'Спросите что-нибудь про ответы.' : 'Напишите, что поменять, или правьте текст вопросов в панели.'}</p>
+      <div class="chips">${chips.map((c) => `<button class="chip" data-act="say" data-text="${esc(c)}">${esc(c)}</button>`).join('')}</div></div>`;
+  }
+  el.innerHTML = `<div class="col">${intro}${t.messages.map(msgHtml).join('')}</div>`;
+  if (scroll) scrollDown();
+}
+
+function updateMsg(m) {
+  const node = document.querySelector(`[data-mid="${m.id}"]`);
+  if (node) node.outerHTML = msgHtml(m);
+}
+function scrollDown() { const el = $('#messages'); el.scrollTop = el.scrollHeight; }
+
+function msgHtml(m) {
+  if (m.role === 'event') return `<div class="event" data-mid="${m.id}">${icon(m.ic, 16)}<span>${m.html}</span></div>`;
+  if (m.role === 'user') {
+    const p = PEOPLE[m.who];
+    return `<div class="msg user ${m.who === 'me' ? '' : 'other'}" data-mid="${m.id}">${m.who === 'me' ? '' : `<div class="who"><span class="ava sm">${p.ini}</span>${esc(p.name)} · ${esc(m.when)}</div>`}<div class="bubble">${esc(m.text)}</div></div>`;
+  }
+  const hasSteps = m.steps && m.steps.length;
+  const open = m.stepsOpen ?? !m.done;
+  const head = hasSteps ? `<div class="agent-head"><button class="think" data-act="toggle-steps" data-mid="${m.id}" aria-expanded="${open}">${m.done ? `Ход работы · ${m.steps.length} ${plural(m.steps.length, ['шаг', 'шага', 'шагов'])}` : '<span class="spin"></span>Работаю'}<span class="chev">${icon('chev', 16)}</span></button></div>` : '';
+  const steps = hasSteps && open ? `<ol class="steps">${m.steps.map((s) => `<li class="${s.state}"><span class="st-ico">${s.state === 'run' ? '<span class="spin"></span>' : icon('check', 14)}</span><span>${esc(s.label)}</span>${s.detail ? `<span class="st-detail">${esc(s.detail)}</span>` : ''}</li>`).join('')}</ol>` : '';
+  const body = m.done ? md(m.text) : m.partial ? `<p>${esc(m.partial)}<span class="caret"></span></p>` : hasSteps ? '' : '<p><span class="caret"></span></p>';
+  let extra = '';
+  if (m.done) {
+    if (m.crosstab) {
+      const s = state.surveys[m.crosstab.sid];
+      extra += `<div class="inline-block"><h4>${esc(m.crosstab.title)}</h4>${segTable(analytics(s))}<div class="legend" style="margin-top:4px">${legendHtml()}</div></div>`;
+    }
+    if (m.quotes && m.quotes.length) extra += `<div class="quotes">${m.quotes.map((r) => `<div class="quote"><div class="quote-text">«${esc(r.t)}»</div><div class="quote-meta">${esc(r.seg)} · оценка ${r.s}</div></div>`).join('')}</div>`;
+    if (m.card) {
+      const c = m.card;
+      extra += `<button class="card" data-act="${c.act}" data-id="${c.sid}"><span class="card-ico">${icon(c.ic, 20)}</span><span><span class="card-title">${esc(c.title)}</span><br><span class="card-meta">${esc(c.meta)}</span></span><span class="go">${icon('chev', 18)}</span></button>`;
+    }
+    if (m.confirm) {
+      const c = m.confirm;
+      extra += m.resolved
+        ? `<div class="resolved">${icon('check', 16)}${esc(m.resolved)}</div>`
+        : `<div class="confirm ${c.warn ? 'warn' : ''}"><div class="confirm-title">${esc(c.title)}</div><div class="confirm-text">${esc(c.text)}</div>
+          <div class="btns"><button class="btn primary" data-act="${c.act}" data-mid="${m.id}">${esc(c.ok)}</button><button class="btn" data-act="cancel" data-mid="${m.id}">Не нужно</button></div></div>`;
+    }
+    if (m.removeList) extra += m.resolved
+      ? `<div class="resolved">${icon('check', 16)}${esc(m.resolved)}</div>`
+      : `<div class="chips">${m.removeList.map((x) => `<button class="chip" data-act="remove-q" data-mid="${m.id}" data-qid="${x.qid}">${esc(x.label)}</button>`).join('')}</div>`;
+    if (m.actions) extra += `<div class="btns" style="margin-top:14px">${m.actions.map((a) => `<button class="btn ${a.primary ? 'primary' : ''}" data-act="${a.act}">${esc(a.label)}</button>`).join('')}</div>`;
+    if (m.chips && m.chips.length) extra += `<div class="chips">${m.chips.map((c) => `<button class="chip" data-act="say" data-text="${esc(c)}">${esc(c)}</button>`).join('')}</div>`;
+    extra += `<div class="msg-actions">
+      <button class="icon-btn" data-act="toast" data-msg="Спасибо! Оценка поможет улучшить ответы" aria-label="Хороший ответ">${icon('thumbUp', 18)}</button>
+      <button class="icon-btn" data-act="toast" data-msg="Спасибо! Расскажите в продукте, что не так" aria-label="Плохой ответ">${icon('thumbDown', 18)}</button>
+      <button class="icon-btn" data-act="toast" data-msg="В продукте агент ответит заново" aria-label="Ответить заново">${icon('redo', 18)}</button>
+      <button class="icon-btn" data-act="toast" data-msg="Ответ скопирован" aria-label="Копировать">${icon('copy', 18)}</button>
+    </div>`;
+  }
+  return `<div class="msg agent" data-mid="${m.id}">${head}${steps}<div class="text">${body}</div>${extra}</div>`;
+}
+
+function renderComposer() {
+  const t = cur();
+  const s = curSurvey();
+  const other = t.busyBy && t.busyBy !== 'me';
+  $('#lock').innerHTML = other ? `<div class="lock"><span class="spin"></span>Агент отвечает ${esc(PEOPLE[t.busyBy].dat)}. Поле ввода откроется, когда он закончит.</div>` : '';
+  $('#composer').classList.toggle('locked', !!other);
+  const ta = $('#input');
+  ta.disabled = !!other;
+  ta.placeholder = s ? `Спросите про «${s.name}»` : 'Опишите, что хотите узнать и у кого';
+  const pid = s ? s.project : t.project;
+  $('#ctxBar').innerHTML = `<button class="ctx-btn" id="projChip" data-act="${s ? 'move-menu' : 'proj-menu'}" aria-haspopup="menu" aria-expanded="false" title="${s ? 'Проект опроса — можно перенести' : 'Куда сохранить опрос'}">${icon(pid === 'drafts' ? 'draft' : 'folder', 18)}<span class="pc-name">${esc(projOf(pid).name)}</span>${icon('chevDown', 16)}</button>`
+    + (s ? `<span class="ctx-meta"><span class="dot ${s.status}"></span>${STATUS[s.status]}${hasResp(s) ? ` · ${rWord(s.a.n)}` : ''}</span>` : '');
+  updateSend();
+  placeToBottom();
+}
+
+/* ════════════ rendering: panel ════════════ */
+function setPanel(patch) {
+  Object.assign(state.panel, patch);
+  renderPanel(); renderChatHeader(); applyLayout();
+}
+
+function renderPanel() {
+  const p = state.panel;
+  const s = p.sid ? state.surveys[p.sid] : null;
+  const el = $('#panel');
+  if (!s) { el.innerHTML = ''; el.dataset.view = ''; return; }
+  if ((p.tab === 'responses' || p.tab === 'analytics') && !hasResp(s)) p.tab = 'overview';
+  const prev = document.getElementById('panelBody');
+  const keepScroll = prev && el.dataset.view === `${s.id}:${p.tab}` ? prev.scrollTop : 0;
+  const tabs = [['overview', 'Обзор', 'info'], ['form', 'Вопросы', 'list'], ['responses', `Ответы${s.a ? ` ${s.a.n}` : ''}`, 'table'], ['analytics', 'Аналитика', 'chart']];
+  el.innerHTML = `
+    <div class="panel-h">
+      <div class="panel-title-row">
+        <span class="panel-title" title="${esc(s.name)}">${esc(s.name)}</span>
+        <span class="status"><span class="dot ${s.status}"></span>${STATUS[s.status]}</span>
+        <span class="spacer"></span>
+        <button class="icon-btn wide-btn" data-act="wide" title="${p.wide ? 'Свернуть' : 'Развернуть'}" aria-label="${p.wide ? 'Свернуть панель' : 'Развернуть панель'}">${icon(p.wide ? 'shrink' : 'expand', 18)}</button>
+        <button class="icon-btn" data-act="close-panel" aria-label="Закрыть панель">${icon('close', 20)}</button>
+      </div>
+      <div class="tabs" role="tablist">
+        ${tabs.map(([id, l, ic]) => `<button class="tab" role="tab" aria-selected="${p.tab === id}" data-act="tab" data-tab="${id}" ${!hasResp(s) && (id === 'responses' || id === 'analytics') ? 'disabled title="Появится после первых ответов"' : ''}>${icon(ic, 16)}${l}</button>`).join('')}
+      </div>
+    </div>
+    <div class="panel-body" id="panelBody">${{ overview: overviewTab, form: formTab, responses: responsesTab, analytics: analyticsTab }[p.tab](s)}</div>
+    ${p.tab === 'form' ? `<div class="panel-foot">
+      <button class="btn sm" data-act="toast" data-msg="В продукте откроется предпросмотр глазами респондента">${icon('eye', 16)}Предпросмотр</button>
+      <button class="btn sm" data-act="toast" data-msg="В продукте откроется классический конструктор: логика, типы вопросов, страницы, оформление">${icon('ext', 16)}В конструкторе</button>
+    </div>` : ''}`;
+  el.dataset.view = `${s.id}:${p.tab}`;
+  const body = document.getElementById('panelBody');
+  const flashEl = body.querySelector('.flash');
+  if (flashEl) flashEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  else body.scrollTop = keepScroll;
+  const focusEl = p.focusQ ? body.querySelector(`.q-title[data-qid="${p.focusQ}"]`)
+    : p.focusOpt ? body.querySelector(`.opt-t[data-qid="${p.focusOpt.split(':')[0]}"][data-oi="${p.focusOpt.split(':')[1]}"]`) : null;
+  if (focusEl) {
+    focusEl.focus();
+    const r = document.createRange(); r.selectNodeContents(focusEl);
+    const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+  }
+  p.flash = null; p.focusQ = null; p.focusOpt = null;
+}
+
+function overviewTab(s) {
+  const fl = state.panel.flash;
+  const c = state.panel.confirm;
+  const a = hasResp(s) ? analytics(s) : null;
+  let status = '';
+  if (s.status === 'draft') {
+    status = `<p class="muted">Опрос видит только ваша команда. После публикации появится ссылка для респондентов.</p>
+      ${c === 'publish' ? `<div class="inline-confirm"><p>Откроется публичная ссылка. После первых ответов удалять вопросы и менять их типы будет нельзя.</p><div class="btns"><button class="btn primary sm" data-act="do-publish">Опубликовать</button><button class="btn sm" data-act="panel-cancel">Отмена</button></div></div>`
+        : `<button class="btn primary" data-act="ask-publish">Опубликовать</button>`}`;
+  } else if (s.status === 'open') {
+    status = `<p class="muted">Ответы принимаются по ссылке:</p>
+      <div class="link-box"><code>${esc(link(s))}</code><button class="btn tonal sm" data-act="copy-link" data-text="https://${esc(link(s))}">${icon('copy', 16)}Копировать</button></div>
+      <div style="margin-top:12px">${c === 'close' ? `<div class="inline-confirm"><p>Ссылка перестанет принимать ответы. Открыть приём можно будет снова.</p><div class="btns"><button class="btn danger sm" data-act="do-close">Остановить приём</button><button class="btn sm" data-act="panel-cancel">Отмена</button></div></div>`
+        : `<button class="btn danger sm" data-act="ask-close">Остановить приём</button>`}</div>`;
+  } else {
+    status = `<p class="muted">Ссылка больше не принимает ответы. Аналитика и ответы доступны.</p><button class="btn sm" data-act="do-reopen">Открыть приём снова</button>`;
+  }
+  return `
+    <div class="block ${fl === 'b-status' ? 'flash' : ''}">
+      <div class="block-h"><h3>Статус</h3><span class="status"><span class="dot ${s.status}"></span>${STATUS[s.status]}</span></div>
+      ${status}
+    </div>
+    ${a ? `<div class="kpis">
+      <div class="kpi"><div class="kpi-l">Ответов</div><div class="kpi-v">${a.n}</div></div>
+      <div class="kpi"><div class="kpi-l">Доходимость</div><div class="kpi-v">${a.completion}%</div></div>
+      <div class="kpi"><div class="kpi-l">NPS</div><div class="kpi-v">${fmtNps(a.nps)}</div></div>
+    </div>` : ''}
+    <div class="block">
+      <dl class="ov-list">
+        <dt>Проект</dt><dd><button class="link-btn" data-act="move-menu" aria-haspopup="menu" aria-expanded="false" title="Перенести опрос">${icon(s.project === 'drafts' ? 'draft' : 'folder', 16)}${esc(projOf(s.project).name)}${icon('chevDown', 14)}</button></dd>
+        <dt>Методика</dt><dd>${esc(s.methods.join(' + '))}</dd>
+        <dt>Вопросов</dt><dd>${s.questions.length}</dd>
+        <dt>Создан</dt><dd>${esc(s.created)} · ${esc(PEOPLE[s.author].name)}</dd>
+      </dl>
+    </div>
+    <button class="btn sm" data-act="toast" data-msg="В продукте откроется страница опроса в классическом интерфейсе">${icon('ext', 16)}Открыть в классическом интерфейсе</button>`;
+}
+
+const TYPE_ICON = { nps: 'chart', csat: 'star', single: 'radio', multi: 'checkbox', text: 'pen' };
+const NEW_TITLE = { nps: 'Насколько вероятно, что вы порекомендуете нас друзьям или коллегам?', csat: 'Насколько вы довольны?', single: 'Новый вопрос', multi: 'Новый вопрос', text: 'Новый вопрос' };
+
+function qPreview(q, locked) {
+  if (q.type === 'nps') return `<div class="scale">${Array.from({ length: 11 }, (_, i) => `<span>${i}</span>`).join('')}</div><div class="scale-l"><span>Маловероятно</span><span>Очень вероятно</span></div>`;
+  if (q.type === 'csat') return `<div class="stars" aria-label="Оценка от 1 до 5 звёзд">★★★★★</div>`;
+  if (q.type === 'single' || q.type === 'multi') {
+    const canDel = !locked && q.options.length > 2;
+    return q.options.map((o, i) => `<div class="opt"><i class="${q.type === 'multi' ? 'sq' : ''}"></i><span class="opt-t" contenteditable="true" spellcheck="false" data-qid="${q.id}" data-oi="${i}" role="textbox" aria-label="Вариант ${i + 1}">${esc(o)}</span>${canDel ? `<button class="opt-x" data-act="del-opt" data-qid="${q.id}" data-oi="${i}" aria-label="Удалить вариант ${i + 1}">${icon('close', 14)}</button>` : ''}</div>`).join('')
+      + `<button class="add-opt" data-act="add-opt" data-qid="${q.id}">${icon('plus', 14)}Добавить вариант</button>`;
+  }
+  return `<div class="fake-input">Ответ респондента…</div>`;
+}
+
+function formTab(s) {
+  const n = s.questions.length;
+  const locked = hasResp(s);
+  const adder = state.panel.adding
+    ? `<div class="type-pick"><div class="type-pick-h">Какой вопрос добавить?<span class="spacer"></span><button class="icon-btn sm" data-act="add-q-cancel" aria-label="Отмена">${icon('close', 16)}</button></div>
+        <div class="type-grid">${Object.keys(TYPE).map((k) => `<button class="type-btn" data-act="add-q" data-type="${k}">${icon(TYPE_ICON[k], 18)}${TYPE[k]}</button>`).join('')}</div></div>`
+    : `<button class="add-q" data-act="add-q-open">${icon('plus', 18)}Добавить вопрос</button>`;
+  return `<div class="meta-row">${s.methods.map((m) => `<span class="badge">${esc(m)}</span>`).join('')}<span>${qWord(n)}</span></div>
+    ${locked ? '<div class="edit-hint">Ответы уже есть: добавлять можно, удалять вопросы и варианты нельзя.</div>' : ''}
+    ${s.questions.map((q, i) => `<div class="q ${state.panel.flash === q.id ? 'flash' : ''}">
+      <div class="q-top"><span class="q-num">${i + 1}</span><span>${TYPE[q.type]}</span><span class="spacer"></span>
+        <button class="req-toggle" data-act="toggle-req" data-qid="${q.id}" aria-pressed="${q.req}">${q.req ? 'Обязательный' : 'Необязательный'}</button>
+        <button class="icon-btn sm" data-act="move" data-dir="-1" data-qid="${q.id}" ${i === 0 ? 'disabled' : ''} aria-label="Переместить выше">${icon('up', 16)}</button>
+        <button class="icon-btn sm" data-act="move" data-dir="1" data-qid="${q.id}" ${i === n - 1 ? 'disabled' : ''} aria-label="Переместить ниже">${icon('down', 16)}</button>
+        <button class="icon-btn sm q-del" data-act="del-q" data-qid="${q.id}" ${locked ? 'disabled' : ''} aria-label="Удалить вопрос" title="Удалить вопрос">${icon('trash', 16)}</button>
+      </div>
+      <div class="q-title" contenteditable="true" spellcheck="false" data-qid="${q.id}" role="textbox" aria-label="Текст вопроса ${i + 1}">${esc(q.title)}</div>
+      <div class="q-prev">${qPreview(q, locked)}</div></div>`).join('')}
+    ${adder}`;
+}
+
+function legendHtml() {
+  return `<span><i style="background:var(--c-d)"></i>Критики 0–6</span><span><i style="background:var(--c-pa)"></i>Нейтральные 7–8</span><span><i style="background:var(--c-p)"></i>Промоутеры 9–10</span>`;
+}
+
+function segTable(a) {
+  return `<table class="seg-table"><tbody>${a.segments.map((g) => `<tr>
+    <td class="l">${esc(g.label)}</td><td class="n">n=${g.n}</td>
+    <td class="bar"><div class="stack sm" role="img" aria-label="${esc(g.label)}: критики ${g.d}%, нейтральные ${g.pa}%, промоутеры ${g.p}%">
+      <div class="seg d" style="flex:${g.d}" data-tip="${esc(g.label)} · критики ${g.d}%"></div>
+      <div class="seg pa" style="flex:${g.pa}" data-tip="${esc(g.label)} · нейтральные ${g.pa}%"></div>
+      <div class="seg p" style="flex:${g.p}" data-tip="${esc(g.label)} · промоутеры ${g.p}%"></div></div></td>
+    <td class="v">${fmtNps(g.p - g.d)}</td></tr>`).join('')}</tbody></table>`;
+}
+
+function analyticsTab(s) {
+  const a = analytics(s);
+  const fl = state.panel.flash;
+  const max = Math.max(...a.hist);
+  const bucket = (i) => (i <= 6 ? 'd' : i <= 8 ? 'pa' : 'p');
+  const tmax = Math.max(...a.themes.map((x) => x.count));
+  const ask = (q) => `<button class="ask" data-act="say" data-text="${esc(q)}"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="${SPARK_PATH}" fill="currentColor"/></svg>Спросить</button>`;
+  return `
+    <div class="kpis">
+      <div class="kpi"><div class="kpi-l">Ответов</div><div class="kpi-v">${a.n}</div><div class="kpi-s">${a.flagged ? `−${a.flagged} подозрительных` : 'все прошли проверку'}</div></div>
+      <div class="kpi"><div class="kpi-l">Доходимость</div><div class="kpi-v">${a.completion}%</div><div class="kpi-s">дошли до конца</div></div>
+      <div class="kpi"><div class="kpi-l">NPS</div><div class="kpi-v">${fmtNps(a.nps)}</div><div class="kpi-s">от −100 до +100</div></div>
+    </div>
+    <div class="block ${fl === 'b-nps' ? 'flash' : ''}">
+      <div class="block-h"><h3>Распределение оценок</h3><span class="sub">n=${a.n}</span>${ask('Проанализируй NPS')}</div>
+      <div class="stack" role="img" aria-label="Критики ${a.dP}%, нейтральные ${a.paP}%, промоутеры ${a.pP}%">
+        <div class="seg d" style="flex:${a.dP}" data-tip="Критики (0–6): ${a.dN} · ${a.dP}%">${a.dP}%</div>
+        <div class="seg pa" style="flex:${a.paP}" data-tip="Нейтральные (7–8): ${a.paN} · ${a.paP}%">${a.paP}%</div>
+        <div class="seg p" style="flex:${a.pP}" data-tip="Промоутеры (9–10): ${a.pN} · ${a.pP}%">${a.pP}%</div>
+      </div>
+      <div class="legend">${legendHtml()}</div>
+      <div class="hist" role="img" aria-label="Гистограмма оценок от 0 до 10">
+        ${a.hist.map((v, i) => `<div class="bar-hit" data-tip="Оценка ${i}: ${rWord(v)}"><div class="bar" style="height:${(v / max) * 100}%;background:var(--c-${bucket(i)})"></div></div>`).join('')}
+      </div>
+      <div class="hist-x">${a.hist.map((_, i) => `<span>${i}</span>`).join('')}</div>
+    </div>
+    <div class="block ${fl === 'b-seg' ? 'flash' : ''}">
+      <div class="block-h"><h3>NPS по ${esc(a.segBy)}</h3>${ask(`Почему NPS отличается по ${a.segBy}?`)}</div>
+      ${segTable(a)}
+    </div>
+    <div class="block">
+      <div class="block-h"><h3>Темы открытых ответов</h3><span class="sub">${a.openN} ответов</span>${ask('Расскажи подробнее про главную проблему')}</div>
+      ${a.themes.map((x) => `<div class="theme-row" data-tip="${esc(x.label)}: ${x.count} упоминаний">
+        <div class="theme-top"><span class="lbl">${esc(x.label)}</span><span class="tag">${x.neg ? 'негатив' : 'позитив'}</span><span class="cnt">${x.count}</span></div>
+        <div class="track"><div style="width:${(x.count / tmax) * 100}%"></div></div></div>`).join('')}
+    </div>`;
+}
+
+function responsesTab(s) {
+  const a = analytics(s);
+  const f = state.panel.filter;
+  const b = (x) => (x <= 6 ? 'd' : x <= 8 ? 'pa' : 'p');
+  const rows = a.rows.filter((r) => f === 'all' || b(r.s) === f);
+  const fl = [['all', `Все · ${a.n}`], ['d', `Критики · ${a.dN}`], ['pa', `Нейтральные · ${a.paN}`], ['p', `Промоутеры · ${a.pN}`]];
+  return `<div class="filters">${fl.map(([id, l]) => `<button class="chip" aria-pressed="${f === id}" data-act="filter" data-f="${id}">${l}</button>`).join('')}</div>
+    <div class="resp">${rows.length ? rows.map((r) => `<div class="resp-row"><div class="score"><i style="background:var(--c-${b(r.s)})"></i>${r.s}</div>
+      <div><div>${esc(r.t)}</div><div class="resp-meta">${esc(r.seg)} · ${esc(r.w)}</div></div></div>`).join('') : '<div class="resp-row"><div></div><div class="resp-meta">В выборке прототипа таких ответов нет</div></div>'}</div>
+    <div class="note">Показаны последние ${rWord(rows.length)} из выборки. В продукте здесь полная таблица с экспортом в CSV.</div>`;
+}
+
+/* ════════════ layout & misc ════════════ */
+function applyLayout() {
+  const app = $('#app');
+  app.classList.toggle('panel-open', state.panel.open && !!state.panel.sid);
+  app.classList.toggle('panel-wide', state.panel.wide);
+}
+function closeSidebarMobile() { $('#app').classList.remove('sb-open'); }
+function renderAll(scroll) { renderSidebar(); renderChatHeader(); renderMessages(scroll); renderComposer(); renderPanel(); applyLayout(); }
+function updateSend() { const t = cur(); $('#sendBtn').disabled = !!t.busyBy || !$('#input').value.trim(); }
+function autoGrow() { const ta = $('#input'); ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 200) + 'px'; placeToBottom(); }
+function placeToBottom() { const btn = $('#toBottom'); btn.style.bottom = ($('#composerWrap').offsetHeight + 12) + 'px'; }
+function updateToBottom() { const el = $('#messages'); $('#toBottom').classList.toggle('show', el.scrollHeight - el.scrollTop - el.clientHeight > 160); }
+let toastT;
+function toast(msg) { const el = $('#toast'); el.textContent = msg; el.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('show'), 2800); }
+
+function askConsent(s, cb) { state.consentCb = { s, cb }; $('#consent').hidden = false; document.querySelector('[data-act="consent-yes"]').focus(); }
+function closeConsent() { $('#consent').hidden = true; state.consentCb = null; $('#input').focus(); }
+
+function statusEvent(s, html, ic) {
+  const t = state.threads[s.id];
+  t.messages.push(eventMsg(html, ic));
+  if (isVisible(t)) renderMessages(true);
+}
+
+const THEMES = ['auto', 'light', 'dark'];
+let themeIdx = 0;
+try { themeIdx = Math.max(0, THEMES.indexOf(localStorage.getItem('svod-agent-theme') || 'auto')); } catch (e) { /* storage may be blocked */ }
+function applyTheme() {
+  const t = THEMES[themeIdx];
+  if (t === 'auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', t);
+  $('#themeBtn').innerHTML = icon(t === 'auto' ? 'auto' : t === 'light' ? 'sun' : 'moon', 20);
+  $('#themeBtn').title = `Тема: ${t === 'auto' ? 'как в системе' : t === 'light' ? 'светлая' : 'тёмная'}`;
+  try { localStorage.setItem('svod-agent-theme', t); } catch (e) { /* storage may be blocked */ }
+}
+
+/* ════════════ project menu ════════════ */
+const menuState = { anchor: null, pick: null };
+function projectMenuItems(selected) {
+  const item = (id, ic, label, sub) => `<button class="menu-item" role="menuitemradio" aria-checked="${id === selected}" data-menu="${id}">${icon(ic, 20)}<span class="mi-text"><span>${esc(label)}</span>${sub ? `<small>${esc(sub)}</small>` : ''}</span>${id === selected ? icon('check', 18) : ''}</button>`;
+  return item('drafts', 'draft', 'Черновики', 'Без проекта — выберете позже')
+    + '<div class="menu-div"></div><div class="menu-h">Проекты</div>'
+    + state.projects.map((p) => item(p.id, 'folder', p.name, `${p.surveys.length} ${plural(p.surveys.length, ['опрос', 'опроса', 'опросов'])}`)).join('')
+    + `<div class="menu-div"></div><button class="menu-item" role="menuitem" data-menu="__new">${icon('plus', 20)}<span class="mi-text"><span>Новый проект</span></span></button>`;
+}
+function toggleMenu(anchor, selected, onPick, title) {
+  const m = $('#menu');
+  if (menuState.anchor === anchor && !m.hidden) { closeMenu(); return; }
+  closeMenu();
+  m.innerHTML = (title ? `<div class="menu-h">${esc(title)}</div>` : '') + projectMenuItems(selected);
+  m.hidden = false;
+  menuState.anchor = anchor;
+  menuState.pick = (id) => { if (id === '__new') toast('Здесь откроется создание проекта'); else if (id !== selected) onPick(id); };
+  anchor.setAttribute('aria-expanded', 'true');
+  const r = anchor.getBoundingClientRect(), mh = m.offsetHeight, mw = m.offsetWidth;
+  const above = r.top > innerHeight / 2;
+  const top = above ? r.top - mh - 8 : r.bottom + 8;
+  m.style.top = `${Math.max(8, Math.min(top, innerHeight - mh - 8))}px`;
+  m.style.left = `${Math.max(8, Math.min(r.left, innerWidth - mw - 8))}px`;
+  (m.querySelector('[aria-checked="true"]') || m.querySelector('.menu-item')).focus();
+}
+function closeMenu() {
+  const m = $('#menu');
+  if (m.hidden) return;
+  m.hidden = true;
+  if (menuState.anchor) menuState.anchor.setAttribute('aria-expanded', 'false');
+  menuState.anchor = null; menuState.pick = null;
+}
+
+/* ════════════ events ════════════ */
+document.addEventListener('click', async (e) => {
+  const mi = e.target.closest('[data-menu]');
+  if (mi) { const fn = menuState.pick; closeMenu(); if (fn) fn(mi.dataset.menu); return; }
+  const b = e.target.closest('[data-act]');
+  if (!e.target.closest('#menu') && !(b && (b.dataset.act === 'proj-menu' || b.dataset.act === 'move-menu'))) closeMenu();
+  if (!b || b.disabled) return;
+  const d = b.dataset;
+  const t = cur();
+  const s = curSurvey();
+  const msg = (id) => t.messages.find((x) => x.id === id);
+  switch (d.act) {
+    case 'say': send(d.text); break;
+    case 'toggle-proj': state.expanded.has(d.id) ? state.expanded.delete(d.id) : state.expanded.add(d.id); renderSidebar(); break;
+    case 'new-survey': openNew(); break;
+    case 'new-in-proj': openNew(d.id); toast(`Новый опрос попадёт ${whereTo(d.id)}`); break;
+    case 'proj-menu':
+      toggleMenu(b, t.project, (pid) => { t.project = pid; state.lastProject = pid; renderComposer(); renderChatHeader(); if (!t.messages.length) renderMessages(); $('#input').focus(); });
+      break;
+    case 'move-menu': toggleMenu(b, s.project, (pid) => moveSurvey(s, pid), 'Перенести опрос'); break;
+    case 'open-survey': openSurvey(d.id); break;
+    case 'toggle-panel': setPanel({ open: !state.panel.open }); break;
+    case 'close-panel': setPanel({ open: false }); break;
+    case 'wide': setPanel({ wide: !state.panel.wide }); break;
+    case 'tab': setPanel({ tab: d.tab, confirm: null }); break;
+    case 'filter': setPanel({ filter: d.f }); break;
+    case 'sb-open': $('#app').classList.add('sb-open'); break;
+    case 'toast': toast(d.msg); break;
+    case 'toggle-steps': { const m = msg(d.mid); if (m) { m.stepsOpen = !(m.stepsOpen ?? !m.done); updateMsg(m); } break; }
+    case 'copy-link': try { await navigator.clipboard.writeText(d.text); } catch (err) { /* clipboard may be blocked in preview */ } toast('Ссылка скопирована'); break;
+    case 'consent-yes': { const c = state.consentCb; c.s.consent = true; closeConsent(); c.cb(); break; }
+    case 'consent-no': closeConsent(); break;
+    case 'cancel': { const m = msg(d.mid); if (m) { m.resolved = 'Отменено, ничего не изменилось.'; updateMsg(m); } break; }
+    case 'apply-add': {
+      const m = msg(d.mid); const q = m.confirm.q; const pos = insertQuestion(s, q);
+      m.resolved = `Добавлен вопрос ${pos + 1} «${q.title}». Прежние ${s.a.n} ответов его не содержат.`; updateMsg(m);
+      setPanel({ open: true, tab: 'form', flash: q.id });
+      break;
+    }
+    case 'apply-required': {
+      const m = msg(d.mid); s.questions.forEach((q) => (q.req = true));
+      m.resolved = 'Все вопросы теперь обязательные для новых респондентов.'; updateMsg(m);
+      setPanel({ open: true, tab: 'form' });
+      break;
+    }
+    case 'do-copy': {
+      const m = msg(d.mid); if (!m || t.busyBy) break;
+      m.resolved = 'Делаю копию.'; updateMsg(m);
+      await runAs(t, 'me', () => flowCopy(t, '', s));
+      break;
+    }
+    case 'remove-q': {
+      const m = msg(d.mid);
+      const idx = s.questions.findIndex((q) => q.id === d.qid);
+      if (idx < 0) break;
+      const [q] = s.questions.splice(idx, 1);
+      m.resolved = `Убран вопрос «${q.title}». Осталось ${qWord(s.questions.length)}.`; updateMsg(m);
+      setPanel({ open: true, tab: 'form' });
+      break;
+    }
+    case 'toggle-req': {
+      const i = s.questions.findIndex((q) => q.id === d.qid); const q = s.questions[i];
+      q.req = !q.req; pushPendingChange(s, `вопрос ${i + 1} стал ${q.req ? 'обязательным' : 'необязательным'}`); renderPanel();
+      break;
+    }
+    case 'move': {
+      const i = s.questions.findIndex((q) => q.id === d.qid); const j = i + Number(d.dir);
+      if (j < 0 || j >= s.questions.length) break;
+      const [q] = s.questions.splice(i, 1); s.questions.splice(j, 0, q);
+      pushPendingChange(s, `вопрос «${short(q.title, 30)}» перемещён`); setPanel({ flash: q.id });
+      break;
+    }
+    case 'add-q-open': setPanel({ adding: true }); break;
+    case 'add-q-cancel': setPanel({ adding: false }); break;
+    case 'add-q': {
+      const multi = d.type === 'single' || d.type === 'multi';
+      const q = Q(d.type, NEW_TITLE[d.type], multi ? ['Вариант 1', 'Вариант 2'] : null, false);
+      s.questions.push(q);
+      pushPendingChange(s, `добавлен вопрос ${s.questions.length}`);
+      if (hasResp(s)) toast('Добавлено. Прежние ответы этого вопроса не содержат');
+      setPanel({ adding: false, flash: q.id, focusQ: q.id });
+      break;
+    }
+    case 'del-q': {
+      if (hasResp(s)) break;
+      const i = s.questions.findIndex((q) => q.id === d.qid); if (i < 0) break;
+      const [q] = s.questions.splice(i, 1);
+      pushPendingChange(s, `удалён вопрос «${short(q.title, 30)}»`); toast('Вопрос удалён'); renderPanel();
+      break;
+    }
+    case 'add-opt': {
+      const i = s.questions.findIndex((q) => q.id === d.qid); const q = s.questions[i]; if (!q) break;
+      q.options.push(`Вариант ${q.options.length + 1}`);
+      pushPendingChange(s, `добавлен вариант в вопросе ${i + 1}`);
+      setPanel({ focusOpt: `${q.id}:${q.options.length - 1}` });
+      break;
+    }
+    case 'del-opt': {
+      const i = s.questions.findIndex((q) => q.id === d.qid); const q = s.questions[i];
+      if (!q || hasResp(s) || q.options.length <= 2) break;
+      q.options.splice(Number(d.oi), 1);
+      pushPendingChange(s, `убран вариант в вопросе ${i + 1}`); renderPanel();
+      break;
+    }
+    case 'ask-publish': setPanel({ confirm: 'publish' }); break;
+    case 'ask-close': setPanel({ confirm: 'close' }); break;
+    case 'panel-cancel': setPanel({ confirm: null }); break;
+    case 'do-publish':
+      s.status = 'open';
+      statusEvent(s, `<b>Вы опубликовали опрос</b> · только что. Ссылка: ${esc(link(s))}`, 'rocket');
+      setPanel({ confirm: null, flash: 'b-status' }); renderSidebar(); toast('Опрос опубликован');
+      break;
+    case 'do-close':
+      s.status = 'closed'; statusEvent(s, '<b>Вы остановили приём ответов</b> · только что', 'info');
+      setPanel({ confirm: null }); renderSidebar();
+      break;
+    case 'do-reopen':
+      s.status = 'open'; statusEvent(s, '<b>Вы снова открыли приём ответов</b> · только что', 'info');
+      setPanel({ confirm: null }); renderSidebar();
+      break;
+  }
+});
+
+document.addEventListener('focusout', (e) => {
+  const el = e.target;
+  if (!el.matches || !el.matches('.q-title, .opt-t')) return;
+  const s = curSurvey(); if (!s) return;
+  const i = s.questions.findIndex((x) => x.id === el.dataset.qid); const q = s.questions[i];
+  if (!q) return;
+  const v = el.textContent.trim();
+  if (el.classList.contains('q-title')) {
+    if (!v) { el.textContent = q.title; return; }
+    if (v !== q.title) { q.title = v; pushPendingChange(s, `переформулирован вопрос ${i + 1}`); toast('Сохранено. Агент увидит правку в следующем ответе'); }
+  } else {
+    const oi = Number(el.dataset.oi);
+    if (!v) { el.textContent = q.options[oi]; return; }
+    if (v !== q.options[oi]) { q.options[oi] = v; pushPendingChange(s, `изменён вариант в вопросе ${i + 1}`); toast('Сохранено. Агент увидит правку в следующем ответе'); }
+  }
+});
+document.addEventListener('keydown', (e) => {
+  if (e.target.matches && e.target.matches('.q-title, .opt-t') && e.key === 'Enter') { e.preventDefault(); e.target.blur(); }
+  if (!$('#menu').hidden) {
+    const items = [...document.querySelectorAll('#menu .menu-item')];
+    const i = items.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); items[(i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length].focus(); return; }
+    if (e.key === 'Escape' || e.key === 'Tab') { const a = menuState.anchor; closeMenu(); if (e.key === 'Escape' && a) a.focus(); return; }
+  }
+  if (e.key === 'Escape') {
+    if (!$('#consent').hidden) { closeConsent(); return; }
+    if ($('#app').classList.contains('sb-open')) closeSidebarMobile();
+    else if (state.panel.open && window.innerWidth <= 1180) setPanel({ open: false });
+  }
+});
+
+const input = $('#input');
+input.addEventListener('input', () => { autoGrow(); updateSend(); });
+input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(input.value); } });
+$('#sendBtn').addEventListener('click', () => send(input.value));
+$('#themeBtn').addEventListener('click', () => { themeIdx = (themeIdx + 1) % THEMES.length; applyTheme(); });
+$('#classicBtn').addEventListener('click', () => toast('В продукте — переход в классический интерфейс СВОД'));
+$('#scrim').addEventListener('click', () => { closeSidebarMobile(); if (window.innerWidth <= 1180) setPanel({ open: false }); });
+$('#messages').addEventListener('scroll', updateToBottom);
+$('#toBottom').addEventListener('click', () => { const el = $('#messages'); el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' }); });
+window.addEventListener('resize', () => { placeToBottom(); closeMenu(); });
+
+const tip = $('#tip');
+document.addEventListener('mousemove', (e) => {
+  const el = e.target.closest && e.target.closest('[data-tip]');
+  if (!el) { tip.style.opacity = 0; return; }
+  tip.textContent = el.dataset.tip; tip.style.opacity = 1;
+  const w = tip.offsetWidth;
+  tip.style.left = Math.min(window.innerWidth - w - 8, Math.max(8, e.clientX - w / 2)) + 'px';
+  tip.style.top = Math.max(8, e.clientY - 36) + 'px';
+});
+
+/* ════════════ init ════════════ */
+$('#newBtn').innerHTML = `${icon('newchat', 20)}Новый опрос`;
+$('#sbSearch').innerHTML = `${icon('search', 18)}<input type="search" placeholder="Поиск по опросам" aria-label="Поиск по опросам">`;
+$('#sbSearch input').addEventListener('input', (e) => { state.search = e.target.value; renderSidebar(); });
+$('#sendBtn').innerHTML = icon('send', 20);
+$('#plusBtn').innerHTML = icon('plus', 22);
+$('#micBtn').innerHTML = icon('mic', 20);
+$('#toBottom').innerHTML = icon('down', 18);
+$('#classicBtn').innerHTML = `${icon('grid', 20)}Классический интерфейс`;
+applyTheme();
+
+for (const sid of Object.keys(state.surveys)) state.threads[sid] = mkThread(sid, state.surveys[sid].project);
+(() => {
+  const t1 = state.threads.s1;
+  t1.messages.push({ id: uid('m'), role: 'user', who: 'anya', when: 'вчера 16:40', text: 'Какие первые выводы по онбордингу?' });
+  t1.messages.push({ id: uid('m'), role: 'agent', done: true, steps: [
+    { label: 'Загружаю 248 ответов', detail: 'доходимость 71%', state: 'done' },
+    { label: 'Считаю NPS по стажу', detail: '3 группы', state: 'done' },
+    { label: 'Группирую открытые ответы по темам', detail: '176 ответов → 5 тем', state: 'done' },
+  ], ...buildAnalysis(state.surveys.s1, false), crosstab: null, chips: [] });
+  const t2 = state.threads.s2;
+  t2.messages.push({ id: uid('m'), role: 'user', who: 'dima', when: '13 окт', text: 'Что больше всего раздражает клиентов в поддержке?' });
+  t2.messages.push({ id: uid('m'), role: 'agent', done: true, steps: [
+    { label: 'Загружаю 512 ответов', detail: 'доходимость 84%', state: 'done' },
+    { label: 'Группирую открытые ответы по темам', detail: '301 ответ → 5 тем', state: 'done' },
+  ], ...buildAnalysis(state.surveys.s2, true), chips: [] });
+  t2.messages.push(eventMsg('<b>Дмитрий остановил приём ответов</b> · 14 окт', 'info'));
+  state.surveys.s2.consent = true;
+})();
+state.newThread = freshNew(state.lastProject);
+renderAll();
+
+/* spotlight on the home tiles: the pointer position drives the edge light */
+document.addEventListener('pointermove', (e) => {
+  const t = e.target.closest && e.target.closest('.tile');
+  if (!t) return;
+  const r = t.getBoundingClientRect();
+  t.style.setProperty('--mx', (e.clientX - r.left) + 'px');
+  t.style.setProperty('--my', (e.clientY - r.top) + 'px');
+});
+</script>
+</body>
+</html>
