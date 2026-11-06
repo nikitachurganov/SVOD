@@ -56,6 +56,8 @@ class Payment(Base):
     # month, year or one_off (the course-work pack)
     term: Mapped[str] = mapped_column(String(16), nullable=False)
     days: Mapped[int] = mapped_column(Integer, nullable=False)
+    # For how many seats it was paid (1 for the pack and for every payment made per person)
+    seats: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     amount_kopecks: Mapped[int] = mapped_column(Integer, nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="RUB", server_default="RUB")
     status: Mapped[str] = mapped_column(String(16), nullable=False, default=PAYMENT_NEW)

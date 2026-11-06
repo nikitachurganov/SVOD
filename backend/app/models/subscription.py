@@ -72,6 +72,10 @@ class Subscription(Base):
         DateTime(timezone=True), nullable=True
     )
     first_paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # How many of the two kit places (2nd and 3rd seat) are still priced at 300 ₽; see seat_window
+    kit_extra_seats: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=2, server_default="2"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_now
     )

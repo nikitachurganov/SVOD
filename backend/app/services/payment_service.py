@@ -54,7 +54,7 @@ from app.repositories import (
     plan_request_repository,
     user_repository,
 )
-from app.services import billing_mail, billing_service, yookassa_client
+from app.services import billing_mail, billing_service, pricing, seat_window, yookassa_client
 from app.services import subscription_lifecycle_service as lifecycle
 from app.services.plan_request_service import DAYS_BY_INTERVAL
 
@@ -107,17 +107,37 @@ def _error(status_code: int, code: str, message: str | None = None) -> HTTPExcep
     return HTTPException(status_code=status_code, detail=detail)
 
 
-def offer(term: str) -> tuple[Plan, int, int]:
-    """(plan, price in kopecks, days) for the term, from the catalogue the server enforces."""
+def offer(
+    term: str, seats: int = 1, kit_extra: int = pricing.KIT_EXTRA_SEATS
+) -> tuple[Plan, int, int]:
+    """(plan, price in kopecks, days) for the term, from the catalogue the server enforces.
+
+    With SEAT_PRICING_ENABLED the Researcher price comes from ``pricing.quote`` for ``seats`` seats
+    (``kit_extra`` is how many kit places still cost 300 ₽); without it there is one price per person
+    and more than one seat is refused. The pack is always one seat at its own price.
+    """
     plan = get_plan(PLAN_RESEARCHER)
-    if term == INTERVAL_MONTH:
-        price = plan.price_month_kopecks
-    elif term == INTERVAL_YEAR:
-        price = plan.price_year_kopecks
-    elif term == INTERVAL_ONE_OFF:
-        plan, price = get_plan(PLAN_PACK), PACK_PRICE_KOPECKS
-    else:
+    if term == INTERVAL_ONE_OFF:
+        if seats != 1:
+            raise _error(status.HTTP_422_UNPROCESSABLE_ENTITY, "invalid_seats", "Пакет — одно место")
+        return get_plan(PLAN_PACK), PACK_PRICE_KOPECKS, DAYS_BY_INTERVAL[term]
+    if term not in (INTERVAL_MONTH, INTERVAL_YEAR):
         raise _error(status.HTTP_422_UNPROCESSABLE_ENTITY, "invalid_term", "Неверный срок подключения")
+    if settings.SEAT_PRICING_ENABLED:
+        try:
+            price = pricing.quote(seats, term, kit_extra=kit_extra).total_kopecks
+        except ValueError as exc:
+            raise _error(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                "invalid_seats",
+                f"Число мест — от 1 до {pricing.MAX_SELF_SERVICE_SEATS}",
+            ) from exc
+    else:
+        if seats != 1:
+            raise _error(
+                status.HTTP_422_UNPROCESSABLE_ENTITY, "seats_unavailable", "Оплата по местам пока недоступна"
+            )
+        price = plan.price_month_kopecks if term == INTERVAL_MONTH else plan.price_year_kopecks
     return plan, price, DAYS_BY_INTERVAL[term]
 
 
@@ -142,13 +162,18 @@ async def _journal(
 
 
 async def create_checkout(
-    session: AsyncSession, user: User, term: str, now: datetime | None = None
+    session: AsyncSession, user: User, term: str, now: datetime | None = None, *, seats: int = 1
 ) -> Payment:
     """Create the payment at the provider and return the row with the page to send the person to."""
     if not settings.payments_enabled:
         raise _error(status.HTTP_409_CONFLICT, "payments_disabled", "Онлайн-оплата пока не подключена")
-    plan, amount, days = offer(term)
     now = now or _now()
+    kit_extra = pricing.KIT_EXTRA_SEATS
+    if settings.SEAT_PRICING_ENABLED and term in (INTERVAL_MONTH, INTERVAL_YEAR):
+        # A team that gave up a kit place pays the plain price for it when it comes back
+        sub = await billing_service.ensure_subscription(session, user.id, now)
+        kit_extra = seat_window.kit_extra_for(sub, now)
+    plan, amount, days = offer(term, seats, kit_extra)
 
     if plan.code == PLAN_PACK:
         # The pack would replace a running subscription that gives far more: do not sell it
@@ -161,7 +186,7 @@ async def create_checkout(
             )
 
     existing = await payment_repository.find_open_checkout(
-        session, user.id, term, since=now - REUSE_CHECKOUT_FOR
+        session, user.id, term, seats=seats, since=now - REUSE_CHECKOUT_FOR
     )
     if existing is not None:
         return existing
@@ -176,6 +201,7 @@ async def create_checkout(
             plan_code=plan.code,
             term=term,
             days=days,
+            seats=seats,
             amount_kopecks=amount,
             status=PAYMENT_NEW,
             created_at=now,
@@ -188,7 +214,8 @@ async def create_checkout(
         created = await yookassa_client.create_payment(
             idempotence_key=payment.idempotence_key,
             amount_kopecks=amount,
-            description=f"Тариф «{plan.title}»: {_TERM_TITLES[term]}",
+            description=f"Тариф «{plan.title}»: {_TERM_TITLES[term]}"
+            + (f", мест: {seats}" if seats > 1 else ""),
             return_url=_return_url(payment.id),
             metadata={"payment_id": str(payment.id), "user_id": str(user.id)},
         )
@@ -283,6 +310,7 @@ async def _apply(
                     payment.plan_code,
                     days=payment.days,
                     interval=payment.term,
+                    seats=payment.seats if payment.plan_code == PLAN_RESEARCHER else None,
                     note=f"Оплата {payment.id}",
                     now=now,
                 )

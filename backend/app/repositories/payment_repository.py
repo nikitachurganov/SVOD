@@ -61,15 +61,16 @@ async def list_for_user(
 
 
 async def find_open_checkout(
-    session: AsyncSession, user_id: uuid.UUID, term: str, *, since: datetime
+    session: AsyncSession, user_id: uuid.UUID, term: str, *, seats: int = 1, since: datetime
 ) -> Payment | None:
-    """A payment of this person for this term that is still waiting for them, so a second click
-    on «Оплатить» returns the same page instead of making another payment."""
+    """A payment of this person for this term and number of seats that is still waiting for them,
+    so a second click on «Оплатить» returns the same page instead of making another payment."""
     stmt = (
         select(Payment)
         .where(
             Payment.user_id == user_id,
             Payment.term == term,
+            Payment.seats == seats,
             Payment.status == PAYMENT_PENDING,
             Payment.confirmation_url.is_not(None),
             Payment.created_at >= since,

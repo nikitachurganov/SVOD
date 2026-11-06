@@ -78,6 +78,8 @@ class PlanRequestCreate(BaseModel):
 class CheckoutRequest(BaseModel):
     # month or year (Researcher), one_off (the pack)
     term: str = INTERVAL_MONTH
+    # Seats of the team to pay for; more than one only while SEAT_PRICING_ENABLED is on
+    seats: int = Field(default=1, ge=1, le=100)
 
 
 class CheckoutResponse(BaseModel):

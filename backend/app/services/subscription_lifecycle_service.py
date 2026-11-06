@@ -40,7 +40,7 @@ from app.core.config import settings
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.repositories import billing_repository, survey_repository, user_repository
-from app.services import billing_mail, billing_service, email_service
+from app.services import billing_mail, billing_service, email_service, seat_window
 
 logger = logging.getLogger(__name__)
 
@@ -93,11 +93,14 @@ async def grant(
     note: str | None = None,
     limit_overrides: dict[str, Any] | None = None,
     interval: str = INTERVAL_ONE_OFF,
+    seats: int | None = None,
     now: datetime | None = None,
 ) -> Subscription:
     """Give a paid plan by hand: for a payment by invoice, a gift, a compensation, the beta.
 
     ``interval`` is what the term was paid as (month, year, one_off); it only labels the period.
+    ``seats`` is how many seats were paid for (the Researcher plan only): they are remembered, and
+    the first paid grant opens the one-time 7-day window for a removed seat (see seat_window).
 
     ``days`` adds to a period that is already running (the plan is extended); ``until`` sets the
     end date and never shortens a longer running period. The responses the quota kept back are
@@ -132,6 +135,8 @@ async def grant(
     sub.billing_interval = interval
     sub.current_period_start, sub.current_period_end = start, end
     sub.trial_ends_at = None
+    if seats is not None and plan.code == PLAN_RESEARCHER:
+        seat_window.record_paid_seats(sub, seats, now)
     if not await _deletion_scheduled(session, user_id):
         sub.cancel_at_period_end = False
     if limit_overrides is not None:

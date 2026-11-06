@@ -58,6 +58,7 @@ def our_payment(**overrides) -> Payment:
         plan_code="researcher",
         term="month",
         days=30,
+        seats=1,
         amount_kopecks=MONTH,
         currency="RUB",
         status=PAYMENT_PENDING,
@@ -255,6 +256,49 @@ class OfferTests(unittest.TestCase):
             payment_service.offer("week")
         self.assertEqual(ctx.exception.status_code, 422)
 
+    def test_without_the_seat_switch_only_one_seat_is_sold_at_the_old_price(self):
+        with patch.object(payment_service.settings, "SEAT_PRICING_ENABLED", False):
+            for seats in (0, 2, 5):
+                with self.subTest(seats=seats), self.assertRaises(HTTPException) as ctx:
+                    payment_service.offer("month", seats)
+                self.assertEqual(
+                    (ctx.exception.status_code, ctx.exception.detail["code"]), (422, "seats_unavailable")
+                )
+
+    def test_with_the_seat_switch_the_price_comes_from_the_calculator(self):
+        with patch.object(payment_service.settings, "SEAT_PRICING_ENABLED", True):
+            for term, seats, kit_extra, price in (
+                ("month", 1, 2, 600_00),
+                ("month", 3, 2, 1200_00),
+                ("month", 4, 2, 1620_00),
+                ("year", 1, 2, 6336_00),
+                ("year", 2, 2, 9504_00),
+                # A kit place given up is paid at the plain price when it comes back
+                ("month", 2, 0, 1020_00),
+            ):
+                with self.subTest(term=term, seats=seats, kit_extra=kit_extra):
+                    plan, amount, _ = payment_service.offer(term, seats, kit_extra)
+                    self.assertEqual((plan.code, amount), ("researcher", price))
+
+    def test_with_the_seat_switch_a_wrong_number_of_seats_is_refused(self):
+        with patch.object(payment_service.settings, "SEAT_PRICING_ENABLED", True):
+            for seats in (0, -1, 11, 100):
+                with self.subTest(seats=seats), self.assertRaises(HTTPException) as ctx:
+                    payment_service.offer("month", seats)
+                self.assertEqual(
+                    (ctx.exception.status_code, ctx.exception.detail["code"]), (422, "invalid_seats")
+                )
+
+    def test_the_pack_is_one_seat_whatever_the_switch_says(self):
+        for enabled in (False, True):
+            with self.subTest(enabled=enabled), patch.object(
+                payment_service.settings, "SEAT_PRICING_ENABLED", enabled
+            ):
+                self.assertEqual(payment_service.offer("one_off", 1)[1], 250_00)
+                with self.assertRaises(HTTPException) as ctx:
+                    payment_service.offer("one_off", 2)
+                self.assertEqual(ctx.exception.detail["code"], "invalid_seats")
+
     def test_the_return_page_names_the_payment_and_keeps_the_rest_of_the_address(self):
         payment_id = uuid.uuid4()
         with patch.object(payment_service.settings, "YOOKASSA_RETURN_URL", ""), patch.object(
@@ -321,6 +365,48 @@ class CheckoutTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(kwargs["amount_kopecks"], MONTH)
         self.assertIn(f"payment={payment.id}", kwargs["return_url"])
         self.assertEqual(kwargs["metadata"], {"payment_id": str(payment.id), "user_id": str(self.person.id)})
+
+    async def test_the_seats_are_stored_and_priced_when_the_switch_is_on(self):
+        never_paid = SimpleNamespace(first_paid_at=None, seat_window_ends_at=None, kit_extra_seats=2)
+        with patch.object(payment_service.settings, "SEAT_PRICING_ENABLED", True), patch.object(
+            payment_service.billing_service, "ensure_subscription", AsyncMock(return_value=never_paid)
+        ):
+            payment = await payment_service.create_checkout(self.session, self.person, "month", NOW, seats=3)
+
+        self.assertEqual((payment.seats, payment.amount_kopecks), (3, 1200_00))
+        kwargs = self.create.await_args.kwargs
+        self.assertEqual(kwargs["amount_kopecks"], 1200_00)
+        self.assertIn("мест: 3", kwargs["description"])
+        self.assertEqual(self.find_open.await_args.kwargs["seats"], 3)
+
+    async def test_a_kit_place_given_up_after_the_window_is_priced_in_full(self):
+        gave_up = SimpleNamespace(
+            first_paid_at=NOW - timedelta(days=60),
+            seat_window_ends_at=NOW - timedelta(days=53),
+            kit_extra_seats=0,
+        )
+        with patch.object(payment_service.settings, "SEAT_PRICING_ENABLED", True), patch.object(
+            payment_service.billing_service, "ensure_subscription", AsyncMock(return_value=gave_up)
+        ):
+            payment = await payment_service.create_checkout(self.session, self.person, "month", NOW, seats=2)
+
+        self.assertEqual(payment.amount_kopecks, 1020_00)
+
+    async def test_more_than_one_seat_creates_nothing_while_the_switch_is_off(self):
+        with patch.object(payment_service.settings, "SEAT_PRICING_ENABLED", False):
+            with self.assertRaises(HTTPException) as ctx:
+                await payment_service.create_checkout(self.session, self.person, "month", NOW, seats=2)
+
+        self.assertEqual(ctx.exception.detail["code"], "seats_unavailable")
+        self.assertEqual(self.added, [])
+        self.create.assert_not_awaited()
+
+    async def test_the_old_one_seat_payment_is_unchanged_while_the_switch_is_off(self):
+        with patch.object(payment_service.settings, "SEAT_PRICING_ENABLED", False):
+            payment = await payment_service.create_checkout(self.session, self.person, "year", NOW)
+
+        self.assertEqual((payment.seats, payment.amount_kopecks), (1, 5_400_00))
+        self.assertNotIn("мест", self.create.await_args.kwargs["description"])
 
     async def test_the_pack_is_sold_as_the_pack_plan_for_sixty_days(self):
         with patch.object(
@@ -438,6 +524,21 @@ class SettleTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.kinds(), ["payment_succeeded"])
         self.close_request.assert_awaited_once()
         self.assertIs(result.subscription, self.sub)
+
+    async def test_the_paid_seats_go_to_the_subscription(self):
+        self.row.seats = 3
+
+        await payment_service.settle(MagicMock(), provider_payment(), NOW)
+
+        self.assertEqual(self.grant.await_args.kwargs["seats"], 3)
+
+    async def test_the_pack_carries_no_seats(self):
+        self.row.plan_code, self.row.term, self.row.days = "pack", "one_off", 60
+        self.row.amount_kopecks = 250_00
+
+        await payment_service.settle(MagicMock(), provider_payment(amount_kopecks=250_00), NOW)
+
+        self.assertIsNone(self.grant.await_args.kwargs["seats"])
 
     async def test_the_year_is_paid_for_a_year(self):
         self.row.term, self.row.days, self.row.amount_kopecks = "year", 365, 7900_00
@@ -878,7 +979,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         ) as create:
             result = await billing_routes.create_checkout(CheckoutRequest(term="year"), self.session, person)
 
-        create.assert_awaited_once_with(self.session, person, "year")
+        create.assert_awaited_once_with(self.session, person, "year", seats=1)
         self.assertEqual((result.payment_id, result.confirmation_url), (row.id, "https://pay.example/1"))
 
     async def test_checkout_without_a_page_from_the_provider_is_a_502(self):

@@ -30,6 +30,9 @@ def sub(**overrides):
         cancel_at_period_end=False,
         limit_overrides=None,
         seats_count=1,
+        first_paid_at=None,
+        seat_window_ends_at=None,
+        kit_extra_seats=2,
         provider=None,
         provider_subscription_id=None,
         payment_method_ref=None,
@@ -213,6 +216,34 @@ class GrantTests(LifecycleCase):
         self.user = person(deletion_requested_at=NOW - DAY)
         await self.grant()
         self.assertTrue(self.sub.cancel_at_period_end)
+
+
+class GrantSeatsTests(LifecycleCase):
+    async def test_the_first_paid_grant_stores_the_seats_and_opens_the_window(self):
+        await lifecycle.grant(self.session, self.sub.user_id, "researcher", days=30, seats=2, now=NOW)
+
+        self.assertEqual((self.sub.seats_count, self.sub.first_paid_at), (2, NOW))
+        self.assertEqual(self.sub.seat_window_ends_at, NOW + 7 * DAY)
+
+    async def test_three_seats_need_no_window(self):
+        await lifecycle.grant(self.session, self.sub.user_id, "researcher", days=30, seats=3, now=NOW)
+
+        self.assertEqual(self.sub.seats_count, 3)
+        self.assertIsNone(self.sub.seat_window_ends_at)
+
+    async def test_a_grant_without_seats_leaves_the_seats_alone(self):
+        self.sub = sub(seats_count=4)
+
+        await lifecycle.grant(self.session, self.sub.user_id, "researcher", days=30, now=NOW)
+
+        self.assertEqual(self.sub.seats_count, 4)
+        self.assertIsNone(self.sub.first_paid_at)
+
+    async def test_the_pack_never_touches_the_seats(self):
+        await lifecycle.grant(self.session, self.sub.user_id, "pack", days=60, seats=5, now=NOW)
+
+        self.assertEqual(self.sub.seats_count, 1)
+        self.assertIsNone(self.sub.first_paid_at)
 
 
 class TrialTests(LifecycleCase):
