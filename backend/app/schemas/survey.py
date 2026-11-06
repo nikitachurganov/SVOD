@@ -207,6 +207,8 @@ class SurveyAiBuildRequest(BaseModel):
     methodology_meta: dict[str, Any] | None = None
     # Explicit methodology set chosen by the user — skips the automatic selection
     methodology_ids: list[str] | None = None
+    # The team the survey is built for: inside a paid team the tokens come from its pool
+    organization_id: str | None = None
 
 
 class SurveyAiBuildResponse(BaseModel):

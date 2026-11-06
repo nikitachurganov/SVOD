@@ -3,7 +3,11 @@ import axios from 'axios';
 /** Fired on window when the server answers 402 «limit reached»; the paywall window listens to it */
 export const PAYWALL_EVENT = 'svod:paywall';
 
-export type BillingErrorCode = 'limit_reached' | 'ai_disabled' | 'ai_budget_exceeded';
+export type BillingErrorCode =
+  | 'limit_reached'
+  | 'ai_disabled'
+  | 'ai_budget_exceeded'
+  | 'ai_forbidden_for_reader';
 
 /** What the server says when a plan limit, a plan feature or the AI switch stops an action */
 export interface BillingError {
@@ -44,6 +48,8 @@ const describeLimit = (detail: Record<string, unknown>): string => {
         typeof detail.resets_at === 'string' ? ` Кредиты обновятся ${formatDay(detail.resets_at)}.` : '';
       return `Кредиты ИИ закончились. Опросы, сбор ответов и обычная аналитика работают как раньше.${when}`;
     }
+    case 'ai_member_tokens':
+      return 'Ваш личный лимит кредитов+ в этой команде исчерпан. Попросите владельца команды увеличить его.';
     case 'active_surveys':
       return `На вашем тарифе можно держать открытыми не больше ${max ?? 'нескольких'} опросов. Закройте один из них или повысьте тариф.`;
     case 'projects':
@@ -89,6 +95,16 @@ export const parseBillingError = (err: unknown): BillingError | null => {
         typeof data.message === 'string'
           ? data.message
           : 'ИИ отключён для вашего аккаунта. Напишите в поддержку.',
+    };
+  }
+  if (status === 403 && data.code === 'ai_forbidden_for_reader') {
+    return {
+      status,
+      code: 'ai_forbidden_for_reader',
+      message:
+        typeof data.message === 'string'
+          ? data.message
+          : 'Читатель не может пользоваться ИИ. Попросите владельца сменить роль.',
     };
   }
   if (status === 503 && data.code === 'ai_budget_exceeded') {

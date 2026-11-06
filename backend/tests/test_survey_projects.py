@@ -114,7 +114,7 @@ class _ServiceCase(unittest.IsolatedAsyncioTestCase):
         patcher = patch.object(
             survey_service.organization_repository,
             "get_member",
-            AsyncMock(return_value=object() if is_member else None),
+            AsyncMock(return_value=SimpleNamespace(role_tag="editor") if is_member else None),
         )
         patcher.start()
         self.addCleanup(patcher.stop)

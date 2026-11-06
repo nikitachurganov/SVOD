@@ -28,6 +28,7 @@ def sub(**overrides):
         trial_used_at=None,
         cancel_at_period_end=False,
         limit_overrides=None,
+        seats_count=1,
     )
     data.update(overrides)
     return SimpleNamespace(**data)

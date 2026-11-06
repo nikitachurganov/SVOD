@@ -68,6 +68,10 @@ class Plan:
     features: frozenset[str]
     price_month_kopecks: int
     price_year_kopecks: int
+    # How many Токенов+ one token of the base model costs (a token of any other model costs 1).
+    # 1.0 everywhere for now: the weight 0.2 of docs/TARIFFS_FINAL.md §5 goes in together with the
+    # new quotas at the payment stage, otherwise the allowance of the current plans would change
+    base_model_weight: float = 1.0
 
 
 # The numeric limits an administrator may override for one user

@@ -37,7 +37,7 @@ class BuildSurveyAccessTests(unittest.IsolatedAsyncioTestCase):
         self.metered = []
 
         @asynccontextmanager
-        async def meter(user, name, *, survey_id=None):
+        async def meter(user, name, *, survey_id=None, organization_id=None):
             self.metered.append(name)
             yield
 

@@ -79,6 +79,8 @@ class JoinRegisterResponse(BaseModel):
 
 
 class ApproveJoinRequest(BaseModel):
+    # The role the person gets: admin, editor (default) or reader
+    role_tag: str = Field("editor", min_length=1, max_length=50)
     job_title: str | None = Field(None, max_length=300)
     specialization: str | None = Field(None, max_length=2000)
 

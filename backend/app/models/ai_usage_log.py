@@ -17,6 +17,8 @@ class AIUsageLog(Base):
         Index("ix_ai_usage_log_user_id_created_at", "user_id", "created_at"),
         # The service-wide spending cap sums the last 24 hours across all users
         Index("ix_ai_usage_log_created_at", "created_at"),
+        # Spending of one team over time
+        Index("ix_ai_usage_log_organization_id_created_at", "organization_id", "created_at"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -28,6 +30,12 @@ class AIUsageLog(Base):
     )
     # No foreign key on purpose: deleting a survey must not erase what its AI calls cost
     survey_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    # The team the action worked for; SET NULL keeps the cost statistics of a deleted team
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True
+    )
+    # Токены+ taken from the counter (after the weight of the model); None: not charged
+    charged_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     action: Mapped[str] = mapped_column(String(32), nullable=False)
     # LLM requests made by the action (a survey build or a chat answer makes two)
     calls: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

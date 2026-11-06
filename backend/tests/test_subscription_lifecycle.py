@@ -29,6 +29,7 @@ def sub(**overrides):
         trial_used_at=None,
         cancel_at_period_end=False,
         limit_overrides=None,
+        seats_count=1,
         provider=None,
         provider_subscription_id=None,
         payment_method_ref=None,

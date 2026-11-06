@@ -13,13 +13,20 @@ export interface OrganizationResponse {
   updated_at: string;
 }
 
+/** Roles of a team; "member" is the old tag of everything before the tariffs (an editor) */
+export type TeamRole = 'owner' | 'admin' | 'editor' | 'reader';
+/** Roles that can be given to a person (the owner changes only by handing the team over) */
+export type AssignableRole = Exclude<TeamRole, 'owner'>;
+
 export interface MemberResponse {
   id: string;
   user: AuthorPreview;
-  role_tag: 'owner' | 'member';
+  role_tag: TeamRole | 'member';
   joined_at: string;
   job_title?: string | null;
   specialization?: string | null;
+  /** Personal cap on the team's tokens (1000 tokens = 1 credit+); null: no cap */
+  token_plus_limit?: number | null;
 }
 
 export interface InvitationResponse {
@@ -45,6 +52,8 @@ export interface InvitationResponse {
 
 export interface CreateInvitationPayload {
   email: string;
+  /** Default: editor */
+  role_tag?: AssignableRole;
   first_name?: string | null;
   last_name?: string | null;
   middle_name?: string | null;

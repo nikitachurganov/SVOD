@@ -1,5 +1,6 @@
 import api from '../lib/api';
 import type {
+  AssignableRole,
   CreateInvitationPayload,
   ExternalContractor,
   ExternalContractorPayload,
@@ -88,6 +89,32 @@ export const getMembers = async (orgId: string): Promise<MemberResponse[]> => {
 
 export const removeMember = async (orgId: string, userId: string): Promise<void> => {
   await api.delete(`/organizations/${orgId}/members/${userId}`);
+};
+
+/** Owner (or an admin, except for the admin role itself) changes a member's role */
+export const updateMemberRole = async (
+  orgId: string,
+  userId: string,
+  roleTag: AssignableRole,
+): Promise<MemberResponse> => {
+  const { data } = await api.patch<MemberResponse>(
+    `/organizations/${orgId}/members/${userId}/role`,
+    { role_tag: roleTag },
+  );
+  return data;
+};
+
+/** Owner or admin caps how many credits+ one member may spend per period (null: no personal cap) */
+export const updateMemberAiLimit = async (
+  orgId: string,
+  userId: string,
+  tokenPlusLimit: number | null,
+): Promise<MemberResponse> => {
+  const { data } = await api.patch<MemberResponse>(
+    `/organizations/${orgId}/members/${userId}/ai-limit`,
+    { token_plus_limit: tokenPlusLimit },
+  );
+  return data;
 };
 
 export const leaveOrganization = async (orgId: string): Promise<void> => {
@@ -186,7 +213,7 @@ export const listJoinRequests = async (orgId: string): Promise<JoinRequestRespon
 
 export const approveJoinRequest = async (
   requestId: string,
-  payload: { job_title?: string | null; specialization?: string | null },
+  payload: { role_tag?: AssignableRole; job_title?: string | null; specialization?: string | null },
 ): Promise<MemberResponse> => {
   const { data } = await api.post<MemberResponse>(`/organizations/join-requests/${requestId}/approve`, payload);
   return data;

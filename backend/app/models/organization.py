@@ -1,10 +1,12 @@
 import uuid
 from datetime import datetime, timezone
+from typing import Any
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.constants.team_roles import DEFAULT_ROLE
 from app.core.database import Base
 
 
@@ -84,7 +86,8 @@ class OrganizationMember(Base):
         nullable=False,
         index=True,
     )
-    role_tag: Mapped[str] = mapped_column(String(50), nullable=False, default="member")
+    # owner / admin / editor / reader (see app.constants.team_roles)
+    role_tag: Mapped[str] = mapped_column(String(50), nullable=False, default=DEFAULT_ROLE)
     joined_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -93,6 +96,12 @@ class OrganizationMember(Base):
     job_title: Mapped[str | None] = mapped_column(String(300), nullable=True)
     specialization: Mapped[str | None] = mapped_column(Text, nullable=True)
     geography: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    # Personal cap on the team's Токены+ for this member; None: spends from the shared pool
+    token_plus_limit: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    token_plus_used: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0, server_default="0"
+    )
+    custom_permissions: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
 
     organization: Mapped["Organization"] = relationship(
         back_populates="members", lazy="selectin"
@@ -120,7 +129,7 @@ class OrganizationInvitation(Base):
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
-    role_tag: Mapped[str] = mapped_column(String(50), nullable=False, default="member")
+    role_tag: Mapped[str] = mapped_column(String(50), nullable=False, default=DEFAULT_ROLE)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
     # existing_user — in-app invitation; new_account — invitee activates a pre-created account by link
     kind: Mapped[str] = mapped_column(String(20), nullable=False, default="existing_user")

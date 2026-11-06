@@ -605,6 +605,8 @@ export interface SurveyAiBuildPayload {
   pages: CreateFormPagePayload[];
   methodology_meta?: MethodologyMeta | null;
   methodology_ids?: string[];
+  /** The team the survey is for: inside a paid team the AI spends the team's pool */
+  organization_id?: string | null;
 }
 
 export interface SurveyAiBuildResponse {

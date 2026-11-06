@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.constants import team_roles
 from app.constants.billing_plans import FEATURE_CROSSTABS, FEATURE_CSV_EXPORT
 from app.knowledge.methodologies import CATEGORIES, METHODOLOGIES
 from app.models.survey import Survey, SurveyProject, SurveyResponse
@@ -131,20 +132,33 @@ def _to_detail(
     )
 
 
-async def _ensure_member(session: AsyncSession, org_id: uuid.UUID, user: User) -> None:
+async def _ensure_member(
+    session: AsyncSession, org_id: uuid.UUID, user: User, *, edit: bool = False
+) -> None:
+    """The user belongs to the team; with ``edit`` also has a role that may change things.
+
+    A reader looks at surveys and results and nothing more (see app.constants.team_roles).
+    """
     member = await organization_repository.get_member(session, org_id, user.id)
     if member is None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You are not a member of this organization",
         )
+    if edit and not team_roles.can_edit(member.role_tag):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your role in this team only allows viewing",
+        )
 
 
-async def _get_for_member(session: AsyncSession, survey_id: str, user: User) -> Survey:
+async def _get_for_member(
+    session: AsyncSession, survey_id: str, user: User, *, edit: bool = False
+) -> Survey:
     survey = await survey_repository.get_by_id(session, _parse_uuid(survey_id))
     if survey is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Survey not found")
-    await _ensure_member(session, survey.organization_id, user)
+    await _ensure_member(session, survey.organization_id, user, edit=edit)
     return survey
 
 
@@ -162,14 +176,14 @@ def _to_project_item(project: SurveyProject, surveys_count: int) -> SurveyProjec
 
 
 async def _get_project_for_member(
-    session: AsyncSession, project_id: str, user: User
+    session: AsyncSession, project_id: str, user: User, *, edit: bool = False
 ) -> SurveyProject:
     project = await survey_repository.get_project(
         session, _parse_uuid(project_id, "Project not found")
     )
     if project is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
-    await _ensure_member(session, project.organization_id, user)
+    await _ensure_member(session, project.organization_id, user, edit=edit)
     return project
 
 
@@ -207,7 +221,7 @@ async def create_project(
     session: AsyncSession, user: User, payload: CreateProjectRequest
 ) -> SurveyProjectItem:
     org_id = _parse_uuid(payload.organization_id, "Organization not found")
-    await _ensure_member(session, org_id, user)
+    await _ensure_member(session, org_id, user, edit=True)
     # Only an explicit "new project" counts; the default project a first survey gets is not refused
     await billing_guard.ensure_can_add_project(session, user)
     project = await survey_repository.create_project(
@@ -228,7 +242,7 @@ async def update_project(
     session: AsyncSession, user: User, project_id: str, payload: UpdateProjectRequest
 ) -> SurveyProjectItem:
     """Rename / re-describe / recolour: the surveys of the project and their ids are not touched."""
-    project = await _get_project_for_member(session, project_id, user)
+    project = await _get_project_for_member(session, project_id, user, edit=True)
     project.name = payload.name
     project.description = payload.description
     project.color = payload.color
@@ -241,7 +255,7 @@ async def update_project(
 
 async def delete_project(session: AsyncSession, user: User, project_id: str) -> None:
     """Only an empty project can go: surveys (and their answers) are never deleted with it."""
-    project = await _get_project_for_member(session, project_id, user)
+    project = await _get_project_for_member(session, project_id, user, edit=True)
     if await survey_repository.count_all_in_project(session, project.id) > 0:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="project_not_empty")
     await survey_repository.delete_project(session, project)
@@ -341,7 +355,7 @@ async def create_survey(
     session: AsyncSession, user: User, payload: CreateSurveyRequest
 ) -> SurveyDetail:
     org_id = _parse_uuid(payload.organization_id, "Organization not found")
-    await _ensure_member(session, org_id, user)
+    await _ensure_member(session, org_id, user, edit=True)
     await billing_guard.ensure_questions_within_limit(session, user, payload.pages)
     project = await _resolve_project_for_new_survey(session, user, org_id, payload.project_id)
     survey = Survey(
@@ -364,7 +378,7 @@ async def create_survey(
 async def update_survey(
     session: AsyncSession, user: User, survey_id: str, payload: UpdateSurveyRequest
 ) -> SurveyDetail:
-    survey = await _get_for_member(session, survey_id, user)
+    survey = await _get_for_member(session, survey_id, user, edit=True)
     await billing_guard.ensure_questions_within_limit(
         session, user, payload.pages, previous_pages=survey.pages
     )
@@ -393,7 +407,7 @@ async def move_survey(
     session: AsyncSession, user: User, survey_id: str, project_id: str
 ) -> SurveyDetail:
     """Only ``project_id`` changes: the id, public link, answers and analytics stay as they were."""
-    survey = await _get_for_member(session, survey_id, user)
+    survey = await _get_for_member(session, survey_id, user, edit=True)
     target = await _project_in_organization(session, project_id, survey.organization_id)
     if survey.project_id != target.id:
         survey.project = target
@@ -407,7 +421,7 @@ async def move_survey(
 async def set_status(
     session: AsyncSession, user: User, survey_id: str, new_status: str
 ) -> SurveyDetail:
-    survey = await _get_for_member(session, survey_id, user)
+    survey = await _get_for_member(session, survey_id, user, edit=True)
     if survey.status == "archived":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Survey is archived")
     if new_status == "open" and survey_methodology_service.count_questions(survey.pages) == 0:
@@ -428,7 +442,7 @@ async def set_status(
 
 
 async def archive_survey(session: AsyncSession, user: User, survey_id: str) -> None:
-    survey = await _get_for_member(session, survey_id, user)
+    survey = await _get_for_member(session, survey_id, user, edit=True)
     survey.status = "archived"
     survey.updated_at = datetime.now(timezone.utc)
     await survey_repository.update(session, survey)
@@ -655,7 +669,8 @@ async def get_ai_summary(
 async def generate_ai_summary(
     session: AsyncSession, user: User, survey_id: str, payload: SurveyAiSummaryRequest
 ) -> SurveyAiSummary:
-    survey = await _get_for_member(session, survey_id, user)
+    # The AI spends the team's Токены+: a reader may read a ready summary, not order a new one
+    survey = await _get_for_member(session, survey_id, user, edit=True)
     analysis = await billing_guard.load_analysis(
         session, user, survey.id, ceiling=MAX_RESULTS_ROWS, exclude_flagged=payload.exclude_flagged
     )
@@ -674,7 +689,9 @@ async def generate_ai_summary(
         survey.pages, rows, exclude_flagged=exclude_flagged
     )
     # Charged only here: a summary served from the cache above costs nothing
-    async with ai_meter.action(user, ai_meter.ACTION_AI_SUMMARY, survey_id=survey.id):
+    async with ai_meter.action(
+        user, ai_meter.ACTION_AI_SUMMARY, survey_id=survey.id, organization_id=survey.organization_id
+    ):
         bullets, evidence = await survey_ai_analysis_service.generate_summary(
             survey.name, results, comparisons
         )
@@ -693,7 +710,7 @@ async def generate_ai_summary(
 async def ai_chat(
     session: AsyncSession, user: User, survey_id: str, payload: SurveyAiAnalysisChatRequest
 ) -> SurveyAiAnalysisChatResponse:
-    survey = await _get_for_member(session, survey_id, user)
+    survey = await _get_for_member(session, survey_id, user, edit=True)
     if payload.messages[-1].role != "user":
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="last_message_must_be_user"
@@ -701,7 +718,9 @@ async def ai_chat(
     analysis = await billing_guard.load_analysis(
         session, user, survey.id, ceiling=MAX_RESULTS_ROWS, exclude_flagged=payload.exclude_flagged
     )
-    async with ai_meter.action(user, ai_meter.ACTION_AI_CHAT, survey_id=survey.id):
+    async with ai_meter.action(
+        user, ai_meter.ACTION_AI_CHAT, survey_id=survey.id, organization_id=survey.organization_id
+    ):
         return await survey_ai_analysis_service.chat(
             survey.name,
             survey.pages,

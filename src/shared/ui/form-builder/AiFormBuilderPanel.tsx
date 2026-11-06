@@ -30,6 +30,7 @@ import {
   type MethodologySummary,
 } from '../../api/surveys.api';
 import { AiQuotaNote } from '../../../components/billing/AiQuotaNote';
+import { useOrganization } from '../../hooks/organization.hooks';
 import { useSubscription } from '../../hooks/subscription.hooks';
 import { getAiQuota } from '../../lib/aiQuota';
 import { billingErrorMessage } from '../../lib/billingErrors';
@@ -178,6 +179,8 @@ export const AiFormBuilderPanel = ({
   const isSurvey = mode === 'survey';
   // Only the survey builder spends the plan's AI actions; the base product's form builder is not metered
   const { subscription, refresh: refreshSubscription } = useSubscription();
+  // Inside a paid team the survey builder spends the team's pool, so the server needs to know the team
+  const { activeOrganization } = useOrganization();
   const quotaExhausted = isSurvey && getAiQuota(subscription).exhausted;
   const [reportOpen, setReportOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -216,6 +219,7 @@ export const AiFormBuilderPanel = ({
             pages: pagePayload,
             methodology_meta: methodology?.meta ?? null,
             methodology_ids: methodologyIds,
+            organization_id: activeOrganization?.id ?? null,
           })
         : await buildFormWithAi({
             messages: chatMessages,

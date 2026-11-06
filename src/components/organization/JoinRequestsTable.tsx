@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Button, Form, Input, Modal, Table, Typography, message } from 'antd';
+import { Button, Form, Input, Modal, Select, Table, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { CheckOutlined, CloseOutlined } from '@ant-design/icons';
 import { approveJoinRequest, rejectJoinRequest } from '../../shared/api/organizations.api';
 import { buildDisplayName } from '../../shared/utils/userName';
-import type { JoinRequestResponse } from '../../types/organization';
+import type { AssignableRole, JoinRequestResponse } from '../../types/organization';
+import { ASSIGNABLE_ROLE_OPTIONS } from './participants.utils';
 
 interface Props {
   requests: JoinRequestResponse[];
@@ -26,22 +27,32 @@ export const JoinRequestsTable = ({ requests, loading, onDecided }: Props) => {
   const [approving, setApproving] = useState<JoinRequestResponse | null>(null);
   const [rejecting, setRejecting] = useState<JoinRequestResponse | null>(null);
   const [busy, setBusy] = useState(false);
-  const [approveForm] = Form.useForm<{ job_title?: string; specialization?: string }>();
+  const [approveForm] = Form.useForm<{
+    role_tag?: AssignableRole;
+    job_title?: string;
+    specialization?: string;
+  }>();
   const [rejectReason, setRejectReason] = useState('');
 
   const openApprove = (row: JoinRequestResponse) => {
     approveForm.setFieldsValue({
+      role_tag: 'editor',
       job_title: row.job_title ?? undefined,
       specialization: row.specialization ?? undefined,
     });
     setApproving(row);
   };
 
-  const submitApprove = async (values: { job_title?: string; specialization?: string }) => {
+  const submitApprove = async (values: {
+    role_tag?: AssignableRole;
+    job_title?: string;
+    specialization?: string;
+  }) => {
     if (!approving) return;
     setBusy(true);
     try {
       await approveJoinRequest(approving.id, {
+        role_tag: values.role_tag ?? 'editor',
         job_title: values.job_title?.trim() || null,
         specialization: values.specialization?.trim() || null,
       });
@@ -152,6 +163,9 @@ export const JoinRequestsTable = ({ requests, loading, onDecided }: Props) => {
           При необходимости поправьте должность и специализацию — они учитываются при подборе исполнителей.
         </Typography.Paragraph>
         <Form form={approveForm} layout="vertical" onFinish={(v) => void submitApprove(v)}>
+          <Form.Item name="role_tag" label="Роль" extra="Читатель бесплатный и не занимает место">
+            <Select options={ASSIGNABLE_ROLE_OPTIONS} />
+          </Form.Item>
           <Form.Item name="job_title" label="Должность">
             <Input maxLength={300} />
           </Form.Item>

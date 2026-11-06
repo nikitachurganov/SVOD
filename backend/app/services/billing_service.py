@@ -38,6 +38,7 @@ from app.constants.billing_plans import (
     apply_overrides,
     get_plan,
 )
+from app.constants.team_roles import SEATS_UNLIMITED
 from app.core.config import settings
 from app.models.subscription import Subscription
 from app.models.user import User
@@ -76,6 +77,8 @@ class Entitlements:
     # is given once and never renewed
     ai_window_start: datetime
     ai_window_end: datetime | None
+    # Paid places of the team: owner, admins and editors. The free plan and the pack are one person
+    seats: int = 1
 
 
 def free_window(anchor: datetime, now: datetime) -> tuple[datetime, datetime]:
@@ -158,6 +161,7 @@ def resolve_entitlements(sub: Subscription, now: datetime, grace_days: int) -> E
         billing_enabled=True,
         ai_window_start=ai_start,
         ai_window_end=ai_end,
+        seats=max(1, sub.seats_count or 1) if plan.code == PLAN_RESEARCHER else 1,
     )
 
 
@@ -175,6 +179,7 @@ def unlimited_entitlements(now: datetime) -> Entitlements:
         billing_enabled=False,
         ai_window_start=now,
         ai_window_end=None,
+        seats=SEATS_UNLIMITED,
     )
 
 

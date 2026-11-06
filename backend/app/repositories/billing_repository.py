@@ -166,10 +166,14 @@ async def add_ai_usage_log(
     completion_tokens: int,
     cost_usd: Decimal,
     status: str,
+    organization_id: uuid.UUID | None = None,
+    charged_tokens: int | None = None,
 ) -> AIUsageLog:
     row = AIUsageLog(
         user_id=user_id,
         survey_id=survey_id,
+        organization_id=organization_id,
+        charged_tokens=charged_tokens,
         action=action,
         calls=calls,
         model=model,

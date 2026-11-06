@@ -109,16 +109,20 @@ class ModerationTests(unittest.IsolatedAsyncioTestCase):
         session = MagicMock()
         session.commit = AsyncMock()
         member = SimpleNamespace(id=uuid.uuid4(), user=u, role_tag="member", joined_at=MagicMock(isoformat=lambda: "t"),
-                                 job_title="Старший дизайнер", specialization=None)
+                                 job_title="Старший дизайнер", specialization=None, token_plus_limit=None)
         p = self._patches(row, o)
         with (
             p[0], p[1], p[2], p[3],
             patch.object(svc.organization_repository, "get_member", AsyncMock(side_effect=[None, member])),
             patch.object(svc.organization_repository, "add_member", AsyncMock(return_value=member)) as add_member,
+            patch.object(svc.team_seat_service, "ensure_room", AsyncMock()) as ensure_room,
         ):
             await svc.approve(session, row.id, ApproveJoinRequest(job_title="Старший дизайнер"), owner)
         created = add_member.await_args.args[1]
         self.assertEqual(created.job_title, "Старший дизайнер")
+        # Nobody chose a role: a working seat, which has to fit into the team
+        self.assertEqual(created.role_tag, "editor")
+        ensure_room.assert_awaited_once()
         self.assertEqual(row.status, "approved")
 
     async def test_reject_keeps_reason_and_allows_new_request(self):

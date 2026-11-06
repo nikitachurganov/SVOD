@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -19,7 +19,16 @@ class Subscription(Base):
 
     __tablename__ = "subscriptions"
     # The worker looks for subscriptions whose period is over
-    __table_args__ = (Index("ix_subscriptions_current_period_end", "current_period_end"),)
+    __table_args__ = (
+        Index("ix_subscriptions_current_period_end", "current_period_end"),
+        # A team has one subscription (several rows may have no team yet)
+        Index(
+            "uq_subscriptions_organization_id",
+            "organization_id",
+            unique=True,
+            postgresql_where=text("organization_id IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
@@ -49,6 +58,20 @@ class Subscription(Base):
     payment_method_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # Individual limits set by an administrator, e.g. {"ai_tokens_per_period": 10000000}
     limit_overrides: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    # The team the plan belongs to. The plan is still looked up by the paying user until the
+    # payment stage moves it to the team; the personal workspaces are linked already
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True
+    )
+    # Paid places (owner, admins and editors; readers are free)
+    seats_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+    # One-time window after the first payment: a removed seat can be restored at the bundle price
+    seat_window_ends_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    first_paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_now
     )

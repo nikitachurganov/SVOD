@@ -12,7 +12,8 @@ from app.core.config import settings
 from app.core.name_utils import build_display_name
 from app.core.security import PENDING_ACTIVATION_HASH, is_pending_activation
 from app.models.request_stage import RequestStage
-from app.services import email_service, welcome_seed_service
+from app.constants import team_roles
+from app.services import email_service, team_seat_service, welcome_seed_service
 
 from app.models.external_contractor import ExternalContractor
 from app.models.organization import (
@@ -35,6 +36,7 @@ from app.schemas.organization import (
     MemberResponse,
     OrganizationResponse,
     TransferOwnershipRequest,
+    UpdateMemberAiLimitRequest,
     UpdateOrganizationRequest,
     UpdateRoleRequest,
 )
@@ -85,6 +87,7 @@ def _to_member_response(member: OrganizationMember) -> MemberResponse:
         joined_at=member.joined_at.isoformat(),
         job_title=member.job_title,
         specialization=member.specialization,
+        token_plus_limit=member.token_plus_limit,
     )
 
 
@@ -136,6 +139,24 @@ def _ensure_owner(org: Organization, user: User) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only the organization owner can perform this action",
         )
+
+
+async def _ensure_can_manage_members(
+    session: AsyncSession, org: Organization, user: User
+) -> OrganizationMember | None:
+    """The owner or an admin: invite, remove, change roles. Returns the caller's membership.
+
+    The owner is recognised without a lookup (no membership row is needed for that).
+    """
+    if org.owner_user_id == user.id:
+        return None
+    member = await organization_repository.get_member(session, org.id, user.id)
+    if member is None or not team_roles.can_manage_members(member.role_tag):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the organization owner or an admin can perform this action",
+        )
+    return member
 
 
 def ensure_not_personal(org: Organization) -> None:
@@ -291,7 +312,7 @@ async def transfer_organization_ownership(
     payload: TransferOwnershipRequest,
     current_user: User,
 ) -> OrganizationResponse:
-    """Set organization.owner_user_id and sync member role_tag (owner/member)."""
+    """Set organization.owner_user_id and sync member role_tag (the former owner becomes an admin)."""
     org = await _get_org_or_404(session, org_id)
     _ensure_owner(org, current_user)
     ensure_not_personal(org)
@@ -323,7 +344,7 @@ async def transfer_organization_ownership(
     org.owner_user_id = new_owner_id
     new_member.role_tag = "owner"
     if old_owner_member is not None:
-        old_owner_member.role_tag = "member"
+        old_owner_member.role_tag = team_roles.ROLE_ADMIN
 
     await session.flush()
     await session.commit()
@@ -352,13 +373,28 @@ async def remove_member(
     current_user: User,
 ) -> None:
     org = await _get_org_or_404(session, org_id)
-    _ensure_owner(org, current_user)
+    caller = await _ensure_can_manage_members(session, org, current_user)
 
     if target_user_id == current_user.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Owner cannot remove themselves. Delete the organization instead.",
         )
+    if target_user_id == org.owner_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="The owner cannot be removed"
+        )
+    if caller is not None:
+        # An admin looks after editors and readers; another admin is the owner's business
+        target = await organization_repository.get_member(session, org_id, target_user_id)
+        if target is not None and team_roles.normalize_role(target.role_tag) in (
+            team_roles.ROLE_ADMIN,
+            team_roles.ROLE_OWNER,
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only the owner can remove an admin",
+            )
 
     removed = await organization_repository.remove_member(session, org_id, target_user_id)
     if not removed:
@@ -377,12 +413,12 @@ async def update_member_role(
     current_user: User,
 ) -> MemberResponse:
     org = await _get_org_or_404(session, org_id)
-    _ensure_owner(org, current_user)
+    caller = await _ensure_can_manage_members(session, org, current_user)
 
     if target_user_id == current_user.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Owner cannot change their own role",
+            detail="You cannot change your own role",
         )
 
     member = await organization_repository.get_member(session, org_id, target_user_id)
@@ -391,12 +427,74 @@ async def update_member_role(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Member not found in this organization",
         )
+    current_role = team_roles.normalize_role(member.role_tag)
+    if current_role == team_roles.ROLE_OWNER or target_user_id == org.owner_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="The owner's role changes only by handing the team over",
+        )
 
-    member.role_tag = payload.role_tag
+    new_role = team_roles.parse_assignable_role(payload.role_tag)
+    if new_role is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Role must be one of: admin, editor, reader",
+        )
+    if caller is not None and team_roles.ROLE_ADMIN in (current_role, new_role):
+        # Admins are made and unmade by the owner only
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the owner can assign or take away the admin role",
+        )
+    if new_role != current_role:
+        await team_seat_service.ensure_room(
+            session, org, new_role, replacing_role=member.role_tag
+        )
+
+    member.role_tag = new_role
     await session.flush()
     await session.refresh(member, attribute_names=["user"])
     await session.commit()
 
+    return _to_member_response(member)
+
+
+async def update_member_ai_limit(
+    session: AsyncSession,
+    org_id: uuid.UUID,
+    target_user_id: uuid.UUID,
+    payload: UpdateMemberAiLimitRequest,
+    current_user: User,
+) -> MemberResponse:
+    """Cap (or uncap) how much of the team's Токены+ one member may spend per period.
+
+    The owner and the admins set it. It binds editors and admins; the owner spends the pool
+    without a cap, and a reader has no AI at all.
+    """
+    org = await _get_org_or_404(session, org_id)
+    await _ensure_can_manage_members(session, org, current_user)
+
+    member = await organization_repository.get_member(session, org_id, target_user_id)
+    if member is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Member not found in this organization",
+        )
+    if target_user_id == org.owner_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The owner spends the team's pool without a personal cap",
+        )
+    if not team_roles.can_edit(member.role_tag):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A reader has no AI to cap",
+        )
+
+    member.token_plus_limit = payload.token_plus_limit
+    await session.flush()
+    await session.refresh(member, attribute_names=["user"])
+    await session.commit()
     return _to_member_response(member)
 
 
@@ -467,9 +565,20 @@ async def create_invitation(
       activates it by the emailed link (sets own password), becoming a member.
     """
     org = await _get_org_or_404(session, org_id)
-    _ensure_owner(org, current_user)
+    await _ensure_can_manage_members(session, org, current_user)
     ensure_not_personal(org)
     email = str(payload.email).strip()
+    role = team_roles.parse_assignable_role(payload.role_tag)
+    if role is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Role must be one of: admin, editor, reader",
+        )
+    if role == team_roles.ROLE_ADMIN and org.owner_user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the owner can invite an admin",
+        )
 
     invited_user = await user_repository.get_by_email(session, email)
     if invited_user is not None and invited_user.id == current_user.id:
@@ -525,12 +634,14 @@ async def create_invitation(
                 middle_name=invited_user.middle_name,
             )
 
+    await team_seat_service.ensure_room(session, org, role)
+
     inv = OrganizationInvitation(
         organization_id=org_id,
         email=email,
         invited_user_id=invited_user.id,
         invited_by_user_id=current_user.id,
-        role_tag="member",
+        role_tag=role,
         kind=kind,
         job_title=payload.job_title,
         specialization=payload.specialization,
@@ -555,7 +666,7 @@ async def resend_invitation(
     if inv is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invitation not found")
     org = await _get_org_or_404(session, inv.organization_id)
-    _ensure_owner(org, current_user)
+    await _ensure_can_manage_members(session, org, current_user)
     if inv.status not in ("pending", "expired"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -577,7 +688,7 @@ async def list_invitations(
     session: AsyncSession, org_id: uuid.UUID, current_user: User
 ) -> list[InvitationResponse]:
     org = await _get_org_or_404(session, org_id)
-    _ensure_owner(org, current_user)
+    await _ensure_can_manage_members(session, org, current_user)
     invitations = await organization_repository.list_invitations(session, org_id)
     return [_to_invitation_response(i) for i in invitations]
 
@@ -632,10 +743,16 @@ async def accept_invitation(
             detail="You are already a member of this organization",
         )
 
+    # The invitation already holds its place, so it does not count against itself
+    role = team_roles.normalize_role(inv.role_tag)
+    await team_seat_service.ensure_room(
+        session, inv.organization, role, already_counted=True
+    )
+
     member = OrganizationMember(
         organization_id=inv.organization_id,
         user_id=current_user.id,
-        role_tag="member",
+        role_tag=role,
         job_title=inv.job_title,
         specialization=inv.specialization,
     )
@@ -684,7 +801,7 @@ async def revoke_invitation(
         )
 
     org = await _get_org_or_404(session, inv.organization_id)
-    _ensure_owner(org, current_user)
+    await _ensure_can_manage_members(session, org, current_user)
 
     if inv.status != "pending":
         raise HTTPException(

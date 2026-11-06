@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.constants import team_roles
 from app.core.config import settings
 from app.core.name_utils import build_display_name
 from app.core.security import (
@@ -494,7 +495,7 @@ async def activate_account(
             OrganizationMember(
                 organization_id=inv.organization_id,
                 user_id=user.id,
-                role_tag=inv.role_tag or "member",
+                role_tag=team_roles.normalize_role(inv.role_tag or team_roles.DEFAULT_ROLE),
                 job_title=inv.job_title,
                 specialization=inv.specialization,
             )

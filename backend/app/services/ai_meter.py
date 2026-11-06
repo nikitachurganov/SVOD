@@ -28,13 +28,13 @@ from decimal import Decimal
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.constants.billing_plans import METRIC_AI_TOKENS
+from app.constants.billing_plans import METRIC_AI_TOKENS, Plan
 from app.core.config import settings
 from app.core.database import async_session_factory
 from app.core.metrics import AI_ACTIONS, AI_COST_USD, AI_TOKENS, BILLING_LIMIT_HIT
 from app.models.user import User
 from app.repositories import billing_repository
-from app.services import ai_usage, billing_service
+from app.services import ai_pool, ai_usage, billing_service
 from app.services import subscription_lifecycle_service as lifecycle
 
 logger = logging.getLogger(__name__)
@@ -48,6 +48,8 @@ OUTCOME_OK = "ok"
 OUTCOME_FAILED = "failed"
 
 LIMIT_AI_TOKENS = "ai_tokens"
+# A member's personal cap inside the team pool
+LIMIT_AI_MEMBER = "ai_member_tokens"
 LIMIT_AI_DAILY_BUDGET = "ai_daily_budget"
 
 _DAILY_WINDOW = timedelta(hours=24)
@@ -57,8 +59,12 @@ _DAILY_WINDOW = timedelta(hours=24)
 class _Reservation:
     """Where the tokens of the action are charged: the counter of the allowance window."""
 
+    # Whose counter: the user's own, or the pool of the team owner (see ai_pool)
+    payer: ai_pool.Payer
     window_start: datetime
     limit: int
+    # The plan that sets the weight of a token of the base model
+    plan: Plan
 
 
 def _flag(enforced: bool) -> str:
@@ -88,45 +94,67 @@ async def check_service_budget() -> None:
         await _check_daily_budget(session)
 
 
-async def _reserve(user_id: uuid.UUID) -> _Reservation | None:
-    """Check that the user's allowance of AI tokens is not used up, before the LLM is called.
+async def _reserve(user: User, organization_id: uuid.UUID | None) -> _Reservation | None:
+    """Check that the allowance of AI tokens is not used up, before the LLM is called.
 
-    Returns None when there is nothing to charge later (billing is off).
+    The allowance is the user's own, or the pool of the team owner when the action runs inside a
+    paid team (then the member's personal cap is checked too). Returns None when there is nothing
+    to charge later (billing is off).
     """
     async with async_session_factory() as session:
         await _check_daily_budget(session)
-        ent = await billing_service.get_entitlements(session, user_id)
+        payer = await ai_pool.resolve_payer(session, user, organization_id)
+        ent = await billing_service.get_entitlements(session, payer.user_id)
         if not ent.billing_enabled:
             return None
         plan = ent.plan
         limit = plan.ai_tokens_per_period
 
-        counters = await billing_repository.get_usage(session, user_id, ent.ai_window_start)
+        counters = await billing_repository.get_usage(session, payer.user_id, ent.ai_window_start)
         used = counters.get(METRIC_AI_TOKENS, 0)
-        if used >= limit:
-            enforced = settings.BILLING_ENFORCE
-            BILLING_LIMIT_HIT.labels(LIMIT_AI_TOKENS, plan.code, _flag(enforced)).inc()
-            if enforced:
-                error = billing_service.limit_reached_error(ent, LIMIT_AI_TOKENS, used, limit)
-                # The free allowance is never renewed: there is no date to wait for
-                error.detail["resets_at"] = (
-                    ent.ai_window_end.isoformat() if ent.ai_window_end else None
-                )
-                raise error
+        _check_limit(ent, LIMIT_AI_TOKENS, used, limit)
+
+        if payer.cap is not None:
+            member_counters = await billing_repository.get_usage(
+                session, payer.cap.user_id, ent.ai_window_start
+            )
+            _check_limit(
+                ent, LIMIT_AI_MEMBER, member_counters.get(payer.cap.metric, 0), payer.cap.limit
+            )
         # The row of the subscription may have just been created
         await session.commit()
-        return _Reservation(window_start=ent.ai_window_start, limit=limit)
+        return _Reservation(
+            payer=payer, window_start=ent.ai_window_start, limit=limit, plan=plan
+        )
+
+
+def _check_limit(ent: billing_service.Entitlements, limit_name: str, used: int, limit: int) -> None:
+    """Count a used-up allowance, and refuse the action when the limits are enforced."""
+    if used < limit:
+        return
+    enforced = settings.BILLING_ENFORCE
+    BILLING_LIMIT_HIT.labels(limit_name, ent.plan.code, _flag(enforced)).inc()
+    if enforced:
+        error = billing_service.limit_reached_error(ent, limit_name, used, limit)
+        # The free allowance is never renewed: there is no date to wait for
+        error.detail["resets_at"] = ent.ai_window_end.isoformat() if ent.ai_window_end else None
+        raise error
 
 
 async def _settle(
     user_id: uuid.UUID,
     name: str,
     survey_id: uuid.UUID | None,
+    organization_id: uuid.UUID | None,
     reservation: _Reservation | None,
     collector: ai_usage.UsageCollector,
     outcome: str,
 ) -> None:
-    """Charge the tokens the LLM really used, and write them down in the usage log."""
+    """Charge the tokens the LLM really used, and write them down in the usage log.
+
+    The counters get the weighted amount (Токены+, see ai_pool.charged_tokens); the log keeps both
+    the real tokens and the amount charged.
+    """
     AI_ACTIONS.labels(name, outcome).inc()
     tokens = collector.prompt_tokens + collector.completion_tokens
     if collector.calls:
@@ -138,20 +166,31 @@ async def _settle(
     charge = reservation is not None and outcome == OUTCOME_OK and collector.calls > 0 and tokens > 0
     if not charge and not collector.calls:
         return
+    charged = (
+        ai_pool.charged_tokens(tokens, collector.model, reservation.plan)
+        if charge and reservation is not None
+        else None
+    )
     try:
         async with async_session_factory() as session:
-            if charge:
+            if charge and reservation is not None and charged is not None:
+                payer = reservation.payer
                 total = await billing_repository.add_usage(
-                    session, user_id, METRIC_AI_TOKENS, reservation.window_start, tokens
+                    session, payer.user_id, METRIC_AI_TOKENS, reservation.window_start, charged
                 )
+                if payer.cap is not None:
+                    await billing_repository.add_usage(
+                        session, payer.cap.user_id, payer.cap.metric, reservation.window_start, charged
+                    )
+                # The warning goes to the payer: the owner of the pool
                 await lifecycle.warn_if_near_limit(
                     session,
-                    user_id,
+                    payer.user_id,
                     METRIC_AI_TOKENS,
                     total,
                     reservation.limit,
                     reservation.window_start,
-                    previous=total - tokens,
+                    previous=total - charged,
                 )
             if collector.calls:
                 # A failed action still cost tokens, so it stays in the log
@@ -159,6 +198,8 @@ async def _settle(
                     session,
                     user_id=user_id,
                     survey_id=survey_id,
+                    organization_id=organization_id,
+                    charged_tokens=charged,
                     action=name,
                     calls=collector.calls,
                     model=collector.model,
@@ -175,9 +216,17 @@ async def _settle(
 
 @asynccontextmanager
 async def action(
-    user: User, name: str, *, survey_id: uuid.UUID | None = None
+    user: User,
+    name: str,
+    *,
+    survey_id: uuid.UUID | None = None,
+    organization_id: uuid.UUID | None = None,
 ) -> AsyncIterator[ai_usage.UsageCollector]:
-    """Wrap everything that calls the LLM for one user-facing AI action."""
+    """Wrap everything that calls the LLM for one user-facing AI action.
+
+    ``organization_id`` is the team the action works for (the team of the survey): inside a paid
+    team the tokens come from its pool, and a reader is refused.
+    """
     if not user.ai_enabled:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -186,7 +235,7 @@ async def action(
                 "message": "ИИ отключён для вашего аккаунта. Напишите в поддержку.",
             },
         )
-    reservation = await _reserve(user.id)
+    reservation = await _reserve(user, organization_id)
     collector = ai_usage.UsageCollector()
     token = ai_usage.activate(collector)
     outcome = OUTCOME_OK
@@ -197,4 +246,4 @@ async def action(
         raise
     finally:
         ai_usage.deactivate(token)
-        await _settle(user.id, name, survey_id, reservation, collector, outcome)
+        await _settle(user.id, name, survey_id, organization_id, reservation, collector, outcome)

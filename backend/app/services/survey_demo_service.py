@@ -292,7 +292,7 @@ def build_responses(
 async def add_demo_responses(
     session: AsyncSession, user: User, survey_id: str, count: int
 ) -> DemoResponsesResult:
-    survey = await _get_for_member(session, survey_id, user)
+    survey = await _get_for_member(session, survey_id, user, edit=True)
     if survey.status not in ("open", "closed"):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="survey_not_published")
     # Test answers go only to a survey nobody has answered: they must never mix with real data
@@ -310,7 +310,7 @@ async def add_demo_responses(
 async def remove_demo_responses(
     session: AsyncSession, user: User, survey_id: str
 ) -> DemoResponsesRemoved:
-    survey = await _get_for_member(session, survey_id, user)
+    survey = await _get_for_member(session, survey_id, user, edit=True)
     removed = await survey_repository.delete_demo_responses(session, survey.id)
     if removed:
         # A summary written from test answers says nothing about the real ones

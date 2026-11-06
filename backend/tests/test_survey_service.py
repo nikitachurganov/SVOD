@@ -124,7 +124,9 @@ class OwnerTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(
             survey_service.survey_repository, "get_by_id", AsyncMock(return_value=survey)
         ), patch.object(
-            survey_service.organization_repository, "get_member", AsyncMock(return_value=object())
+            survey_service.organization_repository,
+            "get_member",
+            AsyncMock(return_value=SimpleNamespace(role_tag="editor")),
         ):
             with self.assertRaises(HTTPException) as ctx:
                 await survey_service.set_status(_session(), user, str(survey.id), "open")

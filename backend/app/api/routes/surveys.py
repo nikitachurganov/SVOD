@@ -160,7 +160,11 @@ async def build_survey_with_ai(
     billing_guard.ensure_methodologies(ent, payload.methodology_ids)
     # Existing pages in the request mean the user is refining a survey, not building a new one
     action = ai_meter.ACTION_SURVEY_EDIT if payload.pages else ai_meter.ACTION_SURVEY_BUILD
-    async with ai_meter.action(user, action):
+    try:
+        organization_id = uuid.UUID(payload.organization_id) if payload.organization_id else None
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Organization not found") from exc
+    async with ai_meter.action(user, action, organization_id=organization_id):
         return await survey_ai_builder_service.build_survey(
             payload,
             allowed_methodologies=billing_guard.allowed_methodologies(ent),

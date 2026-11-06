@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react';
-import { Alert, Button, Form, Input, Modal, Typography } from 'antd';
+import { Alert, Button, Form, Input, Modal, Select, Typography } from 'antd';
 import { CheckCircleFilled, CopyOutlined, MailOutlined } from '@ant-design/icons';
 import { inviteUser, lookupInvitee } from '../../shared/api/organizations.api';
 import { useDebouncedCallback } from '../../shared/hooks/useDebouncedCallback';
 import { emailRules, phoneRules, requiredRule } from '../../shared/utils/formRules';
-import type { InvitationResponse, InviteeLookupResponse } from '../../types/organization';
-import { copyToClipboard } from './participants.utils';
+import type {
+  AssignableRole,
+  InvitationResponse,
+  InviteeLookupResponse,
+} from '../../types/organization';
+import { ASSIGNABLE_ROLE_OPTIONS, ROLE_HINTS, copyToClipboard } from './participants.utils';
 
 interface Props {
   open: boolean;
@@ -15,6 +19,7 @@ interface Props {
 
 interface InviteFormValues {
   email: string;
+  role_tag: AssignableRole;
   last_name: string;
   first_name: string;
   middle_name?: string;
@@ -28,6 +33,7 @@ const API_ERROR_MESSAGES: Record<string, string> = {
   'Pending invitation already exists for this user':
     'Приглашение уже отправлено — повторить его можно на вкладке «Приглашения»',
   'You cannot invite yourself': 'Нельзя пригласить самого себя',
+  'Only the owner can invite an admin': 'Администратора может пригласить только владелец',
 };
 
 /** Result of an invitation: was the email sent, and the link to pass on manually */
@@ -87,6 +93,7 @@ export const InviteMemberModal = ({ open, onClose, organizationId }: Props) => {
   const [result, setResult] = useState<InvitationResponse | null>(null);
   const [form] = Form.useForm<InviteFormValues>();
   const email = Form.useWatch('email', form);
+  const roleTag = Form.useWatch('role_tag', form) ?? 'editor';
   // Account detection by email: null — not checked yet (or email incomplete)
   const [lookup, setLookup] = useState<{ email: string; data: InviteeLookupResponse } | null>(null);
   const [lookupLoading, setLookupLoading] = useState(false);
@@ -131,6 +138,7 @@ export const InviteMemberModal = ({ open, onClose, organizationId }: Props) => {
     try {
       const invitation = await inviteUser(organizationId, {
         email: values.email.trim().toLowerCase(),
+        role_tag: values.role_tag ?? 'editor',
         // A registered person keeps their own name and phone
         last_name: existingAccount ? undefined : values.last_name,
         first_name: existingAccount ? undefined : values.first_name,
@@ -256,6 +264,14 @@ export const InviteMemberModal = ({ open, onClose, organizationId }: Props) => {
               </Form.Item>
             </>
           ) : null}
+          <Form.Item
+            name="role_tag"
+            label="Роль"
+            initialValue="editor"
+            extra={ROLE_HINTS[roleTag]}
+          >
+            <Select options={ASSIGNABLE_ROLE_OPTIONS} />
+          </Form.Item>
           <Form.Item name="job_title" label="Должность">
             <Input placeholder="Например, дизайнер" maxLength={300} />
           </Form.Item>

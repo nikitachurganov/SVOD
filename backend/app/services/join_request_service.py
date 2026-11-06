@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.constants import team_roles
 from app.core.config import settings
 from app.core.name_utils import build_display_name
 from app.core.security import create_access_token, is_pending_activation
@@ -34,7 +35,7 @@ from app.schemas.join_request import (
     RejectJoinRequest,
 )
 from app.schemas.organization import MemberResponse
-from app.services import auth_service, email_service, notification_service
+from app.services import auth_service, email_service, notification_service, team_seat_service
 from app.services.organization_service import (
     _ensure_owner,
     _get_org_or_404,
@@ -343,14 +344,21 @@ async def approve(
     job_title = payload.job_title if "job_title" in fields else row.job_title
     specialization = payload.specialization if "specialization" in fields else row.specialization
 
+    role = team_roles.parse_assignable_role(payload.role_tag)
+    if role is None or (role == team_roles.ROLE_ADMIN and org.owner_user_id != user.id):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Role must be one of: admin, editor, reader",
+        )
     member = await organization_repository.get_member(session, org.id, row.user_id)
     if member is None:
+        await team_seat_service.ensure_room(session, org, role)
         member = await organization_repository.add_member(
             session,
             OrganizationMember(
                 organization_id=org.id,
                 user_id=row.user_id,
-                role_tag="member",
+                role_tag=role,
                 job_title=job_title,
                 specialization=specialization,
             ),

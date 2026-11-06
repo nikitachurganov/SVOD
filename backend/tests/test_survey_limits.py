@@ -327,7 +327,7 @@ class FeatureLimitTests(LimitsCase):
 
     async def test_the_ai_chat_is_told_whether_it_may_build_a_crosstab(self):
         @asynccontextmanager
-        async def meter(user, name, *, survey_id=None):
+        async def meter(user, name, *, survey_id=None, organization_id=None):
             yield
 
         patch.object(ai_meter, "action", meter).start()

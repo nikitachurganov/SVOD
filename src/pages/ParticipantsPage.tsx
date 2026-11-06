@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Table, Button, Tag, Modal, Alert, Card, Tooltip, Dropdown, Badge, message } from 'antd';
+import { Table, Button, Tag, Modal, Alert, Card, Select, Tooltip, Dropdown, Badge, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
   CopyOutlined,
@@ -24,8 +24,11 @@ import {
   removeMember,
   resendInvitation,
   revokeInvitation,
+  updateMemberAiLimit,
+  updateMemberRole,
 } from '../shared/api/organizations.api';
 import type {
+  AssignableRole,
   ExternalContractor,
   InvitationResponse,
   JoinRequestResponse,
@@ -33,9 +36,15 @@ import type {
 } from '../types/organization';
 import { InviteMemberModal, InvitationResult } from '../components/organization/InviteMemberModal';
 import { ContractorModal } from '../components/organization/ContractorModal';
+import { MemberAiLimitInput } from '../components/organization/MemberAiLimitInput';
 import { JoinLinkModal } from '../components/organization/JoinLinkModal';
 import { JoinRequestsTable } from '../components/organization/JoinRequestsTable';
-import { CONTACT_KIND_LABELS, copyToClipboard } from '../components/organization/participants.utils';
+import {
+  ASSIGNABLE_ROLE_OPTIONS,
+  CONTACT_KIND_LABELS,
+  ROLE_LABELS,
+  copyToClipboard,
+} from '../components/organization/participants.utils';
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -53,6 +62,8 @@ type MemberRow = {
   role: string;
   job_title: string | null;
   joined_at: string;
+  /** Personal cap of the member in the team's tokens+; null: none */
+  token_plus_limit: number | null;
 };
 
 type ParticipantsTabKey = 'members' | 'contractors' | 'requests' | 'invitations';
@@ -151,6 +162,39 @@ export const ParticipantsPage = () => {
     } finally { setBusyId(null); }
   }, []);
 
+  const changeRole = useCallback(async (userId: string, role: AssignableRole) => {
+    if (!activeOrganizationId) return;
+    setBusyId(userId);
+    try {
+      const updated = await updateMemberRole(activeOrganizationId, userId, role);
+      setMembers((prev) => prev.map((m) => (m.user.id === userId ? updated : m)));
+      message.success('Роль изменена');
+    } catch (err: unknown) {
+      // Often "no free seat": the 402 body is an object, not a string
+      const detail = (err as { response?: { data?: { detail?: { code?: string } | string } } })
+        ?.response?.data?.detail;
+      if (typeof detail === 'object' && detail?.code === 'limit_reached') {
+        message.error('Нет свободных мест: добавьте место в тарифе или сделайте человека читателем');
+      } else {
+        message.error(apiErrorText(err, 'Не удалось изменить роль'));
+      }
+    } finally { setBusyId(null); }
+  }, [activeOrganizationId]);
+
+  const changeAiLimit = useCallback(async (userId: string, tokens: number | null) => {
+    if (!activeOrganizationId) return;
+    setBusyId(userId);
+    try {
+      const updated = await updateMemberAiLimit(activeOrganizationId, userId, tokens);
+      setMembers((prev) => prev.map((m) => (m.user.id === userId ? updated : m)));
+      message.success(tokens === null ? 'Личный лимит снят' : 'Личный лимит сохранён');
+    } catch (err: unknown) {
+      message.error(apiErrorText(err, 'Не удалось сохранить лимит'));
+      // Put the value the server still has back into the field
+      void getMembers(activeOrganizationId).then(setMembers);
+    } finally { setBusyId(null); }
+  }, [activeOrganizationId]);
+
   const memberRows = useMemo<MemberRow[]>(() => members.map((m) => ({
     id: m.user.id,
     participant: buildDisplayName(m.user) || '—',
@@ -158,6 +202,7 @@ export const ParticipantsPage = () => {
     role: m.role_tag,
     job_title: m.job_title ?? null,
     joined_at: m.joined_at,
+    token_plus_limit: m.token_plus_limit ?? null,
   })), [members]);
 
   const memberColumns = useMemo<ColumnsType<MemberRow>>(
@@ -185,12 +230,48 @@ export const ParticipantsPage = () => {
         dataIndex: 'role',
         key: 'role',
         sorter: (a, b) => a.role.localeCompare(b.role, 'ru'),
-        render: (role: string) => (
-          <Tag color={role === 'owner' ? 'default' : 'blue'}>
-            {role === 'owner' ? 'Владелец' : 'Участник'}
-          </Tag>
-        ),
+        render: (role: string, record) => {
+          if (isOwner && record.id !== user?.id && role !== 'owner') {
+            return (
+              <Select<AssignableRole>
+                size="small"
+                style={{ minWidth: 150 }}
+                value={role === 'member' ? 'editor' : (role as AssignableRole)}
+                options={ASSIGNABLE_ROLE_OPTIONS}
+                disabled={busyId === record.id}
+                onChange={(value) => void changeRole(record.id, value)}
+              />
+            );
+          }
+          return (
+            <Tag color={role === 'owner' ? 'default' : role === 'reader' ? 'green' : 'blue'}>
+              {ROLE_LABELS[role] ?? 'Участник'}
+            </Tag>
+          );
+        },
       },
+      ...(isOwner
+        ? [
+            {
+              title: 'Лимит ИИ',
+              dataIndex: 'token_plus_limit',
+              key: 'token_plus_limit',
+              render: (value: number | null, record: MemberRow) => {
+                // The owner spends the pool freely, a reader has no AI at all
+                if (record.role === 'owner' || record.role === 'reader') {
+                  return <span style={{ color: 'var(--app-text-secondary)' }}>—</span>;
+                }
+                return (
+                  <MemberAiLimitInput
+                    value={value}
+                    disabled={busyId === record.id}
+                    onCommit={(tokens) => void changeAiLimit(record.id, tokens)}
+                  />
+                );
+              },
+            },
+          ]
+        : []),
       {
         title: 'Дата вступления',
         dataIndex: 'joined_at',
@@ -217,7 +298,7 @@ export const ParticipantsPage = () => {
         },
       },
     ],
-    [busyId, isOwner, user?.id],
+    [busyId, changeAiLimit, changeRole, isOwner, user?.id],
   );
 
   const contractorColumns = useMemo<ColumnsType<ExternalContractor>>(

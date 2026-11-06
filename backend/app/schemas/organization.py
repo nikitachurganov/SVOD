@@ -41,10 +41,18 @@ class MemberResponse(BaseModel):
     joined_at: str
     job_title: str | None = None
     specialization: str | None = None
+    # Personal cap of Токены+ per period; None: spends from the shared pool without a cap
+    token_plus_limit: int | None = None
 
 
 class UpdateRoleRequest(BaseModel):
     role_tag: str = Field(..., min_length=1, max_length=50)
+
+
+class UpdateMemberAiLimitRequest(BaseModel):
+    """A personal cap on the team's Токены+ for one member per period; null removes it."""
+
+    token_plus_limit: int | None = Field(None, ge=0, le=1_000_000_000)
 
 
 class TransferOwnershipRequest(BaseModel):
@@ -56,12 +64,13 @@ class TransferOwnershipRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 class CreateInvitationRequest(BaseModel):
-    """Owner adds a person by email. Role is always 'member'.
+    """The owner or an admin adds a person by email, with a role: admin, editor (default) or reader.
 
     A registered user gets an in-app invitation; for an unknown email an inactive account is
     created from the fields below and the person activates it by the emailed link.
     """
     email: EmailStr
+    role_tag: str = Field("editor", min_length=1, max_length=50)
     first_name: str | None = Field(None, max_length=100)
     last_name: str | None = Field(None, max_length=100)
     middle_name: str | None = Field(None, max_length=100)

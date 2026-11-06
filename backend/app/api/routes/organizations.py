@@ -17,6 +17,7 @@ from app.schemas.organization import (
     OrganizationResponse,
     TransferOwnershipRequest,
     UpdateOrganizationRequest,
+    UpdateMemberAiLimitRequest,
     UpdateRoleRequest,
 )
 from app.schemas.public_link import PublicLinkResponse
@@ -127,6 +128,22 @@ async def remove_member(
     user: CurrentUser,
 ) -> None:
     await organization_service.remove_member(session, organization_id, user_id, user)
+
+
+@router.patch(
+    "/{organization_id}/members/{user_id}/ai-limit",
+    response_model=MemberResponse,
+)
+async def update_member_ai_limit(
+    organization_id: uuid.UUID,
+    user_id: uuid.UUID,
+    payload: UpdateMemberAiLimitRequest,
+    session: DbSession,
+    user: CurrentUser,
+) -> MemberResponse:
+    return await organization_service.update_member_ai_limit(
+        session, organization_id, user_id, payload, user
+    )
 
 
 @router.patch(
