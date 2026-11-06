@@ -1,0 +1,1044 @@
+/*
+ * «Стекло»: тестовая тема экрана опроса, перенесённая из docs/prototypes/agent-ui.html.
+ * Включается только на SurveyViewPage: ?glass=1 в адресе (запоминается), ?glass=0 — выключить.
+ * Всё привязано к .survey-page--glass, остальной интерфейс не затрагивается.
+ *
+ * Пока на экране есть .survey-page--glass, стекло распространяется и на оболочку приложения:
+ * сайдбар, верхнюю шапку и фон окна. Токены --sg-* живут на html:has(.survey-page--glass), чтобы их
+ * видели и выпадающие меню с окнами (они выводятся в body, вне страницы).
+ */
+
+html:has(.survey-page--glass) {
+  --sg-canvas: #fbf1e8;
+  --sg-surface: rgba(255, 255, 255, 0.66);
+  --sg-surface-2: rgba(255, 255, 255, 0.56);
+  --sg-surface-3: rgba(255, 255, 255, 0.84);
+  --sg-solid: rgba(255, 255, 255, 0.8);
+  --sg-inset: rgba(90, 45, 15, 0.06);
+  --sg-hover: rgba(60, 30, 10, 0.06);
+  --sg-outline: #cfc4ba;
+  --sg-outline-2: rgba(120, 70, 30, 0.14);
+  --sg-text: #1f1b18;
+  --sg-text-2: #4d4640;
+  --sg-muted: #6f675f;
+  --sg-side: rgba(255, 250, 245, 0.52);
+  --sg-pop: rgba(255, 252, 249, 0.86);
+  --sg-brd: rgba(255, 255, 255, 0.78);
+  --sg-hi: rgba(255, 255, 255, 0.95);
+  --sg-drop: 0 8px 28px rgba(140, 60, 10, 0.1);
+  --sg-edge: inset 0 0 0 1px var(--sg-brd), inset 0 1px 0 var(--sg-hi);
+  --sg-tonal: #fde3d6;
+  --sg-on-tonal: #7a2605;
+  --sg-grad: linear-gradient(135deg, #e8591d, #c2410c);
+  --sg-amb-1: rgba(255, 126, 60, 0.4);
+  --sg-amb-1-mid: rgba(255, 150, 86, 0.26);
+  --sg-amb-2: rgba(255, 186, 110, 0.34);
+  --sg-amb-core: rgba(255, 140, 72, 0.34);
+  --sg-amb-floor: rgba(255, 160, 100, 0.3);
+  --sg-grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .25  0 0 0 0 .1  0 0 0 0 0  0 0 0 .9 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  --sg-grain-o: 0.1;
+  --sg-scrim: rgba(90, 45, 15, 0.18);
+}
+
+html[data-theme='dark']:has(.survey-page--glass) {
+  --sg-canvas: #0b0809;
+  --sg-surface: rgba(255, 255, 255, 0.055);
+  --sg-surface-2: rgba(255, 255, 255, 0.06);
+  --sg-surface-3: rgba(255, 255, 255, 0.11);
+  --sg-solid: rgba(22, 16, 14, 0.76);
+  --sg-inset: rgba(255, 255, 255, 0.06);
+  --sg-hover: rgba(255, 255, 255, 0.07);
+  --sg-outline: rgba(255, 255, 255, 0.28);
+  --sg-outline-2: rgba(255, 255, 255, 0.12);
+  --sg-text: #f0eae5;
+  --sg-text-2: #d0c7c0;
+  --sg-muted: #b8afa7;
+  --sg-side: rgba(18, 12, 10, 0.46);
+  --sg-pop: rgba(30, 22, 19, 0.82);
+  --sg-brd: rgba(255, 255, 255, 0.1);
+  --sg-hi: rgba(255, 255, 255, 0.2);
+  --sg-drop: 0 10px 34px rgba(0, 0, 0, 0.45);
+  --sg-tonal: rgba(255, 140, 90, 0.18);
+  --sg-on-tonal: #ffc4a8;
+  --sg-grad: linear-gradient(180deg, #ef7430, #d0501a);
+  --sg-amb-1: rgba(255, 104, 28, 0.42);
+  --sg-amb-1-mid: rgba(255, 120, 50, 0.18);
+  --sg-amb-2: rgba(255, 170, 96, 0.26);
+  --sg-amb-core: rgba(255, 132, 60, 0.46);
+  --sg-amb-floor: rgba(255, 96, 30, 0.18);
+  --sg-grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 .8  0 0 0 0 .6  0 0 0 .9 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  --sg-grain-o: 0.09;
+  --sg-scrim: rgba(0, 0, 0, 0.42);
+}
+
+/* В концепте сервис сведён к опросам: пунктов «Заявки» и «Формы» в меню нет (в обычном режиме они на месте) */
+html:has(.survey-page--glass) [data-nav='requests'],
+html:has(.survey-page--glass) [data-nav='forms'] {
+  display: none;
+}
+
+/* ── подмена токенов приложения внутри страницы ───────────────────────────────────── */
+
+.survey-page--glass,
+html:has(.survey-page--glass) .app-sidebar,
+html:has(.survey-page--glass) .app-content-header {
+  --app-bg: transparent;
+  --app-bg-hover: var(--sg-hover);
+  --app-surface: var(--sg-surface);
+  --app-surface-elevated: var(--sg-surface-3);
+  --app-surface-accent: var(--sg-inset);
+  --app-surface-hover: var(--sg-hover);
+  --app-surface-selected: var(--sg-tonal);
+  --app-surface-selected-hover: var(--sg-tonal);
+  --app-highlight: var(--sg-tonal);
+  --app-input-bg: var(--sg-surface-3);
+  --app-border: var(--sg-outline);
+  --app-border-secondary: var(--sg-outline-2);
+  --app-text: var(--sg-text);
+  --app-text-secondary: var(--sg-text-2);
+  --app-text-helper: var(--sg-muted);
+  --app-text-placeholder: var(--sg-muted);
+
+  --ant-color-bg-container: var(--sg-surface);
+  --ant-color-bg-elevated: var(--sg-pop);
+  --ant-color-border: var(--sg-outline);
+  --ant-color-border-secondary: var(--sg-outline-2);
+  --ant-color-split: var(--sg-outline-2);
+  --ant-color-text: var(--sg-text);
+  --ant-color-text-secondary: var(--sg-text-2);
+  --ant-color-text-description: var(--sg-muted);
+  --ant-color-fill-quaternary: var(--sg-inset);
+  --ant-color-fill-tertiary: var(--sg-hover);
+  --ant-color-fill-secondary: var(--sg-hover);
+
+  --app-menu-active-bg: var(--sg-tonal);
+  --app-menu-active-text: var(--sg-on-tonal);
+
+  color: var(--sg-text);
+}
+
+.survey-page--glass {
+  position: relative;
+}
+
+/* Шапка и тело страницы лежат в колонке main, чтобы справа можно было поставить колонку с ИИ-чатом.
+   Без стекла колонка ведёт себя как раньше: страница — столбец, шапка сверху, тело прокручивается. */
+.survey-page__main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.survey-page.survey-page--glass {
+  flex-direction: row;
+}
+
+/* ── ИИ-чат: колонка страницы, а не выезжающая шторка ────────────────────────────── */
+
+.survey-page--glass .survey-ai-dock {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex: 0 0 420px;
+  flex-direction: column;
+  width: 420px;
+  min-height: 0;
+  margin: 0;
+  overflow: hidden;
+  border-radius: 0;
+  background: var(--sg-side);
+  box-shadow: inset 1px 0 0 var(--sg-brd);
+  -webkit-backdrop-filter: blur(28px) saturate(1.5);
+  backdrop-filter: blur(28px) saturate(1.5);
+}
+
+.survey-page--glass .survey-ai-dock__head {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 8px 10px 18px;
+  font-weight: 600;
+  color: var(--sg-text);
+  box-shadow: inset 0 -1px 0 var(--sg-outline-2);
+}
+
+/* Содержимое — как в агентском режиме (docs/prototypes/agent-ui.html): реплики без рамок, чипы-подсказки, поле ввода-капсула */
+
+.survey-page--glass .ag-feed {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px 18px 8px;
+}
+
+.survey-page--glass .ag-intro {
+  padding: 16px 18px;
+  border-radius: 18px;
+  background: var(--sg-pop);
+  box-shadow: var(--sg-edge);
+}
+
+.survey-page--glass .ag-intro h2 {
+  margin: 0 0 4px;
+  font-size: 17px;
+  font-weight: 500;
+  color: var(--sg-text);
+}
+
+.survey-page--glass .ag-intro p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--sg-text-2);
+}
+
+.survey-page--glass .ag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.survey-page--glass .ag-chip {
+  padding: 7px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--sg-pop);
+  box-shadow: var(--sg-edge);
+  color: var(--sg-text);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+}
+
+.survey-page--glass .ag-chip:hover {
+  background: var(--sg-surface-3);
+}
+
+.survey-page--glass .ag-msg {
+  margin: 0 0 22px;
+}
+
+.survey-page--glass .ag-msg--user {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.survey-page--glass .ag-bubble {
+  max-width: 86%;
+  padding: 10px 16px;
+  border-radius: 20px 6px 20px 20px;
+  background: var(--sg-pop);
+  box-shadow: var(--sg-edge);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--sg-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.survey-page--glass .ag-text {
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--sg-text);
+  overflow-wrap: anywhere;
+}
+
+.survey-page--glass .ag-msg--error .ag-text {
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--app-error, #d03a2f) 14%, transparent);
+  color: var(--sg-text);
+}
+
+.survey-page--glass .ag-block {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: var(--sg-pop);
+  box-shadow: var(--sg-edge);
+}
+
+.survey-page--glass .ag-quote {
+  margin: 12px 0 0;
+  padding: 2px 0 2px 14px;
+  border-left: 3px solid rgba(255, 130, 70, 0.8);
+  font-size: 13px;
+  font-style: italic;
+  line-height: 1.5;
+  color: var(--sg-text);
+}
+
+.survey-page--glass .ag-quote span {
+  display: block;
+  font-size: 12px;
+  font-style: normal;
+  color: var(--sg-muted);
+}
+
+.survey-page--glass .ag-actions {
+  margin: 6px 0 0 -6px;
+  color: var(--sg-muted);
+}
+
+.survey-page--glass .ag-working {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--sg-text-2);
+}
+
+.survey-page--glass .ag-spin {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--sg-outline-2);
+  border-top-color: rgba(255, 130, 70, 0.95);
+  border-radius: 50%;
+  animation: sg-spin 0.8s linear infinite;
+}
+
+@keyframes sg-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.survey-page--glass .ag-composer-wrap {
+  flex-shrink: 0;
+  padding: 4px 14px 12px;
+}
+
+.survey-page--glass .ag-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 8px 8px 8px 16px;
+  border-radius: 26px;
+  background: var(--sg-pop);
+  box-shadow: var(--sg-edge), var(--sg-drop);
+}
+
+.survey-page--glass .ag-composer:focus-within {
+  box-shadow: var(--sg-edge), 0 0 0 1px rgba(255, 130, 70, 0.5), 0 0 32px rgba(255, 110, 40, 0.2);
+}
+
+.survey-page--glass .ag-composer .ag-input.ant-input {
+  flex: 1;
+  padding: 6px 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  font-size: 14px;
+  color: var(--sg-text);
+}
+
+.survey-page--glass .ag-send {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--sg-inset);
+  color: var(--sg-muted);
+  cursor: default;
+}
+
+.survey-page--glass .ag-send:not(:disabled) {
+  color: #fff;
+  background: var(--sg-grad);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 1px 3px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+}
+
+.survey-page--glass .ag-hint {
+  margin-top: 8px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--sg-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .survey-page--glass .ag-spin {
+    animation: none;
+  }
+}
+
+@media (max-width: 1100px) {
+  .survey-page--glass .survey-ai-dock {
+    flex-basis: 360px;
+    width: 360px;
+  }
+}
+
+/* На телефоне колонки не помещаются: чат раскрывается поверх страницы на весь экран */
+@media (max-width: 767px) {
+  .survey-page--glass .survey-ai-dock {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    width: auto;
+    background: var(--sg-pop);
+  }
+}
+
+/* ── северное сияние на всё окно ──────────────────────────────────────────────────── */
+
+html[data-theme]:has(.survey-page--glass) {
+  background: var(--sg-canvas);
+}
+
+/* Фон body рисуется поверх слоя с z-index: -1, поэтому его надо убрать, иначе сияния не видно */
+html[data-theme]:has(.survey-page--glass) body,
+html[data-theme]:has(.survey-page--glass) #root {
+  background: transparent;
+}
+
+html[data-theme]:has(.survey-page--glass) .app-shell-grid,
+html[data-theme]:has(.survey-page--glass) .app-shell-main,
+html[data-theme]:has(.survey-page--glass) .app-shell-content {
+  background: transparent;
+}
+
+.sg-aurora {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--sg-canvas);
+}
+
+.sg-aurora i {
+  position: absolute;
+  display: block;
+  will-change: transform, opacity;
+}
+
+.sg-aurora__beam {
+  width: 135vmax;
+  height: 36vmax;
+  left: -44vmax;
+  top: -4vmax;
+  background: radial-gradient(closest-side, var(--sg-amb-1), var(--sg-amb-1-mid) 55%, transparent);
+  transform: rotate(-31deg);
+  animation: sg-beam 26s ease-in-out infinite alternate;
+}
+
+.sg-aurora__streak {
+  width: 120vmax;
+  height: 10vmax;
+  left: -6vmax;
+  top: -6vmax;
+  background: radial-gradient(closest-side, var(--sg-amb-2), transparent);
+  transform: rotate(-31deg);
+  animation: sg-streak 34s ease-in-out infinite alternate;
+}
+
+.sg-aurora__core {
+  width: 46vmax;
+  height: 28vmax;
+  left: -12vmax;
+  top: 6vmax;
+  background: radial-gradient(closest-side, var(--sg-amb-core), transparent);
+  animation: sg-core 19s ease-in-out infinite alternate;
+}
+
+.sg-aurora__floor {
+  width: 90vmax;
+  height: 50vmax;
+  right: -44vmax;
+  bottom: -32vmax;
+  background: radial-gradient(closest-side, var(--sg-amb-floor), transparent);
+  animation: sg-floor 31s ease-in-out infinite alternate;
+}
+
+.sg-aurora::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: var(--sg-grain);
+  background-size: 160px;
+  opacity: var(--sg-grain-o);
+}
+
+@keyframes sg-beam {
+  0% { transform: translate3d(0, 0, 0) rotate(-31deg) scaleY(1); opacity: 0.85; }
+  50% { transform: translate3d(7vmax, 3vmax, 0) rotate(-27deg) scaleY(1.18); opacity: 1; }
+  100% { transform: translate3d(2vmax, 10vmax, 0) rotate(-35deg) scaleY(0.92); opacity: 0.8; }
+}
+
+@keyframes sg-streak {
+  0% { transform: translate3d(0, 0, 0) rotate(-31deg); opacity: 0.6; }
+  100% { transform: translate3d(10vmax, 12vmax, 0) rotate(-26deg); opacity: 1; }
+}
+
+@keyframes sg-core {
+  0% { transform: translate3d(0, 0, 0) scale(1); opacity: 0.7; }
+  100% { transform: translate3d(18vmax, 10vmax, 0) scale(1.25); opacity: 1; }
+}
+
+@keyframes sg-floor {
+  0% { transform: translate3d(0, 0, 0) scale(1); opacity: 0.6; }
+  100% { transform: translate3d(-12vmax, -6vmax, 0) scale(1.15); opacity: 1; }
+}
+
+/* ── оболочка приложения: сайдбар и верхняя шапка ─────────────────────────────────── */
+
+html:has(.survey-page--glass) .app-sidebar,
+html:has(.survey-page--glass) .app-content-header {
+  background: var(--sg-side);
+  border: 0;
+  -webkit-backdrop-filter: blur(28px) saturate(1.5);
+  backdrop-filter: blur(28px) saturate(1.5);
+}
+
+html:has(.survey-page--glass) .app-sidebar {
+  box-shadow: inset -1px 0 0 var(--sg-brd);
+}
+
+html:has(.survey-page--glass) .app-content-header {
+  box-shadow: inset 0 -1px 0 var(--sg-brd);
+}
+
+html:has(.survey-page--glass) .app-sidebar__brand {
+  border-bottom: 0;
+}
+
+html:has(.survey-page--glass) .app-sidebar__nav-item {
+  border-radius: 999px;
+  color: var(--sg-text);
+}
+
+html:has(.survey-page--glass) .app-sidebar__nav-item:hover {
+  background: var(--sg-hover);
+}
+
+html:has(.survey-page--glass) .app-sidebar__nav-item--active,
+html:has(.survey-page--glass) .app-sidebar__nav-item--active:hover {
+  background: var(--sg-tonal);
+  color: var(--sg-on-tonal);
+  font-weight: 500;
+}
+
+html:has(.survey-page--glass) .app-sidebar__search-input {
+  border-radius: 999px;
+  border-color: transparent;
+  background: var(--sg-surface-3);
+  box-shadow: var(--sg-edge);
+}
+
+html:has(.survey-page--glass) .app-sidebar-org-profile {
+  border-radius: 16px;
+}
+
+html:has(.survey-page--glass) .app-sidebar-org-profile:hover,
+html:has(.survey-page--glass) .app-header__action-btn:hover {
+  background: var(--sg-hover);
+}
+
+html:has(.survey-page--glass) .app-header__action-btn {
+  border-radius: 999px;
+}
+
+/* ── шапка и вкладки ──────────────────────────────────────────────────────────────── */
+
+.survey-page--glass .survey-page__header {
+  background: var(--sg-side);
+  border-bottom: 0;
+  box-shadow: inset 0 -1px 0 var(--sg-brd);
+  -webkit-backdrop-filter: blur(28px) saturate(1.5);
+  backdrop-filter: blur(28px) saturate(1.5);
+}
+
+/* Когда справа открыт агент, страница узкая: заголовок сжимается, а кнопки остаются в одной строке справа */
+@media (min-width: 768px) {
+  .survey-page--glass .survey-page__header .survey-page__container > div:first-child {
+    flex-wrap: nowrap !important;
+  }
+
+  .survey-page--glass .survey-page__header .survey-page__container > div:first-child > div:nth-child(2) {
+    flex: 1 1 0 !important;
+    min-width: 0;
+  }
+
+  .survey-page--glass .survey-page__header .survey-page__container > div:first-child > div:nth-child(3) {
+    flex: none;
+    flex-wrap: nowrap !important;
+  }
+}
+
+.survey-page--glass .survey-page__header h1 {
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.survey-page--glass .survey-page__tabs.ant-tabs > .ant-tabs-nav {
+  margin-bottom: 10px;
+}
+
+.survey-page--glass .survey-page__tabs .ant-tabs-ink-bar {
+  display: none;
+}
+
+.survey-page--glass .survey-page__tabs .ant-tabs-nav-list {
+  gap: 6px;
+}
+
+.survey-page--glass .survey-page__tabs .ant-tabs-tab {
+  height: 36px;
+  margin: 0;
+  padding: 0 16px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--sg-text-2);
+  box-shadow: inset 0 0 0 1px var(--sg-outline);
+  transition: background 0.15s, color 0.15s;
+}
+
+.survey-page--glass .survey-page__tabs .ant-tabs-tab:hover {
+  background: var(--sg-hover);
+  color: var(--sg-text);
+}
+
+.survey-page--glass .survey-page__tabs .ant-tabs-tab.ant-tabs-tab-active {
+  background: var(--sg-tonal);
+  box-shadow: none;
+}
+
+.survey-page--glass .survey-page__tabs .ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: var(--sg-on-tonal);
+  text-shadow: none;
+}
+
+/* ── кнопки и теги ────────────────────────────────────────────────────────────────── */
+
+.survey-page--glass .ant-btn {
+  border-radius: 999px;
+  font-weight: 500;
+}
+
+.survey-page--glass .ant-btn-default,
+.survey-page--glass .ant-btn-dashed {
+  background: transparent;
+  border-color: var(--sg-outline);
+  box-shadow: none;
+}
+
+.survey-page--glass .ant-btn-default:not(:disabled):hover {
+  background: var(--sg-hover);
+  border-color: var(--sg-outline);
+}
+
+.survey-page--glass .ant-btn-primary:not(.ant-btn-dangerous),
+.survey-page--glass .ant-btn-color-primary.ant-btn-variant-solid {
+  color: #fff;
+  font-weight: 600;
+  background: var(--sg-grad);
+  border: 0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+.survey-page--glass .ant-btn-primary:not(.ant-btn-dangerous):not(:disabled):hover,
+.survey-page--glass .ant-btn-color-primary.ant-btn-variant-solid:not(:disabled):hover {
+  color: #fff;
+  background: var(--sg-grad);
+  filter: brightness(1.08);
+}
+
+.survey-page--glass .ant-tag {
+  border-radius: 999px;
+  padding-inline: 10px;
+  border-color: transparent;
+}
+
+/* ── карточки: стекло с кромкой и мягкой тенью ────────────────────────────────────── */
+
+.survey-page--glass .ant-card,
+.survey-page--glass .survey-analytics-card,
+.survey-page--glass .survey-response,
+.survey-page--glass .survey-form-outline__list,
+.survey-page--glass .ant-table-wrapper .ant-table,
+.survey-page--glass .ant-alert {
+  background: var(--sg-surface-2);
+  border: 0;
+  border-radius: 20px;
+  box-shadow: var(--sg-edge), var(--sg-drop);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  backdrop-filter: blur(16px) saturate(1.4);
+}
+
+.survey-page--glass .survey-analytics .ant-card,
+.survey-page--glass .survey-form-outline__list {
+  border-radius: 20px;
+}
+
+.survey-page--glass .ant-card .ant-card-head {
+  border-bottom-color: var(--sg-outline-2);
+}
+
+.survey-page--glass .survey-response:hover {
+  background: var(--sg-surface-3);
+  border: 0;
+  box-shadow: var(--sg-edge), 0 0 0 1px rgba(255, 130, 70, 0.4), var(--sg-drop);
+}
+
+.survey-page--glass .ant-table-wrapper .ant-table {
+  overflow: hidden;
+}
+
+.survey-page--glass .ant-table-wrapper .ant-table-container,
+.survey-page--glass .ant-table-wrapper .ant-table-thead > tr > th,
+.survey-page--glass .ant-table-wrapper .ant-table-tbody > tr > td,
+.survey-page--glass .ant-table-wrapper .ant-table-tbody > tr.ant-table-row:hover > td {
+  background: transparent;
+  border-color: var(--sg-outline-2);
+}
+
+.survey-page--glass .ant-table-wrapper .ant-table-thead > tr > th {
+  color: var(--sg-muted);
+  font-weight: 500;
+}
+
+/* ── поля, фильтры ────────────────────────────────────────────────────────────────── */
+
+.survey-page--glass .ant-input,
+.survey-page--glass .ant-input-affix-wrapper,
+.survey-page--glass .ant-select .ant-select-selector,
+.survey-page--glass .ant-picker {
+  background: var(--sg-surface-3);
+  border-color: var(--sg-outline-2);
+  border-radius: 14px;
+}
+
+/* Ant Design 6: у селекта рамка и фон на самом .ant-select, а не на .ant-select-selector */
+.survey-page--glass .ant-select.ant-select-outlined {
+  background: var(--sg-surface-2);
+  border: 0;
+  border-radius: 999px;
+  box-shadow: var(--sg-edge);
+  color: var(--sg-text);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  backdrop-filter: blur(16px) saturate(1.4);
+}
+
+.survey-page--glass .ant-select.ant-select-outlined .ant-select-content {
+  padding-inline: 8px;
+}
+
+.survey-page--glass .ant-select.ant-select-outlined:not(.ant-select-disabled):hover {
+  background: var(--sg-surface-3);
+}
+
+.survey-page--glass .ant-select.ant-select-outlined.ant-select-focused {
+  box-shadow: var(--sg-edge), 0 0 0 3px rgba(255, 110, 40, 0.16);
+}
+
+.survey-page--glass .ant-input-affix-wrapper-focused,
+.survey-page--glass .ant-input:focus,
+.survey-page--glass .ant-select-focused .ant-select-selector {
+  border-color: rgba(255, 130, 70, 0.55);
+  box-shadow: 0 0 0 3px rgba(255, 110, 40, 0.16);
+}
+
+.survey-page--glass .survey-filter.ant-segmented {
+  border: 0;
+  background: var(--sg-surface-2);
+  box-shadow: var(--sg-edge);
+  border-radius: 999px;
+}
+
+.survey-page--glass .survey-filter .ant-segmented-item,
+.survey-page--glass .survey-filter .ant-segmented-thumb {
+  border-radius: 999px;
+}
+
+.survey-page--glass .survey-filter .ant-segmented-item-selected,
+.survey-page--glass .survey-filter .ant-segmented-thumb {
+  background: var(--sg-tonal);
+  box-shadow: none;
+}
+
+.survey-page--glass .survey-filter .ant-segmented-item-selected,
+.survey-page--glass .survey-filter .ant-segmented-item-selected .ant-segmented-item-label {
+  color: var(--sg-on-tonal);
+}
+
+html[data-theme='dark'] .survey-page--glass .survey-filter .ant-segmented-thumb,
+html[data-theme='dark'] .survey-page--glass .survey-filter .ant-segmented-item-selected {
+  background: var(--sg-tonal);
+}
+
+html[data-theme='dark'] .survey-page--glass .survey-filter:has(.ant-segmented-thumb) .ant-segmented-item-selected {
+  background: transparent;
+}
+
+.survey-page--glass .survey-filter:has(.ant-segmented-thumb) .ant-segmented-item-selected {
+  background: transparent;
+}
+
+/* ── меню, окна, затемнение: выводятся в body, поэтому привязаны к странице через :has ── */
+
+body:has(.survey-page--glass) .ant-dropdown .ant-dropdown-menu,
+body:has(.survey-page--glass) .ant-modal .ant-modal-content,
+body:has(.survey-page--glass) .ant-drawer .ant-drawer-content {
+  background: var(--sg-pop);
+  color: var(--sg-text);
+  box-shadow: var(--sg-edge), 0 18px 48px rgba(0, 0, 0, 0.26);
+  -webkit-backdrop-filter: blur(28px) saturate(1.6);
+  backdrop-filter: blur(28px) saturate(1.6);
+}
+
+body:has(.survey-page--glass) .ant-dropdown .ant-dropdown-menu,
+body:has(.survey-page--glass) .ant-modal .ant-modal-content {
+  border-radius: 20px;
+}
+
+body:has(.survey-page--glass) .ant-modal-mask,
+body:has(.survey-page--glass) .ant-drawer-mask {
+  background: var(--sg-scrim);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+body:has(.survey-page--glass) .ant-modal .ant-modal-header,
+body:has(.survey-page--glass) .ant-modal .ant-modal-footer {
+  background: transparent;
+}
+
+/* ── таблица и карточки ответов: плотная подложка, чтобы текст не терялся на ярком сиянии ── */
+
+.survey-page--glass .ant-table-wrapper .ant-table,
+.survey-page--glass .survey-response {
+  background: var(--sg-solid);
+}
+
+.survey-page--glass .ant-table-wrapper .ant-table-thead > tr > th {
+  color: var(--sg-text-2);
+  font-weight: 600;
+  box-shadow: inset 0 -1px 0 var(--sg-outline-2);
+}
+
+.survey-page--glass .ant-table-wrapper .ant-table-tbody > tr > td {
+  color: var(--sg-text);
+  border-bottom-color: var(--sg-outline-2);
+}
+
+.survey-page--glass .ant-table-wrapper .ant-table-tbody > tr.ant-table-row:hover > td {
+  background: var(--sg-hover);
+}
+
+.survey-page--glass .survey-resp-who__meta,
+.survey-page--glass .survey-response__who span,
+.survey-page--glass .survey-response__chips li span,
+.survey-page--glass .survey-response__quote cite,
+.survey-page--glass .survey-resp-chevron {
+  color: var(--sg-text-2);
+}
+
+.survey-page--glass .survey-response__chips li,
+.survey-page--glass .survey-resp-answer .survey-response__chips li {
+  background: var(--sg-inset);
+  color: var(--sg-text);
+}
+
+/* ── «Форма опроса» ───────────────────────────────────────────────────────────────── */
+
+.survey-page--glass .ant-card:has(.survey-form-outline) {
+  background: var(--sg-solid);
+}
+
+.survey-page--glass .ant-card:has(.survey-form-outline) h2 {
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--sg-text);
+}
+
+/* список внутри карточки не должен быть вторым слоем стекла */
+.survey-page--glass .survey-form-outline__list {
+  background: var(--sg-inset);
+  border: 0;
+  border-radius: 16px;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.survey-page--glass .survey-form-outline__list > li + li,
+.survey-page--glass .survey-form-outline__sublist > li {
+  border-top-color: var(--sg-outline-2);
+}
+
+.survey-page--glass .survey-form-outline__row {
+  padding: 12px 18px;
+  transition: background 0.15s;
+}
+
+.survey-page--glass .survey-form-outline__row:hover {
+  background: var(--sg-hover);
+}
+
+.survey-page--glass .survey-form-outline__num {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--sg-tonal);
+  color: var(--sg-on-tonal);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.survey-page--glass .survey-form-outline__num:empty {
+  background: transparent;
+}
+
+.survey-page--glass .survey-form-outline__label {
+  color: var(--sg-text);
+}
+
+.survey-page--glass .survey-form-outline__row--text .survey-form-outline__label,
+.survey-page--glass .survey-form-outline__page-count {
+  color: var(--sg-text-2);
+}
+
+.survey-page--glass .survey-form-outline__group-title {
+  background: var(--sg-inset);
+  color: var(--sg-text);
+}
+
+.survey-page--glass .survey-type-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--sg-surface-2);
+  box-shadow: var(--sg-edge);
+  color: var(--sg-text-2);
+  font-size: 12px;
+}
+
+.survey-page--glass button.survey-type-tag:hover {
+  background: var(--sg-surface-3);
+  color: var(--sg-text);
+}
+
+/* ── выпадающие списки, меню, подсказки ───────────────────────────────────────────────
+   Всё это выводится в body, поэтому привязано к странице через :has */
+
+body:has(.survey-page--glass) .ant-select-dropdown,
+body:has(.survey-page--glass) .ant-dropdown .ant-dropdown-menu,
+body:has(.survey-page--glass) .ant-popover .ant-popover-container,
+body:has(.survey-page--glass) .ant-popover .ant-popover-inner,
+body:has(.survey-page--glass) .ant-tooltip .ant-tooltip-container,
+body:has(.survey-page--glass) .ant-tooltip .ant-tooltip-inner {
+  background: var(--sg-pop);
+  color: var(--sg-text);
+  border: 0;
+  border-radius: 18px;
+  box-shadow: var(--sg-edge), 0 18px 48px rgba(0, 0, 0, 0.3);
+  -webkit-backdrop-filter: blur(28px) saturate(1.6);
+  backdrop-filter: blur(28px) saturate(1.6);
+}
+
+body:has(.survey-page--glass) .ant-select-dropdown,
+body:has(.survey-page--glass) .ant-dropdown .ant-dropdown-menu {
+  padding: 6px;
+}
+
+body:has(.survey-page--glass) .ant-tooltip .ant-tooltip-container,
+body:has(.survey-page--glass) .ant-tooltip .ant-tooltip-inner {
+  border-radius: 12px;
+  font-size: 13px;
+}
+
+body:has(.survey-page--glass) .ant-popover .ant-popover-title {
+  color: var(--sg-text);
+  font-weight: 600;
+}
+
+body:has(.survey-page--glass) .ant-popover .ant-popover-content,
+body:has(.survey-page--glass) .ant-popover .survey-options-list {
+  color: var(--sg-text);
+}
+
+/* стрелки с чужим фоном выбиваются из стекла */
+body:has(.survey-page--glass) .ant-popover .ant-popover-arrow,
+body:has(.survey-page--glass) .ant-tooltip .ant-tooltip-arrow {
+  display: none;
+}
+
+body:has(.survey-page--glass) .ant-select-dropdown .ant-select-item,
+body:has(.survey-page--glass) .ant-dropdown .ant-dropdown-menu-item {
+  min-height: 36px;
+  padding: 7px 12px;
+  border-radius: 12px;
+  color: var(--sg-text);
+}
+
+body:has(.survey-page--glass) .ant-select-dropdown .ant-select-item + .ant-select-item,
+body:has(.survey-page--glass) .ant-dropdown .ant-dropdown-menu-item + .ant-dropdown-menu-item {
+  margin-top: 2px;
+}
+
+body:has(.survey-page--glass) .ant-select-dropdown .ant-select-item-option-active:not(.ant-select-item-option-disabled),
+body:has(.survey-page--glass) .ant-dropdown .ant-dropdown-menu-item:not(.ant-dropdown-menu-item-disabled):hover {
+  background: var(--sg-hover);
+}
+
+body:has(.survey-page--glass) .ant-select-dropdown .ant-select-item-option-selected:not(.ant-select-item-option-disabled) {
+  background: var(--sg-tonal);
+  color: var(--sg-on-tonal);
+  font-weight: 600;
+}
+
+body:has(.survey-page--glass) .ant-dropdown .ant-dropdown-menu-item-danger {
+  color: #ff7a6b;
+}
+
+body:has(.survey-page--glass) .ant-dropdown .ant-dropdown-menu-item-danger:hover {
+  background: rgba(255, 90, 70, 0.14);
+}
+
+body:has(.survey-page--glass) .ant-dropdown .ant-dropdown-menu-item-divider {
+  margin: 6px 4px;
+  background: var(--sg-outline-2);
+}
+
+body:has(.survey-page--glass) .ant-dropdown .ant-dropdown-menu-item-disabled,
+body:has(.survey-page--glass) .ant-select-dropdown .ant-select-item-option-disabled {
+  color: var(--sg-muted);
+  opacity: 0.6;
+}
+
+/* ── доступность ──────────────────────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .sg-aurora i {
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .survey-page--glass .survey-page__header,
+  .survey-page--glass .ant-card,
+  .survey-page--glass .survey-analytics-card,
+  .survey-page--glass .survey-response,
+  .survey-page--glass .ant-table-wrapper .ant-table,
+  body:has(.survey-page--glass) .ant-dropdown .ant-dropdown-menu,
+  body:has(.survey-page--glass) .ant-modal .ant-modal-content {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}

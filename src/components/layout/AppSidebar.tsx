@@ -57,6 +57,7 @@ export const AppSidebar = ({
                 <button
                   type="button"
                   aria-label={item.label}
+                  data-nav={item.key}
                   aria-current={selectedKey === item.key ? 'page' : undefined}
                   className={`app-side-nav-rail__item${selectedKey === item.key ? ' app-side-nav-rail__item--active' : ''}`}
                   onClick={() => onNavigate(item.path)}
@@ -105,6 +106,7 @@ export const AppSidebar = ({
             <button
               key={item.key}
               type="button"
+              data-nav={item.key}
               className={`app-sidebar__nav-item${isActive ? ' app-sidebar__nav-item--active' : ''}`}
               aria-current={isActive ? 'page' : undefined}
               onClick={() => onNavigate(item.path)}

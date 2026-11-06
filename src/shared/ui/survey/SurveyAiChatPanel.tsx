@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button, Drawer, Grid, Input, Tag } from 'antd';
-import { RobotOutlined, SendOutlined } from '@ant-design/icons';
+import { CloseOutlined, CopyOutlined, RobotOutlined, SendOutlined } from '@ant-design/icons';
 import axios from 'axios';
 
 import {
@@ -78,6 +78,10 @@ interface SurveyAiChatPanelProps {
   excludeFlagged: boolean;
   /** Starter questions that fit the tab the user is on */
   suggestions?: string[];
+  /** Draw the chat as a column of the page layout (no overlay) instead of a Drawer */
+  dock?: boolean;
+  /** Shown in the intro of the docked agent: survey name and a one-line summary */
+  agentContext?: { name: string; meta: string };
 }
 
 export const SurveyAiChatPanel = ({
@@ -86,7 +90,11 @@ export const SurveyAiChatPanel = ({
   surveyId,
   excludeFlagged,
   suggestions,
+  dock = false,
+  agentContext,
 }: SurveyAiChatPanelProps) => {
+  // Inside the docked glass page --app-bg is transparent, so bubbles need a visible fill
+  const bubbleBg = dock ? 'var(--app-surface-elevated)' : 'var(--app-bg)';
   const isMobile = Grid.useBreakpoint().md === false;
   const { subscription, refresh: refreshSubscription } = useSubscription();
   const quotaExhausted = getAiQuota(subscription).exhausted;
@@ -135,19 +143,15 @@ export const SurveyAiChatPanel = ({
     }
   };
 
-  return (
-    <Drawer
-      open={open}
-      onClose={onClose}
-      size={isMobile ? '100%' : 460}
-      title={
-        <span>
-          <RobotOutlined style={{ color: 'var(--app-primary)', marginRight: 8 }} />
-          Спросить ИИ о результатах
-        </span>
-      }
-      styles={{ body: { padding: 0, display: 'flex', flexDirection: 'column' } }}
-    >
+  const title = (
+    <span>
+      <RobotOutlined style={{ color: 'var(--app-primary)', marginRight: 8 }} />
+      Спросить ИИ о результатах
+    </span>
+  );
+
+  const content = (
+    <>
       <div
         ref={listRef}
         style={{
@@ -178,7 +182,7 @@ export const SurveyAiChatPanel = ({
                     padding: '8px 12px',
                     border: '1px solid var(--app-border)',
                     borderRadius: 8,
-                    background: 'var(--app-bg)',
+                    background: bubbleBg,
                     color: 'var(--app-text)',
                     fontSize: 13,
                     cursor: 'pointer',
@@ -217,7 +221,7 @@ export const SurveyAiChatPanel = ({
                     ? 'var(--app-primary)'
                     : entry.isError
                       ? 'color-mix(in srgb, var(--app-error) 10%, var(--app-surface))'
-                      : 'var(--app-bg)',
+                      : bubbleBg,
                   color: isUser
                     ? '#fff'
                     : entry.isError
@@ -246,7 +250,7 @@ export const SurveyAiChatPanel = ({
                     margin: 0,
                     padding: '8px 12px',
                     borderLeft: '3px solid var(--app-primary)',
-                    background: 'var(--app-bg)',
+                    background: bubbleBg,
                     borderRadius: 4,
                     fontSize: 13,
                     lineHeight: 1.5,
@@ -268,7 +272,7 @@ export const SurveyAiChatPanel = ({
               alignSelf: 'flex-start',
               padding: '8px 12px',
               borderRadius: 12,
-              background: 'var(--app-bg)',
+              background: bubbleBg,
               color: 'var(--app-text-secondary)',
               fontSize: 13,
             }}
@@ -313,6 +317,130 @@ export const SurveyAiChatPanel = ({
           loading={isLoading}
         />
       </div>
+    </>
+  );
+
+  if (dock) {
+    // The chat state lives in this component, so closing the column keeps the conversation
+    if (!open) return null;
+    const canSend = !isLoading && !quotaExhausted && draft.trim().length > 0;
+    return (
+      <aside className="survey-ai-dock" aria-label="Агент">
+        <div className="survey-ai-dock__head">
+          <span className="survey-ai-dock__title">
+            <RobotOutlined style={{ color: 'var(--app-primary)', marginRight: 8 }} />
+            Агент
+          </span>
+          <Button type="text" icon={<CloseOutlined />} aria-label="Закрыть агента" onClick={onClose} />
+        </div>
+
+        <div className="ag-feed" ref={listRef}>
+          {entries.length === 0 && (
+            <div className="ag-intro">
+              <h2>{agentContext?.name ?? 'Этот опрос'}</h2>
+              <p>
+                {agentContext?.meta ? `${agentContext.meta}. ` : ''}
+                Спросите про ответы: агент сопоставит группы, посчитает различия и найдёт цитаты.
+              </p>
+              <div className="ag-chips">
+                {(suggestions ?? EXAMPLE_PROMPTS).map((prompt) => (
+                  <button key={prompt} type="button" className="ag-chip" onClick={() => void send(prompt)}>
+                    {prompt}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {entries.map((entry) =>
+            entry.role === 'user' ? (
+              <div key={entry.id} className="ag-msg ag-msg--user">
+                <div className="ag-bubble">{entry.content}</div>
+              </div>
+            ) : (
+              <div key={entry.id} className={entry.isError ? 'ag-msg ag-msg--error' : 'ag-msg'}>
+                <div className="ag-text">
+                  {entry.isError ? entry.content : <ReplyText text={entry.content} />}
+                </div>
+                {entry.crosstab && (
+                  <div className="ag-block">
+                    <CrosstabView result={entry.crosstab} />
+                  </div>
+                )}
+                {entry.quotes?.map((quote, index) => (
+                  <blockquote key={index} className="ag-quote">
+                    «{quote.text}»
+                    <span>— ответ на вопрос «{quote.question}»</span>
+                  </blockquote>
+                ))}
+                {!entry.isError && (
+                  <div className="ag-actions">
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<CopyOutlined />}
+                      aria-label="Копировать ответ"
+                      onClick={() => void navigator.clipboard?.writeText(entry.content)}
+                    />
+                  </div>
+                )}
+              </div>
+            ),
+          )}
+
+          {isLoading && (
+            <div className="ag-msg ag-working">
+              <span className="ag-spin" />
+              Работаю…
+            </div>
+          )}
+        </div>
+
+        <AiQuotaNote className="ai-quota-note" />
+
+        <div className="ag-composer-wrap">
+          <div className="ag-composer">
+            <Input.TextArea
+              className="ag-input"
+              variant="borderless"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onPressEnter={(e) => {
+                if (!e.shiftKey) {
+                  e.preventDefault();
+                  void send(draft);
+                }
+              }}
+              placeholder="Напишите, что узнать про ответы"
+              autoSize={{ minRows: 1, maxRows: 6 }}
+              disabled={isLoading || quotaExhausted}
+              maxLength={2000}
+            />
+            <button
+              type="button"
+              className="ag-send"
+              aria-label="Отправить"
+              disabled={!canSend}
+              onClick={() => void send(draft)}
+            >
+              <SendOutlined />
+            </button>
+          </div>
+          <div className="ag-hint">Агент опирается на ответы опроса и может ошибаться</div>
+        </div>
+      </aside>
+    );
+  }
+
+  return (
+    <Drawer
+      open={open}
+      onClose={onClose}
+      size={isMobile ? '100%' : 460}
+      title={title}
+      styles={{ body: { padding: 0, display: 'flex', flexDirection: 'column' } }}
+    >
+      {content}
     </Drawer>
   );
 };

@@ -41,6 +41,29 @@ import { SurveyOverviewTab, type SurveyTabKey } from '../shared/ui/survey/Survey
 import { SurveyResponsesTab } from '../shared/ui/survey/SurveyResponsesTab';
 import { PublicFormSkeleton, SurveyViewSkeleton } from '../shared/ui/skeletons/PageSkeletons';
 import { SURVEY_STATUS_COLOR, SURVEY_STATUS_LABEL } from './surveyStatus';
+import './SurveyViewPage.glass.css';
+
+// Test skin from docs/prototypes/agent-ui.html: ?glass=1 turns it on (and is remembered), ?glass=0 turns it off
+const GLASS_KEY = 'svod-survey-glass';
+
+const useSurveyGlass = (search: string): boolean => {
+  const flag = new URLSearchParams(search).get('glass');
+  useEffect(() => {
+    try {
+      if (flag === '1') localStorage.setItem(GLASS_KEY, '1');
+      else if (flag === '0') localStorage.removeItem(GLASS_KEY);
+    } catch {
+      /* private mode: the flag then lives only in the address */
+    }
+  }, [flag]);
+  if (flag === '1') return true;
+  if (flag === '0') return false;
+  try {
+    return localStorage.getItem(GLASS_KEY) === '1';
+  } catch {
+    return false;
+  }
+};
 
 // The respondent form (and its form runtime) is needed only when the author opens the preview
 const PublicSurveyPage = lazy(() => import('./PublicSurveyPage').then((m) => ({ default: m.PublicSurveyPage })));
@@ -87,7 +110,8 @@ const aiErrorMessage = (err: unknown): string => {
 export const SurveyViewPage = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
+  const glass = useSurveyGlass(search);
   const { setEntityTitle, setEntityParent } = useBreadcrumbEntity();
   const { notifySuccess, notifyError } = useNotifications();
   const { step: tourStep, next: tourNext } = useTour();
@@ -383,7 +407,16 @@ export const SurveyViewPage = () => {
   };
 
   return (
-    <div className="survey-page">
+    <div className={glass ? 'survey-page survey-page--glass' : 'survey-page'}>
+      {glass && (
+        <div className="sg-aurora" aria-hidden="true">
+          <i className="sg-aurora__beam" />
+          <i className="sg-aurora__streak" />
+          <i className="sg-aurora__core" />
+          <i className="sg-aurora__floor" />
+        </div>
+      )}
+      <div className="survey-page__main">
       <header className="survey-page__header">
         <div className="survey-page__container">
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -439,7 +472,7 @@ export const SurveyViewPage = () => {
               icon={<MessageOutlined />}
               onClick={() => withAiConsent(() => setChatOpen(true))}
             >
-              Спросить ИИ
+              {glass ? 'Агент' : 'Спросить ИИ'}
             </Button>
             <Dropdown menu={{ items: menuItems, onClick: onMenuClick }} trigger={['click']} placement="bottomRight">
               <Button size={controlSize} icon={<MoreOutlined />} aria-label="Другие действия" loading={busy} />
@@ -481,6 +514,26 @@ export const SurveyViewPage = () => {
           ))}
         </div>
       </div>
+      </div>
+
+      <SurveyAiChatPanel
+        dock={glass}
+        agentContext={{
+          name: survey.name,
+          meta: [
+            SURVEY_STATUS_LABEL[survey.status],
+            `${survey.questions_count} вопр.`,
+            survey.methodology_names?.join(' + '),
+          ]
+            .filter(Boolean)
+            .join(' · '),
+        }}
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+        surveyId={survey.id}
+        excludeFlagged={excludeFlagged}
+        suggestions={AI_SUGGESTIONS[activeTab]}
+      />
 
       <Modal
         open={previewOpen}
@@ -505,14 +558,6 @@ export const SurveyViewPage = () => {
         status={survey.status}
         onPublish={() => void changeStatus('open')}
         publishing={busy}
-      />
-
-      <SurveyAiChatPanel
-        open={chatOpen}
-        onClose={() => setChatOpen(false)}
-        surveyId={survey.id}
-        excludeFlagged={excludeFlagged}
-        suggestions={AI_SUGGESTIONS[activeTab]}
       />
 
       <AiConsentModal open={pendingAi !== null} onConfirm={confirmAi} onCancel={() => setPendingAi(null)} />
