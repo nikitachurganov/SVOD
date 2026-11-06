@@ -29,6 +29,17 @@ export interface MemberResponse {
   token_plus_limit?: number | null;
 }
 
+/** Paid places and free readers of a team (members and unanswered invitations) */
+export interface SeatUsage {
+  seats_used: number;
+  /** null: no limit (billing is switched off) */
+  seats_limit: number | null;
+  readers: number;
+  readers_limit: number;
+  plan_code: string;
+  billing_enabled: boolean;
+}
+
 export interface InvitationResponse {
   id: string;
   organization_id: string;

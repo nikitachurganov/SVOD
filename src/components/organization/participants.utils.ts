@@ -27,6 +27,10 @@ export const ASSIGNABLE_ROLE_OPTIONS = (['editor', 'reader', 'admin'] as const).
   label: ROLE_LABELS[value],
 }));
 
+/** An admin can give editor and reader; only the owner can make another admin */
+export const roleOptionsFor = (canAssignAdmin: boolean) =>
+  canAssignAdmin ? ASSIGNABLE_ROLE_OPTIONS : ASSIGNABLE_ROLE_OPTIONS.filter((o) => o.value !== 'admin');
+
 export const copyToClipboard = async (text: string): Promise<boolean> => {
   try {
     await navigator.clipboard.writeText(text);

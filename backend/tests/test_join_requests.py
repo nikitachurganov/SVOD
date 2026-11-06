@@ -146,5 +146,82 @@ class ModerationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ctx.exception.status_code, 409)
 
 
+class AdminModerationTests(unittest.IsolatedAsyncioTestCase):
+    """Admins moderate join requests like the owner, except they cannot make another admin."""
+
+    def setUp(self):
+        self.o, self.u = org(), user()
+        self.row = join_request(self.o, self.u)
+        self.caller = SimpleNamespace(id=uuid.uuid4())
+        self.role = "admin"
+        self.session = MagicMock()
+        self.session.commit = AsyncMock()
+        self.member = SimpleNamespace(id=uuid.uuid4(), user=self.u, role_tag="editor",
+                                      joined_at=MagicMock(isoformat=lambda: "t"), job_title=None,
+                                      specialization=None, token_plus_limit=None)
+
+        async def get_member(session, org_id, user_id):
+            if user_id == self.caller.id:
+                return SimpleNamespace(role_tag=self.role)
+            return None
+
+        for target in (
+            patch.object(svc, "_get_request_or_404", AsyncMock(return_value=self.row)),
+            patch.object(svc, "_get_org_or_404", AsyncMock(return_value=self.o)),
+            patch.object(svc.notification_service, "create_notification", AsyncMock(return_value=True)),
+            patch.object(svc.email_service, "send_email", AsyncMock(return_value=False)),
+            patch.object(svc.team_seat_service, "ensure_room", AsyncMock()),
+            patch.object(svc.organization_repository, "get_member", AsyncMock(side_effect=get_member)),
+            patch.object(svc.organization_repository, "add_member", AsyncMock(return_value=self.member)),
+        ):
+            target.start()
+        self.addCleanup(patch.stopall)
+
+    async def test_an_admin_sees_the_requests(self):
+        patch.object(svc, "select", MagicMock()).start()
+        self.session.scalars = AsyncMock(return_value=MagicMock(all=lambda: [self.row]))
+
+        result = await svc.list_requests(self.session, self.o.id, self.caller)
+
+        self.assertEqual(len(result), 1)
+
+    async def test_an_admin_rejects_a_request(self):
+        await svc.reject(self.session, self.row.id, RejectJoinRequest(reason="Нет мест"), self.caller)
+
+        self.assertEqual(self.row.status, "rejected")
+        self.assertEqual(self.row.decided_by_user_id, self.caller.id)
+
+    async def test_an_admin_approves_as_a_reader(self):
+        with patch.object(svc.organization_repository, "get_member",
+                          AsyncMock(side_effect=[SimpleNamespace(role_tag="admin"), None, self.member])):
+            await svc.approve(self.session, self.row.id, ApproveJoinRequest(role_tag="reader"), self.caller)
+
+        created = svc.organization_repository.add_member.await_args.args[1]
+        self.assertEqual(created.role_tag, "reader")
+        self.assertEqual(self.row.status, "approved")
+
+    async def test_an_admin_cannot_approve_as_an_admin(self):
+        with self.assertRaises(HTTPException) as ctx:
+            await svc.approve(self.session, self.row.id, ApproveJoinRequest(role_tag="admin"), self.caller)
+
+        self.assertEqual(ctx.exception.status_code, 422)
+        self.assertEqual(self.row.status, "pending")
+
+    async def test_an_editor_cannot_moderate(self):
+        self.role = "editor"
+
+        with self.assertRaises(HTTPException) as ctx:
+            await svc.reject(self.session, self.row.id, RejectJoinRequest(reason="x"), self.caller)
+
+        self.assertEqual(ctx.exception.status_code, 403)
+        self.assertEqual(self.row.status, "pending")
+
+    async def test_a_stranger_cannot_list(self):
+        with self.assertRaises(HTTPException) as ctx:
+            await svc.list_requests(self.session, self.o.id, SimpleNamespace(id=uuid.uuid4()))
+
+        self.assertEqual(ctx.exception.status_code, 403)
+
+
 if __name__ == "__main__":
     unittest.main()

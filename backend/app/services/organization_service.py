@@ -35,6 +35,7 @@ from app.schemas.organization import (
     InvitationWithOrgResponse,
     MemberResponse,
     OrganizationResponse,
+    SeatUsageResponse,
     TransferOwnershipRequest,
     UpdateMemberAiLimitRequest,
     UpdateOrganizationRequest,
@@ -356,6 +357,24 @@ async def transfer_organization_ownership(
 # ---------------------------------------------------------------------------
 # Members
 # ---------------------------------------------------------------------------
+
+async def get_seat_usage(
+    session: AsyncSession, org_id: uuid.UUID, current_user: User
+) -> SeatUsageResponse:
+    """Occupied and available places of the team, for the owner and the admins."""
+    org = await _get_org_or_404(session, org_id)
+    await _ensure_can_manage_members(session, org, current_user)
+    usage, ent = await team_seat_service.usage_for_org(session, org)
+    unlimited = not ent.billing_enabled or usage.seats_limit >= team_roles.SEATS_UNLIMITED
+    return SeatUsageResponse(
+        seats_used=usage.seats_used,
+        seats_limit=None if unlimited else usage.seats_limit,
+        readers=usage.readers,
+        readers_limit=team_roles.MAX_READERS_PER_TEAM,
+        plan_code=ent.plan.code,
+        billing_enabled=ent.billing_enabled,
+    )
+
 
 async def list_members(
     session: AsyncSession, org_id: uuid.UUID, current_user: User

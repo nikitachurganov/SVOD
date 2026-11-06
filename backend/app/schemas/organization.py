@@ -55,6 +55,18 @@ class UpdateMemberAiLimitRequest(BaseModel):
     token_plus_limit: int | None = Field(None, ge=0, le=1_000_000_000)
 
 
+class SeatUsageResponse(BaseModel):
+    """How many paid places the team uses (members and unanswered invitations) and how many it has."""
+
+    seats_used: int
+    # null: no limit (billing is switched off)
+    seats_limit: int | None
+    readers: int
+    readers_limit: int
+    plan_code: str
+    billing_enabled: bool
+
+
 class TransferOwnershipRequest(BaseModel):
     new_owner_user_id: str = Field(..., min_length=1, max_length=64)
 

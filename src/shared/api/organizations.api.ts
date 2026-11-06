@@ -13,6 +13,7 @@ import type {
   MemberResponse,
   MyInvitationResponse,
   OrganizationResponse,
+  SeatUsage,
 } from '../../types/organization';
 
 export interface CreateOrganizationPayload {
@@ -84,6 +85,12 @@ export const transferOrganizationOwnership = async (
 
 export const getMembers = async (orgId: string): Promise<MemberResponse[]> => {
   const { data } = await api.get<MemberResponse[]>(`/organizations/${orgId}/members`);
+  return data;
+};
+
+/** Owner or admin: how many places the team uses and how many it has */
+export const getSeatUsage = async (orgId: string): Promise<SeatUsage> => {
+  const { data } = await api.get<SeatUsage>(`/organizations/${orgId}/seats`);
   return data;
 };
 

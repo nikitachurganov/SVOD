@@ -338,5 +338,59 @@ class MemberRoleChangeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.role_tag, "editor")
 
 
+class SeatUsageEndpointTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.owner = SimpleNamespace(id=uuid.uuid4())
+        self.org = SimpleNamespace(id=uuid.uuid4(), owner_user_id=self.owner.id)
+        self.role = "admin"
+        self.entitlements = _entitlements(RESEARCHER, seats=3)
+        self.usage = SeatUsage(seats_used=2, readers=4, seats_limit=3)
+
+        async def get_member(session, org_id, user_id):
+            return SimpleNamespace(role_tag=self.role)
+
+        patch.object(organization_service, "_get_org_or_404", AsyncMock(return_value=self.org)).start()
+        patch.object(
+            organization_service.organization_repository, "get_member", AsyncMock(side_effect=get_member)
+        ).start()
+        patch.object(
+            organization_service.team_seat_service,
+            "usage_for_org",
+            AsyncMock(side_effect=lambda session, org: (self.usage, self.entitlements)),
+        ).start()
+        self.addCleanup(patch.stopall)
+
+    async def test_the_owner_sees_places_and_readers(self):
+        result = await organization_service.get_seat_usage(None, self.org.id, self.owner)
+
+        self.assertEqual(
+            (result.seats_used, result.seats_limit, result.readers, result.readers_limit),
+            (2, 3, 4, team_roles.MAX_READERS_PER_TEAM),
+        )
+        self.assertEqual(result.plan_code, "researcher")
+
+    async def test_an_admin_sees_them_too(self):
+        result = await organization_service.get_seat_usage(None, self.org.id, SimpleNamespace(id=uuid.uuid4()))
+
+        self.assertEqual(result.seats_used, 2)
+
+    async def test_an_editor_does_not(self):
+        self.role = "editor"
+
+        with self.assertRaises(HTTPException) as ctx:
+            await organization_service.get_seat_usage(None, self.org.id, SimpleNamespace(id=uuid.uuid4()))
+
+        self.assertEqual(ctx.exception.status_code, 403)
+
+    async def test_with_billing_off_there_is_no_limit(self):
+        self.entitlements = _entitlements(RESEARCHER, seats=team_roles.SEATS_UNLIMITED, enabled=False)
+        self.usage = SeatUsage(seats_used=2, readers=0, seats_limit=team_roles.SEATS_UNLIMITED)
+
+        result = await organization_service.get_seat_usage(None, self.org.id, self.owner)
+
+        self.assertIsNone(result.seats_limit)
+        self.assertFalse(result.billing_enabled)
+
+
 if __name__ == "__main__":
     unittest.main()

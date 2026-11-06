@@ -15,6 +15,7 @@ from app.schemas.organization import (
     InvitationWithOrgResponse,
     MemberResponse,
     OrganizationResponse,
+    SeatUsageResponse,
     TransferOwnershipRequest,
     UpdateOrganizationRequest,
     UpdateMemberAiLimitRequest,
@@ -118,6 +119,15 @@ async def list_members(
     user: CurrentUser,
 ) -> list[MemberResponse]:
     return await organization_service.list_members(session, organization_id, user)
+
+
+@router.get("/{organization_id}/seats", response_model=SeatUsageResponse)
+async def get_seat_usage(
+    organization_id: uuid.UUID,
+    session: DbSession,
+    user: CurrentUser,
+) -> SeatUsageResponse:
+    return await organization_service.get_seat_usage(session, organization_id, user)
 
 
 @router.delete("/{organization_id}/members/{user_id}", status_code=204)

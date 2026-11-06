@@ -5,13 +5,15 @@ import { CheckOutlined, CloseOutlined } from '@ant-design/icons';
 import { approveJoinRequest, rejectJoinRequest } from '../../shared/api/organizations.api';
 import { buildDisplayName } from '../../shared/utils/userName';
 import type { AssignableRole, JoinRequestResponse } from '../../types/organization';
-import { ASSIGNABLE_ROLE_OPTIONS } from './participants.utils';
+import { roleOptionsFor } from './participants.utils';
 
 interface Props {
   requests: JoinRequestResponse[];
   loading: boolean;
-  /** Called after the owner approved or rejected a request */
+  /** Called after the owner or an admin approved or rejected a request */
   onDecided: (requestId: string, approved: boolean) => void;
+  /** Only the owner can let someone in as an admin */
+  canAssignAdmin?: boolean;
 }
 
 const apiErrorText = (err: unknown, fallback: string): string => {
@@ -22,8 +24,8 @@ const apiErrorText = (err: unknown, fallback: string): string => {
 const formatDate = (iso: string): string =>
   new Date(iso).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
-/** Owner: pending requests to join by the link — approve (with editable profile) or reject */
-export const JoinRequestsTable = ({ requests, loading, onDecided }: Props) => {
+/** Owner or admin: pending requests to join by the link — approve (with editable profile) or reject */
+export const JoinRequestsTable = ({ requests, loading, onDecided, canAssignAdmin = true }: Props) => {
   const [approving, setApproving] = useState<JoinRequestResponse | null>(null);
   const [rejecting, setRejecting] = useState<JoinRequestResponse | null>(null);
   const [busy, setBusy] = useState(false);
@@ -164,7 +166,7 @@ export const JoinRequestsTable = ({ requests, loading, onDecided }: Props) => {
         </Typography.Paragraph>
         <Form form={approveForm} layout="vertical" onFinish={(v) => void submitApprove(v)}>
           <Form.Item name="role_tag" label="Роль" extra="Читатель бесплатный и не занимает место">
-            <Select options={ASSIGNABLE_ROLE_OPTIONS} />
+            <Select options={roleOptionsFor(canAssignAdmin)} />
           </Form.Item>
           <Form.Item name="job_title" label="Должность">
             <Input maxLength={300} />

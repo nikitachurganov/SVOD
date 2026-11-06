@@ -37,6 +37,7 @@ from app.schemas.join_request import (
 from app.schemas.organization import MemberResponse
 from app.services import auth_service, email_service, notification_service, team_seat_service
 from app.services.organization_service import (
+    _ensure_can_manage_members,
     _ensure_owner,
     _get_org_or_404,
     _to_author,
@@ -276,7 +277,7 @@ async def list_requests(
     session: AsyncSession, org_id: uuid.UUID, user: User, *, status_filter: str | None = STATUS_PENDING
 ) -> list[JoinRequestResponse]:
     org = await _get_org_or_404(session, org_id)
-    _ensure_owner(org, user)
+    await _ensure_can_manage_members(session, org, user)
     stmt = select(OrganizationJoinRequest).where(OrganizationJoinRequest.organization_id == org_id)
     if status_filter:
         stmt = stmt.where(OrganizationJoinRequest.status == status_filter)
@@ -289,7 +290,7 @@ async def _load_pending_for_owner(
 ) -> tuple[OrganizationJoinRequest, Organization]:
     row = await _get_request_or_404(session, request_id)
     org = await _get_org_or_404(session, row.organization_id)
-    _ensure_owner(org, user)
+    await _ensure_can_manage_members(session, org, user)
     if row.status != STATUS_PENDING:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Заявка уже рассмотрена или отозвана")
     return row, org

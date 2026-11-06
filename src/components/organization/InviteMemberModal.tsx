@@ -9,12 +9,14 @@ import type {
   InvitationResponse,
   InviteeLookupResponse,
 } from '../../types/organization';
-import { ASSIGNABLE_ROLE_OPTIONS, ROLE_HINTS, copyToClipboard } from './participants.utils';
+import { ROLE_HINTS, copyToClipboard, roleOptionsFor } from './participants.utils';
 
 interface Props {
   open: boolean;
   onClose: () => void;
   organizationId: string;
+  /** Only the owner can invite an admin; for an admin the role is not offered */
+  canAssignAdmin?: boolean;
 }
 
 interface InviteFormValues {
@@ -88,7 +90,7 @@ export const InvitationResult = ({ invitation }: { invitation: InvitationRespons
   );
 };
 
-export const InviteMemberModal = ({ open, onClose, organizationId }: Props) => {
+export const InviteMemberModal = ({ open, onClose, organizationId, canAssignAdmin = true }: Props) => {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<InvitationResponse | null>(null);
   const [form] = Form.useForm<InviteFormValues>();
@@ -270,7 +272,7 @@ export const InviteMemberModal = ({ open, onClose, organizationId }: Props) => {
             initialValue="editor"
             extra={ROLE_HINTS[roleTag]}
           >
-            <Select options={ASSIGNABLE_ROLE_OPTIONS} />
+            <Select options={roleOptionsFor(canAssignAdmin)} />
           </Form.Item>
           <Form.Item name="job_title" label="Должность">
             <Input placeholder="Например, дизайнер" maxLength={300} />

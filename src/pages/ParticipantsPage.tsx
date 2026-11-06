@@ -18,6 +18,7 @@ import { buildDisplayName } from '../shared/utils/userName';
 import {
   deleteExternalContractor,
   getMembers,
+  getSeatUsage,
   listExternalContractors,
   listJoinRequests,
   listOrgInvitations,
@@ -33,6 +34,7 @@ import type {
   InvitationResponse,
   JoinRequestResponse,
   MemberResponse,
+  SeatUsage,
 } from '../types/organization';
 import { InviteMemberModal, InvitationResult } from '../components/organization/InviteMemberModal';
 import { ContractorModal } from '../components/organization/ContractorModal';
@@ -40,10 +42,10 @@ import { MemberAiLimitInput } from '../components/organization/MemberAiLimitInpu
 import { JoinLinkModal } from '../components/organization/JoinLinkModal';
 import { JoinRequestsTable } from '../components/organization/JoinRequestsTable';
 import {
-  ASSIGNABLE_ROLE_OPTIONS,
   CONTACT_KIND_LABELS,
   ROLE_LABELS,
   copyToClipboard,
+  roleOptionsFor,
 } from '../components/organization/participants.utils';
 
 function formatDate(iso: string): string {
@@ -89,6 +91,7 @@ export const ParticipantsPage = () => {
   const isOwner = !!activeOrganization && activeOrganization.owner_user_id === user?.id;
 
   const [members, setMembers] = useState<MemberResponse[]>([]);
+  const [seatUsage, setSeatUsage] = useState<SeatUsage | null>(null);
   const [invitations, setInvitations] = useState<InvitationResponse[]>([]);
   const [joinRequests, setJoinRequests] = useState<JoinRequestResponse[]>([]);
   const [joinLinkOpen, setJoinLinkOpen] = useState(false);
@@ -106,28 +109,52 @@ export const ParticipantsPage = () => {
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
 
   const activeOrganizationId = activeOrganization?.id;
-  const visibleTabs: ParticipantsTabKey[] = isOwner
+  // The owner and the admins manage people; only the owner makes admins and runs the join link
+  const isAdmin = members.some((m) => m.user.id === user?.id && m.role_tag === 'admin');
+  const canManage = isOwner || isAdmin;
+  const visibleTabs: ParticipantsTabKey[] = canManage
     ? ['members', 'contractors', 'requests', 'invitations']
     : ['members', 'contractors'];
+
+  const refreshSeats = useCallback(async () => {
+    if (!activeOrganizationId) return;
+    try {
+      setSeatUsage(await getSeatUsage(activeOrganizationId));
+    } catch {
+      // The indicator is a hint: the page works without it
+      setSeatUsage(null);
+    }
+  }, [activeOrganizationId]);
 
   const load = useCallback(async () => {
     if (!activeOrganizationId) return;
     setLoading(true); setError(null);
     try {
-      const [m, c, inv, jr] = await Promise.all([
+      const [m, c] = await Promise.all([
         getMembers(activeOrganizationId),
         listExternalContractors(activeOrganizationId),
-        isOwner ? listOrgInvitations(activeOrganizationId) : Promise.resolve([]),
-        isOwner ? listJoinRequests(activeOrganizationId) : Promise.resolve([]),
       ]);
       setMembers(m);
       setContractors(c);
-      setInvitations(inv.filter((i) => i.status === 'pending'));
-      setJoinRequests(jr);
+      // Invitations, requests and places are for those who manage people; we know that only from the list
+      const manages = isOwner || m.some((x) => x.user.id === user?.id && x.role_tag === 'admin');
+      if (manages) {
+        const [inv, jr] = await Promise.all([
+          listOrgInvitations(activeOrganizationId),
+          listJoinRequests(activeOrganizationId),
+        ]);
+        setInvitations(inv.filter((i) => i.status === 'pending'));
+        setJoinRequests(jr);
+        void refreshSeats();
+      } else {
+        setInvitations([]);
+        setJoinRequests([]);
+        setSeatUsage(null);
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Не удалось загрузить данные');
     } finally { setLoading(false); }
-  }, [activeOrganizationId, isOwner]);
+  }, [activeOrganizationId, isOwner, user?.id, refreshSeats]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -138,9 +165,11 @@ export const ParticipantsPage = () => {
       if (confirmAction.type === 'remove') {
         await removeMember(activeOrganizationId, confirmAction.id);
         setMembers((prev) => prev.filter((m) => m.user.id !== confirmAction.id));
+        void refreshSeats();
       } else if (confirmAction.type === 'revoke') {
         await revokeInvitation(confirmAction.id);
         setInvitations((prev) => prev.filter((i) => i.id !== confirmAction.id));
+        void refreshSeats();
       } else {
         await deleteExternalContractor(activeOrganizationId, confirmAction.id);
         setContractors((prev) => prev.filter((c) => c.id !== confirmAction.id));
@@ -149,7 +178,7 @@ export const ParticipantsPage = () => {
     } catch (err) {
       message.error(apiErrorText(err, 'Не удалось выполнить действие'));
     } finally { setBusyId(null); }
-  }, [activeOrganizationId, confirmAction]);
+  }, [activeOrganizationId, confirmAction, refreshSeats]);
 
   const handleResend = useCallback(async (invitationId: string) => {
     setBusyId(invitationId);
@@ -169,6 +198,7 @@ export const ParticipantsPage = () => {
       const updated = await updateMemberRole(activeOrganizationId, userId, role);
       setMembers((prev) => prev.map((m) => (m.user.id === userId ? updated : m)));
       message.success('Роль изменена');
+      void refreshSeats();
     } catch (err: unknown) {
       // Often "no free seat": the 402 body is an object, not a string
       const detail = (err as { response?: { data?: { detail?: { code?: string } | string } } })
@@ -179,7 +209,7 @@ export const ParticipantsPage = () => {
         message.error(apiErrorText(err, 'Не удалось изменить роль'));
       }
     } finally { setBusyId(null); }
-  }, [activeOrganizationId]);
+  }, [activeOrganizationId, refreshSeats]);
 
   const changeAiLimit = useCallback(async (userId: string, tokens: number | null) => {
     if (!activeOrganizationId) return;
@@ -231,13 +261,14 @@ export const ParticipantsPage = () => {
         key: 'role',
         sorter: (a, b) => a.role.localeCompare(b.role, 'ru'),
         render: (role: string, record) => {
-          if (isOwner && record.id !== user?.id && role !== 'owner') {
+          // An admin changes editors and readers; admins are touched by the owner only
+          if (canManage && record.id !== user?.id && role !== 'owner' && (isOwner || role !== 'admin')) {
             return (
               <Select<AssignableRole>
                 size="small"
                 style={{ minWidth: 150 }}
                 value={role === 'member' ? 'editor' : (role as AssignableRole)}
-                options={ASSIGNABLE_ROLE_OPTIONS}
+                options={roleOptionsFor(isOwner)}
                 disabled={busyId === record.id}
                 onChange={(value) => void changeRole(record.id, value)}
               />
@@ -250,7 +281,7 @@ export const ParticipantsPage = () => {
           );
         },
       },
-      ...(isOwner
+      ...(canManage
         ? [
             {
               title: 'Лимит ИИ',
@@ -283,7 +314,8 @@ export const ParticipantsPage = () => {
         title: 'Действия',
         key: 'actions',
         render: (_, record) => {
-          if (!isOwner || record.id === user?.id || record.role === 'owner') return null;
+          if (!canManage || record.id === user?.id || record.role === 'owner') return null;
+          if (!isOwner && record.role === 'admin') return null;
           return (
             <Button
               type="text"
@@ -298,7 +330,7 @@ export const ParticipantsPage = () => {
         },
       },
     ],
-    [busyId, changeAiLimit, changeRole, isOwner, user?.id],
+    [busyId, canManage, changeAiLimit, changeRole, isOwner, user?.id],
   );
 
   const contractorColumns = useMemo<ColumnsType<ExternalContractor>>(
@@ -471,21 +503,31 @@ export const ParticipantsPage = () => {
 
   if (!activeOrganization) return null;
 
-  const headerAction = isOwner ? (
+  const headerAction = canManage ? (
     <Dropdown
       classNames={{ root: 'app-menu-dropdown' }}
       trigger={['click']}
       menu={{
         items: [
-          {
-            key: 'link',
-            icon: <LinkOutlined />,
-            label: 'Пригласить по ссылке',
-            extra: 'с модерацией',
-          },
+          // The join link (create, switch off, renew) belongs to the owner
+          ...(isOwner
+            ? [
+                {
+                  key: 'link',
+                  icon: <LinkOutlined />,
+                  label: 'Пригласить по ссылке',
+                  extra: 'с модерацией',
+                },
+              ]
+            : []),
           { key: 'manual', icon: <UserAddOutlined />, label: 'Добавить вручную', extra: 'аккаунт + письмо' },
-          { type: 'divider' },
-          { key: 'contractor', icon: <SolutionOutlined />, label: 'Добавить подрядчика', extra: 'без входа' },
+          // Outside contractors are kept by the owner only (the server refuses an admin)
+          ...(isOwner
+            ? [
+                { type: 'divider' as const },
+                { key: 'contractor', icon: <SolutionOutlined />, label: 'Добавить подрядчика', extra: 'без входа' },
+              ]
+            : []),
         ],
         onClick: ({ key }) => {
           if (key === 'link') setJoinLinkOpen(true);
@@ -547,6 +589,26 @@ export const ParticipantsPage = () => {
         ) : (
           <Card className="registry-page__card">
             {activeTab === 'members' ? (
+              <>
+              {seatUsage?.billing_enabled ? (
+                <div style={{ margin: '0 0 12px', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <Tooltip title="Владелец, администраторы, редакторы и неотвеченные приглашения занимают место. Читатели бесплатны.">
+                    <Tag
+                      color={
+                        seatUsage.seats_limit !== null && seatUsage.seats_used >= seatUsage.seats_limit
+                          ? 'orange'
+                          : 'default'
+                      }
+                    >
+                      Места: {seatUsage.seats_used}
+                      {seatUsage.seats_limit !== null ? ` из ${seatUsage.seats_limit}` : ''}
+                    </Tag>
+                  </Tooltip>
+                  <Tag color="green">
+                    Читатели: {seatUsage.readers} из {seatUsage.readers_limit}
+                  </Tag>
+                </div>
+              ) : null}
               <Table<MemberRow>
                 rowKey="id"
                 columns={memberColumns}
@@ -556,6 +618,7 @@ export const ParticipantsPage = () => {
                 pagination={false}
                 size="middle"
               />
+              </>
             ) : activeTab === 'contractors' ? (
               <>
                 <p style={{ margin: '0 0 12px', color: 'var(--app-text-secondary)', fontSize: 13 }}>
@@ -576,10 +639,12 @@ export const ParticipantsPage = () => {
               <JoinRequestsTable
                 requests={joinRequests}
                 loading={loading}
+                canAssignAdmin={isOwner}
                 onDecided={(requestId, approved) => {
                   setJoinRequests((prev) => prev.filter((r) => r.id !== requestId));
                   if (approved && activeOrganizationId) {
                     void getMembers(activeOrganizationId).then(setMembers);
+                    void refreshSeats();
                   }
                 }}
               />
@@ -602,6 +667,7 @@ export const ParticipantsPage = () => {
         open={inviteOpen}
         onClose={() => { setInviteOpen(false); void load(); }}
         organizationId={activeOrganization.id}
+        canAssignAdmin={isOwner}
       />
 
       <JoinLinkModal
