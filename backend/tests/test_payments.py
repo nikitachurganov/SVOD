@@ -645,6 +645,9 @@ class SettleTests(unittest.IsolatedAsyncioTestCase):
         self.add_seats = patch.object(
             payment_service.lifecycle, "add_seats", AsyncMock(return_value=self.sub)
         ).start()
+        self.revoke = patch.object(
+            payment_service.lifecycle, "revoke_for_refund", AsyncMock(return_value="expired")
+        ).start()
         self.journal = patch.object(payment_service, "_journal", AsyncMock()).start()
         self.close_request = patch.object(payment_service, "_close_plan_request", AsyncMock()).start()
         patch.object(
@@ -794,7 +797,7 @@ class SettleTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.outcome, "unchanged")
         self.assertEqual(self.row.status, PAYMENT_SUCCEEDED)
 
-    async def test_a_refund_is_recorded_once_and_the_plan_is_left_for_a_human(self):
+    async def test_a_full_refund_is_recorded_once_and_takes_the_plan_back_once(self):
         await payment_service.settle(MagicMock(), provider_payment(), NOW)
         self.grant.reset_mock()
 
@@ -805,6 +808,64 @@ class SettleTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.row.refunded_kopecks, MONTH)
         self.assertEqual(self.kinds(), ["payment_succeeded", "payment_refunded"])
         self.grant.assert_not_awaited()
+        self.revoke.assert_awaited_once()
+        args, kwargs = self.revoke.await_args
+        self.assertEqual(args[1], self.person.id)
+        self.assertEqual(
+            (kwargs["plan_code"], kwargs["seats_added"], kwargs["days"], kwargs["payment_id"]),
+            ("researcher", False, 30, self.row.id),
+        )
+        self.assertEqual(first.refund_effect, "expired")
+
+    async def test_a_full_refund_takes_the_days_of_the_payment_a_partial_one_the_whole_period(self):
+        await payment_service.settle(MagicMock(), provider_payment(), NOW)
+        await payment_service.settle(MagicMock(), provider_payment(refunded_kopecks=MONTH), NOW)
+        self.assertFalse(self.revoke.await_args.kwargs["whole_period"])
+
+        self.revoke.reset_mock()
+        self.row = our_payment(user_id=self.person.id, applied_at=NOW, status=PAYMENT_SUCCEEDED)
+        await payment_service.settle(MagicMock(), provider_payment(refunded_kopecks=MONTH // 3), NOW)
+
+        self.assertTrue(self.revoke.await_args.kwargs["whole_period"])
+
+    async def test_a_partial_refund_ends_the_plan_and_what_comes_after_takes_nothing_more(self):
+        self.row = our_payment(user_id=self.person.id, applied_at=NOW, status=PAYMENT_SUCCEEDED)
+
+        part = await payment_service.settle(MagicMock(), provider_payment(refunded_kopecks=MONTH // 3), NOW)
+        more = await payment_service.settle(MagicMock(), provider_payment(refunded_kopecks=MONTH), NOW)
+
+        self.assertEqual((part.outcome, part.refund_effect), ("refunded", "expired"))
+        self.assertEqual((more.outcome, more.refund_effect), ("refunded", None))
+        self.revoke.assert_awaited_once()
+
+    async def test_a_refund_of_seats_takes_the_seats_not_the_period(self):
+        self.row.term, self.row.days, self.row.seats = "seats_add", 15, 3
+        await payment_service.settle(MagicMock(), provider_payment(), NOW)
+
+        await payment_service.settle(MagicMock(), provider_payment(refunded_kopecks=MONTH), NOW)
+
+        self.assertTrue(self.revoke.await_args.kwargs["seats_added"])
+
+    async def test_a_refund_of_a_pack_is_the_pack_of_the_plan_not_the_researcher(self):
+        self.row.plan_code, self.row.term, self.row.days = "pack", "one_off", 60
+        self.row.amount_kopecks = 250_00
+        await payment_service.settle(MagicMock(), provider_payment(amount_kopecks=250_00), NOW)
+
+        await payment_service.settle(
+            MagicMock(), provider_payment(amount_kopecks=250_00, refunded_kopecks=250_00), NOW
+        )
+
+        self.assertEqual(self.revoke.await_args.kwargs["plan_code"], "pack")
+        self.assertEqual(self.revoke.await_args.kwargs["days"], 60)
+
+    async def test_a_refund_of_a_deleted_account_takes_nothing(self):
+        await payment_service.settle(MagicMock(), provider_payment(), NOW)
+        self.row.user_id = None
+
+        result = await payment_service.settle(MagicMock(), provider_payment(refunded_kopecks=MONTH), NOW)
+
+        self.assertEqual(result.refund_effect, "nothing")
+        self.revoke.assert_not_awaited()
 
     async def test_a_payment_of_a_deleted_account_extends_nothing(self):
         payment_service.user_repository.get_by_id.return_value = None
@@ -960,6 +1021,14 @@ class AnnounceTests(unittest.IsolatedAsyncioTestCase):
                     await payment_service.announce(payment_service.Settlement(outcome, our_payment(), user()))
                 self.assertEqual(self.alert.await_args.kwargs["to"], "boss@example.com")
                 self.assertEqual(self.alert.await_args.kwargs["outcome"], outcome)
+
+    async def test_the_administrator_is_told_what_a_full_refund_took_back(self):
+        with patch.object(payment_service.settings, "ADMIN_NOTIFY_EMAIL", "boss@example.com"):
+            await payment_service.announce(
+                payment_service.Settlement("refunded", our_payment(), user(), refund_effect="expired")
+            )
+
+        self.assertEqual(self.alert.await_args.kwargs["effect"], "expired")
 
     async def test_without_an_address_the_administrator_is_not_mailed(self):
         with patch.object(payment_service.settings, "ADMIN_NOTIFY_EMAIL", ""):

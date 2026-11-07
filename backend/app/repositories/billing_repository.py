@@ -297,6 +297,23 @@ async def has_event(
     return result.first() is not None
 
 
+async def find_event(
+    session: AsyncSession, subscription_id: uuid.UUID, kind: str, **match: Any
+) -> SubscriptionEvent | None:
+    """The newest event of this kind whose payload holds the given fields, or None."""
+    result = await session.execute(
+        select(SubscriptionEvent)
+        .where(
+            SubscriptionEvent.subscription_id == subscription_id,
+            SubscriptionEvent.kind == kind,
+            SubscriptionEvent.payload.contains(match),
+        )
+        .order_by(SubscriptionEvent.created_at.desc())
+        .limit(1)
+    )
+    return result.scalars().first()
+
+
 async def list_events(
     session: AsyncSession, subscription_id: uuid.UUID, *, limit: int
 ) -> list[SubscriptionEvent]:

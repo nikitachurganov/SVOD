@@ -105,6 +105,35 @@ class Settlement:
     payment: Payment
     user: User | None = None
     subscription: Subscription | None = None
+    # For a full refund: what was taken back (a ``lifecycle.REFUND_*`` value, "addon" for a pack
+    # of tokens, REFUND_NOTHING when there was nothing to take); None for a partial one
+    refund_effect: str | None = None
+
+
+EFFECT_ADDON = "addon_revoked"
+
+
+async def _take_back(
+    session: AsyncSession, payment: Payment, now: datetime, *, whole_period: bool
+) -> str:
+    """The payment was refunded: take away what it gave. ``whole_period`` is for a refund of a part,
+    which ends the paid period instead of subtracting the days of this payment."""
+    if payment.term == TERM_ADDON:
+        # What was spent from the pack stays spent
+        revoked = await token_grant_repository.revoke_for_payment(session, payment.id, now)
+        return EFFECT_ADDON if revoked else lifecycle.REFUND_NOTHING
+    if payment.user_id is None:
+        return lifecycle.REFUND_NOTHING
+    return await lifecycle.revoke_for_refund(
+        session,
+        payment.user_id,
+        plan_code=payment.plan_code,
+        seats_added=payment.term == TERM_SEATS_ADD,
+        days=payment.days,
+        payment_id=payment.id,
+        whole_period=whole_period,
+        now=now,
+    )
 
 
 def _now() -> datetime:
@@ -500,20 +529,30 @@ async def _apply(
             return Settlement(OUTCOME_APPLIED, payment, user, sub)
 
         if provider.refunded_kopecks > payment.refunded_kopecks:
+            first_refund = payment.refunded_kopecks == 0
+            was_full = payment.refunded_kopecks >= payment.amount_kopecks
             payment.refunded_kopecks = provider.refunded_kopecks
             payment.refunded_at = now
-            if payment.term == TERM_ADDON and payment.refunded_kopecks >= payment.amount_kopecks:
-                # The money is back, so is the pack (what was spent from it stays spent)
-                await token_grant_repository.revoke_for_payment(session, payment.id, now)
+            full_now = not was_full and payment.refunded_kopecks >= payment.amount_kopecks
+            effect: str | None = None
+            # What the money bought goes back with it, once. A plan or seats: at the first refund,
+            # whatever its size (the refund terms, 4.1: a refund for the unused period ends the plan;
+            # a full one takes exactly the days this payment gave). A pack of tokens: only a full one.
+            if (full_now if payment.term == TERM_ADDON else first_refund):
+                effect = await _take_back(session, payment, now, whole_period=not full_now)
             await _journal(
                 session,
                 payment.user_id,
                 EVENT_PAYMENT_REFUNDED,
-                {"payment_id": str(payment.id), "refunded_kopecks": provider.refunded_kopecks},
+                {
+                    "payment_id": str(payment.id),
+                    "refunded_kopecks": provider.refunded_kopecks,
+                    "effect": effect,
+                },
                 now,
             )
             PAYMENTS.labels("refunded").inc()
-            return Settlement(OUTCOME_REFUNDED, payment, user)
+            return Settlement(OUTCOME_REFUNDED, payment, user, refund_effect=effect)
         return Settlement(OUTCOME_UNCHANGED, payment, user)
 
     if provider.status == yookassa_client.STATUS_CANCELED and payment.status in OPEN_STATUSES:
@@ -617,6 +656,7 @@ async def announce(settlement: Settlement | None) -> None:
                     email=settlement.payment.payer_email,
                     amount_kopecks=settlement.payment.amount_kopecks,
                     refunded_kopecks=settlement.payment.refunded_kopecks,
+                    effect=settlement.refund_effect,
                 )
             )
 

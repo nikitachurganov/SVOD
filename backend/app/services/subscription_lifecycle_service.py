@@ -55,7 +55,9 @@ EVENT_RESUMED = "resumed"
 EVENT_LIMIT_WARNING = "limit_warning"
 EVENT_SEATS_ADDED = "seats_added"
 EVENT_SEAT_WINDOW_REMINDER = "seat_window_notified"
+EVENT_REFUND_REVOKED = "refund_revoked"
 
+REASON_REFUNDED = "refunded"
 REASON_TRIAL_ENDED = "trial_ended"
 REASON_PERIOD_ENDED = "period_ended"
 REASON_GRACE_OVER = "grace_over"
@@ -190,6 +192,85 @@ async def add_seats(
         payload={"from": before, "to": seats, "note": note},
     )
     return sub
+
+
+REFUND_EXPIRED = "expired"
+REFUND_SHORTENED = "shortened"
+REFUND_SEATS_REVERTED = "seats_reverted"
+REFUND_NOTHING = "nothing"
+
+
+async def revoke_for_refund(
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    *,
+    plan_code: str,
+    seats_added: bool,
+    days: int,
+    payment_id: uuid.UUID,
+    whole_period: bool = False,
+    now: datetime | None = None,
+) -> str:
+    """Take back what a refunded payment gave. Returns what came of it (REFUND_*).
+
+    A plan payment gave ``days`` of access, so exactly those days are taken off the end of the period:
+    a person who paid once and got the money back falls to the free plan at once (the usual
+    case), one who paid two months in a row and refunded one keeps the other. With ``whole_period``
+    (a refund of a part: money for the unused days) the paid period ends now instead, as the refund
+    terms say. A payment for added seats takes those seats back. When the subscription is no longer
+    the paid plan the payment gave (it ran out, or was replaced by hand), there is nothing to take
+    and the answer says so.
+    Not idempotent by itself: the caller runs it once, at the first refund of the payment.
+    """
+    now = now or _now()
+    sub = await billing_repository.get_subscription(session, user_id)
+    if sub is None or sub.plan_code != plan_code or sub.status != STATUS_ACTIVE:
+        return REFUND_NOTHING
+
+    if seats_added:
+        added = await billing_repository.find_event(
+            session, sub.id, EVENT_SEATS_ADDED, note=f"Оплата {payment_id}"
+        )
+        if added is None:
+            return REFUND_NOTHING
+        was, became = int((added.payload or {}).get("from", 0)), int((added.payload or {}).get("to", 0))
+        reverted = max(1, sub.seats_count - max(0, became - was))
+        if reverted >= sub.seats_count:
+            return REFUND_NOTHING
+        before, sub.seats_count = sub.seats_count, reverted
+        await session.flush()
+        await billing_repository.add_event(
+            session,
+            subscription_id=sub.id,
+            kind=EVENT_REFUND_REVOKED,
+            payload={"payment_id": str(payment_id), "seats_from": before, "seats_to": reverted},
+        )
+        return REFUND_SEATS_REVERTED
+
+    new_end = now if whole_period else sub.current_period_end - timedelta(days=days)
+    if new_end <= now:
+        await billing_repository.add_event(
+            session,
+            subscription_id=sub.id,
+            kind=EVENT_REFUND_REVOKED,
+            payload={"payment_id": str(payment_id), "plan": plan_code, "result": REFUND_EXPIRED},
+        )
+        await expire_subscription(session, sub, now, REASON_REFUNDED)
+        return REFUND_EXPIRED
+    sub.current_period_end = new_end
+    await session.flush()
+    await billing_repository.add_event(
+        session,
+        subscription_id=sub.id,
+        kind=EVENT_REFUND_REVOKED,
+        payload={
+            "payment_id": str(payment_id),
+            "plan": plan_code,
+            "result": REFUND_SHORTENED,
+            "period_end": new_end.isoformat(),
+        },
+    )
+    return REFUND_SHORTENED
 
 
 async def start_trial(session: AsyncSession, user: User, now: datetime | None = None) -> Subscription:

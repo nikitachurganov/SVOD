@@ -217,15 +217,28 @@ async def send_payment_alert_to_admin(
     email: str,
     amount_kopecks: int,
     refunded_kopecks: int,
+    effect: str | None = None,
 ) -> bool:
-    """A payment needs a human: money went back (the plan stays until it is taken away by hand) or
-    the provider's amount differs from ours (nothing was granted)."""
+    """A payment is worth a look: money went back (a full refund takes the tariff, the pack or the
+    seats away by itself, a partial one takes nothing) or the provider's amount differs from ours
+    (nothing was granted). ``effect`` is what a full refund took back."""
     rub = amount_kopecks / 100
     if outcome == "refunded":
         subject = "Возврат по платежу — СВОД"
+        what = {
+            "expired": "Платный тариф снят: человек переведён на «Старт».",
+            "shortened": "Оплаченный период сокращён на срок этого платежа, тариф продолжает действовать за счёт других оплат.",
+            "seats_reverted": "Места, добавленные этим платежом, сняты.",
+            "addon_revoked": "Пакет Токенов+ отозван (потраченное из него остаётся потраченным).",
+            "nothing": "Снимать нечего: тариф уже закончился или изменён вручную. Проверьте карточку пользователя.",
+        }
+        if effect is None:
+            consequence = "Тариф не менялся (повторное поступление по уже возвращённому платежу или частичный возврат пакета)."
+        else:
+            consequence = what.get(effect, "Тариф пересчитан.")
         paragraphs = [
             f"По платежу {payment_id} от {email} на {rub:g} ₽ возвращено {refunded_kopecks / 100:g} ₽.",
-            "Тариф человека остаётся. Если он больше не положен, снимите его в карточке пользователя.",
+            consequence,
         ]
     else:
         subject = "Платёж с другой суммой — СВОД"
