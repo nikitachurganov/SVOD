@@ -25,6 +25,8 @@ export interface BillingError {
   upgradeTo?: string | null;
   /** When a periodic limit starts again */
   resetsAt?: string | null;
+  /** True: the credits that ran out belong to the owner of the team and the person who acts is not the owner */
+  teamMember?: boolean;
 }
 
 const FEATURE_TEXT: Record<string, string> = {
@@ -44,6 +46,9 @@ const describeLimit = (detail: Record<string, unknown>): string => {
     typeof detail.resets_at === 'string' ? ` Лимит обновится ${formatDay(detail.resets_at)}.` : '';
   switch (limit) {
     case 'ai_tokens': {
+      if (detail.team_member === true) {
+        return 'Кредиты команды закончились. Опросы, сбор ответов и обычная аналитика работают как раньше.';
+      }
       const when =
         typeof detail.resets_at === 'string' ? ` Кредиты обновятся ${formatDay(detail.resets_at)}.` : '';
       return `Кредиты ИИ закончились. Опросы, сбор ответов и обычная аналитика работают как раньше.${when}`;
@@ -85,6 +90,7 @@ export const parseBillingError = (err: unknown): BillingError | null => {
       plan: typeof data.plan === 'string' ? data.plan : undefined,
       upgradeTo: typeof data.upgrade_to === 'string' ? data.upgrade_to : null,
       resetsAt: typeof data.resets_at === 'string' ? data.resets_at : null,
+      teamMember: data.team_member === true,
     };
   }
   if (status === 403 && data.code === 'ai_disabled') {

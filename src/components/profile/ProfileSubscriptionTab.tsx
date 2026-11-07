@@ -1,12 +1,15 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Alert, Button, Skeleton, Tag } from 'antd';
 import { Link, useSearchParams } from 'react-router-dom';
 import { PaymentHistory } from '../billing/PaymentHistory';
 import { PaymentReturnNotice } from '../billing/PaymentReturnNotice';
 import { PlanActions } from '../billing/PlanActions';
+import { SeatsPanel } from '../billing/SeatsPanel';
 import { UsageBar } from '../billing/UsageBar';
 import { AI_ACTION_HINT, formatCredits, formatDay, formatPrice, STATUS_LABELS } from '../billing/billingFormat';
+import { getPlans } from '../../shared/api/billing.api';
 import { useSubscription } from '../../shared/hooks/subscription.hooks';
+import type { PlansResponse } from '../../types/billing';
 import '../billing/billing.css';
 
 /** The person's plan, what is used of it and what can be done: try, pay, ask for an invoice */
@@ -16,6 +19,20 @@ export const ProfileSubscriptionTab = () => {
   // The payment page sends the person back with ?payment=<id>
   const returnedPayment = searchParams.get('payment');
   const [paymentsReload, setPaymentsReload] = useState(0);
+  // The catalogue says whether the plan is sold by seats; without it the tab looks as it always did
+  const [plans, setPlans] = useState<PlansResponse | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getPlans()
+      .then((next) => {
+        if (!cancelled) setPlans(next);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const dismissReturn = useCallback(() => {
     setSearchParams(
@@ -63,6 +80,7 @@ export const ProfileSubscriptionTab = () => {
   const trialing = subscription.status === 'trialing';
   const monthlyPrice = plan.price_month_kopecks;
   const isPack = plan.code === 'pack';
+  const seatMode = Boolean(plans?.seat_pricing_enabled);
   const aiResets = usage.ai_tokens.resets_at;
   // The pack's credits burn at the end of its term, the subscription's come back, the free ones are given once
   const aiNote = !aiResets
@@ -113,7 +131,7 @@ export const ProfileSubscriptionTab = () => {
             </div>
             <div>
               <dt>{isPack ? 'Стоимость' : 'Стоимость в месяц'}</dt>
-              <dd>{isPack ? 'Разово' : formatPrice(monthlyPrice)}</dd>
+              <dd>{isPack ? 'Разово' : seatMode && paid ? 'Зависит от числа мест' : formatPrice(monthlyPrice)}</dd>
             </div>
             <div>
               <dt>{paid ? 'Действует до' : 'Кредиты ИИ'}</dt>
@@ -174,11 +192,15 @@ export const ProfileSubscriptionTab = () => {
                 Сейчас лимиты только считаются и ничего не блокируют: так мы проверяем, что тарифы подходят.
               </p>
             ) : null}
+            {seatMode && plans && paid ? <SeatsPanel subscription={subscription} plans={plans} /> : null}
           </>
         ) : null}
 
         <div style={{ marginTop: 20 }}>
-          <PlanActions extendLabel={trialing ? 'Запросить подключение' : 'Запросить продление'} />
+          <PlanActions
+            extendLabel={trialing ? 'Запросить подключение' : 'Запросить продление'}
+            seats={seatMode && paid ? subscription.seats : undefined}
+          />
         </div>
 
         <p className="billing-note">

@@ -21,7 +21,7 @@ from app.models.payment import (
     PAYMENT_SUCCEEDED,
     Payment,
 )
-from app.schemas.billing import CheckoutRequest
+from app.schemas.billing import CheckoutRequest, SeatsRequest
 from app.services import payment_service, yookassa_client
 from app.services.yookassa_client import ProviderPayment
 
@@ -486,6 +486,149 @@ class CheckoutTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.added[0].failure_reason, "provider_rejected")
 
 
+class SeatAdditionTests(unittest.IsolatedAsyncioTestCase):
+    """Seats bought in the middle of a period: the price of the new seats for the days that are left."""
+
+    def setUp(self):
+        self.session = session_mock()
+        self.person = user()
+        self.added: list[Payment] = []
+
+        async def add(session, payment):
+            self.added.append(payment)
+            payment.id = payment.id or uuid.uuid4()
+            return payment
+
+        patch.object(payment_service.payment_repository, "add", add).start()
+        self.find_open = patch.object(
+            payment_service.payment_repository, "find_open_checkout", AsyncMock(return_value=None)
+        ).start()
+        self.create = patch.object(
+            payment_service.yookassa_client,
+            "create_payment",
+            AsyncMock(
+                return_value=provider_payment(
+                    status="pending", paid=False, confirmation_url="https://pay.example/1", is_test=True
+                )
+            ),
+        ).start()
+        self.running = SimpleNamespace(
+            plan_code="researcher",
+            billing_interval="month",
+            seats_count=1,
+            current_period_end=NOW + timedelta(days=15),
+            first_paid_at=NOW - timedelta(days=15),
+            seat_window_ends_at=None,
+            kit_extra_seats=2,
+        )
+        self.active = patch.object(
+            payment_service.lifecycle, "active_paid_subscription", AsyncMock(return_value=self.running)
+        ).start()
+        patch.object(payment_service.settings, "BILLING_ENABLED", True).start()
+        patch.object(payment_service.settings, "YOOKASSA_SHOP_ID", "shop").start()
+        patch.object(payment_service.settings, "YOOKASSA_SECRET_KEY", "secret").start()
+        patch.object(payment_service.settings, "SEAT_PRICING_ENABLED", True).start()
+        self.addCleanup(patch.stopall)
+
+    async def refused(self, code, seats=3):
+        with self.assertRaises(HTTPException) as ctx:
+            await payment_service.create_seat_addition(self.session, self.person, seats, NOW)
+        self.assertEqual(ctx.exception.detail["code"], code)
+        self.assertEqual(self.added, [])
+        self.create.assert_not_awaited()
+
+    async def test_the_new_seats_are_paid_for_the_days_that_are_left(self):
+        payment = await payment_service.create_seat_addition(self.session, self.person, 3, NOW)
+
+        # (1200 - 600) ₽ for a month, half of it is left
+        self.assertEqual(payment.amount_kopecks, 300_00)
+        self.assertEqual(
+            (payment.plan_code, payment.term, payment.seats, payment.days), ("researcher", "seats_add", 3, 15)
+        )
+        self.assertEqual(self.create.await_args.kwargs["amount_kopecks"], 300_00)
+
+    async def test_the_quote_shown_before_paying_is_the_sum_that_is_charged(self):
+        quote = await payment_service.quote_seat_addition(self.session, self.person, 3, NOW)
+        payment = await payment_service.create_seat_addition(self.session, self.person, 3, NOW)
+
+        self.assertEqual((quote.seats, quote.amount_kopecks, quote.days_left), (3, 300_00, 15))
+        self.assertEqual((payment.amount_kopecks, payment.days), (quote.amount_kopecks, quote.days_left))
+
+    async def test_a_quote_stores_nothing_and_does_not_call_the_provider(self):
+        await payment_service.quote_seat_addition(self.session, self.person, 3, NOW)
+
+        self.assertEqual(self.added, [])
+        self.create.assert_not_awaited()
+
+    async def test_a_started_day_is_a_whole_day(self):
+        self.running.current_period_end = NOW + timedelta(days=14, hours=3)
+
+        payment = await payment_service.create_seat_addition(self.session, self.person, 3, NOW)
+
+        self.assertEqual(payment.days, 15)
+
+    async def test_a_year_is_prorated_over_the_year(self):
+        self.running.billing_interval = "year"
+        self.running.current_period_end = NOW + timedelta(days=100)
+
+        payment = await payment_service.create_seat_addition(self.session, self.person, 2, NOW)
+
+        # (9504 - 6336) ₽ for 100 days of 365, rounded to the kopeck
+        self.assertEqual((payment.amount_kopecks, payment.days), (86795, 100))
+
+    async def test_a_period_paid_ahead_is_charged_for_one_nominal_period(self):
+        self.running.current_period_end = NOW + timedelta(days=60)
+
+        payment = await payment_service.create_seat_addition(self.session, self.person, 3, NOW)
+
+        self.assertEqual((payment.amount_kopecks, payment.days), (600_00, 30))
+
+    async def test_a_kit_place_given_up_after_the_window_costs_the_plain_price(self):
+        self.running.first_paid_at = NOW - timedelta(days=60)
+        self.running.seat_window_ends_at = NOW - timedelta(days=53)
+        self.running.kit_extra_seats = 0
+
+        payment = await payment_service.create_seat_addition(self.session, self.person, 2, NOW)
+
+        # A plain seat is 420 ₽ a month, half of it is left
+        self.assertEqual(payment.amount_kopecks, 210_00)
+
+    async def test_a_second_click_returns_the_same_payment_page(self):
+        waiting = our_payment(user_id=self.person.id, term="seats_add", seats=3)
+        self.find_open.return_value = waiting
+
+        payment = await payment_service.create_seat_addition(self.session, self.person, 3, NOW)
+
+        self.assertIs(payment, waiting)
+        self.assertEqual(self.find_open.await_args.args[2], "seats_add")
+        self.create.assert_not_awaited()
+
+    async def test_it_is_refused_while_the_seat_switch_is_off(self):
+        with patch.object(payment_service.settings, "SEAT_PRICING_ENABLED", False):
+            await self.refused("seats_unavailable")
+
+    async def test_it_is_refused_without_a_running_paid_plan(self):
+        self.active.return_value = None
+        await self.refused("no_active_subscription")
+
+        self.active.return_value = SimpleNamespace(**{**vars(self.running), "plan_code": "pack"})
+        await self.refused("no_active_subscription")
+
+    async def test_a_plan_given_for_days_is_left_to_the_support(self):
+        self.running.billing_interval = "one_off"
+        await self.refused("seats_by_request")
+
+    async def test_the_number_of_seats_must_grow_and_stay_in_range(self):
+        self.running.seats_count = 3
+        for seats in (1, 3, 11):
+            with self.subTest(seats=seats):
+                await self.refused("invalid_seats", seats)
+
+    async def test_nothing_is_created_while_payments_are_off(self):
+        with patch.object(payment_service.settings, "BILLING_ENABLED", False):
+            await self.refused("payments_disabled")
+
+
 class SettleTests(unittest.IsolatedAsyncioTestCase):
     """The row is settled from the provider's data, once, whatever number of times it is asked."""
 
@@ -498,6 +641,9 @@ class SettleTests(unittest.IsolatedAsyncioTestCase):
         ).start()
         self.grant = patch.object(
             payment_service.lifecycle, "grant", AsyncMock(return_value=self.sub)
+        ).start()
+        self.add_seats = patch.object(
+            payment_service.lifecycle, "add_seats", AsyncMock(return_value=self.sub)
         ).start()
         self.journal = patch.object(payment_service, "_journal", AsyncMock()).start()
         self.close_request = patch.object(payment_service, "_close_plan_request", AsyncMock()).start()
@@ -531,6 +677,38 @@ class SettleTests(unittest.IsolatedAsyncioTestCase):
         await payment_service.settle(MagicMock(), provider_payment(), NOW)
 
         self.assertEqual(self.grant.await_args.kwargs["seats"], 3)
+
+    async def test_a_seat_payment_adds_seats_and_extends_nothing(self):
+        self.row.term, self.row.days, self.row.seats = "seats_add", 15, 3
+
+        result = await payment_service.settle(MagicMock(), provider_payment(), NOW)
+
+        self.assertEqual(result.outcome, "applied")
+        self.grant.assert_not_awaited()
+        args, kwargs = self.add_seats.await_args
+        self.assertEqual(args[1:3], (self.person.id, 3))
+        self.assertIn(str(self.row.id), kwargs["note"])
+        self.assertEqual(self.row.applied_at, NOW)
+
+    async def test_a_seat_payment_that_cannot_be_applied_is_left_for_a_human(self):
+        self.row.term, self.row.seats = "seats_add", 3
+        self.add_seats.side_effect = ValueError("no plan")
+
+        result = await payment_service.settle(MagicMock(), provider_payment(), NOW)
+
+        self.assertEqual(result.outcome, "unchanged")
+        self.assertEqual((self.row.status, self.row.failure_reason), (PAYMENT_SUCCEEDED, "grant_failed"))
+        self.assertIsNone(self.row.applied_at)
+
+    async def test_the_same_seat_news_a_second_time_adds_nothing_again(self):
+        self.row.term, self.row.seats = "seats_add", 3
+        await payment_service.settle(MagicMock(), provider_payment(), NOW)
+        self.add_seats.reset_mock()
+
+        again = await payment_service.settle(MagicMock(), provider_payment(), NOW + timedelta(minutes=1))
+
+        self.assertEqual(again.outcome, "unchanged")
+        self.add_seats.assert_not_awaited()
 
     async def test_the_pack_carries_no_seats(self):
         self.row.plan_code, self.row.term, self.row.days = "pack", "one_off", 60
@@ -981,6 +1159,27 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
 
         create.assert_awaited_once_with(self.session, person, "year", seats=1)
         self.assertEqual((result.payment_id, result.confirmation_url), (row.id, "https://pay.example/1"))
+
+    async def test_the_extra_seats_route_returns_the_page_and_respects_the_billing_switch(self):
+        person = user()
+        row = our_payment(user_id=person.id, term="seats_add", seats=3)
+        with patch.object(
+            billing_routes.payment_service, "create_seat_addition", AsyncMock(return_value=row)
+        ) as create:
+            result = await billing_routes.add_seats(SeatsRequest(seats=3), self.session, person)
+
+            create.assert_awaited_once_with(self.session, person, 3)
+            self.assertEqual((result.payment_id, result.confirmation_url), (row.id, "https://pay.example/1"))
+
+            with patch.object(billing_routes.settings, "BILLING_ENABLED", False):
+                with self.assertRaises(HTTPException) as ctx:
+                    await billing_routes.add_seats(SeatsRequest(seats=3), self.session, person)
+            self.assertEqual(ctx.exception.status_code, 409)
+
+    def test_the_extra_seats_request_needs_at_least_two_seats(self):
+        for seats in (0, 1, 101):
+            with self.subTest(seats=seats), self.assertRaises(ValueError):
+                SeatsRequest(seats=seats)
 
     async def test_checkout_without_a_page_from_the_provider_is_a_502(self):
         row = our_payment(confirmation_url=None)

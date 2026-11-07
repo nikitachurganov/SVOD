@@ -29,6 +29,7 @@ from app.constants.roles import ROLE_ADMIN
 from app.core.config import settings
 from app.models.plan_request import PlanRequest
 from app.models.subscription import Subscription
+from app.models.token_grant import GRANT_BONUS, TokenGrant
 from app.models.user import User
 from app.repositories import (
     admin_repository,
@@ -36,6 +37,7 @@ from app.repositories import (
     payment_repository,
     plan_request_repository,
     survey_repository,
+    token_grant_repository,
 )
 from app.schemas.admin import (
     AdminAiLogRow,
@@ -48,6 +50,7 @@ from app.schemas.admin import (
     AdminStats,
     AdminSubscription,
     AdminTierStats,
+    AdminTokenPackRequest,
     AdminUsage,
     AdminUserDetail,
     AdminUserList,
@@ -64,6 +67,7 @@ EVENT_ACCOUNT_UNBLOCKED = "account_unblocked"
 EVENT_AI_DISABLED = "ai_disabled"
 EVENT_AI_ENABLED = "ai_enabled"
 EVENT_REVOKED = "admin_revoked"
+EVENT_TOKEN_PACK_GRANTED = "token_pack_granted"
 
 REASON_REVOKED = "admin_revoked"
 
@@ -276,6 +280,10 @@ async def get_user_detail(session: AsyncSession, user_id: uuid.UUID) -> AdminUse
             cancel_at_period_end=ent.cancel_at_period_end,
             limit_overrides=(sub.limit_overrides or None) if sub else None,
             limits=_limits(plan),
+            seats=ent.seats,
+            kit_extra_seats=sub.kit_extra_seats if sub else 2,
+            first_paid_at=sub.first_paid_at if sub else None,
+            seat_window_ends_at=sub.seat_window_ends_at if sub else None,
         ),
         usage=AdminUsage(
             ai_tokens=UsageMetric(
@@ -293,6 +301,7 @@ async def get_user_detail(session: AsyncSession, user_id: uuid.UUID) -> AdminUse
                 max=plan.max_projects,
             ),
             locked_responses=await survey_repository.count_locked_for_owner(session, user_id),
+            ai_extra_tokens=await token_grant_repository.remaining(session, user_id, now),
             ai_cost_usd_30d=float(cost),
         ),
         events=[
@@ -418,9 +427,37 @@ async def grant_plan(
             actor_user_id=admin.id,
             note=payload.note,
             limit_overrides=payload.limit_overrides,
+            seats=payload.seats,
         )
     except ValueError as exc:
         raise _error(status.HTTP_422_UNPROCESSABLE_ENTITY, "grant_failed", str(exc)) from exc
+
+
+async def grant_token_pack(
+    session: AsyncSession, admin: User, user_id: uuid.UUID, payload: AdminTokenPackRequest
+) -> TokenGrant:
+    """Give a block of Токены+ by hand (a pack paid by invoice, a gift, a compensation)."""
+    target = await _require_user(session, user_id)
+    now = _now()
+    block = await token_grant_repository.add(
+        session,
+        TokenGrant(
+            user_id=target.id,
+            kind=GRANT_BONUS,
+            amount=payload.tokens,
+            expires_at=now + timedelta(days=payload.days),
+            created_at=now,
+        ),
+    )
+    sub = await billing_service.ensure_subscription(session, target.id, now)
+    await billing_repository.add_event(
+        session,
+        subscription_id=sub.id,
+        kind=EVENT_TOKEN_PACK_GRANTED,
+        payload={"tokens": payload.tokens, "days": payload.days, "note": payload.note},
+        actor_user_id=admin.id,
+    )
+    return block
 
 
 async def revoke_plan(session: AsyncSession, admin: User, user_id: uuid.UUID) -> Subscription:

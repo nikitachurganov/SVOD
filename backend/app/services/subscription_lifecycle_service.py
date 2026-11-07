@@ -53,6 +53,8 @@ EVENT_DOWNGRADE_CLOSED = "downgrade_closed_surveys"
 EVENT_CANCELED = "canceled"
 EVENT_RESUMED = "resumed"
 EVENT_LIMIT_WARNING = "limit_warning"
+EVENT_SEATS_ADDED = "seats_added"
+EVENT_SEAT_WINDOW_REMINDER = "seat_window_notified"
 
 REASON_TRIAL_ENDED = "trial_ended"
 REASON_PERIOD_ENDED = "period_ended"
@@ -60,6 +62,8 @@ REASON_GRACE_OVER = "grace_over"
 
 TRIAL_REMINDER_DAYS = 2
 EXPIRY_REMINDER_DAYS = 3
+# The window for a kit place ends tomorrow
+SEAT_WINDOW_REMINDER_DAYS = 1
 # A pending warning email that could not be sent is given up after this long
 WARNING_RETRY_HOURS = 24
 # How many subscriptions one worker tick handles per step
@@ -150,6 +154,41 @@ async def grant(
         actor_user_id=actor_user_id,
     )
     await billing_service.unlock_responses(session, user_id, actor_user_id=actor_user_id)
+    return sub
+
+
+async def add_seats(
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    seats: int,
+    *,
+    note: str | None = None,
+    now: datetime | None = None,
+) -> Subscription:
+    """Raise the seats of a running Researcher subscription to ``seats`` after the extra payment.
+
+    The period is not touched: the seats were paid for the days that are left. Raises ValueError when
+    there is no running paid subscription or the team already has that many seats, so the payment is
+    left for a human to look at instead of being applied to the wrong state.
+    """
+    now = now or _now()
+    sub = await billing_service.ensure_subscription(session, user_id, now)
+    running = (
+        sub.plan_code == PLAN_RESEARCHER and sub.status == STATUS_ACTIVE and sub.current_period_end > now
+    )
+    if not running:
+        raise ValueError("Места добавляются к действующему тарифу «Исследователь»")
+    if seats <= sub.seats_count:
+        raise ValueError("В команде уже не меньше мест, чем оплачено")
+    before = sub.seats_count
+    seat_window.record_paid_seats(sub, seats, now)
+    await session.flush()
+    await billing_repository.add_event(
+        session,
+        subscription_id=sub.id,
+        kind=EVENT_SEATS_ADDED,
+        payload={"from": before, "to": seats, "note": note},
+    )
     return sub
 
 
@@ -458,6 +497,37 @@ async def _remind_expiring(session: AsyncSession, now: datetime) -> int:
     return sent
 
 
+async def _remind_seat_window(session: AsyncSession, now: datetime) -> int:
+    """Tell a team with an empty kit place that its 7-day window ends tomorrow. Only in the seat model."""
+    if not settings.SEAT_PRICING_ENABLED:
+        return 0
+    until, sent, last_id = now + timedelta(days=SEAT_WINDOW_REMINDER_DAYS), 0, None
+    for _ in range(BATCH):
+        rows = await billing_repository.list_ending_seat_windows(
+            session, now, until, after_id=last_id, limit=1
+        )
+        if not rows:
+            break
+        sub = rows[0]
+        last_id = sub.id
+        user = await user_repository.get_by_id(session, sub.user_id)
+        match = {"window_end": sub.seat_window_ends_at.isoformat()}
+        if user is None or await billing_repository.has_event(
+            session, sub.id, EVENT_SEAT_WINDOW_REMINDER, match
+        ):
+            await session.rollback()
+            continue
+        if await deliver(
+            billing_mail.send_seat_window_ending(user, sub.seat_window_ends_at, sub.seats_count)
+        ):
+            await billing_repository.add_event(
+                session, subscription_id=sub.id, kind=EVENT_SEAT_WINDOW_REMINDER, payload=match
+            )
+            sent += 1
+        await session.commit()
+    return sent
+
+
 async def _send_limit_warnings(session: AsyncSession, now: datetime) -> int:
     events = await billing_repository.list_unsent_events(session, EVENT_LIMIT_WARNING, limit=BATCH)
     sent = 0
@@ -488,6 +558,7 @@ async def process_due(session: AsyncSession, now: datetime | None = None) -> Cou
         ("expired", _expire_due),
         ("trial_reminders", _remind_trials),
         ("expiry_reminders", _remind_expiring),
+        ("seat_window_reminders", _remind_seat_window),
         ("limit_warnings", _send_limit_warnings),
     ):
         try:

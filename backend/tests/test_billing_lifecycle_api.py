@@ -165,6 +165,7 @@ def paid(**overrides):
         cancel_at_period_end=False,
         limit_overrides=None,
         seats_count=1,
+        seat_window_ends_at=None,
     )
     data.update(overrides)
     return SimpleNamespace(**data)

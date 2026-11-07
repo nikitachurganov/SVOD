@@ -69,6 +69,13 @@ class MeterCase(unittest.IsolatedAsyncioTestCase):
         self.get_usage = patch.object(repo, "get_usage", AsyncMock(return_value={})).start()
         self.spent = patch.object(repo, "sum_ai_cost_usd", AsyncMock(return_value=Decimal(0))).start()
         self.warn = patch.object(ai_meter.lifecycle, "warn_if_near_limit", AsyncMock()).start()
+        # No extra packs unless a test says so
+        self.pack_left = patch.object(
+            ai_meter.token_grant_repository, "remaining", AsyncMock(return_value=0)
+        ).start()
+        self.pack_spent = patch.object(
+            ai_meter.token_grant_repository, "consume", AsyncMock(return_value=0)
+        ).start()
         self.entitlements = patch.object(
             ai_meter.billing_service, "get_entitlements", AsyncMock(return_value=ent())
         ).start()
@@ -178,6 +185,8 @@ class AllowanceTests(MeterCase):
                 "upgrade_to": "researcher",
                 # The free allowance is never renewed
                 "resets_at": None,
+                # The person acts for their own account, not for a team pool
+                "team_member": False,
             },
         )
         self.assertEqual(ran, [])

@@ -30,6 +30,38 @@ export interface PlansResponse {
   pack: PlanInfo;
   pack_price_kopecks: number;
   pack_days: number;
+  /** True: the Researcher plan is sold by seats and `limits` are per seat; false: one price per person */
+  seat_pricing_enabled: boolean;
+  max_seats: number;
+  /** The extra pack of Токены+ on top of a running plan */
+  addon_price_kopecks: number;
+  addon_tokens: number;
+  addon_days: number;
+}
+
+export type QuoteTerm = 'month' | 'year';
+
+export interface QuoteLine {
+  /** creator, kit or other */
+  kind: 'creator' | 'kit' | 'other' | (string & {});
+  kopecks: number;
+}
+
+export interface QuoteResponse {
+  term: QuoteTerm;
+  seats: number;
+  lines: QuoteLine[];
+  subtotal_kopecks: number;
+  total_kopecks: number;
+  /** What a year saves against twelve months */
+  year_saving_kopecks: number;
+}
+
+/** What extra seats cost for the rest of the paid period */
+export interface SeatAdditionQuote {
+  seats: number;
+  amount_kopecks: number;
+  days_left: number;
 }
 
 export interface UsageMetric {
@@ -46,6 +78,8 @@ export interface SubscriptionUsage {
   projects: UsageMetric;
   /** Responses received beyond the quota and kept back until the plan grows */
   locked_responses: number;
+  /** Токены+ left in the extra packs bought on top of the quota */
+  ai_extra_tokens: number;
 }
 
 export type PlanRequestTerm = 'month' | 'year' | 'one_off';
@@ -76,6 +110,11 @@ export interface SubscriptionInfo {
   deletion_at: string | null;
   usage: SubscriptionUsage;
   plan_request: PlanRequestInfo | null;
+  /** Paid seats of the team */
+  seats: number;
+  /** The 7 days after the first payment when seats are added at the kit price; null outside it */
+  seat_window_ends_at: string | null;
+  seat_window_days_left: number;
 }
 
 export interface CheckoutResponse {

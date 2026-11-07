@@ -8,6 +8,7 @@ from app.models.usage_counter import UsageCounter
 from app.models.ai_usage_log import AIUsageLog
 from app.models.plan_request import PlanRequest
 from app.models.payment import Payment
+from app.models.token_grant import TokenGrant
 from app.models.form import Form
 from app.models.request import Request
 from app.models.form_file import FormFile

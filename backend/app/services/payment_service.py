@@ -23,6 +23,9 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants.billing_plans import (
+    ADDON_DAYS,
+    ADDON_PRICE_KOPECKS,
+    ADDON_TOKENS,
     INTERVAL_MONTH,
     INTERVAL_ONE_OFF,
     INTERVAL_YEAR,
@@ -47,11 +50,13 @@ from app.models.payment import (
 )
 from app.models.plan_request import PLAN_REQUEST_APPROVED
 from app.models.subscription import Subscription
+from app.models.token_grant import GRANT_ADDON, TokenGrant
 from app.models.user import User
 from app.repositories import (
     billing_repository,
     payment_repository,
     plan_request_repository,
+    token_grant_repository,
     user_repository,
 )
 from app.services import billing_mail, billing_service, pricing, seat_window, yookassa_client
@@ -59,6 +64,12 @@ from app.services import subscription_lifecycle_service as lifecycle
 from app.services.plan_request_service import DAYS_BY_INTERVAL
 
 logger = logging.getLogger(__name__)
+
+# The term of a payment that only adds seats to the running period (it extends nothing)
+TERM_SEATS_ADD = "seats_add"
+# The extra pack of Токены+: it is its own kind of payment and has no plan of its own
+TERM_ADDON = "addon"
+PLAN_CODE_ADDON = "addon"
 
 EVENT_PAYMENT_SUCCEEDED = "payment_succeeded"
 EVENT_PAYMENT_CANCELED = "payment_canceled"
@@ -185,6 +196,122 @@ async def create_checkout(
                 "У вас уже действует тариф «Исследователь»",
             )
 
+    description = f"Тариф «{plan.title}»: {_TERM_TITLES[term]}" + (f", мест: {seats}" if seats > 1 else "")
+    return await _open_payment(session, user, plan.code, term, days, seats, amount, description, now)
+
+
+@dataclass(frozen=True)
+class SeatAdditionQuote:
+    """What more seats cost in the middle of the period: the sum and the days it is counted for."""
+
+    seats: int
+    amount_kopecks: int
+    days_left: int
+
+
+async def quote_seat_addition(
+    session: AsyncSession, user: User, seats: int, now: datetime | None = None
+) -> SeatAdditionQuote:
+    """The price of a team of ``seats`` seats for the rest of the paid period (nothing is stored).
+
+    The same numbers the payment is made for: ``create_seat_addition`` takes its amount from here.
+    """
+    if not settings.SEAT_PRICING_ENABLED:
+        raise _error(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, "seats_unavailable", "Оплата по местам пока недоступна"
+        )
+    now = now or _now()
+    sub = await lifecycle.active_paid_subscription(session, user.id, now)
+    if sub is None or sub.plan_code != PLAN_RESEARCHER:
+        raise _error(
+            status.HTTP_409_CONFLICT, "no_active_subscription", "Места добавляются к тарифу «Исследователь»"
+        )
+    if sub.billing_interval not in (INTERVAL_MONTH, INTERVAL_YEAR):
+        # Given by hand for a term in days: there is no price list for it, an operator sets it
+        raise _error(
+            status.HTTP_409_CONFLICT, "seats_by_request", "Для этого тарифа места добавляет поддержка"
+        )
+    if not sub.seats_count < seats <= pricing.MAX_SELF_SERVICE_SEATS:
+        raise _error(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "invalid_seats",
+            f"Число мест — больше {sub.seats_count} и не больше {pricing.MAX_SELF_SERVICE_SEATS}",
+        )
+    period_days = DAYS_BY_INTERVAL[sub.billing_interval]
+    # A started day is paid as a whole day; a period paid ahead is charged for one nominal period only
+    days_left = min(period_days, max(1, -((now - sub.current_period_end) // timedelta(days=1))))
+    kit_extra = seat_window.kit_extra_for(sub, now)
+    amount = pricing.seat_addition(
+        sub.seats_count,
+        seats,
+        sub.billing_interval,
+        days_left=days_left,
+        period_days=period_days,
+        kit_extra_now=kit_extra,
+        kit_extra_after=kit_extra,
+    )
+    if amount <= 0:
+        raise _error(status.HTTP_409_CONFLICT, "nothing_to_pay", "Доплата не нужна")
+    return SeatAdditionQuote(seats=seats, amount_kopecks=amount, days_left=days_left)
+
+
+async def create_seat_addition(
+    session: AsyncSession, user: User, seats: int, now: datetime | None = None
+) -> Payment:
+    """Pay for more seats in the middle of a period: the price of the new seats for the days that are
+    left. The period itself does not change; the seats appear when the payment is settled."""
+    if not settings.payments_enabled:
+        raise _error(status.HTTP_409_CONFLICT, "payments_disabled", "Онлайн-оплата пока не подключена")
+    now = now or _now()
+    quote = await quote_seat_addition(session, user, seats, now)
+    plan = get_plan(PLAN_RESEARCHER)
+    description = f"Тариф «{plan.title}»: места до {seats}, дней в периоде: {quote.days_left}"
+    return await _open_payment(
+        session, user, plan.code, TERM_SEATS_ADD, quote.days_left, seats, quote.amount_kopecks, description, now
+    )
+
+
+async def create_addon(session: AsyncSession, user: User, now: datetime | None = None) -> Payment:
+    """Buy the extra pack of Токены+: 1 million for 300 ₽, valid 90 days, only on top of a running
+    subscription or pack. The tokens appear when the payment is settled."""
+    if not settings.payments_enabled:
+        raise _error(status.HTTP_409_CONFLICT, "payments_disabled", "Онлайн-оплата пока не подключена")
+    if not settings.SEAT_PRICING_ENABLED:
+        raise _error(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, "addon_unavailable", "Дополнительные пакеты пока недоступны"
+        )
+    now = now or _now()
+    if await lifecycle.active_paid_subscription(session, user.id, now) is None:
+        raise _error(
+            status.HTTP_409_CONFLICT,
+            "no_active_subscription",
+            "Пакет докупается к действующему тарифу или пакету «Исследование»",
+        )
+    return await _open_payment(
+        session,
+        user,
+        PLAN_CODE_ADDON,
+        TERM_ADDON,
+        ADDON_DAYS,
+        1,
+        ADDON_PRICE_KOPECKS,
+        "Дополнительный пакет: 1 000 000 Токенов+, 90 дней",
+        now,
+    )
+
+
+async def _open_payment(
+    session: AsyncSession,
+    user: User,
+    plan_code: str,
+    term: str,
+    days: int,
+    seats: int,
+    amount: int,
+    description: str,
+    now: datetime,
+) -> Payment:
+    """Store the payment, then create it at the provider; a second click returns the same page."""
     existing = await payment_repository.find_open_checkout(
         session, user.id, term, seats=seats, since=now - REUSE_CHECKOUT_FOR
     )
@@ -198,7 +325,7 @@ async def create_checkout(
             payer_email=user.email,
             provider=PROVIDER_YOOKASSA,
             idempotence_key=yookassa_client.new_idempotence_key(),
-            plan_code=plan.code,
+            plan_code=plan_code,
             term=term,
             days=days,
             seats=seats,
@@ -214,8 +341,7 @@ async def create_checkout(
         created = await yookassa_client.create_payment(
             idempotence_key=payment.idempotence_key,
             amount_kopecks=amount,
-            description=f"Тариф «{plan.title}»: {_TERM_TITLES[term]}"
-            + (f", мест: {seats}" if seats > 1 else ""),
+            description=description,
             return_url=_return_url(payment.id),
             metadata={"payment_id": str(payment.id), "user_id": str(user.id)},
         )
@@ -303,17 +429,51 @@ async def _apply(
                 logger.error("Payment %s succeeded but its account no longer exists", payment.id)
                 PAYMENTS.labels("succeeded").inc()
                 return Settlement(OUTCOME_UNCHANGED, payment, None)
-            try:
-                sub = await lifecycle.grant(
+            if payment.term == TERM_ADDON:
+                # Nothing of the subscription changes: a block of Токенов+ with its own expiry
+                await token_grant_repository.add(
+                    session,
+                    TokenGrant(
+                        user_id=user.id,
+                        kind=GRANT_ADDON,
+                        amount=ADDON_TOKENS,
+                        expires_at=now + timedelta(days=ADDON_DAYS),
+                        payment_id=payment.id,
+                        created_at=now,
+                    ),
+                )
+                payment.applied_at = now
+                await _journal(
                     session,
                     user.id,
-                    payment.plan_code,
-                    days=payment.days,
-                    interval=payment.term,
-                    seats=payment.seats if payment.plan_code == PLAN_RESEARCHER else None,
-                    note=f"Оплата {payment.id}",
-                    now=now,
+                    EVENT_PAYMENT_SUCCEEDED,
+                    {
+                        "payment_id": str(payment.id),
+                        "amount_kopecks": payment.amount_kopecks,
+                        "term": payment.term,
+                        "days": payment.days,
+                        "test": payment.is_test,
+                    },
+                    now,
                 )
+                PAYMENTS.labels("succeeded").inc()
+                return Settlement(OUTCOME_APPLIED, payment, user)
+            try:
+                if payment.term == TERM_SEATS_ADD:
+                    sub = await lifecycle.add_seats(
+                        session, user.id, payment.seats, note=f"Оплата {payment.id}", now=now
+                    )
+                else:
+                    sub = await lifecycle.grant(
+                        session,
+                        user.id,
+                        payment.plan_code,
+                        days=payment.days,
+                        interval=payment.term,
+                        seats=payment.seats if payment.plan_code == PLAN_RESEARCHER else None,
+                        note=f"Оплата {payment.id}",
+                        now=now,
+                    )
             except ValueError as exc:
                 # Paid, but the plan cannot be given (e.g. a pack bought while a subscription
                 # started in the meantime): the money has to go back by hand
@@ -342,6 +502,9 @@ async def _apply(
         if provider.refunded_kopecks > payment.refunded_kopecks:
             payment.refunded_kopecks = provider.refunded_kopecks
             payment.refunded_at = now
+            if payment.term == TERM_ADDON and payment.refunded_kopecks >= payment.amount_kopecks:
+                # The money is back, so is the pack (what was spent from it stays spent)
+                await token_grant_repository.revoke_for_payment(session, payment.id, now)
             await _journal(
                 session,
                 payment.user_id,

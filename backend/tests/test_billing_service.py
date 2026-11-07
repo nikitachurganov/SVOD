@@ -29,6 +29,7 @@ def sub(**overrides):
         cancel_at_period_end=False,
         limit_overrides=None,
         seats_count=1,
+        seat_window_ends_at=None,
     )
     data.update(overrides)
     return SimpleNamespace(**data)
@@ -301,6 +302,9 @@ class SubscriptionSummaryTests(unittest.IsolatedAsyncioTestCase):
         ).start()
         self.locked = patch.object(
             survey_repo, "count_locked_for_owner", AsyncMock(return_value=0)
+        ).start()
+        patch.object(
+            service.token_grant_repository, "remaining", AsyncMock(return_value=0)
         ).start()
         return patch.object(
             service.billing_repository, "get_usage", AsyncMock(return_value={"ai_tokens": 4})

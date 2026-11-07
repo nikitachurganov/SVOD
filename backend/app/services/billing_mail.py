@@ -84,6 +84,22 @@ async def send_plan_ending(user: Any, plan_title: str, ends_at: datetime) -> boo
     )
 
 
+async def send_seat_window_ending(user: Any, ends_at: datetime, seats: int) -> bool:
+    return await email_service.send_notice(
+        to=user.email,
+        first_name=user.first_name,
+        subject="Окно 7 дней заканчивается — СВОД",
+        paragraphs=[
+            f"В вашей команде сейчас мест: {seats}. До {_date(ends_at)} включительно второе и третье "
+            "места можно добавить по цене комплекта: 300 ₽ в месяц за каждое.",
+            "После этой даты место комплекта, которое вы не заняли, станет обычным: "
+            "каждое новое место будет стоить 420 ₽ в месяц.",
+        ],
+        action_label="Добавить места",
+        action_url=_subscription_url(),
+    )
+
+
 async def send_plan_ended(user: Any, plan_title: str, closed_surveys: int = 0) -> bool:
     return await email_service.send_notice(
         to=user.email,

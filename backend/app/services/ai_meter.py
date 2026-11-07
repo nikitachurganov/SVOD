@@ -33,7 +33,7 @@ from app.core.config import settings
 from app.core.database import async_session_factory
 from app.core.metrics import AI_ACTIONS, AI_COST_USD, AI_TOKENS, BILLING_LIMIT_HIT
 from app.models.user import User
-from app.repositories import billing_repository
+from app.repositories import billing_repository, token_grant_repository
 from app.services import ai_pool, ai_usage, billing_service
 from app.services import subscription_lifecycle_service as lifecycle
 
@@ -112,14 +112,28 @@ async def _reserve(user: User, organization_id: uuid.UUID | None) -> _Reservatio
 
         counters = await billing_repository.get_usage(session, payer.user_id, ent.ai_window_start)
         used = counters.get(METRIC_AI_TOKENS, 0)
-        _check_limit(ent, LIMIT_AI_TOKENS, used, limit)
+        # Once the quota of the period is used up, the packs bought on top of it are spent
+        if used < limit or await token_grant_repository.remaining(
+            session, payer.user_id, datetime.now(timezone.utc)
+        ) <= 0:
+            _check_limit(
+                ent,
+                LIMIT_AI_TOKENS,
+                used,
+                limit,
+                team_member=payer.pooled and payer.user_id != user.id,
+            )
 
         if payer.cap is not None:
             member_counters = await billing_repository.get_usage(
                 session, payer.cap.user_id, ent.ai_window_start
             )
             _check_limit(
-                ent, LIMIT_AI_MEMBER, member_counters.get(payer.cap.metric, 0), payer.cap.limit
+                ent,
+                LIMIT_AI_MEMBER,
+                member_counters.get(payer.cap.metric, 0),
+                payer.cap.limit,
+                team_member=True,
             )
         # The row of the subscription may have just been created
         await session.commit()
@@ -128,14 +142,26 @@ async def _reserve(user: User, organization_id: uuid.UUID | None) -> _Reservatio
         )
 
 
-def _check_limit(ent: billing_service.Entitlements, limit_name: str, used: int, limit: int) -> None:
-    """Count a used-up allowance, and refuse the action when the limits are enforced."""
+def _check_limit(
+    ent: billing_service.Entitlements,
+    limit_name: str,
+    used: int,
+    limit: int,
+    *,
+    team_member: bool = False,
+) -> None:
+    """Count a used-up allowance, and refuse the action when the limits are enforced.
+
+    ``team_member`` is True when the pool that ran out belongs to the owner of the team and the person
+    who acts is somebody else: the window then asks them to turn to the owner, not to pay.
+    """
     if used < limit:
         return
     enforced = settings.BILLING_ENFORCE
     BILLING_LIMIT_HIT.labels(limit_name, ent.plan.code, _flag(enforced)).inc()
     if enforced:
         error = billing_service.limit_reached_error(ent, limit_name, used, limit)
+        error.detail["team_member"] = team_member
         # The free allowance is never renewed: there is no date to wait for
         error.detail["resets_at"] = ent.ai_window_end.isoformat() if ent.ai_window_end else None
         raise error
@@ -178,6 +204,12 @@ async def _settle(
                 total = await billing_repository.add_usage(
                     session, payer.user_id, METRIC_AI_TOKENS, reservation.window_start, charged
                 )
+                # The part of this action above the quota of the period comes out of the packs
+                over_quota = total - max(reservation.limit, total - charged)
+                if over_quota > 0:
+                    await token_grant_repository.consume(
+                        session, payer.user_id, over_quota, datetime.now(timezone.utc)
+                    )
                 if payer.cap is not None:
                     await billing_repository.add_usage(
                         session, payer.cap.user_id, payer.cap.metric, reservation.window_start, charged

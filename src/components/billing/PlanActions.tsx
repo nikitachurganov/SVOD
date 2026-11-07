@@ -13,13 +13,22 @@ interface Props {
   extendLabel?: string;
   /** What is bought: the subscription, or the one-off pack (no trial, its own labels) */
   offer?: 'researcher' | 'pack';
+  /** The team size chosen on the plans page; the checkout window opens with it (seat pricing only) */
+  seats?: number;
+  /** The term chosen there */
+  term?: 'month' | 'year';
 }
 
 /**
  * How a person gets the paid plan: a free trial once, then a request that an administrator
  * activates after the payment. Shared by the subscription tab and the plans page.
  */
-export const PlanActions = ({ extendLabel = 'Запросить продление', offer = 'researcher' }: Props) => {
+export const PlanActions = ({
+  extendLabel = 'Запросить продление',
+  offer = 'researcher',
+  seats,
+  term: chosenTerm,
+}: Props) => {
   const { subscription, refresh, replace } = useSubscription();
   const { notifySuccess, notifyError } = useNotifications();
   const [requestOpen, setRequestOpen] = useState(false);
@@ -54,7 +63,7 @@ export const PlanActions = ({ extendLabel = 'Запросить продлени
     subscription.plan.code === 'researcher' &&
     subscription.status === 'active' &&
     !subscription.trial_ends_at;
-  const term = forPack ? 'one_off' : 'month';
+  const term = forPack ? 'one_off' : (chosenTerm ?? 'month');
 
   if (packBlocked) {
     return (
@@ -122,7 +131,12 @@ export const PlanActions = ({ extendLabel = 'Запросить продлени
           Мы получили вашу заявку и свяжемся с вами по указанному контакту. Тариф включится после оплаты.
         </p>
       ) : null}
-      <CheckoutModal open={checkoutOpen} onClose={() => setCheckoutOpen(false)} initialTerm={term} />
+      <CheckoutModal
+        open={checkoutOpen}
+        onClose={() => setCheckoutOpen(false)}
+        initialTerm={term}
+        initialSeats={seats}
+      />
       <PlanRequestModal
         open={requestOpen}
         initialTerm={term}

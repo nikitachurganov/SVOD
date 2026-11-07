@@ -447,3 +447,47 @@
     flex: 1 1 auto;
   }
 }
+
+/* The seat configurator on the plans page and in the checkout window */
+.seat-config {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin-top: 8px;
+}
+
+.seat-config__label {
+  font-size: 13px;
+  color: var(--app-text-secondary);
+}
+
+.seat-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.seat-stepper__value {
+  min-width: 20px;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--app-text);
+}
+
+.seat-quote-lines {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--app-text-secondary);
+}
+
+.seat-quote-lines li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}

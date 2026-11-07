@@ -163,6 +163,38 @@ PLANS: Mapping[str, Plan] = MappingProxyType(
 )
 
 
+# The seat model of docs/TARIFFS_FINAL.md §3 and §5, in force while SEAT_PRICING_ENABLED is on:
+# 2 million Токенов+ a month for every seat, 1 million in the pack, and a token of the base model
+# counts as 0.2 of a Токен+. The trial gives one seat's quota for its 14 days of the 30.
+
+# The extra pack on top of a running subscription or pack: 1 million Токенов+ for 300 ₽, 90 days
+ADDON_PRICE_KOPECKS = 30_000
+ADDON_TOKENS = 1_000_000
+ADDON_DAYS = 90
+
+SEAT_AI_TOKENS = 2_000_000
+SEAT_MODEL_PACK_AI_TOKENS = 1_000_000
+SEAT_MODEL_BASE_WEIGHT = 0.2
+TRIAL_QUOTA_DAYS = 14
+
+
+def seat_model_plan(plan: Plan, seats: int = 1, *, trialing: bool = False) -> Plan:
+    """The plan with the quota of the seat model; the free plan and the stand-in are left as they are."""
+    if plan.code == PLAN_RESEARCHER:
+        if trialing:
+            quota = SEAT_AI_TOKENS * TRIAL_QUOTA_DAYS // PERIOD_DAYS
+        else:
+            quota = SEAT_AI_TOKENS * max(1, seats)
+        return replace(plan, ai_tokens_per_period=quota, base_model_weight=SEAT_MODEL_BASE_WEIGHT)
+    if plan.code == PLAN_PACK:
+        return replace(
+            plan,
+            ai_tokens_per_period=SEAT_MODEL_PACK_AI_TOKENS,
+            base_model_weight=SEAT_MODEL_BASE_WEIGHT,
+        )
+    return plan
+
+
 def get_plan(code: str | None) -> Plan:
     """Unknown or missing code falls back to the free plan (the safe failure)."""
     return PLANS.get(code or "", START)

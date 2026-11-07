@@ -6,6 +6,9 @@ import type {
   PlanRequestPayload,
   PlanRequestTerm,
   PlansResponse,
+  QuoteResponse,
+  QuoteTerm,
+  SeatAdditionQuote,
   SubscriptionInfo,
 } from '../../types/billing';
 
@@ -46,8 +49,38 @@ export const resumeSubscription = async (): Promise<SubscriptionInfo> => {
 };
 
 /** Starts an online payment; the answer is the provider's page to send the person to */
-export const createCheckout = async (term: PlanRequestTerm): Promise<CheckoutResponse> => {
-  const { data } = await api.post<CheckoutResponse>('/billing/checkout', { term });
+export const createCheckout = async (
+  term: PlanRequestTerm,
+  seats?: number,
+): Promise<CheckoutResponse> => {
+  const { data } = await api.post<CheckoutResponse>(
+    '/billing/checkout',
+    seats && seats > 1 ? { term, seats } : { term },
+  );
+  return data;
+};
+
+/** The price of a team for a month or a year, from the same calculator as the payment */
+export const getQuote = async (term: QuoteTerm, seats: number): Promise<QuoteResponse> => {
+  const { data } = await api.get<QuoteResponse>('/billing/quote', { params: { term, seats } });
+  return data;
+};
+
+/** What the extra seats cost now; the same sum the payment is made for */
+export const getSeatAdditionQuote = async (seats: number): Promise<SeatAdditionQuote> => {
+  const { data } = await api.get<SeatAdditionQuote>('/billing/seats/quote', { params: { seats } });
+  return data;
+};
+
+/** Pays for more seats in the middle of the period; `seats` is how many the team has afterwards */
+export const addSeats = async (seats: number): Promise<CheckoutResponse> => {
+  const { data } = await api.post<CheckoutResponse>('/billing/seats', { seats });
+  return data;
+};
+
+/** Buys the extra pack of Токены+ on top of a running plan */
+export const buyAddon = async (): Promise<CheckoutResponse> => {
+  const { data } = await api.post<CheckoutResponse>('/billing/addon');
   return data;
 };
 
@@ -89,6 +122,18 @@ export const billingActionError = (err: unknown, fallback: string): string => {
         return 'Тарифы пока не включены.';
       case 'payments_disabled':
         return 'Онлайн-оплата пока не подключена. Оставьте заявку, и мы выставим счёт.';
+      case 'seats_unavailable':
+        return 'Покупка мест пока недоступна.';
+      case 'invalid_seats':
+        return 'Выберите от 2 до 10 мест. Для большей команды напишите нам.';
+      case 'no_active_subscription':
+        return 'Сначала подключите платный тариф: места добавляются к действующей подписке.';
+      case 'seats_by_request':
+        return 'Для этой подписки места добавляются по заявке: напишите нам.';
+      case 'nothing_to_pay':
+        return 'Сейчас доплачивать нечего: подписка уже оплачена за нужное число мест.';
+      case 'addon_unavailable':
+        return 'Дополнительный пакет пока недоступен.';
       case 'payment_provider_unavailable':
       case 'payment_provider_rejected':
         return 'Не удалось создать платёж. Попробуйте позже или оставьте заявку.';

@@ -1,7 +1,7 @@
 import logging
 import uuid
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request, status
 
 from app.api.deps import CurrentUser, DbSession
 from app.core.client_ip import client_ip
@@ -15,6 +15,9 @@ from app.schemas.billing import (
     PlanRequestCreate,
     PlanRequestInfo,
     PlansResponse,
+    QuoteResponse,
+    SeatAdditionQuoteResponse,
+    SeatsRequest,
     SubscriptionResponse,
 )
 from app.services import billing_service, payment_service, plan_request_service, yookassa_client
@@ -39,6 +42,25 @@ async def get_plans() -> PlansResponse:
     return billing_service.build_plans_response()
 
 
+@router.get("/quote", response_model=QuoteResponse)
+async def get_quote(
+    term: str = Query(default="month", pattern="^(month|year)$"),
+    seats: int = Query(default=1, ge=1, le=100),
+) -> QuoteResponse:
+    """The price of a team of ``seats`` seats for a month or a year, for the price page and the cart.
+    Public like the plans; the price of a first purchase (both kit places at 300 ₽)."""
+    if not settings.SEAT_PRICING_ENABLED:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail={"code": "seats_unavailable"}
+        )
+    try:
+        return billing_service.build_quote_response(term, seats)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail={"code": "invalid_seats"}
+        ) from exc
+
+
 @router.get("/subscription", response_model=SubscriptionResponse)
 async def get_subscription(session: DbSession, user: CurrentUser) -> SubscriptionResponse:
     return await billing_service.get_subscription_summary(session, user)
@@ -51,6 +73,42 @@ async def create_checkout(
     """Start paying for the paid plan online: the answer is the payment page to send the person to."""
     _require_billing()
     payment = await payment_service.create_checkout(session, user, payload.term, seats=payload.seats)
+    if not payment.confirmation_url:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY, detail={"code": "payment_provider_rejected"}
+        )
+    return CheckoutResponse(payment_id=payment.id, confirmation_url=payment.confirmation_url)
+
+
+@router.get("/seats/quote", response_model=SeatAdditionQuoteResponse)
+async def quote_seats(
+    session: DbSession, user: CurrentUser, seats: int = Query(ge=2, le=100)
+) -> SeatAdditionQuoteResponse:
+    """The sum of adding seats now, to show before the person goes to pay; nothing is created."""
+    _require_billing()
+    quote = await payment_service.quote_seat_addition(session, user, seats)
+    return SeatAdditionQuoteResponse(
+        seats=quote.seats, amount_kopecks=quote.amount_kopecks, days_left=quote.days_left
+    )
+
+
+@router.post("/seats", response_model=CheckoutResponse)
+async def add_seats(payload: SeatsRequest, session: DbSession, user: CurrentUser) -> CheckoutResponse:
+    """Pay for more seats in the middle of the period: the answer is the payment page."""
+    _require_billing()
+    payment = await payment_service.create_seat_addition(session, user, payload.seats)
+    if not payment.confirmation_url:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY, detail={"code": "payment_provider_rejected"}
+        )
+    return CheckoutResponse(payment_id=payment.id, confirmation_url=payment.confirmation_url)
+
+
+@router.post("/addon", response_model=CheckoutResponse)
+async def buy_addon(session: DbSession, user: CurrentUser) -> CheckoutResponse:
+    """Buy the extra pack of Токены+ (1 million, 90 days): the answer is the payment page."""
+    _require_billing()
+    payment = await payment_service.create_addon(session, user)
     if not payment.confirmation_url:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY, detail={"code": "payment_provider_rejected"}

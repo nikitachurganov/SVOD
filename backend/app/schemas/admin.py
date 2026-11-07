@@ -59,6 +59,11 @@ class AdminSubscription(BaseModel):
     limit_overrides: dict[str, int] | None
     # The limits that apply now (the plan with the overrides)
     limits: AdminLimits
+    # Seats of the team and the 7-day window after the first payment (docs/TARIFFS_FINAL.md §4.3)
+    seats: int = 1
+    kit_extra_seats: int = 2
+    first_paid_at: datetime | None = None
+    seat_window_ends_at: datetime | None = None
 
 
 class AdminUsage(BaseModel):
@@ -67,6 +72,8 @@ class AdminUsage(BaseModel):
     active_surveys: UsageMetric
     projects: UsageMetric
     locked_responses: int
+    # Токены+ left in the extra packs and bonuses
+    ai_extra_tokens: int = 0
     # Real AI spending of the last 30 days, in dollars
     ai_cost_usd_30d: float
 
@@ -152,6 +159,21 @@ class AdminGrantRequest(BaseModel):
     until: datetime | None = None
     note: str | None = Field(default=None, max_length=500)
     limit_overrides: dict[str, int] | None = None
+    # Seats of the team to record (the Researcher plan); empty leaves them as they are
+    seats: int | None = Field(default=None, ge=1, le=100)
+
+    @field_validator("note")
+    @classmethod
+    def _strip_note(cls, value: str | None) -> str | None:
+        return value.strip() or None if value else None
+
+
+class AdminTokenPackRequest(BaseModel):
+    """Give a block of Токены+ with its own expiry: a compensation, a gift, a paid-by-invoice pack."""
+
+    tokens: int = Field(ge=1, le=50_000_000)
+    days: int = Field(default=90, ge=1, le=365)
+    note: str | None = Field(default=None, max_length=500)
 
     @field_validator("note")
     @classmethod

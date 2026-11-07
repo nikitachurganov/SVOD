@@ -8,6 +8,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants.billing_plans import (
+    PLAN_RESEARCHER,
     PLAN_START,
     STATUS_ACTIVE,
     STATUS_PAST_DUE,
@@ -254,6 +255,27 @@ async def list_ending_plans(
         Subscription.status == STATUS_ACTIVE,
         Subscription.current_period_end > now,
         Subscription.current_period_end <= until,
+    )
+    result = await session.execute(_worker_page(stmt, after_id, limit))
+    return list(result.scalars().all())
+
+
+async def list_ending_seat_windows(
+    session: AsyncSession,
+    now: datetime,
+    until: datetime,
+    *,
+    after_id: uuid.UUID | None = None,
+    limit: int = 1,
+) -> list[Subscription]:
+    """Paid teams that left a kit place empty and whose 7-day window after the first payment ends soon."""
+    stmt = select(Subscription).where(
+        Subscription.plan_code == PLAN_RESEARCHER,
+        Subscription.status == STATUS_ACTIVE,
+        Subscription.seat_window_ends_at.is_not(None),
+        Subscription.seat_window_ends_at > now,
+        Subscription.seat_window_ends_at <= until,
+        Subscription.seats_count < 3,
     )
     result = await session.execute(_worker_page(stmt, after_id, limit))
     return list(result.scalars().all())

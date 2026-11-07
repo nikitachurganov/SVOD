@@ -16,6 +16,7 @@ from app.schemas.admin import (
     AdminPlanRequest,
     AdminPlanRequestList,
     AdminRejectRequest,
+    AdminTokenPackRequest,
     AdminStats,
     AdminUserDetail,
     AdminUserList,
@@ -74,6 +75,16 @@ async def grant_subscription(
     user_id: uuid.UUID, payload: AdminGrantRequest, session: DbSession, admin: AdminUser
 ) -> AdminUserDetail:
     await admin_service.grant_plan(session, admin, user_id, payload)
+    await session.commit()
+    return await admin_service.get_user_detail(session, user_id)
+
+
+@router.post("/users/{user_id}/token-pack", response_model=AdminUserDetail)
+async def grant_token_pack(
+    user_id: uuid.UUID, payload: AdminTokenPackRequest, session: DbSession, admin: AdminUser
+) -> AdminUserDetail:
+    """A block of Токены+ with its own expiry, given by hand."""
+    await admin_service.grant_token_pack(session, admin, user_id, payload)
     await session.commit()
     return await admin_service.get_user_detail(session, user_id)
 

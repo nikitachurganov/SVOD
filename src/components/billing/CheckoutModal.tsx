@@ -4,6 +4,8 @@ import { useNotifications } from '../../shared/context/notifications.context';
 import { billingActionError, createCheckout, getPlans } from '../../shared/api/billing.api';
 import { useSubscription } from '../../shared/hooks/subscription.hooks';
 import type { PlanRequestTerm, PlansResponse } from '../../types/billing';
+import { SeatStepper } from './SeatConfigurator';
+import { DEFAULT_SEATS, SEAT_PRICE_RULE, seatsWord, useQuote } from './seatPricing';
 import { formatCreditsWithWord, formatPrice } from './billingFormat';
 
 interface Props {
@@ -11,6 +13,8 @@ interface Props {
   onClose: () => void;
   /** The term chosen when the window opens */
   initialTerm?: PlanRequestTerm;
+  /** The team size chosen when the window opens (only while the plan is sold by seats) */
+  initialSeats?: number;
 }
 
 type ConsentKey = 'offer' | 'privacy' | 'personalData';
@@ -29,9 +33,15 @@ const CONSENTS: { key: ConsentKey; before: string; link: string; to: string }[] 
 const NOTHING_ACCEPTED: Record<ConsentKey, boolean> = { offer: false, privacy: false, personalData: false };
 
 /** Choosing the term and going to the payment page; the plan is switched on when the payment is settled */
-export const CheckoutModal = ({ open, onClose, initialTerm = 'month' }: Props) => {
+export const CheckoutModal = ({
+  open,
+  onClose,
+  initialTerm = 'month',
+  initialSeats = DEFAULT_SEATS,
+}: Props) => {
   const [plans, setPlans] = useState<PlansResponse | null>(null);
   const [term, setTerm] = useState<PlanRequestTerm>('month');
+  const [seats, setSeats] = useState(initialSeats);
   const { notifyInfo } = useNotifications();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,6 +54,7 @@ export const CheckoutModal = ({ open, onClose, initialTerm = 'month' }: Props) =
     setAccepted(NOTHING_ACCEPTED);
     setError(null);
     setTerm(initialTerm);
+    setSeats(initialSeats);
     let cancelled = false;
     getPlans()
       .then((next) => {
@@ -53,13 +64,29 @@ export const CheckoutModal = ({ open, onClose, initialTerm = 'month' }: Props) =
     return () => {
       cancelled = true;
     };
-  }, [open, initialTerm]);
+  }, [open, initialTerm, initialSeats]);
 
   const { subscription } = useSubscription();
   const researcher = plans?.plans.find((plan) => plan.code === 'researcher');
+  // While the plan is sold by seats, its limits are per seat and the price comes from the server's calculator
+  const seatMode = Boolean(plans?.seat_pricing_enabled);
+  const monthQuote = useQuote('month', seats, seatMode && open);
+  const yearQuote = useQuote('year', seats, seatMode && open);
+  const teamSeats = seatMode ? seats : 1;
   const researcherTokens = researcher
-    ? `, ${formatCreditsWithWord(researcher.limits.ai_tokens_per_period)} ИИ в месяц`
+    ? `, ${formatCreditsWithWord(researcher.limits.ai_tokens_per_period * teamSeats)} ИИ в месяц`
     : '';
+  const priceOf = (kind: 'month' | 'year'): string => {
+    if (!researcher) return '';
+    if (!seatMode) {
+      return formatPrice(kind === 'month' ? researcher.price_month_kopecks : researcher.price_year_kopecks);
+    }
+    const quote = kind === 'month' ? monthQuote : yearQuote;
+    if (quote.quote) return formatPrice(quote.quote.total_kopecks);
+    return quote.failed ? 'цена недоступна' : '…';
+  };
+  const seatsLabel = seatMode ? `, ${seats} ${seatsWord(seats)}` : '';
+  const renewing = subscription?.plan.code === 'researcher' && subscription.status === 'active';
   // The pack would replace a running subscription that gives far more: the server refuses it too
   const subscribed =
     subscription?.plan.code === 'researcher' && subscription.status === 'active' && !subscription.trial_ends_at;
@@ -73,7 +100,10 @@ export const CheckoutModal = ({ open, onClose, initialTerm = 'month' }: Props) =
     setBusy(true);
     setError(null);
     try {
-      const { confirmation_url: url } = await createCheckout(term);
+      const { confirmation_url: url } = await createCheckout(
+        term,
+        seatMode && term !== 'one_off' ? seats : undefined,
+      );
       if (tab) {
         tab.location.href = url;
         notifyInfo('Оплата открыта в новой вкладке', 'После оплаты тариф включится сразу.');
@@ -107,6 +137,12 @@ export const CheckoutModal = ({ open, onClose, initialTerm = 'month' }: Props) =
         включится сразу.
       </p>
       {error ? <Alert type="error" showIcon title={error} style={{ marginBottom: 16 }} /> : null}
+      {seatMode && plans && term !== 'one_off' ? (
+        <div className="seat-config" style={{ marginTop: 0, marginBottom: 12 }}>
+          <span className="seat-config__label">Мест в команде</span>
+          <SeatStepper value={seats} onChange={setSeats} max={plans.max_seats} disabled={busy} />
+        </div>
+      ) : null}
       <Radio.Group
         value={term}
         onChange={(event) => setTerm(event.target.value as PlanRequestTerm)}
@@ -114,11 +150,11 @@ export const CheckoutModal = ({ open, onClose, initialTerm = 'month' }: Props) =
       >
         <Radio value="month">
           «Исследователь» на месяц
-          {researcher ? ` — ${formatPrice(researcher.price_month_kopecks)}${researcherTokens}` : ''}
+          {researcher ? ` — ${priceOf('month')}${seatsLabel}${researcherTokens}` : ''}
         </Radio>
         <Radio value="year">
           «Исследователь» на год
-          {researcher ? ` — ${formatPrice(researcher.price_year_kopecks)}${researcherTokens}` : ''}
+          {researcher ? ` — ${priceOf('year')}${seatsLabel}${researcherTokens}` : ''}
         </Radio>
         <Radio value="one_off" disabled={subscribed}>
           Разовый доступ «Исследование»
@@ -127,6 +163,12 @@ export const CheckoutModal = ({ open, onClose, initialTerm = 'month' }: Props) =
             : ''}
         </Radio>
       </Radio.Group>
+      {seatMode && term !== 'one_off' ? (
+        <p className="billing-note">
+          {SEAT_PRICE_RULE}
+          {renewing ? ' Для действующей подписки итоговая сумма показана на странице оплаты.' : ''}
+        </p>
+      ) : null}
       <p className="billing-note">
         Подписка не продлевается сама: когда срок подойдёт к концу, мы напомним, и вы оплатите ещё раз. Если
         подписка уже действует, оплаченный срок добавится к ней. Разовый доступ не продлевается: новая

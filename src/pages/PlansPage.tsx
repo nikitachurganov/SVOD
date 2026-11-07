@@ -5,17 +5,26 @@ import type { CollapseProps } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { Link } from 'react-router-dom';
 import { PlanActions } from '../components/billing/PlanActions';
+import { SeatStepper, TermSwitch } from '../components/billing/SeatConfigurator';
+import {
+  DEFAULT_SEATS,
+  SEAT_PRICE_RULE,
+  seatsWord,
+  useQuote,
+  yearSavingText,
+} from '../components/billing/seatPricing';
 import {
   FEATURE_LABELS,
   collectsWithoutLimits,
   formatCredits,
+  formatCreditsWithWord,
   formatPrice,
 } from '../components/billing/billingFormat';
 import { getPlans } from '../shared/api/billing.api';
 import { LEGAL } from '../shared/config/legal';
 import { useAuth } from '../shared/hooks/auth.hooks';
 import { useSubscription } from '../shared/hooks/subscription.hooks';
-import type { PlanInfo, PlansResponse } from '../types/billing';
+import type { PlanInfo, PlansResponse, QuoteTerm } from '../types/billing';
 import '../components/billing/billing.css';
 
 interface Row {
@@ -28,7 +37,13 @@ interface Row {
 
 const yesNo = (value: boolean): string => (value ? 'Да' : 'Нет');
 
-const buildRows = (start: PlanInfo, pack: PlanInfo, researcher: PlanInfo, packDays: number): Row[] => {
+const buildRows = (
+  start: PlanInfo,
+  pack: PlanInfo,
+  researcher: PlanInfo,
+  packDays: number,
+  seatMode: boolean,
+): Row[] => {
   const cells = (pick: (plan: PlanInfo) => string) => ({
     start: pick(start),
     pack: pick(pack),
@@ -39,6 +54,10 @@ const buildRows = (start: PlanInfo, pack: PlanInfo, researcher: PlanInfo, packDa
       key: 'ai_tokens',
       label: 'Кредиты ИИ',
       ...cells((plan) => formatCredits(plan.limits.ai_tokens_per_period)),
+      // With seats the numbers of the plan are per seat, and the seats of a team add up
+      researcher: seatMode
+        ? `${formatCredits(researcher.limits.ai_tokens_per_period)} на каждое место`
+        : formatCredits(researcher.limits.ai_tokens_per_period),
     },
     {
       key: 'ai_window',
@@ -96,6 +115,11 @@ export const PlansPage = () => {
   const { subscription } = useSubscription();
   const [plans, setPlans] = useState<PlansResponse | null>(null);
   const [failed, setFailed] = useState(false);
+  // The configurator of the Researcher card; it exists only while the plan is sold by seats
+  const [seats, setSeats] = useState(DEFAULT_SEATS);
+  const [term, setTerm] = useState<QuoteTerm>('month');
+  const seatMode = plans?.seat_pricing_enabled ?? false;
+  const { quote, failed: quoteFailed } = useQuote(term, seats, seatMode);
 
   useEffect(() => {
     let cancelled = false;
@@ -158,7 +182,7 @@ export const PlansPage = () => {
           <Table<Row>
             rowKey="key"
             columns={columns}
-            dataSource={buildRows(start, pack, researcher, plans.pack_days)}
+            dataSource={buildRows(start, pack, researcher, plans.pack_days, seatMode)}
             pagination={false}
             size="middle"
           />
@@ -288,7 +312,11 @@ export const PlansPage = () => {
           <TokensRow
             amount={pack.limits.ai_tokens_per_period}
             when={`на ${plans.pack_days} дней`}
-            hint="Хватит примерно на 25 полных исследований с глубоким чатом"
+            hint={
+              seatMode
+                ? 'Для одного исследования, без подписки'
+                : 'Хватит примерно на 25 полных исследований с глубоким чатом'
+            }
           />
           <div className="plan-card__cta">
             {user ? (
@@ -319,21 +347,50 @@ export const PlansPage = () => {
             </div>
             <p className="plan-card__tagline">Для тех, кто исследует постоянно</p>
           </div>
-          <div className="plan-card__price">
-            <span className="plan-card__amount">{formatPrice(researcher.price_month_kopecks)}</span>
-            <span className="plan-card__period">в месяц</span>
-            <span className="plan-card__price-note">
-              или {formatPrice(researcher.price_year_kopecks)} в год — на четверть дешевле
-            </span>
-          </div>
-          <TokensRow
-            amount={researcher.limits.ai_tokens_per_period}
-            when="каждый месяц"
-            hint="Около 80 полных исследований в месяц"
-          />
+          {seatMode ? (
+            <div className="plan-card__price">
+              <span className="plan-card__amount">
+                {quote ? formatPrice(quote.total_kopecks) : quoteFailed ? '—' : '…'}
+              </span>
+              <span className="plan-card__period">{term === 'year' ? 'в год' : 'в месяц'}</span>
+              <span className="plan-card__price-note">
+                {quoteFailed
+                  ? 'Не удалось получить цену. Обновите страницу.'
+                  : [yearSavingText(quote), SEAT_PRICE_RULE].filter(Boolean).join('. ')}
+              </span>
+              <div className="seat-config">
+                <span className="seat-config__label">
+                  {seats} {seatsWord(seats)}
+                </span>
+                <SeatStepper value={seats} onChange={setSeats} max={plans.max_seats} />
+                <TermSwitch value={term} onChange={setTerm} />
+              </div>
+            </div>
+          ) : (
+            <div className="plan-card__price">
+              <span className="plan-card__amount">{formatPrice(researcher.price_month_kopecks)}</span>
+              <span className="plan-card__period">в месяц</span>
+              <span className="plan-card__price-note">
+                или {formatPrice(researcher.price_year_kopecks)} в год — на четверть дешевле
+              </span>
+            </div>
+          )}
+          {seatMode ? (
+            <TokensRow
+              amount={researcher.limits.ai_tokens_per_period * seats}
+              when="каждый месяц на всю команду"
+              hint={`По ${formatCreditsWithWord(researcher.limits.ai_tokens_per_period)} на место, общий пул для всех`}
+            />
+          ) : (
+            <TokensRow
+              amount={researcher.limits.ai_tokens_per_period}
+              when="каждый месяц"
+              hint="Около 80 полных исследований в месяц"
+            />
+          )}
           <div className="plan-card__cta">
             {user ? (
-              <PlanActions />
+              <PlanActions seats={seatMode ? seats : undefined} term={seatMode ? term : undefined} />
             ) : (
               <Link to="/auth" state={{ from: '/plans' }}>
                 <Button type="primary" block>
@@ -353,6 +410,15 @@ export const PlansPage = () => {
           </div>
         </article>
       </div>
+
+      {seatMode ? (
+        <p className="billing-note" style={{ margin: 0 }}>
+          Не хватило кредитов? К действующей подписке можно докупить пакет: {formatCreditsWithWord(plans.addon_tokens)}{' '}
+          за {formatPrice(plans.addon_price_kopecks)}, он действует {plans.addon_days} дней. Пакет докупается в разделе
+          «Профиль», вкладка «Подписка». Места можно добавить в любой момент, цена пересчитывается за остаток оплаченного
+          срока.
+        </p>
+      ) : null}
 
       <section className="plans-page__faq">
         <h2 className="plans-page__section-title">Частые вопросы и сравнение тарифов</h2>

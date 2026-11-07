@@ -21,6 +21,9 @@ from app.constants.billing_plans import (
     INTERVAL_NONE,
     METRIC_AI_TOKENS,
     METRIC_RESPONSES,
+    ADDON_DAYS,
+    ADDON_PRICE_KOPECKS,
+    ADDON_TOKENS,
     PACK,
     PACK_DAYS,
     PACK_PRICE_KOPECKS,
@@ -37,21 +40,30 @@ from app.constants.billing_plans import (
     Plan,
     apply_overrides,
     get_plan,
+    seat_model_plan,
 )
 from app.constants.team_roles import SEATS_UNLIMITED
 from app.core.config import settings
 from app.models.subscription import Subscription
 from app.models.user import User
-from app.repositories import billing_repository, plan_request_repository, survey_repository
+from app.repositories import (
+    billing_repository,
+    plan_request_repository,
+    survey_repository,
+    token_grant_repository,
+)
 from app.schemas.billing import (
     PlanInfo,
     PlanLimits,
     PlanRequestInfo,
     PlansResponse,
+    QuoteLine,
+    QuoteResponse,
     SubscriptionResponse,
     SubscriptionUsage,
     UsageMetric,
 )
+from app.services import pricing, seat_window
 
 EVENT_CREATED = "created"
 EVENT_RESPONSES_UNLOCKED = "responses_unlocked"
@@ -79,6 +91,8 @@ class Entitlements:
     ai_window_end: datetime | None
     # Paid places of the team: owner, admins and editors. The free plan and the pack are one person
     seats: int = 1
+    # End of the one-time 7-day window for a kit place after the first payment (None: no window)
+    seat_window_ends_at: datetime | None = None
 
 
 def free_window(anchor: datetime, now: datetime) -> tuple[datetime, datetime]:
@@ -144,7 +158,11 @@ def resolve_entitlements(sub: Subscription, now: datetime, grace_days: int) -> E
     code = effective_plan_code(sub, now, grace_days)
     downgraded = code != stored.code
     plan = get_plan(code)
+    seats = max(1, sub.seats_count or 1) if plan.code == PLAN_RESEARCHER else 1
     if not downgraded:
+        if settings.SEAT_PRICING_ENABLED:
+            # The quota of the seat model comes first, so that an override of the administrator wins
+            plan = seat_model_plan(plan, seats, trialing=sub.status == STATUS_TRIALING)
         # The overrides were granted together with the plan; they go away when it does
         plan = apply_overrides(plan, sub.limit_overrides)
     period_start, period_end = _current_period(sub, stored.code, downgraded, now)
@@ -161,7 +179,8 @@ def resolve_entitlements(sub: Subscription, now: datetime, grace_days: int) -> E
         billing_enabled=True,
         ai_window_start=ai_start,
         ai_window_end=ai_end,
-        seats=max(1, sub.seats_count or 1) if plan.code == PLAN_RESEARCHER else 1,
+        seats=seats,
+        seat_window_ends_at=sub.seat_window_ends_at if plan.code == PLAN_RESEARCHER else None,
     )
 
 
@@ -302,13 +321,35 @@ def plan_info(plan: Plan) -> PlanInfo:
 
 
 def build_plans_response() -> PlansResponse:
+    def shown(plan: Plan) -> Plan:
+        # With the seat model the public numbers are the quota of one seat and of the pack
+        return seat_model_plan(plan) if settings.SEAT_PRICING_ENABLED else plan
+
     return PlansResponse(
         # The one-off pack is not a subscription: it is described by the pack_* fields
-        plans=[plan_info(plan) for plan in PLANS.values() if plan.code != PLAN_PACK],
+        plans=[plan_info(shown(plan)) for plan in PLANS.values() if plan.code != PLAN_PACK],
         payments_enabled=settings.payments_enabled,
-        pack=plan_info(PACK),
+        pack=plan_info(shown(PACK)),
         pack_price_kopecks=PACK_PRICE_KOPECKS,
         pack_days=PACK_DAYS,
+        seat_pricing_enabled=settings.SEAT_PRICING_ENABLED,
+        max_seats=pricing.MAX_SELF_SERVICE_SEATS,
+        addon_price_kopecks=ADDON_PRICE_KOPECKS,
+        addon_tokens=ADDON_TOKENS,
+        addon_days=ADDON_DAYS,
+    )
+
+
+def build_quote_response(term: str, seats: int, kit_extra: int = pricing.KIT_EXTRA_SEATS) -> QuoteResponse:
+    """The price of a team for a period; the same calculator the payment uses. ValueError on a bad input."""
+    quote = pricing.quote(seats, term, kit_extra=kit_extra)
+    return QuoteResponse(
+        term=term,
+        seats=quote.seats,
+        lines=[QuoteLine(kind=line.kind, kopecks=line.price_kopecks) for line in quote.lines],
+        subtotal_kopecks=quote.subtotal_kopecks,
+        total_kopecks=quote.total_kopecks,
+        year_saving_kopecks=quote.year_saving_kopecks,
     )
 
 
@@ -319,7 +360,9 @@ async def get_subscription_summary(session: AsyncSession, user: User) -> Subscri
     open_surveys = projects = locked = 0
     pending = None
     ai_used = 0
+    extra_tokens = 0
     if ent.billing_enabled:
+        extra_tokens = await token_grant_repository.remaining(session, user.id, datetime.now(timezone.utc))
         used = await billing_repository.get_usage(session, user.id, ent.period_start)
         ai_used = (await billing_repository.get_usage(session, user.id, ent.ai_window_start)).get(
             METRIC_AI_TOKENS, 0
@@ -353,8 +396,12 @@ async def get_subscription_summary(session: AsyncSession, user: User) -> Subscri
             active_surveys=UsageMetric(used=open_surveys, max=ent.plan.max_active_surveys),
             projects=UsageMetric(used=projects, max=ent.plan.max_projects),
             locked_responses=locked,
+            ai_extra_tokens=extra_tokens,
         ),
         plan_request=(
             PlanRequestInfo.model_validate(pending, from_attributes=True) if pending else None
         ),
+        seats=ent.seats if ent.seats < SEATS_UNLIMITED else 1,
+        seat_window_ends_at=ent.seat_window_ends_at,
+        seat_window_days_left=seat_window.days_left(ent, datetime.now(timezone.utc)),
     )

@@ -22,6 +22,7 @@ from app.schemas.admin import (
     AdminApproveRequest,
     AdminGrantRequest,
     AdminRejectRequest,
+    AdminTokenPackRequest,
     AdminUserPatch,
 )
 from app.schemas.auth import LoginRequest
@@ -328,6 +329,49 @@ class GrantAndRevokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(kwargs["actor_user_id"], self.admin.id)
         self.assertEqual(kwargs["note"], "подарок")
         self.assertEqual(kwargs["limit_overrides"], {"ai_tokens_per_period": 500})
+
+    async def test_the_seats_of_a_manual_grant_are_passed_on(self):
+        await admin_service.grant_plan(
+            self.session, self.admin, self.target.id, AdminGrantRequest(days=30, seats=3)
+        )
+        self.assertEqual(self.grant.await_args.kwargs["seats"], 3)
+
+        await admin_service.grant_plan(
+            self.session, self.admin, self.target.id, AdminGrantRequest(days=30)
+        )
+        self.assertIsNone(self.grant.await_args.kwargs["seats"])
+
+    async def test_a_token_pack_is_a_block_with_its_own_expiry_and_a_journal_entry(self):
+        added = patch.object(
+            admin_service.token_grant_repository, "add", AsyncMock(side_effect=lambda s, g: g)
+        ).start()
+        patch.object(
+            admin_service.billing_service,
+            "ensure_subscription",
+            AsyncMock(return_value=SimpleNamespace(id=uuid.uuid4())),
+        ).start()
+
+        block = await admin_service.grant_token_pack(
+            self.session,
+            self.admin,
+            self.target.id,
+            AdminTokenPackRequest(tokens=500_000, days=30, note="  компенсация "),
+        )
+
+        added.assert_awaited_once()
+        self.assertEqual(
+            (block.user_id, block.kind, block.amount, block.expires_at),
+            (self.target.id, "bonus", 500_000, NOW + timedelta(days=30)),
+        )
+        kwargs = self.add_event.await_args.kwargs
+        self.assertEqual(kwargs["kind"], "token_pack_granted")
+        self.assertEqual(kwargs["actor_user_id"], self.admin.id)
+        self.assertEqual(kwargs["payload"], {"tokens": 500_000, "days": 30, "note": "компенсация"})
+
+    def test_a_pack_of_nothing_or_without_end_is_refused(self):
+        for case in ({"tokens": 0}, {"tokens": 10, "days": 0}, {"tokens": 10, "days": 4000}):
+            with self.subTest(case=case), self.assertRaises(ValueError):
+                AdminTokenPackRequest(**case)
 
     async def test_a_date_without_a_zone_is_taken_as_utc(self):
         payload = AdminGrantRequest(until=datetime(2027, 1, 1))

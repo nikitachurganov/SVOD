@@ -246,6 +246,56 @@ class GrantSeatsTests(LifecycleCase):
         self.assertIsNone(self.sub.first_paid_at)
 
 
+class AddSeatsTests(LifecycleCase):
+    def setUp(self):
+        super().setUp()
+        self.sub = sub(seats_count=1, first_paid_at=NOW - 15 * DAY, current_period_end=NOW + 15 * DAY)
+
+    async def add(self, seats):
+        return await lifecycle.add_seats(self.session, self.sub.user_id, seats, note="оплата", now=NOW)
+
+    async def test_the_seats_grow_and_the_period_stays(self):
+        end = self.sub.current_period_end
+
+        await self.add(3)
+
+        self.assertEqual(self.sub.seats_count, 3)
+        self.assertEqual(self.sub.current_period_end, end)
+        kwargs = self.add_event.await_args.kwargs
+        self.assertEqual(kwargs["kind"], "seats_added")
+        self.assertEqual((kwargs["payload"]["from"], kwargs["payload"]["to"]), (1, 3))
+
+    async def test_a_place_the_team_does_not_keep_is_given_up_after_the_window(self):
+        self.sub.seat_window_ends_at = NOW - 8 * DAY
+        self.sub.kit_extra_seats = 1
+
+        await self.add(2)
+
+        self.assertEqual((self.sub.seats_count, self.sub.kit_extra_seats), (2, 1))
+
+    async def test_no_running_paid_plan_is_an_error(self):
+        for case in (
+            free(),
+            sub(status="past_due"),
+            sub(current_period_end=NOW - DAY),
+            sub(plan_code="pack"),
+        ):
+            with self.subTest(plan=case.plan_code, status=case.status):
+                self.sub = case
+                with self.assertRaises(ValueError):
+                    await self.add(3)
+                self.assertEqual(self.sub.seats_count, 1)
+
+    async def test_the_same_or_a_smaller_number_of_seats_is_an_error(self):
+        self.sub.seats_count = 4
+
+        for seats in (2, 4):
+            with self.subTest(seats=seats), self.assertRaises(ValueError):
+                await self.add(seats)
+        self.assertEqual(self.sub.seats_count, 4)
+        self.add_event.assert_not_awaited()
+
+
 class TrialTests(LifecycleCase):
     async def test_the_trial_starts_for_the_configured_number_of_days(self):
         await lifecycle.start_trial(self.session, self.user, now=NOW)
@@ -692,18 +742,72 @@ class LimitWarningTests(WorkerCase):
         self.add_event.assert_not_awaited()
 
 
+class SeatWindowReminderTests(WorkerCase):
+    def setUp(self):
+        super().setUp()
+        self.list_windows = patch.object(
+            lifecycle.billing_repository, "list_ending_seat_windows", AsyncMock(return_value=[])
+        ).start()
+        self.send = patch.object(
+            lifecycle.billing_mail, "send_seat_window_ending", AsyncMock(return_value=True)
+        ).start()
+        patch.object(lifecycle.settings, "SEAT_PRICING_ENABLED", True).start()
+        self.team = sub(seats_count=1, seat_window_ends_at=NOW + DAY // 2, first_paid_at=NOW - 6 * DAY)
+
+    async def test_a_team_with_an_empty_kit_place_is_told_once(self):
+        self.list_windows.side_effect = [[self.team], []]
+
+        sent = await lifecycle._remind_seat_window(self.session, NOW)
+
+        self.assertEqual(sent, 1)
+        self.send.assert_awaited_once_with(self.user, self.team.seat_window_ends_at, 1)
+        kwargs = self.add_event.await_args.kwargs
+        self.assertEqual(kwargs["kind"], "seat_window_notified")
+        self.assertEqual(kwargs["payload"], {"window_end": self.team.seat_window_ends_at.isoformat()})
+
+    async def test_it_is_not_repeated(self):
+        self.list_windows.side_effect = [[self.team], []]
+        self.has_event.return_value = True
+
+        sent = await lifecycle._remind_seat_window(self.session, NOW)
+
+        self.assertEqual(sent, 0)
+        self.send.assert_not_awaited()
+
+    async def test_nothing_goes_out_while_the_seat_switch_is_off(self):
+        self.list_windows.side_effect = [[self.team], []]
+        with patch.object(lifecycle.settings, "SEAT_PRICING_ENABLED", False):
+            sent = await lifecycle._remind_seat_window(self.session, NOW)
+
+        self.assertEqual(sent, 0)
+        self.list_windows.assert_not_awaited()
+
+    async def test_an_unsent_email_is_tried_again_next_tick(self):
+        self.list_windows.side_effect = [[self.team], []]
+        self.send.return_value = False
+
+        sent = await lifecycle._remind_seat_window(self.session, NOW)
+
+        self.assertEqual(sent, 0)
+        self.add_event.assert_not_awaited()
+
+
 class ProcessDueTests(WorkerCase):
     async def test_every_step_runs_and_a_failing_one_does_not_stop_the_rest(self):
         with (
             patch.object(lifecycle, "_expire_due", AsyncMock(side_effect=RuntimeError("boom"))),
             patch.object(lifecycle, "_remind_trials", AsyncMock(return_value=2)),
             patch.object(lifecycle, "_remind_expiring", AsyncMock(return_value=3)),
+            patch.object(lifecycle, "_remind_seat_window", AsyncMock(return_value=5)),
             patch.object(lifecycle, "_send_limit_warnings", AsyncMock(return_value=4)),
             self.assertLogs(lifecycle.logger, level="ERROR"),
         ):
             done = await lifecycle.process_due(self.session, NOW)
 
-        self.assertEqual(dict(done), {"trial_reminders": 2, "expiry_reminders": 3, "limit_warnings": 4})
+        self.assertEqual(
+            dict(done),
+            {"trial_reminders": 2, "expiry_reminders": 3, "seat_window_reminders": 5, "limit_warnings": 4},
+        )
         self.session.rollback.assert_awaited()
 
 

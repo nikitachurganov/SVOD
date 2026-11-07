@@ -181,6 +181,7 @@ class EntitlementSeatsTests(unittest.TestCase):
             cancel_at_period_end=False,
             limit_overrides=None,
             seats_count=seats,
+            seat_window_ends_at=None,
         )
 
     def test_researcher_seats_come_from_the_subscription(self):

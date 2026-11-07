@@ -33,6 +33,40 @@ class PlansResponse(BaseModel):
     pack: PlanInfo
     pack_price_kopecks: int
     pack_days: int
+    # True: the Researcher plan is sold by seats (the price page shows the configurator and the
+    # numbers of `limits` are per seat); False: one price per person
+    seat_pricing_enabled: bool = False
+    max_seats: int = 10
+    # The extra pack of Токены+ bought on top of a running plan
+    addon_price_kopecks: int = 0
+    addon_tokens: int = 0
+    addon_days: int = 0
+
+
+class QuoteLine(BaseModel):
+    # creator, kit or other (docs/TARIFFS_FINAL.md §4.2)
+    kind: str
+    kopecks: int
+
+
+class QuoteResponse(BaseModel):
+    """What a team of ``seats`` seats pays for one period, from the same calculator as the payment."""
+
+    term: str
+    seats: int
+    lines: list[QuoteLine]
+    subtotal_kopecks: int
+    total_kopecks: int
+    # What a year saves against twelve months, in kopecks
+    year_saving_kopecks: int
+
+
+class SeatAdditionQuoteResponse(BaseModel):
+    """What the extra seats cost for the rest of the paid period."""
+
+    seats: int
+    amount_kopecks: int
+    days_left: int
 
 
 class UsageMetric(BaseModel):
@@ -49,6 +83,8 @@ class SubscriptionUsage(BaseModel):
     projects: UsageMetric
     # Responses received beyond the quota and kept back until the plan grows
     locked_responses: int
+    # Токены+ left in the extra packs; they are spent after the quota of the period
+    ai_extra_tokens: int = 0
 
 
 class PlanRequestCreate(BaseModel):
@@ -80,6 +116,11 @@ class CheckoutRequest(BaseModel):
     term: str = INTERVAL_MONTH
     # Seats of the team to pay for; more than one only while SEAT_PRICING_ENABLED is on
     seats: int = Field(default=1, ge=1, le=100)
+
+
+class SeatsRequest(BaseModel):
+    # How many seats the team should have after the extra payment
+    seats: int = Field(ge=2, le=100)
 
 
 class CheckoutResponse(BaseModel):
@@ -127,3 +168,7 @@ class SubscriptionResponse(BaseModel):
     usage: SubscriptionUsage
     # The request for a paid plan that waits for the administrator, if there is one
     plan_request: PlanRequestInfo | None = None
+    # Paid seats of the team and the 7-day window after the first payment (docs/TARIFFS_FINAL.md §4.3)
+    seats: int = 1
+    seat_window_ends_at: datetime | None = None
+    seat_window_days_left: int = 0
