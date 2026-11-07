@@ -9,6 +9,7 @@ import type {
   QuoteResponse,
   QuoteTerm,
   SeatAdditionQuote,
+  SubscriptionHistoryItem,
   SubscriptionInfo,
 } from '../../types/billing';
 
@@ -86,6 +87,11 @@ export const buyAddon = async (): Promise<CheckoutResponse> => {
 
 export const getPayment = async (paymentId: string): Promise<PaymentInfo> => {
   const { data } = await api.get<PaymentInfo>(`/billing/payments/${paymentId}`);
+  return data;
+};
+
+export const getSubscriptionHistory = async (): Promise<SubscriptionHistoryItem[]> => {
+  const { data } = await api.get<SubscriptionHistoryItem[]>('/billing/history');
   return data;
 };
 

@@ -18,6 +18,7 @@ from app.schemas.billing import (
     QuoteResponse,
     SeatAdditionQuoteResponse,
     SeatsRequest,
+    SubscriptionHistoryItem,
     SubscriptionResponse,
 )
 from app.services import billing_service, payment_service, plan_request_service, yookassa_client
@@ -64,6 +65,12 @@ async def get_quote(
 @router.get("/subscription", response_model=SubscriptionResponse)
 async def get_subscription(session: DbSession, user: CurrentUser) -> SubscriptionResponse:
     return await billing_service.get_subscription_summary(session, user)
+
+
+@router.get("/history", response_model=list[SubscriptionHistoryItem])
+async def get_history(session: DbSession, user: CurrentUser) -> list[SubscriptionHistoryItem]:
+    """What happened to the plan: paid, seats added, expired, refunded (the person's own journal)."""
+    return await billing_service.get_history(session, user)
 
 
 @router.post("/checkout", response_model=CheckoutResponse)

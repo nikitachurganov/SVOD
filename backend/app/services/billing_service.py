@@ -353,6 +353,47 @@ def build_quote_response(term: str, seats: int, kit_extra: int = pricing.KIT_EXT
     )
 
 
+# What of the subscription journal the person is told, and which fields of each event they may see.
+# Notes (they carry payment ids), administrators' ids and everything else stay out.
+_HISTORY_FIELDS: dict[str, tuple[str, ...]] = {
+    "trial_started": ("ends_at",),
+    "manual_grant": ("plan", "until", "extended"),
+    "seats_added": ("from", "to"),
+    "refund_revoked": ("plan", "result", "period_end", "seats_from", "seats_to"),
+    "expired": ("from_plan", "reason"),
+    "canceled": ("period_end",),
+    "resumed": (),
+}
+HISTORY_LIMIT = 30
+
+
+def history_item(kind: str, created_at: datetime, payload: dict | None):
+    """One journal event in the shape the person sees, or None for a kind that is not theirs to see."""
+    fields = _HISTORY_FIELDS.get(kind)
+    if fields is None:
+        return None
+    from app.schemas.billing import SubscriptionHistoryItem
+
+    details: dict[str, str | int | None] = {}
+    for name in fields:
+        value = (payload or {}).get(name)
+        if isinstance(value, bool):
+            value = int(value)
+        if value is None or isinstance(value, (str, int)):
+            details[name] = value
+    return SubscriptionHistoryItem(kind=kind, created_at=created_at, details=details)
+
+
+async def get_history(session: AsyncSession, user: User) -> list:
+    """The newest things that happened to the person's plan: payments applied, seats, expiry, refunds."""
+    sub = await billing_repository.get_subscription(session, user.id)
+    if sub is None:
+        return []
+    events = await billing_repository.list_events(session, sub.id, limit=HISTORY_LIMIT * 2)
+    items = [history_item(e.kind, e.created_at, e.payload) for e in events]
+    return [item for item in items if item is not None][:HISTORY_LIMIT]
+
+
 async def get_subscription_summary(session: AsyncSession, user: User) -> SubscriptionResponse:
     """Plan, period and usage for the profile page. Commits: it may have created the subscription."""
     ent = await get_entitlements(session, user.id)

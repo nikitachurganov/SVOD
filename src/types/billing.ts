@@ -127,13 +127,25 @@ export type PaymentStatus = 'new' | 'pending' | 'succeeded' | 'canceled' | 'fail
 
 export interface PaymentInfo {
   id: string;
+  plan_code: PlanCode;
+  /** month, year, one_off, seats_add or addon */
   term: PlanRequestTerm | string;
+  seats: number;
+  days: number;
   amount_kopecks: number;
   status: PaymentStatus | string;
   created_at: string;
   paid_at: string | null;
   refunded_kopecks: number;
   is_test: boolean;
+}
+
+/** One thing that happened to the person's plan (the server sends only fields meant for the person) */
+export interface SubscriptionHistoryItem {
+  /** trial_started, manual_grant, seats_added, refund_revoked, expired, canceled or resumed */
+  kind: string;
+  created_at: string;
+  details: Record<string, string | number | null>;
 }
 
 export interface PlanRequestPayload {

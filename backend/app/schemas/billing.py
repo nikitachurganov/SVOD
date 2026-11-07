@@ -131,7 +131,12 @@ class CheckoutResponse(BaseModel):
 
 class PaymentInfo(BaseModel):
     id: uuid.UUID
+    # What the payment was for: the plan, how it was paid (month, year, one_off, seats_add, addon),
+    # how many seats and how many days it gave
+    plan_code: str
     term: str
+    seats: int
+    days: int
     amount_kopecks: int
     # new, pending, succeeded, canceled, failed or mismatch
     status: str
@@ -139,6 +144,15 @@ class PaymentInfo(BaseModel):
     paid_at: datetime | None
     refunded_kopecks: int
     is_test: bool
+
+
+class SubscriptionHistoryItem(BaseModel):
+    """One thing that happened to the person's plan, in the words the person can be told."""
+
+    kind: str
+    created_at: datetime
+    # Only the fields that are meant for the person (plan, dates, seats); never notes or payment ids
+    details: dict[str, str | int | None] = {}
 
 
 class PlanRequestInfo(BaseModel):

@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Alert, Button, Spin } from 'antd';
+import { Link } from 'react-router-dom';
 import { getPayment } from '../../shared/api/billing.api';
 import { useSubscription } from '../../shared/hooks/subscription.hooks';
+import type { PaymentInfo, SubscriptionInfo } from '../../types/billing';
+import { formatCreditsWithWord } from './billingFormat';
+import { dayForSentence, daysWord } from './billingText';
+import { seatsWord } from './seatPricing';
 import './billing.css';
 
 type Outcome = 'checking' | 'succeeded' | 'canceled' | 'problem' | 'slow';
@@ -19,10 +24,68 @@ interface Props {
   onSettled: () => void;
 }
 
+interface Result {
+  title: string;
+  lines: string[];
+  /** Where the person goes next to use what they paid for */
+  link?: { to: string; label: string };
+}
+
+/** What the payment changed, said in numbers: the plan and its end, the seats, the credits */
+const resultOf = (payment: PaymentInfo, subscription: SubscriptionInfo | null): Result => {
+  const until = subscription ? dayForSentence(subscription.current_period_end) : null;
+  if (payment.term === 'seats_add') {
+    return {
+      title: 'Оплата прошла, места добавлены',
+      lines: [
+        `Теперь в команде оплачено ${payment.seats} ${seatsWord(payment.seats)}.`,
+        until ? `Срок подписки не изменился: до ${until}. Новые места продлеваются вместе со всей командой.` : '',
+        'Пригласите людей на новые места в разделе «Команда».',
+      ],
+      link: { to: '/participants', label: 'Открыть команду' },
+    };
+  }
+  if (payment.term === 'addon') {
+    return {
+      title: 'Оплата прошла, кредиты добавлены',
+      lines: [
+        `Пакет действует ${payment.days} ${daysWord(payment.days)} и общий для всей команды.`,
+        'Он тратится после месячных кредитов подписки.',
+        subscription && subscription.usage.ai_extra_tokens > 0
+          ? `Сейчас в пакетах осталось ${formatCreditsWithWord(subscription.usage.ai_extra_tokens)}.`
+          : '',
+      ],
+    };
+  }
+  if (payment.plan_code === 'pack') {
+    return {
+      title: 'Оплата прошла, разовый доступ включён',
+      lines: [
+        until ? `Действует до ${until}.` : '',
+        subscription ? `Кредитов ИИ: ${formatCreditsWithWord(subscription.usage.ai_tokens.max)}, действуют весь срок.` : '',
+      ],
+    };
+  }
+  return {
+    title: 'Оплата прошла, тариф «Исследователь» включён',
+    lines: [
+      until ? `Действует до ${until}.` : '',
+      payment.seats > 1
+        ? `Оплачено мест: ${payment.seats}. Владелец, администраторы и редакторы занимают места, читатели бесплатны.`
+        : 'Оплачено 1 место: ваше.',
+      subscription
+        ? `Кредитов ИИ в месяц: ${formatCreditsWithWord(subscription.usage.ai_tokens.max)}, они общие для команды.`
+        : '',
+    ],
+    link: payment.seats > 1 ? { to: '/participants', label: 'Пригласить людей' } : undefined,
+  };
+};
+
 /** What a person sees after coming back from the payment page: the payment is asked about until it is settled */
 export const PaymentReturnNotice = ({ paymentId, onDismiss, onSettled }: Props) => {
-  const { refresh } = useSubscription();
+  const { refresh, subscription } = useSubscription();
   const [outcome, setOutcome] = useState<Outcome>('checking');
+  const [paid, setPaid] = useState<PaymentInfo | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -47,6 +110,7 @@ export const PaymentReturnNotice = ({ paymentId, onDismiss, onSettled }: Props) 
           return;
         }
         if (payment.status === 'succeeded') {
+          setPaid(payment);
           setOutcome('succeeded');
           await refresh();
           if (!cancelled) onSettled();
@@ -86,12 +150,25 @@ export const PaymentReturnNotice = ({ paymentId, onDismiss, onSettled }: Props) 
     );
   }
   if (outcome === 'succeeded') {
+    const result = paid ? resultOf(paid, subscription) : null;
     return (
       <Alert
         className="billing-alert"
         type="success"
         showIcon
-        title="Оплата прошла, тариф включён"
+        title={result?.title ?? 'Оплата прошла, тариф включён'}
+        description={
+          result ? (
+            <>
+              {result.lines
+                .filter(Boolean)
+                .map((line) => (
+                  <div key={line}>{line}</div>
+                ))}
+              {result.link ? <Link to={result.link.to}>{result.link.label}</Link> : null}
+            </>
+          ) : undefined
+        }
         action={close}
       />
     );

@@ -5,8 +5,11 @@ import { PaymentHistory } from '../billing/PaymentHistory';
 import { PaymentReturnNotice } from '../billing/PaymentReturnNotice';
 import { PlanActions } from '../billing/PlanActions';
 import { SeatsPanel } from '../billing/SeatsPanel';
+import { SubscriptionHistory } from '../billing/SubscriptionHistory';
+import { SubscriptionHowItWorks } from '../billing/SubscriptionHowItWorks';
 import { UsageBar } from '../billing/UsageBar';
 import { AI_ACTION_HINT, formatCredits, formatDay, formatPrice, STATUS_LABELS } from '../billing/billingFormat';
+import { dayForSentence } from '../billing/billingText';
 import { getPlans } from '../../shared/api/billing.api';
 import { useSubscription } from '../../shared/hooks/subscription.hooks';
 import type { PlansResponse } from '../../types/billing';
@@ -86,8 +89,8 @@ export const ProfileSubscriptionTab = () => {
   const aiNote = !aiResets
     ? 'Бесплатные кредиты даются один раз и не обновляются.'
     : isPack
-      ? `Кредиты действуют до ${formatDay(aiResets)}.`
-      : `Кредиты обновятся ${formatDay(aiResets)}.`;
+      ? `Кредиты действуют до ${dayForSentence(aiResets)}.`
+      : `Кредиты обновятся ${dayForSentence(aiResets)}.`;
 
   return (
     <section className="profile-page__panel" aria-labelledby="profile-subscription-title">
@@ -202,7 +205,12 @@ export const ProfileSubscriptionTab = () => {
           <Link to="/plans">Сравнить тарифы</Link>
         </p>
 
+        {subscription.billing_enabled && paid && !trialing ? (
+          <SubscriptionHowItWorks subscription={subscription} seatMode={seatMode} />
+        ) : null}
+
         {subscription.billing_enabled ? <PaymentHistory reloadKey={paymentsReload} /> : null}
+        {subscription.billing_enabled ? <SubscriptionHistory reloadKey={paymentsReload} /> : null}
       </div>
     </section>
   );

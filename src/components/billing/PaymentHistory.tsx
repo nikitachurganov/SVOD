@@ -3,7 +3,8 @@ import { Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { listPayments } from '../../shared/api/billing.api';
 import type { PaymentInfo } from '../../types/billing';
-import { TERM_LABELS, formatDay, formatPrice } from './billingFormat';
+import { formatDay, formatPrice } from './billingFormat';
+import { describePayment, describeRefund } from './billingText';
 import './billing.css';
 
 const STATUS: Record<string, { label: string; color: string }> = {
@@ -21,9 +22,16 @@ const columns: ColumnsType<PaymentInfo> = [
   },
   {
     title: 'За что',
-    dataIndex: 'term',
     key: 'term',
-    render: (term: string) => `Тариф «Исследователь» ${TERM_LABELS[term] ?? ''}`.trim(),
+    render: (_, row) => {
+      const { title, detail } = describePayment(row);
+      return (
+        <>
+          <div>{title}</div>
+          {detail ? <div className="billing-note billing-note--tight">{detail}</div> : null}
+        </>
+      );
+    },
   },
   {
     title: 'Сумма',
@@ -36,11 +44,16 @@ const columns: ColumnsType<PaymentInfo> = [
     key: 'status',
     render: (_, row) => {
       const state = STATUS[row.status] ?? { label: row.status, color: 'default' };
+      const refund = describeRefund(row);
       return (
         <>
           <Tag color={state.color}>{state.label}</Tag>
-          {row.refunded_kopecks > 0 ? <Tag>Возврат {formatPrice(row.refunded_kopecks)}</Tag> : null}
           {row.is_test ? <Tag>Тест</Tag> : null}
+          {refund ? (
+            <div className="billing-note billing-note--tight" style={{ minWidth: 200, maxWidth: 260 }}>
+              {refund}
+            </div>
+          ) : null}
         </>
       );
     },

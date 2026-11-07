@@ -53,6 +53,55 @@
   color: var(--app-text-secondary);
 }
 
+/* A second line inside a table cell or a list row */
+.billing-note.billing-note--tight {
+  margin: 2px 0 0;
+}
+
+.billing-history {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.billing-history__item {
+  display: grid;
+  grid-template-columns: 132px 1fr;
+  gap: 4px 16px;
+}
+
+.billing-history__date {
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--app-text-secondary);
+}
+
+.billing-history__title {
+  font-size: 14px;
+  line-height: 20px;
+}
+
+@media (max-width: 575px) {
+  .billing-history__item {
+    grid-template-columns: 1fr;
+  }
+}
+
+.billing-how {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--app-text-secondary);
+}
+
+.billing-how li + li {
+  margin-top: 4px;
+}
+
 .billing-note--warn {
   color: var(--app-text-error, var(--ant-color-error, #ff4d4f));
 }
