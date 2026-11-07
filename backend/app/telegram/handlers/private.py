@@ -173,7 +173,7 @@ async def on_organization_chosen(
     organizations = await organization_repository.get_orgs_for_user(session, user.id)
     organization = next((o for o in organizations if o.id == callback_data.organization_id), None)
     if organization is None:
-        await callback.answer("Вы не участник этой организации", show_alert=True)
+        await callback.answer("Вы не участник этой команды", show_alert=True)
         return
     account.current_organization_id = organization.id
     await session.commit()

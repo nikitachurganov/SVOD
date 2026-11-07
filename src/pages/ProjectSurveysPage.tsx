@@ -249,7 +249,7 @@ export const ProjectSurveysPage = () => {
         subTitle={
           IS_SURVEYS_APP
             ? 'Возможно, он был удалён.'
-            : 'Возможно, он был удалён или находится в другой организации.'
+            : 'Возможно, он был удалён или находится в другой команде.'
         }
         extra={
           <Button type="primary" onClick={() => navigate('/surveys')}>

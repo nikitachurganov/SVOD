@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Button, Card, Form, Input, Modal, Progress, Select, Switch, Tag, Tooltip } from 'antd';
+import { Alert, Button, Card, Form, Input, Modal, Progress, Select, Switch, Tag, Tooltip, message } from 'antd';
 import { Link } from 'react-router-dom';
-import { CalendarOutlined, FormOutlined, InfoCircleOutlined, MailOutlined, MessageOutlined, RobotOutlined, SaveOutlined } from '@ant-design/icons';
+import { CalendarOutlined, EditOutlined, FormOutlined, InfoCircleOutlined, MailOutlined, MessageOutlined, RobotOutlined, SaveOutlined } from '@ant-design/icons';
 import { useAuth } from '../../shared/hooks/auth.hooks';
 import { useOrganization } from '../../shared/hooks/organization.hooks';
 import {
@@ -31,11 +31,11 @@ function apiErrorMessage(err: unknown): string {
 
 const TRANSFER_ERROR_RU: Record<string, string> = {
   'New owner must be an existing member of the organization':
-    'Новый владелец должен быть участником организации.',
-  'You are already the owner': 'Вы уже владелец этой организации.',
+    'Новый владелец должен быть участником команды.',
+  'You are already the owner': 'Вы уже владелец этой команды.',
   'Invalid new_owner_user_id': 'Некорректный идентификатор пользователя.',
   'Only the organization owner can perform this action':
-    'Только владелец организации может выполнить это действие.',
+    'Только владелец команды может выполнить это действие.',
 };
 
 function mapTransferError(detail: string): string {
@@ -75,7 +75,7 @@ export const OrganizationSettingsSection = ({ onAfterDelete }: Props) => {
   const [orgForm] = Form.useForm<OrganizationFormValues>();
   const [saveBusy, setSaveBusy] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(false);
   const [settingsTab, setSettingsTab] = useState<'organization' | 'connections' | 'ai'>('organization');
 
   const isOwner =
@@ -100,13 +100,6 @@ export const OrganizationSettingsSection = ({ onAfterDelete }: Props) => {
   useEffect(() => {
     if (activeOrganizationId) void loadMembers();
   }, [activeOrganizationId, loadMembers]);
-
-  useEffect(() => {
-    if (!activeOrganization) return;
-    orgForm.setFieldsValue({ name: activeOrganization.name, description: activeOrganization.description ?? '' });
-    setSaveError(null);
-    setSaveSuccess(false);
-  }, [activeOrganization, orgForm]);
 
   const transferCandidates = useMemo(() => {
     if (!user) return [];
@@ -156,11 +149,11 @@ export const OrganizationSettingsSection = ({ onAfterDelete }: Props) => {
     if (!activeOrganization) return;
     setSaveBusy(true);
     setSaveError(null);
-    setSaveSuccess(false);
     try {
       await updateOrganization(activeOrganization.id, { name: values.name.trim(), description: values.description?.trim() || null });
       await refreshOrganizations();
-      setSaveSuccess(true);
+      setEditingProfile(false);
+      void message.success('Изменения сохранены');
     } catch (e) {
       setSaveError(apiErrorMessage(e));
     } finally {
@@ -172,8 +165,8 @@ export const OrganizationSettingsSection = ({ onAfterDelete }: Props) => {
     return (
       <Alert
         type="info"
-        message="Нет активной организации"
-        description="Выберите организацию в боковой панели."
+        message="Нет активной команды"
+        description="Выберите команду в боковой панели."
         showIcon
         closable={false}
       />
@@ -183,19 +176,72 @@ export const OrganizationSettingsSection = ({ onAfterDelete }: Props) => {
   return (
     <>
       <div className={`org-settings org-settings--${settingsTab}`}>
-        <p className="org-settings__org-name">{activeOrganization.name}</p>
+        {!IS_SURVEYS_APP && <p className="org-settings__org-name">{activeOrganization.name}</p>}
 
         {/* The integrations and AI switches of the settings are about requests: the surveys service has only the team's profile */}
         <div className="org-settings__tabs" role="tablist" aria-label="Разделы настроек" hidden={IS_SURVEYS_APP}>
-          <button className={`org-settings__tab ${settingsTab === 'organization' ? 'org-settings__tab--active' : ''}`} role="tab" aria-selected={settingsTab === 'organization'} onClick={() => setSettingsTab('organization')}>Организация</button>
+          <button className={`org-settings__tab ${settingsTab === 'organization' ? 'org-settings__tab--active' : ''}`} role="tab" aria-selected={settingsTab === 'organization'} onClick={() => setSettingsTab('organization')}>Команда</button>
           <button className={`org-settings__tab ${settingsTab === 'connections' ? 'org-settings__tab--active' : ''}`} role="tab" aria-selected={settingsTab === 'connections'} onClick={() => setSettingsTab('connections')}>Подключения</button>
           <button className={`org-settings__tab ${settingsTab === 'ai' ? 'org-settings__tab--active' : ''}`} role="tab" aria-selected={settingsTab === 'ai'} onClick={() => setSettingsTab('ai')}>ИИ и лимиты</button>
         </div>
 
-        <section className="org-settings__group org-settings__general-tab" aria-labelledby="org-profile-title"><div className="org-settings__group-heading"><h3 id="org-profile-title">Профиль организации</h3><p>Добавьте описание, чтобы участникам было проще ориентироваться в рабочем пространстве.</p></div><Card className="org-settings__tile" styles={{ body: { padding: 20 } }}><Form className="org-settings__form" form={orgForm} layout="vertical" disabled={!isOwner} onFinish={(values) => void handleSave(values)}><Form.Item name="name" label="Название организации" rules={[{ required: true, whitespace: true, message: 'Введите название организации' }]}><Input maxLength={255} /></Form.Item><Form.Item name="description" label="Описание" extra="Видно всем участникам организации."><Input.TextArea autoSize={{ minRows: 3, maxRows: 6 }} maxLength={1000} showCount placeholder="Например, создаём сервисы для автоматизации внутренних процессов." /></Form.Item>{isOwner && <div className="org-settings__form-actions"><Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={saveBusy}>Сохранить изменения</Button>{saveSuccess && <span className="org-settings__save-status">Изменения сохранены</span>}</div>}{saveError && <Alert type="error" message="Не удалось сохранить изменения" description={saveError} showIcon />}</Form></Card></section>
+        <section className="org-settings__group org-settings__general-tab" aria-labelledby="org-profile-title">
+          <div className="org-settings__group-heading">
+            <h3 id="org-profile-title">Профиль команды</h3>
+          </div>
+          <Card className="org-settings__tile" styles={{ body: { padding: 20 } }}>
+            {editingProfile && isOwner ? (
+              <Form
+                className="org-settings__form"
+                form={orgForm}
+                layout="vertical"
+                preserve={false}
+                initialValues={{ name: activeOrganization.name, description: activeOrganization.description ?? '' }}
+                onFinish={(values) => void handleSave(values)}
+              >
+                <Form.Item name="name" label="Название команды" rules={[{ required: true, whitespace: true, message: 'Введите название команды' }]}>
+                  <Input maxLength={255} autoFocus />
+                </Form.Item>
+                <Form.Item name="description" label="Описание" extra="Видно всем участникам команды.">
+                  <Input.TextArea autoSize={{ minRows: 3, maxRows: 6 }} maxLength={1000} showCount placeholder="Например, команда исследований продукта." />
+                </Form.Item>
+                {saveError && <Alert type="error" message="Не удалось сохранить изменения" description={saveError} showIcon style={{ marginBottom: 16 }} />}
+                <div className="org-settings__form-actions">
+                  <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={saveBusy}>Сохранить</Button>
+                  <Button disabled={saveBusy} onClick={() => { setEditingProfile(false); setSaveError(null); }}>Отмена</Button>
+                </div>
+              </Form>
+            ) : (
+              <div className="org-settings__profile-view">
+                <dl className="org-settings__profile-list">
+                  <div>
+                    <dt>Название команды</dt>
+                    <dd>{activeOrganization.name}</dd>
+                  </div>
+                  <div>
+                    <dt>Описание</dt>
+                    <dd className={activeOrganization.description ? undefined : 'org-settings__profile-empty'}>
+                      {activeOrganization.description || 'Описание не добавлено'}
+                    </dd>
+                  </div>
+                </dl>
+                {isOwner && (
+                  <Tooltip title="Редактировать">
+                    <Button
+                      className="org-settings__profile-edit"
+                      icon={<EditOutlined />}
+                      aria-label="Редактировать профиль команды"
+                      onClick={() => { setSaveError(null); setEditingProfile(true); }}
+                    />
+                  </Tooltip>
+                )}
+              </div>
+            )}
+          </Card>
+        </section>
         {/* @ts-expect-error heterogeneous icon tuples are normalized at render time */}
         <section className="org-settings__group org-settings__future-group org-settings__connections-tab" aria-labelledby="future-integrations"><div className="org-settings__group-heading org-settings__group-heading--split"><div><h3 id="future-integrations">Интеграции</h3><p>Подключайте привычные сервисы, чтобы работать с заявками в одном месте.</p></div></div><Card className="org-settings__tile" styles={{ body: { padding: 20 } }}><div className="org-settings__integration-grid">{[['Yandex Mail', MailOutlined, 'yellow'], ['Telegram', MessageOutlined, 'blue'], ['MAX', MessageOutlined, 'violet'], ['Calendar', CalendarOutlined, 'green'], ['Yandex Forms', FormOutlined, 'red'], ['Google Forms', FormOutlined, 'purple']].map(([name, Icon, tone]) => { if (name === 'Telegram') return <TelegramIntegrationCard key="Telegram" />; const IntegrationIcon = Icon as typeof MailOutlined; return <article className="org-settings__integration-card" key={name as string}><span className={`org-settings__integration-icon org-settings__integration-icon--${tone}`}><IntegrationIcon /></span><div><h4>{name}</h4><p>Скоро будет доступно</p></div><Tag>Скоро</Tag></article>; })}</div></Card></section>
-        <section className="org-settings__group org-settings__future-group org-settings__ai-tab" aria-labelledby="future-ai"><div className="org-settings__group-heading"><h3 id="future-ai">Лимиты и ИИ</h3><p>Здесь появятся данные о потреблении ресурсов и управление ИИ-функциями.</p></div><div className="org-settings__resource-grid"><Card className="org-settings__tile" styles={{ body: { padding: 20 } }}><div className="org-settings__card-title-row"><div><h4>Лимиты организации</h4><p>Данные появятся после подключения тарифа.</p></div><Tooltip title="Лимиты будут рассчитываться по активному тарифу."><InfoCircleOutlined className="org-settings__info-icon" /></Tooltip></div><div className="org-settings__limit-value"><span>—</span><small>из — ИИ-запросов</small></div><Progress percent={0} showInfo={false} /><p className="org-settings__placeholder-note">Здесь можно будет следить за остатком запросов и мест в команде.</p></Card><Card className="org-settings__tile" styles={{ body: { padding: 20 } }}><div className="org-settings__card-title-row"><div><h4>ИИ-функции</h4><p>Включайте только нужные сценарии для команды.</p></div><RobotOutlined className="org-settings__ai-icon" /></div><div className="org-settings__ai-options">{['Помощник при создании заявки', 'Краткое резюме заявки', 'Анализ готовности заявки'].map((item) => <div className="org-settings__ai-option" key={item}><span>{item}</span><Switch checked disabled /></div>)}</div><p className="org-settings__placeholder-note">Настройки станут активны после запуска управления ИИ-функциями.</p></Card></div></section>
+        <section className="org-settings__group org-settings__future-group org-settings__ai-tab" aria-labelledby="future-ai"><div className="org-settings__group-heading"><h3 id="future-ai">Лимиты и ИИ</h3><p>Здесь появятся данные о потреблении ресурсов и управление ИИ-функциями.</p></div><div className="org-settings__resource-grid"><Card className="org-settings__tile" styles={{ body: { padding: 20 } }}><div className="org-settings__card-title-row"><div><h4>Лимиты команды</h4><p>Данные появятся после подключения тарифа.</p></div><Tooltip title="Лимиты будут рассчитываться по активному тарифу."><InfoCircleOutlined className="org-settings__info-icon" /></Tooltip></div><div className="org-settings__limit-value"><span>—</span><small>из — ИИ-запросов</small></div><Progress percent={0} showInfo={false} /><p className="org-settings__placeholder-note">Здесь можно будет следить за остатком запросов и мест в команде.</p></Card><Card className="org-settings__tile" styles={{ body: { padding: 20 } }}><div className="org-settings__card-title-row"><div><h4>ИИ-функции</h4><p>Включайте только нужные сценарии для команды.</p></div><RobotOutlined className="org-settings__ai-icon" /></div><div className="org-settings__ai-options">{['Помощник при создании заявки', 'Краткое резюме заявки', 'Анализ готовности заявки'].map((item) => <div className="org-settings__ai-option" key={item}><span>{item}</span><Switch checked disabled /></div>)}</div><p className="org-settings__placeholder-note">Настройки станут активны после запуска управления ИИ-функциями.</p></Card></div></section>
         {loadError && (
           <Alert
             type="error"
@@ -211,7 +257,7 @@ export const OrganizationSettingsSection = ({ onAfterDelete }: Props) => {
           <Alert
             type="info"
             message="Доступ ограничен"
-            description="Изменение владельца и удаление организации доступны только текущему владельцу."
+            description="Изменение владельца и удаление команды доступны только текущему владельцу."
             showIcon
             closable={false}
           />
@@ -223,14 +269,17 @@ export const OrganizationSettingsSection = ({ onAfterDelete }: Props) => {
               <h3 className="org-settings__tile-title">Смена владельца</h3>
               <p className="org-settings__tile-description">
                 Передайте права владельца другому участнику. Вы останетесь участником с ролью
-                «Участник». Сначала пригласите пользователей на странице{' '}
-                <Link to="/participants">Участники</Link>.
+                «Администратор». Сначала пригласите пользователей {IS_SURVEYS_APP ? 'на вкладке' : 'на странице'}{' '}
+                <Link to="/participants">{IS_SURVEYS_APP ? 'В команде' : 'Участники'}</Link>.
               </p>
 
               {transferCandidates.length === 0 ? (
-                <p className="org-settings__empty-text">
-                  Нет других участников для передачи владения.
-                </p>
+                <Alert
+                  type="info"
+                  showIcon
+                  message="Нет других участников"
+                  description="Передать владение пока некому: в команде только вы."
+                />
               ) : (
                 <>
                   <div className="org-settings__field-wrap">
@@ -272,9 +321,9 @@ export const OrganizationSettingsSection = ({ onAfterDelete }: Props) => {
             </Card>
 
             <Card className="org-settings__tile org-settings__tile--danger org-settings__general-tab" styles={{ body: { padding: 16 } }}>
-              <h3 className="org-settings__tile-title">Удаление организации</h3>
+              <h3 className="org-settings__tile-title">Удаление команды</h3>
               <p className="org-settings__tile-description">
-                Безвозвратно удалить организацию и связанные данные. Доступно только владельцу.
+                Безвозвратно удалить команду и связанные данные. Доступно только владельцу.
               </p>
               <Button
                 danger
@@ -283,7 +332,7 @@ export const OrganizationSettingsSection = ({ onAfterDelete }: Props) => {
                   setDeleteModalOpen(true);
                 }}
               >
-                Удалить организацию…
+                Удалить команду…
               </Button>
               {deleteError && (
                 <div className="org-settings__alert-wrap">
@@ -312,14 +361,14 @@ export const OrganizationSettingsSection = ({ onAfterDelete }: Props) => {
         onOk={() => void handleTransfer()}
       >
         <p style={{ margin: 0 }}>
-          Владельцем организации «{activeOrganization.name}» станет{' '}
+          Владельцем команды «{activeOrganization.name}» станет{' '}
           <strong>{selectedNewOwner?.text ?? '—'}</strong>. Продолжить?
         </p>
       </Modal>
 
       <Modal
         open={deleteModalOpen}
-        title="Удалить организацию?"
+        title="Удалить команду?"
         okText="Удалить"
         cancelText="Отмена"
         okButtonProps={{ danger: true, loading: deleteBusy }}
@@ -327,7 +376,7 @@ export const OrganizationSettingsSection = ({ onAfterDelete }: Props) => {
         onOk={() => void handleDelete()}
       >
         <p style={{ margin: 0 }}>
-          Организация «{activeOrganization.name}» будет удалена без возможности восстановления.
+          Команда «{activeOrganization.name}» будет удалена без возможности восстановления.
         </p>
       </Modal>
     </>

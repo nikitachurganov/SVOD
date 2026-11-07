@@ -84,13 +84,13 @@ async def send_account_invitation(
     subject = f"Приглашение в «{organization_name}» — СВОД"
     text = (
         f"Здравствуйте, {first_name}!\n\n"
-        f"{inviter_name} добавил(а) вас в организацию «{organization_name}» в сервисе СВОД.\n"
+        f"{inviter_name} добавил(а) вас в команду «{organization_name}» в сервисе СВОД.\n"
         f"Чтобы войти, подтвердите аккаунт и придумайте пароль по ссылке:\n{activation_url}\n\n"
         f"Ссылка действует {ttl_days} дн. Если вы не ждали это письмо, просто проигнорируйте его."
     )
     body = (
         f"<p>Здравствуйте, {html.escape(first_name)}!</p>"
-        f"<p>{html.escape(inviter_name)} добавил(а) вас в организацию "
+        f"<p>{html.escape(inviter_name)} добавил(а) вас в команду "
         f"«{html.escape(organization_name)}» в сервисе СВОД.</p>"
         f"<p>Чтобы войти, подтвердите аккаунт и придумайте пароль:</p>"
         f"<p>{_button_html(activation_url, 'Подтвердить аккаунт')}</p>"
@@ -158,11 +158,11 @@ async def send_organization_invitation(
 ) -> bool:
     subject = f"Приглашение в «{organization_name}» — СВОД"
     text = (
-        f"{inviter_name} пригласил(а) вас в организацию «{organization_name}» в сервисе СВОД.\n"
+        f"{inviter_name} пригласил(а) вас в команду «{organization_name}» в сервисе СВОД.\n"
         f"Войдите в свой аккаунт, чтобы принять приглашение: {app_url}"
     )
     body = (
-        f"<p>{html.escape(inviter_name)} пригласил(а) вас в организацию "
+        f"<p>{html.escape(inviter_name)} пригласил(а) вас в команду "
         f"«{html.escape(organization_name)}» в сервисе СВОД.</p>"
         f"<p>{_button_html(app_url, 'Открыть СВОД')}</p>"
         f"<p style=\"color:#6b7280;font-size:13px\">Приглашение появится в уведомлениях после входа.</p>"

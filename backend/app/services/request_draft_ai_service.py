@@ -301,7 +301,7 @@ async def _pick_forms(
     """Best form plus the other active forms of the org, best matches first."""
     active = await form_repository.get_active_by_org(session, organization_id)
     if not active:
-        raise DraftError("В организации нет активных форм заявок")
+        raise DraftError("В команде нет активных форм заявок")
     by_id = {str(form.id): form for form in active}
 
     suggestion = await public_form_suggest_service.suggest_forms_for_org(

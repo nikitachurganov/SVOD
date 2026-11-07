@@ -52,7 +52,7 @@ export function PerformerHintAssistant({
       <Card styles={{ body: { padding: 14 } }}>
         <span style={{ display: 'block', fontWeight: 600, marginBottom: 8 }}>Подсказка по исполнителю</span>
         <span style={{ fontSize: 12, color: 'var(--app-text-secondary)' }}>
-          Укажите организацию у заявки.
+          Укажите команду у заявки.
         </span>
       </Card>
     );

@@ -55,7 +55,7 @@ export function AssignPerformerModal({
     const groups = [
       { label: 'Рекомендуемые', options: (performers ?? []).map((item) => toOption(item, true)) },
       {
-        label: 'Участники организации',
+        label: 'Участники команды',
         options: rest.filter((item) => item.is_internal).sort(byName).map((item) => toOption(item, false)),
       },
       {

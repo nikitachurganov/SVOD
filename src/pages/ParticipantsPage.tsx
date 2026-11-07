@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Table, Button, Tag, Modal, Alert, Card, Select, Tooltip, Dropdown, Badge, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
@@ -16,7 +17,7 @@ import { useOrganization } from '../shared/hooks/organization.hooks';
 import { useAuth } from '../shared/hooks/auth.hooks';
 import { buildDisplayName } from '../shared/utils/userName';
 import { localizeAppLink } from '../shared/lib/localizeLink';
-import { IS_SURVEYS_APP } from '../shared/config/appMode';
+import { HOME_PATH, IS_SURVEYS_APP } from '../shared/config/appMode';
 import {
   deleteExternalContractor,
   getMembers,
@@ -43,6 +44,7 @@ import { ContractorModal } from '../components/organization/ContractorModal';
 import { MemberAiLimitInput } from '../components/organization/MemberAiLimitInput';
 import { JoinLinkModal } from '../components/organization/JoinLinkModal';
 import { JoinRequestsTable } from '../components/organization/JoinRequestsTable';
+import { OrganizationSettingsSection } from '../components/organization/OrganizationSettingsSection';
 import {
   CONTACT_KIND_LABELS,
   ROLE_LABELS,
@@ -70,14 +72,17 @@ type MemberRow = {
   token_plus_limit: number | null;
 };
 
-type ParticipantsTabKey = 'members' | 'contractors' | 'requests' | 'invitations';
+type ParticipantsTabKey = 'members' | 'contractors' | 'requests' | 'invitations' | 'settings';
 
 const TAB_LABELS: Record<ParticipantsTabKey, string> = {
-  members: IS_SURVEYS_APP ? 'В команде' : 'В организации',
+  members: 'В команде',
   contractors: 'Подрядчики',
   requests: 'Заявки на вступление',
   invitations: 'Приглашения',
+  settings: 'Настройки',
 };
+
+const TAB_KEYS = Object.keys(TAB_LABELS) as ParticipantsTabKey[];
 
 type ConfirmAction =
   | { type: 'remove'; id: string; name: string }
@@ -107,7 +112,13 @@ export const ParticipantsPage = () => {
     open: false,
     contractor: null,
   });
-  const [activeTab, setActiveTab] = useState<ParticipantsTabKey>('members');
+  // The tab lives in the address (?tab=settings): the team's settings share this page in the surveys service
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const tabParam = searchParams.get('tab') as ParticipantsTabKey | null;
+  const activeTab: ParticipantsTabKey = tabParam && TAB_KEYS.includes(tabParam) ? tabParam : 'members';
+  const setActiveTab = (key: ParticipantsTabKey) =>
+    setSearchParams(key === 'members' ? {} : { tab: key }, { replace: true });
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
 
   const activeOrganizationId = activeOrganization?.id;
@@ -115,9 +126,11 @@ export const ParticipantsPage = () => {
   const isAdmin = members.some((m) => m.user.id === user?.id && m.role_tag === 'admin');
   const canManage = isOwner || isAdmin;
   // Outside contractors are assigned to the stages of requests: the surveys service has no such thing
-  const visibleTabs: ParticipantsTabKey[] = (
+  const peopleTabs: ParticipantsTabKey[] = (
     canManage ? ['members', 'contractors', 'requests', 'invitations'] : ['members', 'contractors']
   ).filter((key) => !(IS_SURVEYS_APP && key === 'contractors')) as ParticipantsTabKey[];
+  // The surveys service has one «Команда» page: people and the team's settings together
+  const visibleTabs: ParticipantsTabKey[] = IS_SURVEYS_APP ? [...peopleTabs, 'settings'] : peopleTabs;
 
   const refreshSeats = useCallback(async () => {
     if (!activeOrganizationId) return;
@@ -506,7 +519,7 @@ export const ParticipantsPage = () => {
 
   if (!activeOrganization) return null;
 
-  const headerAction = canManage ? (
+  const headerAction = canManage && activeTab !== 'settings' ? (
     <Dropdown
       classNames={{ root: 'app-menu-dropdown' }}
       trigger={['click']}
@@ -556,7 +569,7 @@ export const ParticipantsPage = () => {
     <div className="registry-page">
       <div className="registry-page__header">
         <div className="registry-page__title-row">
-          <h1 className="registry-page__title">Участники</h1>
+          <h1 className="registry-page__title">{IS_SURVEYS_APP ? 'Команда' : 'Участники'}</h1>
           {headerAction}
         </div>
         <div className="registry-page__tabs" role="tablist" aria-label="Разделы участников">
@@ -582,7 +595,9 @@ export const ParticipantsPage = () => {
       </div>
 
       <div className="registry-page__content">
-        {error ? (
+        {activeTab === 'settings' ? (
+          <OrganizationSettingsSection onAfterDelete={() => navigate(HOME_PATH)} />
+        ) : error ? (
           <Card className="registry-page__card">
             <Alert type="error" title="Ошибка загрузки" description={error} showIcon />
             <Button type="text" size="small" onClick={() => void load()} style={{ marginTop: 8 }}>

@@ -27,7 +27,7 @@ from app.services.yookassa_client import ProviderPayment
 
 NOW = datetime(2026, 11, 1, 12, 0, tzinfo=timezone.utc)
 FAR = datetime(2099, 1, 1, tzinfo=timezone.utc)
-MONTH = 600_00
+MONTH = 690_00
 
 
 def provider_payment(**overrides) -> ProviderPayment:
@@ -153,7 +153,7 @@ class ClientTests(unittest.IsolatedAsyncioTestCase):
         "id": "pay-1",
         "status": "pending",
         "paid": False,
-        "amount": {"value": "600.00", "currency": "RUB"},
+        "amount": {"value": "690.00", "currency": "RUB"},
         "confirmation": {"type": "redirect", "confirmation_url": "https://pay.example/1"},
         "test": True,
         "metadata": {"payment_id": "x"},
@@ -178,7 +178,7 @@ class ClientTests(unittest.IsolatedAsyncioTestCase):
             "Basic " + base64.b64encode(b"shop:secret").decode(),
         )
         body = json.loads(request.content)
-        self.assertEqual(body["amount"], {"value": "600.00", "currency": "RUB"})
+        self.assertEqual(body["amount"], {"value": "690.00", "currency": "RUB"})
         self.assertEqual(body["confirmation"], {"type": "redirect", "return_url": "https://app/return"})
         self.assertTrue(body["capture"])
         self.assertEqual(body["metadata"], {"payment_id": "x"})
@@ -243,8 +243,8 @@ class ClientTests(unittest.IsolatedAsyncioTestCase):
 class OfferTests(unittest.TestCase):
     def test_the_price_and_the_days_follow_the_catalogue(self):
         for term, plan_code, price, days in (
-            ("month", "researcher", 600_00, 30),
-            ("year", "researcher", 5_400_00, 365),
+            ("month", "researcher", 690_00, 30),
+            ("year", "researcher", 6_210_00, 365),
             ("one_off", "pack", 250_00, 60),
         ):
             with self.subTest(term=term):
@@ -268,13 +268,13 @@ class OfferTests(unittest.TestCase):
     def test_with_the_seat_switch_the_price_comes_from_the_calculator(self):
         with patch.object(payment_service.settings, "SEAT_PRICING_ENABLED", True):
             for term, seats, kit_extra, price in (
-                ("month", 1, 2, 600_00),
-                ("month", 3, 2, 1200_00),
-                ("month", 4, 2, 1620_00),
-                ("year", 1, 2, 6336_00),
-                ("year", 2, 2, 9504_00),
+                ("month", 1, 2, 690_00),
+                ("month", 3, 2, 1290_00),
+                ("month", 4, 2, 1710_00),
+                ("year", 1, 2, 7286_00),
+                ("year", 2, 2, 10454_00),
                 # A kit place given up is paid at the plain price when it comes back
-                ("month", 2, 0, 1020_00),
+                ("month", 2, 0, 1110_00),
             ):
                 with self.subTest(term=term, seats=seats, kit_extra=kit_extra):
                     plan, amount, _ = payment_service.offer(term, seats, kit_extra)
@@ -373,9 +373,9 @@ class CheckoutTests(unittest.IsolatedAsyncioTestCase):
         ):
             payment = await payment_service.create_checkout(self.session, self.person, "month", NOW, seats=3)
 
-        self.assertEqual((payment.seats, payment.amount_kopecks), (3, 1200_00))
+        self.assertEqual((payment.seats, payment.amount_kopecks), (3, 1290_00))
         kwargs = self.create.await_args.kwargs
-        self.assertEqual(kwargs["amount_kopecks"], 1200_00)
+        self.assertEqual(kwargs["amount_kopecks"], 1290_00)
         self.assertIn("мест: 3", kwargs["description"])
         self.assertEqual(self.find_open.await_args.kwargs["seats"], 3)
 
@@ -390,7 +390,7 @@ class CheckoutTests(unittest.IsolatedAsyncioTestCase):
         ):
             payment = await payment_service.create_checkout(self.session, self.person, "month", NOW, seats=2)
 
-        self.assertEqual(payment.amount_kopecks, 1020_00)
+        self.assertEqual(payment.amount_kopecks, 1110_00)
 
     async def test_more_than_one_seat_creates_nothing_while_the_switch_is_off(self):
         with patch.object(payment_service.settings, "SEAT_PRICING_ENABLED", False):
@@ -405,7 +405,7 @@ class CheckoutTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(payment_service.settings, "SEAT_PRICING_ENABLED", False):
             payment = await payment_service.create_checkout(self.session, self.person, "year", NOW)
 
-        self.assertEqual((payment.seats, payment.amount_kopecks), (1, 5_400_00))
+        self.assertEqual((payment.seats, payment.amount_kopecks), (1, 6_210_00))
         self.assertNotIn("мест", self.create.await_args.kwargs["description"])
 
     async def test_the_pack_is_sold_as_the_pack_plan_for_sixty_days(self):
@@ -540,7 +540,7 @@ class SeatAdditionTests(unittest.IsolatedAsyncioTestCase):
     async def test_the_new_seats_are_paid_for_the_days_that_are_left(self):
         payment = await payment_service.create_seat_addition(self.session, self.person, 3, NOW)
 
-        # (1200 - 600) ₽ for a month, half of it is left
+        # (1290 - 690) ₽ for a month, half of it is left
         self.assertEqual(payment.amount_kopecks, 300_00)
         self.assertEqual(
             (payment.plan_code, payment.term, payment.seats, payment.days), ("researcher", "seats_add", 3, 15)
@@ -573,7 +573,7 @@ class SeatAdditionTests(unittest.IsolatedAsyncioTestCase):
 
         payment = await payment_service.create_seat_addition(self.session, self.person, 2, NOW)
 
-        # (9504 - 6336) ₽ for 100 days of 365, rounded to the kopeck
+        # (10454 - 7286) ₽ for 100 days of 365, rounded to the kopeck
         self.assertEqual((payment.amount_kopecks, payment.days), (86795, 100))
 
     async def test_a_period_paid_ahead_is_charged_for_one_nominal_period(self):

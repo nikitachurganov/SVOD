@@ -97,7 +97,7 @@ export const RequestTasksPanel = ({
       const data = await getMembers(organizationId);
       setMembers(data);
     } catch {
-      message.error('Не удалось загрузить участников организации');
+      message.error('Не удалось загрузить участников команды');
     } finally {
       setMembersLoading(false);
     }
@@ -411,7 +411,7 @@ export const RequestTasksPanel = ({
             <Select
               allowClear
               showSearch
-              placeholder="Выберите участника организации"
+              placeholder="Выберите участника команды"
               loading={membersLoading}
               options={memberOptions}
               optionFilterProp="label"

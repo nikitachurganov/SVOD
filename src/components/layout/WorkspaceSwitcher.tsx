@@ -1,6 +1,6 @@
 import { Dropdown } from 'antd';
 import type { MenuProps } from 'antd';
-import { DownOutlined, PlusOutlined, SettingOutlined, TeamOutlined, UserOutlined } from '@ant-design/icons';
+import { DownOutlined, PlusOutlined, TeamOutlined, UserOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useOrganization } from '../../shared/hooks/organization.hooks';
 import type { OrganizationResponse } from '../../types/organization';
@@ -38,8 +38,7 @@ export const WorkspaceSwitcher = ({ onCreateTeam }: Props) => {
     { type: 'divider' },
     ...(inTeam
       ? [
-          { key: 'participants', icon: <TeamOutlined />, label: 'Участники команды' },
-          { key: 'settings', icon: <SettingOutlined />, label: 'Настройки команды' },
+          { key: 'team', icon: <TeamOutlined />, label: 'Участники и настройки' },
         ]
       : []),
     { key: 'create', icon: <PlusOutlined />, label: 'Создать команду' },
@@ -47,8 +46,7 @@ export const WorkspaceSwitcher = ({ onCreateTeam }: Props) => {
 
   const onClick: MenuProps['onClick'] = ({ key }) => {
     if (key === 'create') onCreateTeam();
-    else if (key === 'participants') navigate('/participants');
-    else if (key === 'settings') navigate('/settings/organization');
+    else if (key === 'team') navigate('/participants');
     else if (key.startsWith('org:')) {
       setActiveOrganizationId(key.slice('org:'.length));
       // A page of the previous workspace (a survey, a project) does not exist in the next one

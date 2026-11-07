@@ -3,6 +3,7 @@ import uuid
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import request_service
 from app.models.organization import OrganizationMember
 from app.models.user import User
 from app.repositories import organization_repository
@@ -26,5 +27,7 @@ async def list_accessible_organization_ids(
     session: AsyncSession,
     user: User,
 ) -> list[uuid.UUID]:
-    organizations = await organization_repository.get_orgs_for_user(session, user.id)
+    organizations = await organization_repository.get_orgs_for_user(
+        session, user.id, service=request_service.current_service()
+    )
     return [org.id for org in organizations]

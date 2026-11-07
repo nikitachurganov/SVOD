@@ -25,6 +25,10 @@ class Organization(Base):
     is_personal: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
+    # The service the team lives in: "platform" (requests) or "surveys"; never visible in the other one
+    service: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="platform", server_default="platform", index=True
+    )
     owner_user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="RESTRICT"),

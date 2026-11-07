@@ -158,7 +158,7 @@ export const SurveysPage = () => {
       return (
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={IS_SURVEYS_APP ? 'Пространство ещё загружается.' : 'Выберите организацию, чтобы увидеть проекты.'}
+          description={IS_SURVEYS_APP ? 'Пространство ещё загружается.' : 'Выберите команду, чтобы увидеть проекты.'}
         />
       );
     }

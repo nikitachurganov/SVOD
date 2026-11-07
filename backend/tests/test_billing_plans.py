@@ -48,9 +48,9 @@ class CatalogueTests(unittest.TestCase):
     def test_researcher_plan_matches_the_monetization_model(self):
         self.assertEqual(RESEARCHER.ai_tokens_per_period, 6_000_000)
         self.assertEqual(RESEARCHER.ai_window, plans.AI_WINDOW_MONTH)
-        # 600 roubles a month, 5 400 a year (25 % off twelve months)
-        self.assertEqual(RESEARCHER.price_month_kopecks, 60_000)
-        self.assertEqual(RESEARCHER.price_year_kopecks, 540_000)
+        # 690 roubles a month, 6 210 a year (25 % off twelve months)
+        self.assertEqual(RESEARCHER.price_month_kopecks, 69_000)
+        self.assertEqual(RESEARCHER.price_year_kopecks, 621_000)
         self.assertEqual(RESEARCHER.price_year_kopecks, RESEARCHER.price_month_kopecks * 12 * 0.75)
 
     def test_the_more_a_plan_costs_the_more_tokens_it_has(self):

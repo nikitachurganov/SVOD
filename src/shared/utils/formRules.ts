@@ -56,7 +56,7 @@ export const passwordRules = (required = true, minLength = 8): Rule[] => [
 ];
 
 export const organizationNameRules = (): Rule[] => [
-  requiredRule('Введите название организации'),
+  requiredRule('Введите название команды'),
   { max: 255, message: 'Не более 255 символов' },
 ];
 

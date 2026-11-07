@@ -60,9 +60,9 @@ async def owned_organizations(session: AsyncSession, user: User) -> list[Organiz
 async def _require_member(session: AsyncSession, organization_id: uuid.UUID, user: User, *, manager: bool) -> None:
     member = await organization_repository.get_member(session, organization_id, user.id)
     if member is None:
-        raise GroupError("Вы не участник организации, к которой подключена группа")
+        raise GroupError("Вы не участник команды, к которой подключена группа")
     if manager and member.role_tag not in W.MANAGER_ROLE_TAGS:
-        raise GroupError("Это может сделать только владелец организации")
+        raise GroupError("Это может сделать только владелец команды")
 
 
 async def connect_chat(

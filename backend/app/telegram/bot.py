@@ -19,7 +19,7 @@ PRIVATE_COMMANDS = [
     BotCommand(command="new", description="Создать заявку"),
     BotCommand(command="my", description="Мои активные заявки"),
     BotCommand(command="free", description="Свободные заявки"),
-    BotCommand(command="org", description="Выбрать организацию"),
+    BotCommand(command="org", description="Выбрать команду"),
     BotCommand(command="start", description="Статус подключения"),
     BotCommand(command="help", description="Что умеет бот"),
     BotCommand(command="cancel", description="Отменить текущее действие"),

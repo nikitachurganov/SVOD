@@ -2,8 +2,8 @@
 
 The rules are the ones of docs/TARIFFS_FINAL.md (sections 4 and 8):
 
-* the 1st seat (the creator) costs 600 ₽ a month, the 2nd and the 3rd 300 ₽ each (the kit of three is
-  1 200 ₽), any other seat 420 ₽;
+* the 1st seat (the creator) costs 690 ₽ a month, the 2nd and the 3rd 300 ₽ each (the kit of three is
+  1 290 ₽), any other seat 420 ₽;
 * a year costs 10.56 months instead of 12 (-12 %); each seat is rounded to whole rubles;
 * at most one more discount of 10 % (a friend's referral or an ambassador's promo code) on top of the
   year, taken from the total and rounded to whole rubles;
@@ -21,7 +21,7 @@ from app.constants.billing_plans import INTERVAL_MONTH, INTERVAL_YEAR
 
 KOPECKS_IN_RUBLE = 100
 
-SEAT_CREATOR_KOPECKS = 60_000
+SEAT_CREATOR_KOPECKS = 69_000
 SEAT_KIT_KOPECKS = 30_000
 SEAT_OTHER_KOPECKS = 42_000
 

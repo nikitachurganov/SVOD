@@ -395,7 +395,7 @@ class PlansResponseTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual([plan.code for plan in result.plans], ["start", "researcher"])
         researcher = result.plans[1]
-        self.assertEqual((researcher.price_month_kopecks, researcher.price_year_kopecks), (60_000, 540_000))
+        self.assertEqual((researcher.price_month_kopecks, researcher.price_year_kopecks), (69_000, 621_000))
         self.assertEqual(
             researcher.features,
             ["all_methodologies", "crosstabs", "csv_export", "quality_filter"],

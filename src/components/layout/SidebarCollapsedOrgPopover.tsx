@@ -28,7 +28,7 @@ const SidebarCollapsedOrgPopoverInner = () => {
         <button
           type="button"
           className={`app-side-nav-rail__item${open ? ' app-side-nav-rail__item--menu-open' : ''}`}
-          aria-label="Организация: переключить и действия"
+          aria-label="Команда: переключить и действия"
           aria-expanded={open}
           onClick={() => setOpen((v) => !v)}
         >
@@ -40,7 +40,7 @@ const SidebarCollapsedOrgPopoverInner = () => {
 };
 
 /**
- * В свёрнутом сайдбаре: иконка организации, по клику — переключатель и действия,
+ * В свёрнутом сайдбаре: иконка команды, по клику — переключатель и действия,
  * как в развёрнутой нижней части панели.
  */
 export const SidebarCollapsedOrgPopover = () => {

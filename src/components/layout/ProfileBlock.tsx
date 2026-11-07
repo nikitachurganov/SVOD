@@ -91,7 +91,7 @@ export const HeaderProfileMenuContent = ({
           className="app-profile-dropdown__item"
           onClick={handleCreateOrg}
         >
-          Создать организацию
+          Создать команду
         </button>
       )}
 

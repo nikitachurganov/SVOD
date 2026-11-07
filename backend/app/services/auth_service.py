@@ -439,7 +439,7 @@ async def _load_account_invitation(
     if inv.expires_at and inv.expires_at < datetime.now(timezone.utc):
         raise HTTPException(
             status_code=status.HTTP_410_GONE,
-            detail="Срок действия ссылки истёк. Попросите владельца организации отправить приглашение повторно.",
+            detail="Срок действия ссылки истёк. Попросите владельца команды отправить приглашение повторно.",
         )
     user = inv.invited_user
     if not is_pending_activation(user.password_hash):

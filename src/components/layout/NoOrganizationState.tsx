@@ -47,7 +47,7 @@ export const NoOrganizationState = ({ onCreateClick }: { onCreateClick: () => vo
 
   const createButton = (
     <Button icon={<PlusOutlined />} onClick={onCreateClick}>
-      Создать свою организацию
+      Создать свою команду
     </Button>
   );
 
@@ -65,7 +65,7 @@ export const NoOrganizationState = ({ onCreateClick }: { onCreateClick: () => vo
         <Result
           status="info"
           title={`Заявка в «${pending.organization_name}» на рассмотрении`}
-          subTitle={`Отправлена ${formatDate(pending.created_at)}. Как только владелец одобрит её, организация откроется здесь автоматически.`}
+          subTitle={`Отправлена ${formatDate(pending.created_at)}. Как только владелец одобрит её, команда откроется здесь автоматически.`}
           extra={[
             <Button
               key="withdraw"
@@ -113,9 +113,9 @@ export const NoOrganizationState = ({ onCreateClick }: { onCreateClick: () => vo
 
   return (
     <div className="app-no-org-state">
-      <p>Для начала работы необходимо создать организацию или вступить в существующую по ссылке-приглашению</p>
+      <p>Для начала работы необходимо создать команду или вступить в существующую по ссылке-приглашению</p>
       <Button type="primary" icon={<PlusOutlined />} onClick={onCreateClick}>
-        Создать организацию
+        Создать команду
       </Button>
     </div>
   );

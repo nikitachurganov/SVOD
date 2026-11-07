@@ -69,7 +69,7 @@ class Settings(BaseSettings):
     BILLING_ENABLED: bool = False
     # With BILLING_ENABLED, off is the "shadow mode": usage is counted and reported, nothing is blocked.
     BILLING_ENFORCE: bool = False
-    # The price of the paid plan by seats (docs/TARIFFS_FINAL.md): 600 / 300 / 300 / 420 ₽, the year -12 %.
+    # The price of the paid plan by seats (docs/TARIFFS_FINAL.md): 690 / 300 / 300 / 420 ₽, the year -12 %.
     # Off: the old per-person price and one seat. Turn on together with the new offer and price page.
     SEAT_PRICING_ENABLED: bool = False
     # How long a paid plan keeps working after a failed renewal

@@ -28,9 +28,9 @@ async def get_org_by_id(
 
 
 async def get_orgs_for_user(
-    session: AsyncSession, user_id: uuid.UUID
+    session: AsyncSession, user_id: uuid.UUID, service: str | None = None
 ) -> list[Organization]:
-    """Return organizations where the user is a member (includes owned)."""
+    """Return organizations where the user is a member (includes owned); only one service's when given."""
     stmt = (
         select(Organization)
         .join(OrganizationMember, OrganizationMember.organization_id == Organization.id)
@@ -38,6 +38,8 @@ async def get_orgs_for_user(
         .where(OrganizationMember.user_id == user_id)
         .order_by(Organization.created_at.desc())
     )
+    if service is not None:
+        stmt = stmt.where(Organization.service == service)
     result = await session.execute(stmt)
     return list(result.scalars().all())
 
@@ -214,9 +216,9 @@ async def create_invitation(
 
 
 async def list_invitations_for_user(
-    session: AsyncSession, user_id: uuid.UUID
+    session: AsyncSession, user_id: uuid.UUID, service: str | None = None
 ) -> list[OrganizationInvitation]:
-    """Return all pending invitations addressed to the given user."""
+    """Return all pending invitations addressed to the given user (to one service's teams when given)."""
     stmt = (
         select(OrganizationInvitation)
         .options(
@@ -229,6 +231,10 @@ async def list_invitations_for_user(
         )
         .order_by(OrganizationInvitation.created_at.desc())
     )
+    if service is not None:
+        stmt = stmt.join(
+            Organization, Organization.id == OrganizationInvitation.organization_id
+        ).where(Organization.service == service)
     result = await session.execute(stmt)
     return list(result.scalars().all())
 

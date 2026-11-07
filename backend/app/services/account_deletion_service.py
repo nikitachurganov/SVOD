@@ -59,7 +59,7 @@ def _now() -> datetime:
 def _shared_message(names: list[str]) -> str:
     listed = ", ".join(f"«{name}»" for name in names)
     return (
-        f"Вы владелец организаций с другими участниками: {listed}. "
+        f"Вы владелец команд с другими участниками: {listed}. "
         "Передайте владение или удалите их, затем повторите удаление аккаунта."
     )
 

@@ -32,7 +32,7 @@ export const OrganizationSwitcher = () => {
         <button
           type="button"
           className="app-sidebar-org-profile"
-          aria-label="Переключить организацию"
+          aria-label="Переключить команду"
           aria-haspopup="listbox"
         >
           <Avatar className="app-sidebar-org-profile__avatar" size={32}>

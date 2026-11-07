@@ -13,7 +13,7 @@ RUB = 100
 class MonthlyPriceTests(unittest.TestCase):
     def test_the_table_of_configurations(self):
         # seats -> rubles a month (section 4.2)
-        for seats, rubles in {1: 600, 2: 900, 3: 1200, 4: 1620}.items():
+        for seats, rubles in {1: 690, 2: 990, 3: 1290, 4: 1710}.items():
             with self.subTest(seats=seats):
                 self.assertEqual(pricing.quote(seats, INTERVAL_MONTH).total_kopecks, rubles * RUB)
 
@@ -22,16 +22,16 @@ class MonthlyPriceTests(unittest.TestCase):
 
         self.assertEqual(
             [(line.kind, line.price_kopecks // RUB) for line in lines],
-            [("creator", 600), ("kit", 300), ("kit", 300), ("other", 420)],
+            [("creator", 690), ("kit", 300), ("kit", 300), ("other", 420)],
         )
 
     def test_ten_seats_is_the_self_service_ceiling(self):
-        self.assertEqual(pricing.quote(10, INTERVAL_MONTH).total_kopecks, (600 + 600 + 7 * 420) * RUB)
+        self.assertEqual(pricing.quote(10, INTERVAL_MONTH).total_kopecks, (690 + 600 + 7 * 420) * RUB)
 
 
 class YearlyPriceTests(unittest.TestCase):
     def test_the_table_of_configurations(self):
-        for seats, rubles in {1: 6336, 2: 9504, 3: 12672, 4: 17107}.items():
+        for seats, rubles in {1: 7286, 2: 10454, 3: 13622, 4: 18057}.items():
             with self.subTest(seats=seats):
                 self.assertEqual(pricing.quote(seats, INTERVAL_YEAR).total_kopecks, rubles * RUB)
 
@@ -39,15 +39,15 @@ class YearlyPriceTests(unittest.TestCase):
         lines = pricing.quote(4, INTERVAL_YEAR).lines
 
         self.assertEqual(
-            [line.price_kopecks // RUB for line in lines], [6336, 3168, 3168, 4435]
+            [line.price_kopecks // RUB for line in lines], [7286, 3168, 3168, 4435]
         )
         self.assertTrue(all(line.price_kopecks % RUB == 0 for line in lines))
 
     def test_the_year_saves_twelve_percent(self):
         q = pricing.quote(3, INTERVAL_YEAR)
 
-        # 12 months at 1 200 = 14 400; the year costs 12 672
-        self.assertEqual(q.year_saving_kopecks, (14_400 - 12_672) * RUB)
+        # 12 months at 1 290 = 15 480; the year costs 13 622
+        self.assertEqual(q.year_saving_kopecks, (15_480 - 13_622) * RUB)
 
     def test_a_month_saves_nothing(self):
         self.assertEqual(pricing.quote(3, INTERVAL_MONTH).year_saving_kopecks, 0)
@@ -57,14 +57,14 @@ class DiscountTests(unittest.TestCase):
     def test_a_promo_on_a_year_of_three_seats(self):
         q = pricing.quote(3, INTERVAL_YEAR, pricing.DISCOUNT_PROMO)
 
-        self.assertEqual(q.subtotal_kopecks, 12_672 * RUB)
-        self.assertEqual(q.total_kopecks, 11_405 * RUB)
-        self.assertEqual(q.discount_kopecks, (12_672 - 11_405) * RUB)
+        self.assertEqual(q.subtotal_kopecks, 13_622 * RUB)
+        self.assertEqual(q.total_kopecks, 12_260 * RUB)
+        self.assertEqual(q.discount_kopecks, (13_622 - 12_260) * RUB)
 
     def test_a_referral_on_a_month(self):
         q = pricing.quote(3, INTERVAL_MONTH, pricing.DISCOUNT_REFERRAL)
 
-        self.assertEqual(q.total_kopecks, 1_080 * RUB)
+        self.assertEqual(q.total_kopecks, 1_161 * RUB)
 
     def test_both_discounts_are_the_same_ten_percent(self):
         promo = pricing.quote(2, INTERVAL_YEAR, pricing.DISCOUNT_PROMO)
@@ -81,17 +81,17 @@ class DiscountTests(unittest.TestCase):
 class KitWindowTests(unittest.TestCase):
     def test_a_seat_returned_in_the_window_keeps_the_kit_price(self):
         # Bought with two, the third comes back within 7 days: both extras are still at 300
-        self.assertEqual(pricing.quote(3, INTERVAL_MONTH, kit_extra=2).total_kopecks, 1_200 * RUB)
+        self.assertEqual(pricing.quote(3, INTERVAL_MONTH, kit_extra=2).total_kopecks, 1_290 * RUB)
 
     def test_after_the_window_only_the_kept_seat_has_the_kit_price(self):
         # The window closed when the team had two seats: one extra at 300, the next at 420
         q = pricing.quote(3, INTERVAL_MONTH, kit_extra=1)
 
-        self.assertEqual(q.total_kopecks, (600 + 300 + 420) * RUB)
+        self.assertEqual(q.total_kopecks, (690 + 300 + 420) * RUB)
         self.assertEqual([line.kind for line in q.lines], ["creator", "kit", "other"])
 
     def test_with_no_kit_left_every_extra_seat_is_420(self):
-        self.assertEqual(pricing.quote(2, INTERVAL_MONTH, kit_extra=0).total_kopecks, (600 + 420) * RUB)
+        self.assertEqual(pricing.quote(2, INTERVAL_MONTH, kit_extra=0).total_kopecks, (690 + 420) * RUB)
 
     def test_the_kit_never_covers_more_than_two_extras(self):
         self.assertEqual(pricing.seat_kinds(5, kit_extra=9).count("kit"), 2)

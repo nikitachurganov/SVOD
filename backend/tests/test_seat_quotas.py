@@ -141,11 +141,11 @@ class QuoteRouteTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_the_price_page_gets_the_same_numbers_as_the_payment(self):
         for term, seats, total in (
-            ("month", 1, 600_00),
-            ("month", 3, 1200_00),
-            ("month", 4, 1620_00),
-            ("year", 1, 6336_00),
-            ("year", 3, 12672_00),
+            ("month", 1, 690_00),
+            ("month", 3, 1290_00),
+            ("month", 4, 1710_00),
+            ("year", 1, 7286_00),
+            ("year", 3, 13622_00),
         ):
             with self.subTest(term=term, seats=seats):
                 result = await self.quote(term, seats)
@@ -154,7 +154,7 @@ class QuoteRouteTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_a_year_tells_how_much_it_saves(self):
         result = await self.quote("year", 3)
-        self.assertEqual(result.year_saving_kopecks, 12 * 1200_00 - 12672_00)
+        self.assertEqual(result.year_saving_kopecks, 12 * 1290_00 - 13622_00)
 
     async def test_it_is_closed_while_the_seat_switch_is_off_and_for_a_bad_number(self):
         from fastapi import HTTPException

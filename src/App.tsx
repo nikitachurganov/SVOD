@@ -736,7 +736,8 @@ const surveysRoutes: RouteObject[] = [
 
       { path: 'participants', element: <TeamOnly><ParticipantsPage /></TeamOnly> },
 
-      { path: 'settings/organization', element: <TeamOnly><OrganizationSettingsPage /></TeamOnly> },
+      // The team's settings are a tab of the «Команда» page
+      { path: 'settings/organization', element: <Navigate to="/participants?tab=settings" replace /> },
 
       { path: 'admin', element: <AdminRoute /> },
 

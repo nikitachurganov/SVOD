@@ -50,7 +50,7 @@ STATUS_APPROVED = "approved"
 STATUS_REJECTED = "rejected"
 STATUS_WITHDRAWN = "withdrawn"
 
-_LINK_INVALID = "Ссылка-приглашение недействительна или выключена владельцем организации"
+_LINK_INVALID = "Ссылка-приглашение недействительна или выключена владельцем команды"
 
 
 # ---------------------------------------------------------------------------
@@ -94,7 +94,8 @@ def _link_response(org: Organization) -> JoinLinkResponse:
 
 async def _org_by_join_token(session: AsyncSession, token: str) -> Organization:
     org = await session.scalar(select(Organization).where(Organization.join_token == token))
-    if org is None or not org.join_link_enabled:
+    # A link of a team of the other service does not work here: the services do not share teams
+    if org is None or not org.join_link_enabled or org.service != request_service.current_service():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_LINK_INVALID)
     return org
 
@@ -164,7 +165,7 @@ async def _create_request(
     message: str | None,
 ) -> OrganizationJoinRequest:
     if await organization_repository.get_member(session, org.id, user.id):
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Вы уже состоите в этой организации")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Вы уже состоите в этой команде")
     existing = await session.scalar(
         select(OrganizationJoinRequest).where(
             OrganizationJoinRequest.organization_id == org.id,
@@ -305,10 +306,10 @@ async def _notify_applicant(
 ) -> None:
     if approved:
         title = f"Вас приняли в «{org.name}»"
-        body = "Организация теперь доступна в сервисе."
+        body = "Команда теперь доступна в сервисе."
     else:
         title = f"Заявка в «{org.name}» отклонена"
-        body = row.reject_reason or "Владелец организации отклонил заявку."
+        body = row.reject_reason or "Владелец команды отклонил заявку."
     await notification_service.create_notification(
         session,
         recipient_user_id=row.user_id,
@@ -327,13 +328,13 @@ async def _email_applicant(row: OrganizationJoinRequest, org: Organization, *, a
     safe_org = html.escape(org.name)
     if approved:
         subject = f"Вас приняли в «{org.name}» — СВОД"
-        text = f"Владелец организации «{org.name}» одобрил вашу заявку. Войдите в СВОД: {app_url}"
-        html_body = f"<p>Владелец организации «{safe_org}» одобрил вашу заявку.</p><p><a href=\"{html.escape(app_url, quote=True)}\">Открыть СВОД</a></p>"
+        text = f"Владелец команды «{org.name}» одобрил вашу заявку. Войдите в СВОД: {app_url}"
+        html_body = f"<p>Владелец команды «{safe_org}» одобрил вашу заявку.</p><p><a href=\"{html.escape(app_url, quote=True)}\">Открыть СВОД</a></p>"
     else:
         reason = row.reject_reason or "причина не указана"
         subject = f"Заявка в «{org.name}» отклонена — СВОД"
-        text = f"Владелец организации «{org.name}» отклонил вашу заявку: {reason}"
-        html_body = f"<p>Владелец организации «{safe_org}» отклонил вашу заявку.</p><p>Причина: {html.escape(reason)}</p>"
+        text = f"Владелец команды «{org.name}» отклонил вашу заявку: {reason}"
+        html_body = f"<p>Владелец команды «{safe_org}» отклонил вашу заявку.</p><p>Причина: {html.escape(reason)}</p>"
     await email_service.send_email(to=row.user.email, subject=subject, text=text, html_body=html_body)
 
 

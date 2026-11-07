@@ -137,9 +137,9 @@ RESEARCHER = Plan(
     ai_tokens_per_period=6_000_000,
     ai_window=AI_WINDOW_MONTH,
     features=_PAID_FEATURES,
-    price_month_kopecks=60_000,
-    # 25 % off twelve months
-    price_year_kopecks=540_000,
+    price_month_kopecks=69_000,
+    # 25 % off twelve months of 690 ₽: 6 210 ₽
+    price_year_kopecks=621_000,
 )
 
 UNLIMITED = Plan(

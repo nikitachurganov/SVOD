@@ -110,7 +110,7 @@ async def load_for_action(
         raise SuggestionError("Черновик уже неактуален")
     member = await organization_repository.get_member(session, suggestion.organization_id, user.id)
     if member is None:
-        raise SuggestionError("Вы не участник организации, к которой относится заявка")
+        raise SuggestionError("Вы не участник команды, к которой относится заявка")
     if suggestion.source_kind == SOURCE_PRIVATE and suggestion.initiator_user_id != user.id:
         raise SuggestionError("Это чужой черновик")
     return suggestion

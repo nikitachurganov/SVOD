@@ -5,11 +5,13 @@ from collections.abc import Collection
 from datetime import datetime, timezone
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants import request_workflow as W
+from app.core import request_service as calling_service
 from app.models.notification import Notification
+from app.models.organization import Organization
 from app.models.request import Request
 from app.models.request_stage import RequestStage
 from app.models.user import User
@@ -163,21 +165,38 @@ async def notify_request_created(
         )
 
 
+def _visible_in_service(user: User) -> list:
+    """The conditions of the notifications the calling service shows to the person.
+
+    One account works in both services, but the surveys service knows nothing about requests: stage and
+    request news (they carry a request) stay in the main web app, and the surveys bell keeps the team's
+    own news (join requests and their decisions).
+    """
+    service = calling_service.current_service()
+    # The teams of the two services do not mix: the news of a team shows only in the service it lives in
+    teams_of_service = select(Organization.id).where(Organization.service == service)
+    conditions = [
+        Notification.recipient_user_id == user.id,
+        or_(Notification.organization_id.is_(None), Notification.organization_id.in_(teams_of_service)),
+    ]
+    if service == calling_service.SERVICE_SURVEYS:
+        conditions += [Notification.request_id.is_(None), Notification.stage_id.is_(None)]
+    return conditions
+
+
 async def list_notifications(
     session: AsyncSession, user: User, *, limit: int = 50
 ) -> NotificationListResponse:
+    visible = _visible_in_service(user)
     result = await session.execute(
         select(Notification)
-        .where(Notification.recipient_user_id == user.id)
+        .where(*visible)
         .order_by(Notification.created_at.desc())
         .limit(min(max(limit, 1), 100))
     )
     rows = list(result.scalars().all())
     unread = await session.scalar(
-        select(func.count(Notification.id)).where(
-            Notification.recipient_user_id == user.id,
-            Notification.read_at.is_(None),
-        )
+        select(func.count(Notification.id)).where(*visible, Notification.read_at.is_(None))
     )
     return NotificationListResponse(items=[_to_response(row) for row in rows], unread_count=int(unread or 0))
 
@@ -199,7 +218,7 @@ async def mark_read(session: AsyncSession, notification_id: uuid.UUID, user: Use
 async def mark_all_read(session: AsyncSession, user: User) -> None:
     await session.execute(
         update(Notification)
-        .where(Notification.recipient_user_id == user.id, Notification.read_at.is_(None))
+        .where(*_visible_in_service(user), Notification.read_at.is_(None))
         .values(read_at=datetime.now(timezone.utc))
     )
     await session.commit()

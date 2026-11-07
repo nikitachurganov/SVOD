@@ -208,6 +208,8 @@ async def create_organization(
         name=payload.name,
         description=payload.description,
         owner_user_id=current_user.id,
+        # A team lives in the service it was created in
+        service=request_service.current_service(),
     )
     org = await organization_repository.create_org(session, org)
 
@@ -236,6 +238,7 @@ async def get_or_create_personal_organization(
                     name=PERSONAL_ORGANIZATION_NAME,
                     owner_user_id=current_user.id,
                     is_personal=True,
+                    service=request_service.SERVICE_SURVEYS,
                 ),
             )
             await organization_repository.add_member(
@@ -262,7 +265,9 @@ async def get_or_create_personal_organization(
 async def get_my_organizations(
     session: AsyncSession, current_user: User
 ) -> list[OrganizationResponse]:
-    orgs = await organization_repository.get_orgs_for_user(session, current_user.id)
+    orgs = await organization_repository.get_orgs_for_user(
+        session, current_user.id, service=request_service.current_service()
+    )
     roles = await organization_repository.get_role_tags_for_user(session, current_user.id)
     results: list[OrganizationResponse] = []
     for org in orgs:
@@ -723,7 +728,7 @@ async def get_my_invitations(
 ) -> list[InvitationWithOrgResponse]:
     """Return all pending in-app invitations addressed to the current user."""
     invitations = await organization_repository.list_invitations_for_user(
-        session, current_user.id
+        session, current_user.id, service=request_service.current_service()
     )
     return [_to_invitation_with_org_response(i) for i in invitations]
 

@@ -353,7 +353,7 @@ def _fallback_cards(
         _forms_to_cards(
             ranked[:3],
             base_score=0.55,
-            reason="Популярная форма среди заявок организации",
+            reason="Популярная форма среди заявок команды",
         ),
         _HINT_POPULAR,
     )
