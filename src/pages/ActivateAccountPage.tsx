@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Alert, Button, Form, Input, Spin } from 'antd';
 import { useNavigate, useParams } from 'react-router-dom';
+import { HOME_PATH, IS_SURVEYS_APP } from '../shared/config/appMode';
+import { TEAM_ACC } from '../shared/lib/teamWords';
 import {
   activateAccount,
   getAccountActivation,
@@ -70,7 +72,7 @@ export const ActivateAccountPage = () => {
         password: values.password,
       });
       await refreshProfile();
-      navigate('/requests', { replace: true });
+      navigate(HOME_PATH, { replace: true });
     } catch (err) {
       setSubmitError(errorDetail(err, 'Не удалось активировать аккаунт'));
     } finally {
@@ -85,7 +87,9 @@ export const ActivateAccountPage = () => {
         <div className="auth-page__hero-overlay" />
         <div className="auth-page__hero-content">
           <img src={logoUrl} alt="СВОД" className="auth-page__hero-logo" />
-          <p className="auth-page__hero-tagline">Все заявки в одном управляемом потоке</p>
+          <p className="auth-page__hero-tagline">
+            {IS_SURVEYS_APP ? 'Опросы и анкетирование' : 'Все заявки в одном управляемом потоке'}
+          </p>
         </div>
       </div>
 
@@ -110,7 +114,7 @@ export const ActivateAccountPage = () => {
           ) : (
             <>
               <p style={{ margin: '0 0 20px', color: 'var(--app-text-secondary)', lineHeight: 1.5 }}>
-                {info.inviter_name ? `${info.inviter_name} добавил(а) вас` : 'Вас добавили'} в организацию{' '}
+                {info.inviter_name ? `${info.inviter_name} добавил(а) вас` : 'Вас добавили'} в {TEAM_ACC}{' '}
                 <strong style={{ color: 'var(--app-text)' }}>«{info.organization_name}»</strong>
                 {info.job_title ? ` как «${info.job_title}»` : ''}. Проверьте данные и придумайте пароль —
                 дальше вы будете входить по почте <strong style={{ color: 'var(--app-text)' }}>{info.email}</strong>.

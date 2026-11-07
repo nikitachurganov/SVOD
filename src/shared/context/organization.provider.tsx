@@ -18,9 +18,16 @@ import { OrganizationContext, type OrganizationContextValue } from './organizati
 
 const ACTIVE_ORG_KEY = 'active_organization_id';
 
-/** The standalone surveys service has no organizations: its only "organization" is the user's own workspace */
-const fetchOrganizations = async (): Promise<OrganizationResponse[]> =>
-  IS_SURVEYS_APP ? [await getPersonalOrganization()] : getMyOrganizations();
+/**
+ * The standalone surveys service opens in the user's own workspace (the server creates it on first call);
+ * the teams the person created or joined follow it in the list.
+ */
+const fetchOrganizations = async (): Promise<OrganizationResponse[]> => {
+  if (!IS_SURVEYS_APP) return getMyOrganizations();
+  const personal = await getPersonalOrganization();
+  const all = await getMyOrganizations().catch(() => [personal]);
+  return [personal, ...all.filter((org) => org.id !== personal.id)];
+};
 
 export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
@@ -123,11 +130,15 @@ export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
     [organizations, activeOrgId],
   );
 
+  // An answer without a role (an old server) is not a reason to take the buttons away
+  const canEdit = activeOrganization !== null && activeOrganization.my_role !== 'reader';
+
   const value = useMemo<OrganizationContextValue>(
     () => ({
       organizations,
       activeOrganization,
       isLoading,
+      canEdit,
       setActiveOrganizationId,
       refreshOrganizations: loadOrganizations,
       createOrganization,
@@ -136,6 +147,7 @@ export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
       organizations,
       activeOrganization,
       isLoading,
+      canEdit,
       setActiveOrganizationId,
       loadOrganizations,
       createOrganization,

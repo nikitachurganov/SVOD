@@ -13,7 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants import team_roles
-from app.core.config import settings
+from app.core import request_service
 from app.core.name_utils import build_display_name
 from app.core.security import create_access_token, is_pending_activation
 from app.models.organization import (
@@ -58,7 +58,7 @@ _LINK_INVALID = "Ссылка-приглашение недействитель�
 # ---------------------------------------------------------------------------
 
 def join_url(token: str) -> str:
-    return f"{settings.APP_PUBLIC_URL.rstrip('/')}/join/{token}"
+    return f"{request_service.app_base_url()}/join/{token}"
 
 
 def _display_name(user: User | None) -> str:
@@ -323,7 +323,7 @@ async def _notify_applicant(
 async def _email_applicant(row: OrganizationJoinRequest, org: Organization, *, approved: bool) -> None:
     if row.user is None:
         return
-    app_url = settings.APP_PUBLIC_URL.rstrip("/")
+    app_url = request_service.app_base_url()
     safe_org = html.escape(org.name)
     if approved:
         subject = f"Вас приняли в «{org.name}» — СВОД"

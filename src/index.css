@@ -190,6 +190,52 @@ html[data-theme] body {
   white-space: nowrap;
 }
 
+/* Standalone surveys service: the workspace (own or a team's) the person works in */
+.workspace-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 240px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--app-border-secondary);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--app-text);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.workspace-switcher:hover {
+  background: var(--app-surface-hover);
+}
+
+.workspace-switcher:focus-visible {
+  outline: 2px solid var(--app-primary);
+  outline-offset: 2px;
+}
+
+.workspace-switcher__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-switcher__arrow {
+  font-size: 10px;
+  color: var(--app-text-secondary);
+}
+
+@media (max-width: 600px) {
+  .workspace-switcher {
+    max-width: 120px;
+    padding: 0 8px;
+  }
+}
+
 .app-content-header__right {
   display: flex;
   align-items: center;

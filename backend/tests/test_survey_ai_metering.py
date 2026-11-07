@@ -13,7 +13,9 @@ from app.services import ai_meter, survey_service
 
 class MeteringCase(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
-        self.survey = SimpleNamespace(id=uuid.uuid4(), name="Опрос", pages=[], ai_summary=None)
+        self.survey = SimpleNamespace(
+            id=uuid.uuid4(), organization_id=uuid.uuid4(), name="Опрос", pages=[], ai_summary=None
+        )
         self.user = SimpleNamespace(id=uuid.uuid4())
         self.session = MagicMock()
         self.session.commit = AsyncMock()

@@ -22,6 +22,8 @@ import {
 
   useNavigate,
 
+  useParams,
+
 } from 'react-router-dom';
 
 import { useAuth } from './shared/hooks/auth.hooks';
@@ -39,7 +41,8 @@ import { NAV_ITEMS } from './components/layout/navItems';
 
 import { AppContentHeader } from './components/layout/AppContentHeader';
 
-import { getBreadcrumbsForPath, withStandaloneRoot } from './components/layout/appBreadcrumbs';
+import { getBreadcrumbsForPath, getTeamBreadcrumbs, withStandaloneRoot } from './components/layout/appBreadcrumbs';
+import { PersonalWorkspaceNotice } from './components/layout/PersonalWorkspaceNotice';
 
 import { BreadcrumbProvider, useBreadcrumbEntity } from './shared/context/breadcrumb.context';
 
@@ -351,7 +354,10 @@ const AppLayoutContent = () => {
 
             breadcrumbs={
               IS_SURVEYS_APP
-                ? withStandaloneRoot(getBreadcrumbsForPath(location.pathname, entityTitle, entityParent))
+                ? withStandaloneRoot(
+                    getBreadcrumbsForPath(location.pathname, entityTitle, entityParent) ??
+                      getTeamBreadcrumbs(location.pathname),
+                  )
                 : getBreadcrumbsForPath(location.pathname, entityTitle, entityParent)
             }
 
@@ -373,7 +379,7 @@ const AppLayoutContent = () => {
 
             onCreateOrg={openCreateOrg}
 
-            showNotifications={!IS_SURVEYS_APP}
+            showNotifications
 
             standalone={IS_SURVEYS_APP}
 
@@ -429,17 +435,13 @@ const AppLayoutContent = () => {
 
 
 
-      {!IS_SURVEYS_APP && (
+      <CreateOrganizationModal
 
-        <CreateOrganizationModal
+        open={createOrgOpen}
 
-          open={createOrgOpen}
+        onClose={() => setCreateOrgOpen(false)}
 
-          onClose={() => setCreateOrgOpen(false)}
-
-        />
-
-      )}
+      />
 
     </>
 
@@ -552,22 +554,42 @@ const publicSurveyRoutes: RouteObject[] = [
 
 ];
 
+// A reader of a team looks at surveys and results, he does not create or change them:
+// the address of such a page leads him back to where he can look
+const EditorOnly = ({ to, children }: { to: string; children: ReactNode }) => {
+  const { canEdit } = useOrganization();
+
+  if (!canEdit) return <Navigate to={to} replace />;
+
+  return <>{children}</>;
+};
+
+const EditSurveyRoute = () => {
+  const { id } = useParams<{ id: string }>();
+
+  return (
+    <EditorOnly to={id ? `/surveys/${id}` : '/surveys'}>
+      <EditSurveyPage />
+    </EditorOnly>
+  );
+};
+
 // Author's surveys section (children of the protected layout)
 const surveyRoutes: RouteObject[] = [
 
   { path: 'surveys', element: <SurveysPage /> },
 
-  { path: 'surveys/create', element: <CreateSurveyPage /> },
+  { path: 'surveys/create', element: <EditorOnly to="/surveys"><CreateSurveyPage /></EditorOnly> },
 
   // The survey the AI built on svodservice.ru, taken into the account after signing in
-  { path: 'surveys/from-demo/:token', element: <SurveyFromDemoPage /> },
+  { path: 'surveys/from-demo/:token', element: <EditorOnly to="/surveys"><SurveyFromDemoPage /></EditorOnly> },
 
   { path: 'surveys/projects/:projectId', element: <ProjectSurveysPage /> },
 
   // One route for the survey page and its tabs (/form, /responses[/:responseId], /analytics)
   { path: 'surveys/:id/*', element: <SurveyViewPage /> },
 
-  { path: 'surveys/:id/edit', element: <EditSurveyPage /> },
+  { path: 'surveys/:id/edit', element: <EditSurveyRoute /> },
 
 ];
 
@@ -664,10 +686,24 @@ const publicLegalRoutes: RouteObject[] = [
 
 ];
 
-// Standalone surveys service: sign-in, the surveys section and respondent pages only
+// The people and settings of a team have nothing to show in the person's own workspace: it is not shared
+const TeamOnly = ({ children }: { children: ReactNode }) => {
+  const { activeOrganization } = useOrganization();
+
+  if (activeOrganization?.is_personal) return <PersonalWorkspaceNotice />;
+
+  return <>{children}</>;
+};
+
+// Standalone surveys service: sign-in, the surveys section, teams and respondent pages only
 const surveysRoutes: RouteObject[] = [
 
   { path: '/verify-email/:token', element: <VerifyEmailPage /> },
+
+  // Public: join a team by its link, and activate an account the team's owner created
+  { path: '/join/:token', element: <JoinOrganizationPage /> },
+
+  { path: '/activate/:token', element: <ActivateAccountPage /> },
 
   // «Continue in the service» on svodservice.ru: a guest signs up (or in) first, then gets the survey
   { path: '/demo/:token', element: <DemoDraftEntryPage /> },
@@ -697,6 +733,10 @@ const surveysRoutes: RouteObject[] = [
       { path: 'profile', element: <ProfilePage /> },
 
       { path: 'plans', element: <PlansPage /> },
+
+      { path: 'participants', element: <TeamOnly><ParticipantsPage /></TeamOnly> },
+
+      { path: 'settings/organization', element: <TeamOnly><OrganizationSettingsPage /></TeamOnly> },
 
       { path: 'admin', element: <AdminRoute /> },
 

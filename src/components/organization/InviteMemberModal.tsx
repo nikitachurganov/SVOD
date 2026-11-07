@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react';
 import { Alert, Button, Form, Input, Modal, Select, Typography } from 'antd';
 import { CheckCircleFilled, CopyOutlined, MailOutlined } from '@ant-design/icons';
 import { inviteUser, lookupInvitee } from '../../shared/api/organizations.api';
+import { localizeAppLink } from '../../shared/lib/localizeLink';
+import { IS_SURVEYS_APP } from '../../shared/config/appMode';
+import { TEAM_PREP } from '../../shared/lib/teamWords';
 import { useDebouncedCallback } from '../../shared/hooks/useDebouncedCallback';
 import { emailRules, phoneRules, requiredRule } from '../../shared/utils/formRules';
 import type {
@@ -31,7 +34,7 @@ interface InviteFormValues {
 }
 
 const API_ERROR_MESSAGES: Record<string, string> = {
-  'User is already a member of this organization': 'Этот человек уже состоит в организации',
+  'User is already a member of this organization': `Этот человек уже состоит в ${TEAM_PREP}`,
   'Pending invitation already exists for this user':
     'Приглашение уже отправлено — повторить его можно на вкладке «Приглашения»',
   'You cannot invite yourself': 'Нельзя пригласить самого себя',
@@ -76,7 +79,7 @@ export const InvitationResult = ({ invitation }: { invitation: InvitationRespons
             {invitation.expires_at ? new Date(invitation.expires_at).toLocaleDateString('ru-RU') : '—'})
           </Typography.Text>
           <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-            <Input value={invitation.activation_url} readOnly onFocus={(e) => e.target.select()} />
+            <Input value={localizeAppLink(invitation.activation_url)} readOnly onFocus={(e) => e.target.select()} />
             <Button
               icon={<CopyOutlined />}
               onClick={async () => setCopied(await copyToClipboard(invitation.activation_url ?? ''))}
@@ -221,7 +224,7 @@ export const InviteMemberModal = ({ open, onClose, organizationId, canAssignAdmi
           </Form.Item>
 
           {currentLookup?.is_member ? (
-            <Alert type="error" showIcon style={{ marginBottom: 16 }} message={`${currentLookup.full_name ?? 'Этот человек'} уже состоит в организации`} />
+            <Alert type="error" showIcon style={{ marginBottom: 16 }} message={`${currentLookup.full_name ?? 'Этот человек'} уже состоит в ${TEAM_PREP}`} />
           ) : currentLookup?.has_pending_invitation ? (
             <Alert
               type="warning"
@@ -280,7 +283,7 @@ export const InviteMemberModal = ({ open, onClose, organizationId, canAssignAdmi
           <Form.Item
             name="specialization"
             label="Специализация"
-            extra="Учитывается при подборе исполнителей этапов"
+            extra={IS_SURVEYS_APP ? undefined : 'Учитывается при подборе исполнителей этапов'}
           >
             <Input.TextArea placeholder="Например, полиграфия, наружная реклама" autoSize={{ minRows: 2, maxRows: 4 }} maxLength={2000} />
           </Form.Item>

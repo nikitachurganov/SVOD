@@ -7,6 +7,7 @@ import {
   setJoinLinkEnabled,
 } from '../../shared/api/organizations.api';
 import type { JoinLinkResponse } from '../../types/organization';
+import { localizeAppLink } from '../../shared/lib/localizeLink';
 import { copyToClipboard } from './participants.utils';
 
 interface Props {
@@ -83,7 +84,7 @@ export const JoinLinkModal = ({ open, organizationId, onClose }: Props) => {
           {link.enabled && link.url ? (
             <>
               <div style={{ display: 'flex', gap: 8 }}>
-                <Input value={link.url} readOnly onFocus={(e) => e.target.select()} aria-label="Ссылка-приглашение" />
+                <Input value={localizeAppLink(link.url)} readOnly onFocus={(e) => e.target.select()} aria-label="Ссылка-приглашение" />
                 <Button
                   type="primary"
                   icon={<CopyOutlined />}

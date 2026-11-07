@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { announcePaywall, parseBillingError } from './billingErrors';
+import { IS_SURVEYS_APP } from '../config/appMode';
 
 const BASE_URL = import.meta.env.VITE_API_URL as string | undefined;
 
@@ -9,7 +10,11 @@ if (!BASE_URL) {
 
 const api = axios.create({
   baseURL: BASE_URL,
-  headers: { 'Content-Type': 'application/json' },
+  headers: {
+    'Content-Type': 'application/json',
+    // The server builds the links of invitations on the address of the front end the request came from
+    ...(IS_SURVEYS_APP ? { 'X-App-Service': 'surveys' } : {}),
+  },
 });
 
 api.interceptors.request.use((config) => {

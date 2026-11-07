@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Form, Input, Modal } from 'antd';
 import { useOrganization } from '../../shared/hooks/organization.hooks';
 import { organizationNameRules } from '../../shared/utils/formRules';
+import { IS_SURVEYS_APP } from '../../shared/config/appMode';
 
 const { TextArea } = Input;
 
@@ -43,7 +44,7 @@ export const CreateOrganizationModal = ({ open, onClose }: Props) => {
   return (
     <Modal
       open={open}
-      title="Создать организацию"
+      title={IS_SURVEYS_APP ? 'Создать команду' : 'Создать организацию'}
       okText={loading ? 'Создание…' : 'Создать'}
       cancelText="Отмена"
       confirmLoading={loading}
@@ -61,7 +62,7 @@ export const CreateOrganizationModal = ({ open, onClose }: Props) => {
         style={{ paddingTop: 8 }}
       >
         <Form.Item name="name" label="Название" rules={organizationNameRules()}>
-          <Input placeholder="Название организации" maxLength={255} />
+          <Input placeholder={IS_SURVEYS_APP ? 'Название команды' : 'Название организации'} maxLength={255} />
         </Form.Item>
         <Form.Item name="description" label="Описание">
           <TextArea

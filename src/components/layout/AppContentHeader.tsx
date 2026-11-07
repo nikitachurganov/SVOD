@@ -5,6 +5,7 @@ import { useTour } from '../tour/useTour';
 import type { AppBreadcrumbItem } from './appBreadcrumbs';
 import { HeaderNotifications } from './HeaderNotifications';
 import { HeaderProfileMenu } from './HeaderProfileMenu';
+import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 import { HOME_PATH } from '../../shared/config/appMode';
 import logoUrl from '../../assets/logo.svg';
 
@@ -19,9 +20,9 @@ interface AppContentHeaderProps {
   resolvedName: string;
   resolvedEmail: string;
   onCreateOrg: () => void;
-  /** Invitations and platform notifications; off in the standalone surveys service */
+  /** Invitations to a team and decisions on join requests */
   showNotifications?: boolean;
-  /** Standalone surveys service: no sidebar and no organizations, the brand lives here */
+  /** Standalone surveys service: no sidebar, the brand and the workspace switcher live here */
   standalone?: boolean;
   showMobileMenu?: boolean;
   onMobileMenuClick?: () => void;
@@ -82,6 +83,7 @@ export const AppContentHeader = ({
         ) : null}
       </div>
       <div className="app-content-header__right">
+        {standalone && <WorkspaceSwitcher onCreateTeam={onCreateOrg} />}
         {showNotifications && (
           <HeaderNotifications
             open={notificationsOpen}

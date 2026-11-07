@@ -13,6 +13,7 @@ import {
 import type { MemberResponse } from '../../types/organization';
 import { buildDisplayName } from '../../shared/utils/userName';
 import { TelegramIntegrationCard } from './TelegramIntegrationCard';
+import { IS_SURVEYS_APP } from '../../shared/config/appMode';
 
 function apiErrorMessage(err: unknown): string {
   if (err && typeof err === 'object' && 'response' in err) {
@@ -184,7 +185,8 @@ export const OrganizationSettingsSection = ({ onAfterDelete }: Props) => {
       <div className={`org-settings org-settings--${settingsTab}`}>
         <p className="org-settings__org-name">{activeOrganization.name}</p>
 
-        <div className="org-settings__tabs" role="tablist" aria-label="Разделы настроек">
+        {/* The integrations and AI switches of the settings are about requests: the surveys service has only the team's profile */}
+        <div className="org-settings__tabs" role="tablist" aria-label="Разделы настроек" hidden={IS_SURVEYS_APP}>
           <button className={`org-settings__tab ${settingsTab === 'organization' ? 'org-settings__tab--active' : ''}`} role="tab" aria-selected={settingsTab === 'organization'} onClick={() => setSettingsTab('organization')}>Организация</button>
           <button className={`org-settings__tab ${settingsTab === 'connections' ? 'org-settings__tab--active' : ''}`} role="tab" aria-selected={settingsTab === 'connections'} onClick={() => setSettingsTab('connections')}>Подключения</button>
           <button className={`org-settings__tab ${settingsTab === 'ai' ? 'org-settings__tab--active' : ''}`} role="tab" aria-selected={settingsTab === 'ai'} onClick={() => setSettingsTab('ai')}>ИИ и лимиты</button>

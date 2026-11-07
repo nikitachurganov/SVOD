@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from app.api.routes import api_router
+from app.core import request_service
 from app.core.config import settings
 from app.core.metrics import REQUEST_API_ERRORS
 
@@ -20,6 +21,13 @@ app.add_middleware(
 )
 
 app.include_router(api_router)
+
+
+@app.middleware("http")
+async def remember_calling_service(request, call_next):
+    # Links in answers and emails lead to the front end the request came from
+    request_service.set_service(request.headers.get(request_service.SERVICE_HEADER))
+    return await call_next(request)
 
 
 @app.middleware("http")

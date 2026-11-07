@@ -6,6 +6,8 @@ export interface OrganizationContextValue {
   organizations: OrganizationResponse[];
   activeOrganization: OrganizationResponse | null;
   isLoading: boolean;
+  /** The person may create and change surveys here: every role but the reader (the server checks it again) */
+  canEdit: boolean;
   setActiveOrganizationId: (id: string) => void;
   refreshOrganizations: () => Promise<void>;
   createOrganization: (payload: CreateOrganizationPayload) => Promise<OrganizationResponse>;

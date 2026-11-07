@@ -30,6 +30,7 @@ import { billingErrorMessage } from '../shared/lib/billingErrors';
 import { useTour } from '../components/tour/useTour';
 import { useBreadcrumbEntity } from '../shared/context/breadcrumb.context';
 import { useNotifications } from '../shared/context/notifications.context';
+import { useOrganization } from '../shared/hooks/organization.hooks';
 import { AiConsentModal } from '../shared/ui/survey/AiConsentModal';
 import { hasAiConsent, rememberAiConsent } from '../shared/ui/survey/aiConsent';
 import { MethodologyReportModal } from '../shared/ui/survey/MethodologyReportModal';
@@ -114,6 +115,7 @@ export const SurveyViewPage = () => {
   const glass = useSurveyGlass(search);
   const { setEntityTitle, setEntityParent } = useBreadcrumbEntity();
   const { notifySuccess, notifyError } = useNotifications();
+  const { canEdit } = useOrganization();
   const { step: tourStep, next: tourNext } = useTour();
   const [demoBusy, setDemoBusy] = useState(false);
 
@@ -317,6 +319,8 @@ export const SurveyViewPage = () => {
 
   const isArchived = survey.status === 'archived';
   const base = `/surveys/${survey.id}`;
+  // A reader looks at the survey and its results: no changes, no AI
+  const canChange = canEdit;
   const tabPath = (tab: SurveyTabKey) => (tab === 'overview' ? base : `${base}/${tab}`);
   const totalResponses = results?.total ?? survey.responses_count;
 
@@ -330,9 +334,11 @@ export const SurveyViewPage = () => {
           : null;
 
   const menuItems: MenuProps['items'] = [
-    ...(statusAction ? [{ key: statusAction.key, label: statusAction.label }] : []),
+    ...(statusAction && canChange ? [{ key: statusAction.key, label: statusAction.label }] : []),
     { key: 'csv', label: 'Скачать ответы (CSV)', disabled: totalResponses === 0 },
-    ...(isArchived ? [] : [{ type: 'divider' as const }, { key: 'archive', label: 'В архив', danger: true }]),
+    ...(isArchived || !canChange
+      ? []
+      : [{ type: 'divider' as const }, { key: 'archive', label: 'В архив', danger: true }]),
   ];
 
   const onMenuClick: MenuProps['onClick'] = ({ key }) => {
@@ -373,6 +379,7 @@ export const SurveyViewPage = () => {
       <SurveyFormTab
         survey={survey}
         onEdit={() => navigate(`${base}/edit`)}
+        readOnly={!canChange}
         onPreview={() => setPreviewOpen(true)}
         onOpenReport={() => setReportOpen(true)}
       />
@@ -467,13 +474,15 @@ export const SurveyViewPage = () => {
                 Поделиться
               </Button>
             )}
-            <Button
-              size={controlSize}
-              icon={<MessageOutlined />}
-              onClick={() => withAiConsent(() => setChatOpen(true))}
-            >
-              {glass ? 'Агент' : 'Спросить ИИ'}
-            </Button>
+            {canChange && (
+              <Button
+                size={controlSize}
+                icon={<MessageOutlined />}
+                onClick={() => withAiConsent(() => setChatOpen(true))}
+              >
+                {glass ? 'Агент' : 'Спросить ИИ'}
+              </Button>
+            )}
             <Dropdown menu={{ items: menuItems, onClick: onMenuClick }} trigger={['click']} placement="bottomRight">
               <Button size={controlSize} icon={<MoreOutlined />} aria-label="Другие действия" loading={busy} />
             </Dropdown>

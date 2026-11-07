@@ -9,6 +9,8 @@ export interface OrganizationResponse {
   members_count: number;
   /** Personal workspace of the owner (standalone surveys service) */
   is_personal: boolean;
+  /** The caller's role in it; absent in answers that are not about the caller's own membership */
+  my_role?: TeamRole | null;
   created_at: string;
   updated_at: string;
 }

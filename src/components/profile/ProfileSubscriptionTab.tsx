@@ -173,11 +173,6 @@ export const ProfileSubscriptionTab = () => {
                 {aiNote} {AI_ACTION_HINT} Когда кредиты закончатся, опросы и обычная аналитика продолжат работать.
               </p>
             </div>
-            <div className="billing-usage-group billing-usage-group--rows">
-              <UsageBar label="Ответы" metric={usage.responses} />
-              <UsageBar label="Открытые опросы" metric={usage.active_surveys} />
-              <UsageBar label="Проекты" metric={usage.projects} />
-            </div>
             {usage.locked_responses > 0 ? (
               <Alert
                 className="billing-alert"

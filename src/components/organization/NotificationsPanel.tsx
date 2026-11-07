@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Button, Spin } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { useOrganization } from '../../shared/hooks/organization.hooks';
+import { HOME_PATH } from '../../shared/config/appMode';
 import {
   acceptInvitation,
   declineInvitation,
@@ -114,7 +115,7 @@ export const NotificationsPanelContent = ({
     if (item.type === 'join_request_approved' && item.organization_id) {
       await refreshOrganizations();
       setActiveOrganizationId(item.organization_id);
-      navigate('/requests');
+      navigate(HOME_PATH);
       return;
     }
     if (item.request_id) navigate(`/requests/${item.request_id}`);

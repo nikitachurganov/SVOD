@@ -116,12 +116,14 @@ const OutlineRows = ({ items }: { items: OutlineItem[] }) => (
 interface SurveyFormTabProps {
   survey: SurveyDetail;
   onEdit: () => void;
+  /** A reader sees the questions but cannot change them */
+  readOnly?: boolean;
   onPreview: () => void;
   onOpenReport: () => void;
 }
 
 /** What the respondent is asked: the questions of the form, plus the way to change or preview them */
-export const SurveyFormTab = ({ survey, onEdit, onPreview, onOpenReport }: SurveyFormTabProps) => {
+export const SurveyFormTab = ({ survey, onEdit, readOnly = false, onPreview, onOpenReport }: SurveyFormTabProps) => {
   const [warningOpen, setWarningOpen] = useState(false);
   const isMobile = useMediaQuery('(max-width: 767px)');
   const archived = survey.status === 'archived';
@@ -151,9 +153,11 @@ export const SurveyFormTab = ({ survey, onEdit, onPreview, onOpenReport }: Surve
                 Предпросмотр
               </Button>
             )}
-            <Button type="primary" icon={<EditOutlined />} onClick={startEditing} disabled={archived}>
-              Редактировать
-            </Button>
+            {!readOnly && (
+              <Button type="primary" icon={<EditOutlined />} onClick={startEditing} disabled={archived}>
+                Редактировать
+              </Button>
+            )}
           </div>
         </div>
 
@@ -185,7 +189,7 @@ export const SurveyFormTab = ({ survey, onEdit, onPreview, onOpenReport }: Surve
             image={Empty.PRESENTED_IMAGE_SIMPLE}
             description="В опросе пока нет вопросов. Добавьте их в редакторе — тогда форму можно будет посмотреть глазами респондента."
           >
-            {!archived && (
+            {!archived && !readOnly && (
               <Button type="primary" icon={<EditOutlined />} onClick={startEditing}>
                 Добавить вопросы
               </Button>

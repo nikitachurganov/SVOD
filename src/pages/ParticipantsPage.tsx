@@ -15,6 +15,8 @@ import {
 import { useOrganization } from '../shared/hooks/organization.hooks';
 import { useAuth } from '../shared/hooks/auth.hooks';
 import { buildDisplayName } from '../shared/utils/userName';
+import { localizeAppLink } from '../shared/lib/localizeLink';
+import { IS_SURVEYS_APP } from '../shared/config/appMode';
 import {
   deleteExternalContractor,
   getMembers,
@@ -71,7 +73,7 @@ type MemberRow = {
 type ParticipantsTabKey = 'members' | 'contractors' | 'requests' | 'invitations';
 
 const TAB_LABELS: Record<ParticipantsTabKey, string> = {
-  members: 'В организации',
+  members: IS_SURVEYS_APP ? 'В команде' : 'В организации',
   contractors: 'Подрядчики',
   requests: 'Заявки на вступление',
   invitations: 'Приглашения',
@@ -112,9 +114,10 @@ export const ParticipantsPage = () => {
   // The owner and the admins manage people; only the owner makes admins and runs the join link
   const isAdmin = members.some((m) => m.user.id === user?.id && m.role_tag === 'admin');
   const canManage = isOwner || isAdmin;
-  const visibleTabs: ParticipantsTabKey[] = canManage
-    ? ['members', 'contractors', 'requests', 'invitations']
-    : ['members', 'contractors'];
+  // Outside contractors are assigned to the stages of requests: the surveys service has no such thing
+  const visibleTabs: ParticipantsTabKey[] = (
+    canManage ? ['members', 'contractors', 'requests', 'invitations'] : ['members', 'contractors']
+  ).filter((key) => !(IS_SURVEYS_APP && key === 'contractors')) as ParticipantsTabKey[];
 
   const refreshSeats = useCallback(async () => {
     if (!activeOrganizationId) return;
@@ -469,7 +472,7 @@ export const ParticipantsPage = () => {
                   icon={<CopyOutlined />}
                   aria-label="Скопировать ссылку для активации"
                   onClick={async () => {
-                    const ok = await copyToClipboard(record.activation_url ?? '');
+                    const ok = await copyToClipboard(localizeAppLink(record.activation_url));
                     if (ok) message.success('Ссылка скопирована');
                     else message.error('Не удалось скопировать ссылку');
                   }}
@@ -522,7 +525,7 @@ export const ParticipantsPage = () => {
             : []),
           { key: 'manual', icon: <UserAddOutlined />, label: 'Добавить вручную', extra: 'аккаунт + письмо' },
           // Outside contractors are kept by the owner only (the server refuses an admin)
-          ...(isOwner
+          ...(isOwner && !IS_SURVEYS_APP
             ? [
                 { type: 'divider' as const },
                 { key: 'contractor', icon: <SolutionOutlined />, label: 'Добавить подрядчика', extra: 'без входа' },

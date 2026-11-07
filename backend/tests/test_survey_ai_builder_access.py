@@ -67,7 +67,7 @@ class BuildSurveyAccessTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_a_refusal_of_the_meter_stops_the_builder(self):
         @asynccontextmanager
-        async def refusing(user, name, *, survey_id=None):
+        async def refusing(user, name, *, survey_id=None, organization_id=None):
             raise HTTPException(status_code=402, detail={"code": "limit_reached"})
             yield
 

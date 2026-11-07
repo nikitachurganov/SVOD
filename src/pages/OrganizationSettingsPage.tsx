@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { OrganizationSettingsSection } from '../components/organization/OrganizationSettingsSection';
+import { HOME_PATH } from '../shared/config/appMode';
 
 export const OrganizationSettingsPage = () => {
   const navigate = useNavigate();
@@ -10,7 +11,7 @@ export const OrganizationSettingsPage = () => {
         <h2 className="org-settings-page__title">Настройки</h2>
       </div>
 
-      <OrganizationSettingsSection onAfterDelete={() => navigate('/requests')} />
+      <OrganizationSettingsSection onAfterDelete={() => navigate(HOME_PATH)} />
     </div>
   );
 };

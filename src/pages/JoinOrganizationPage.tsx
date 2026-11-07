@@ -9,6 +9,8 @@ import {
 } from '../shared/api/organizations.api';
 import { useAuth } from '../shared/hooks/auth.hooks';
 import { useOrganization } from '../shared/hooks/organization.hooks';
+import { HOME_PATH, IS_SURVEYS_APP } from '../shared/config/appMode';
+import { TEAM_ACC, TEAM_GEN } from '../shared/lib/teamWords';
 import { emailRules, passwordRules, phoneRules, requiredRule } from '../shared/utils/formRules';
 import type { JoinPageInfo, JoinRequestResponse } from '../types/organization';
 import logoUrl from '../assets/logo.svg';
@@ -139,7 +141,7 @@ export const JoinOrganizationPage = () => {
         <Result
           status="success"
           title={`Вы уже в «${info.organization_name}»`}
-          extra={<Button type="primary" onClick={() => navigate('/requests')}>Открыть СВОД</Button>}
+          extra={<Button type="primary" onClick={() => navigate(HOME_PATH)}>Открыть СВОД</Button>}
         />
       );
     }
@@ -148,8 +150,8 @@ export const JoinOrganizationPage = () => {
         <Result
           status="info"
           title="Заявка отправлена"
-          subTitle={`Владелец организации «${info.organization_name}» рассмотрит её. Мы сообщим о решении в уведомлениях${user || submitted ? ' и на почту' : ''}.`}
-          extra={<Button type="primary" onClick={() => navigate('/requests')}>Перейти в СВОД</Button>}
+          subTitle={`Владелец ${TEAM_GEN} «${info.organization_name}» рассмотрит её. Мы сообщим о решении в уведомлениях${user || submitted ? ' и на почту' : ''}.`}
+          extra={<Button type="primary" onClick={() => navigate(HOME_PATH)}>Перейти в СВОД</Button>}
         />
       );
     }
@@ -157,12 +159,12 @@ export const JoinOrganizationPage = () => {
     return (
       <>
         <p style={{ margin: '0 0 20px', color: 'var(--app-text-secondary)', lineHeight: 1.5 }}>
-          Вас пригласили в организацию{' '}
+          Вас пригласили в {TEAM_ACC}{' '}
           <strong style={{ color: 'var(--app-text)' }}>«{info.organization_name}»</strong>
           {info.organization_description ? ` — ${info.organization_description}` : ''}.{' '}
           {user
             ? 'Расскажите о себе — владелец рассмотрит заявку.'
-            : 'Заполните данные и придумайте пароль: аккаунт заработает сразу, а в организацию вы попадёте после одобрения владельцем.'}
+            : `Заполните данные и придумайте пароль: аккаунт заработает сразу, а в ${TEAM_ACC} вы попадёте после одобрения владельцем.`}
         </p>
 
         {submitError ? (
@@ -263,12 +265,14 @@ export const JoinOrganizationPage = () => {
         <div className="auth-page__hero-overlay" />
         <div className="auth-page__hero-content">
           <img src={logoUrl} alt="СВОД" className="auth-page__hero-logo" />
-          <p className="auth-page__hero-tagline">Все заявки в одном управляемом потоке</p>
+          <p className="auth-page__hero-tagline">
+            {IS_SURVEYS_APP ? 'Опросы и анкетирование' : 'Все заявки в одном управляемом потоке'}
+          </p>
         </div>
       </div>
 
-      <section className="auth-page__panel" aria-label="Вступление в организацию">
-        <h1 className="auth-page__heading">Вступление в организацию</h1>
+      <section className="auth-page__panel" aria-label={`Вступление в ${TEAM_ACC}`}>
+        <h1 className="auth-page__heading">Вступление в {TEAM_ACC}</h1>
         <div className="auth-page__panel-body">{renderBody()}</div>
       </section>
     </div>

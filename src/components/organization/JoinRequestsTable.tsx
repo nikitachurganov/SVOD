@@ -6,6 +6,8 @@ import { approveJoinRequest, rejectJoinRequest } from '../../shared/api/organiza
 import { buildDisplayName } from '../../shared/utils/userName';
 import type { AssignableRole, JoinRequestResponse } from '../../types/organization';
 import { roleOptionsFor } from './participants.utils';
+import { IS_SURVEYS_APP } from '../../shared/config/appMode';
+import { TEAM_ACC, TEAM_PREP } from '../../shared/lib/teamWords';
 
 interface Props {
   requests: JoinRequestResponse[];
@@ -58,7 +60,7 @@ export const JoinRequestsTable = ({ requests, loading, onDecided, canAssignAdmin
         job_title: values.job_title?.trim() || null,
         specialization: values.specialization?.trim() || null,
       });
-      message.success(`${approving.user ? buildDisplayName(approving.user) : 'Участник'} теперь в организации`);
+      message.success(`${approving.user ? buildDisplayName(approving.user) : 'Участник'} теперь в ${TEAM_PREP}`);
       onDecided(approving.id, true);
       setApproving(null);
     } catch (err) {
@@ -154,7 +156,7 @@ export const JoinRequestsTable = ({ requests, loading, onDecided, canAssignAdmin
       <Modal
         open={!!approving}
         title={`Принять ${approving?.user ? buildDisplayName(approving.user) : ''}?`}
-        okText="Принять в организацию"
+        okText={`Принять в ${TEAM_ACC}`}
         cancelText="Отмена"
         confirmLoading={busy}
         onOk={() => approveForm.submit()}
@@ -162,7 +164,9 @@ export const JoinRequestsTable = ({ requests, loading, onDecided, canAssignAdmin
         destroyOnHidden
       >
         <Typography.Paragraph type="secondary" style={{ fontSize: 13 }}>
-          При необходимости поправьте должность и специализацию — они учитываются при подборе исполнителей.
+          {IS_SURVEYS_APP
+            ? 'При необходимости поправьте должность и специализацию.'
+            : 'При необходимости поправьте должность и специализацию — они учитываются при подборе исполнителей.'}
         </Typography.Paragraph>
         <Form form={approveForm} layout="vertical" onFinish={(v) => void submitApprove(v)}>
           <Form.Item name="role_tag" label="Роль" extra="Читатель бесплатный и не занимает место">

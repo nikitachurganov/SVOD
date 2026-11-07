@@ -67,7 +67,7 @@ type ProjectState = 'loading' | 'ready' | 'missing' | 'error';
 export const ProjectSurveysPage = () => {
   const navigate = useNavigate();
   const { projectId } = useParams<{ projectId: string }>();
-  const { activeOrganization } = useOrganization();
+  const { activeOrganization, canEdit } = useOrganization();
   const { notifySuccess, notifyError } = useNotifications();
   const { setEntityTitle } = useBreadcrumbEntity();
   const organizationId = activeOrganization?.id ?? null;
@@ -269,28 +269,32 @@ export const ProjectSurveysPage = () => {
           <div className="project-page__heading">
             <div className="project-page__title-line">
               <h1 className="registry-page__title project-page__title">{project.name}</h1>
-              <Button
-                type="text"
-                size="small"
-                icon={<EditOutlined />}
-                title="Переименовать проект"
-                aria-label="Переименовать проект"
-                onClick={() => setRenameOpen(true)}
-              />
+              {canEdit && (
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<EditOutlined />}
+                  title="Переименовать проект"
+                  aria-label="Переименовать проект"
+                  onClick={() => setRenameOpen(true)}
+                />
+              )}
             </div>
             {project.description && (
               <p className="project-page__description">{project.description}</p>
             )}
           </div>
-          <Button
-            type="primary"
-            className="registry-page__create-btn"
-            data-tour="create-survey"
-            icon={<PlusOutlined />}
-            onClick={createSurvey}
-          >
-            Создать опрос
-          </Button>
+          {canEdit && (
+            <Button
+              type="primary"
+              className="registry-page__create-btn"
+              data-tour="create-survey"
+              icon={<PlusOutlined />}
+              onClick={createSurvey}
+            >
+              Создать опрос
+            </Button>
+          )}
         </div>
       </div>
 
@@ -305,13 +309,19 @@ export const ProjectSurveysPage = () => {
                   <div style={{ fontWeight: 500, color: 'var(--app-text)' }}>
                     В проекте пока нет опросов
                   </div>
-                  <div>Создайте первый опрос — он появится в этом проекте.</div>
+                  <div>
+                    {canEdit
+                      ? 'Создайте первый опрос — он появится в этом проекте.'
+                      : 'Опросы появятся здесь, когда их создадут редакторы команды.'}
+                  </div>
                 </div>
               }
             >
-              <Button type="primary" icon={<PlusOutlined />} onClick={createSurvey}>
-                Создать опрос
-              </Button>
+              {canEdit && (
+                <Button type="primary" icon={<PlusOutlined />} onClick={createSurvey}>
+                  Создать опрос
+                </Button>
+              )}
             </Empty>
           </Card>
         ) : (
@@ -361,14 +371,16 @@ export const ProjectSurveysPage = () => {
                       <span className={`survey-card__status survey-card__status--${survey.status}`}>
                         {SURVEY_STATUS_LABEL[survey.status]}
                       </span>
-                      <Dropdown menu={menuFor(survey)} trigger={['click']} placement="bottomRight">
-                        <Button
-                          type="text"
-                          className="survey-card__menu"
-                          icon={<MoreOutlined />}
-                          aria-label={`Действия с опросом «${survey.name}»`}
-                        />
-                      </Dropdown>
+                      {canEdit && (
+                        <Dropdown menu={menuFor(survey)} trigger={['click']} placement="bottomRight">
+                          <Button
+                            type="text"
+                            className="survey-card__menu"
+                            icon={<MoreOutlined />}
+                            aria-label={`Действия с опросом «${survey.name}»`}
+                          />
+                        </Dropdown>
+                      )}
                     </div>
                     {/* The link is stretched over the whole card; the menu button sits above it */}
                     <Link to={`/surveys/${survey.id}`} className="survey-card__name">

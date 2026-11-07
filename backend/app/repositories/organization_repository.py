@@ -85,6 +85,17 @@ async def count_members(session: AsyncSession, org_id: uuid.UUID) -> int:
 # Members
 # ---------------------------------------------------------------------------
 
+async def get_role_tags_for_user(
+    session: AsyncSession, user_id: uuid.UUID
+) -> dict[uuid.UUID, str]:
+    """The stored role tag of the user in each organization they belong to."""
+    stmt = select(OrganizationMember.organization_id, OrganizationMember.role_tag).where(
+        OrganizationMember.user_id == user_id
+    )
+    result = await session.execute(stmt)
+    return {org_id: tag for org_id, tag in result.all()}
+
+
 async def get_member(
     session: AsyncSession, org_id: uuid.UUID, user_id: uuid.UUID
 ) -> OrganizationMember | None:

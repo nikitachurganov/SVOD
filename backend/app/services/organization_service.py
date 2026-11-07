@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants import request_execution as C
+from app.core import request_service
 from app.core.config import settings
 from app.core.name_utils import build_display_name
 from app.core.security import PENDING_ACTIVATION_HASH, is_pending_activation
@@ -66,7 +67,9 @@ def _to_author(user: User | None) -> PublicAuthorResponse | None:
     )
 
 
-def _to_org_response(org: Organization, members_count: int = 0) -> OrganizationResponse:
+def _to_org_response(
+    org: Organization, members_count: int = 0, my_role: str | None = None
+) -> OrganizationResponse:
     return OrganizationResponse(
         id=str(org.id),
         name=org.name,
@@ -75,6 +78,7 @@ def _to_org_response(org: Organization, members_count: int = 0) -> OrganizationR
         owner=_to_author(org.owner),
         members_count=members_count,
         is_personal=org.is_personal,
+        my_role=team_roles.normalize_role(my_role) if my_role else None,
         created_at=org.created_at.isoformat(),
         updated_at=org.updated_at.isoformat(),
     )
@@ -93,7 +97,7 @@ def _to_member_response(member: OrganizationMember) -> MemberResponse:
 
 
 def activation_url(invite_code: str) -> str:
-    return f"{settings.APP_PUBLIC_URL.rstrip('/')}/activate/{invite_code}"
+    return f"{request_service.app_base_url()}/activate/{invite_code}"
 
 
 def _to_invitation_response(
@@ -216,7 +220,7 @@ async def create_organization(
     await session.commit()
 
     count = await organization_repository.count_members(session, org.id)
-    return _to_org_response(org, members_count=count)
+    return _to_org_response(org, members_count=count, my_role=team_roles.ROLE_OWNER)
 
 
 async def get_or_create_personal_organization(
@@ -252,17 +256,18 @@ async def get_or_create_personal_organization(
                 raise
 
     count = await organization_repository.count_members(session, org.id)
-    return _to_org_response(org, members_count=count)
+    return _to_org_response(org, members_count=count, my_role=team_roles.ROLE_OWNER)
 
 
 async def get_my_organizations(
     session: AsyncSession, current_user: User
 ) -> list[OrganizationResponse]:
     orgs = await organization_repository.get_orgs_for_user(session, current_user.id)
+    roles = await organization_repository.get_role_tags_for_user(session, current_user.id)
     results: list[OrganizationResponse] = []
     for org in orgs:
         count = await organization_repository.count_members(session, org.id)
-        results.append(_to_org_response(org, members_count=count))
+        results.append(_to_org_response(org, members_count=count, my_role=roles.get(org.id)))
     return results
 
 
@@ -270,9 +275,9 @@ async def get_organization(
     session: AsyncSession, org_id: uuid.UUID, current_user: User
 ) -> OrganizationResponse:
     org = await _get_org_or_404(session, org_id)
-    await _ensure_membership(session, org_id, current_user.id)
+    member = await _ensure_membership(session, org_id, current_user.id)
     count = await organization_repository.count_members(session, org.id)
-    return _to_org_response(org, members_count=count)
+    return _to_org_response(org, members_count=count, my_role=member.role_tag)
 
 
 async def update_organization(
@@ -294,7 +299,7 @@ async def update_organization(
     await session.commit()
 
     count = await organization_repository.count_members(session, org.id)
-    return _to_org_response(org, members_count=count)
+    return _to_org_response(org, members_count=count, my_role=team_roles.ROLE_OWNER)
 
 
 async def delete_organization(
@@ -567,7 +572,7 @@ async def _send_invitation_email(inv: OrganizationInvitation, org: Organization,
         to=inv.email,
         organization_name=org.name,
         inviter_name=inviter_name,
-        app_url=settings.APP_PUBLIC_URL,
+        app_url=request_service.app_base_url(),
     )
 
 
