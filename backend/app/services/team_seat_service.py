@@ -13,16 +13,18 @@ enforced it refuses with 402 limit_reached.
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.constants.billing_plans import METRIC_AI_TOKENS, PLAN_START
 from app.constants.team_roles import MAX_READERS_PER_TEAM, takes_seat
 from app.core.config import settings
 from app.core.metrics import BILLING_LIMIT_HIT
 from app.models.organization import Organization
-from app.repositories import organization_repository
-from app.services import billing_service
+from app.repositories import billing_repository, organization_repository
+from app.services import billing_service, seat_window
 
 LIMIT_SEATS = "seats"
 LIMIT_READERS = "readers"
@@ -67,6 +69,39 @@ def limit_value(usage: SeatUsage, limit: str) -> tuple[int, int]:
     if limit == LIMIT_SEATS:
         return usage.seats_used, usage.seats_limit
     return usage.readers, MAX_READERS_PER_TEAM
+
+
+@dataclass(frozen=True)
+class TeamAiQuota:
+    """The team's shared pool of Токены+ and what each person took from it in this period."""
+
+    pool_used: int | None = None
+    pool_max: int | None = None
+    resets_at: datetime | None = None
+    spent_by_user: dict[str, int] = field(default_factory=dict)
+    seat_window_days_left: int = 0
+
+
+async def ai_quota_for_org(
+    session: AsyncSession, org: Organization, ent: billing_service.Entitlements
+) -> TeamAiQuota:
+    """The pool of the owner's plan: used and total, when it renews, and the spending of each member.
+
+    A team whose owner is on the free plan has no pool (everybody spends their own allowance, see
+    ai_pool.py), so only the seat window is reported for it.
+    """
+    window_left = seat_window.days_left(ent, datetime.now(timezone.utc))
+    if not ent.billing_enabled or ent.plan.code == PLAN_START:
+        return TeamAiQuota(seat_window_days_left=window_left)
+    counters = await billing_repository.get_usage(session, org.owner_user_id, ent.ai_window_start)
+    spent = await billing_repository.charged_tokens_by_user(session, org.id, ent.ai_window_start)
+    return TeamAiQuota(
+        pool_used=counters.get(METRIC_AI_TOKENS, 0),
+        pool_max=ent.plan.ai_tokens_per_period,
+        resets_at=ent.ai_window_end,
+        spent_by_user={str(user_id): tokens for user_id, tokens in spent.items()},
+        seat_window_days_left=window_left,
+    )
 
 
 async def usage_for_org(

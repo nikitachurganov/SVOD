@@ -1,5 +1,9 @@
 .auth-page {
-  --auth-hero-overlay: rgba(255, 255, 255, 0.1);
+  /* Hero: light theme melts the glow into warm cream, dark theme into deep brown-red (never pure black) */
+  --auth-hero-base: #ffe9d6;
+  --auth-hero-fade: 255, 236, 220;
+  --auth-hero-text: #1c1410;
+  --auth-hero-logo-filter: none;
   --auth-input-bg: transparent;
   --auth-input-text: var(--app-text);
   --auth-input-placeholder: var(--app-text-placeholder);
@@ -16,30 +20,84 @@
   overflow: auto;
 }
 
+/* The hero: a glowing orange sphere that melts into the theme's base colour, the text sits on the lower part */
 .auth-page__hero {
   position: relative;
   min-height: 0;
   border-radius: 20px;
   overflow: hidden;
+  isolation: isolate;
+  background: var(--auth-hero-base);
 }
 
 .auth-page__hero-bg {
   position: absolute;
   inset: 0;
-  width: 158%;
-  height: 122%;
-  max-width: none;
-  left: -11%;
-  top: -11%;
-  object-fit: cover;
+  overflow: hidden;
   pointer-events: none;
 }
 
+.auth-page__blob {
+  position: absolute;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  filter: blur(40px);
+  will-change: transform;
+}
+
+/* Warm yellow light that sweeps across the top */
+.auth-page__blob--sun {
+  width: 120%;
+  left: -10%;
+  top: -35%;
+  background: radial-gradient(circle, #ffd23f 0%, #ffa72b 45%, rgba(255, 167, 43, 0) 70%);
+  animation: auth-blob-sun 9s ease-in-out infinite alternate;
+}
+
+/* The red-orange sphere: it breathes and rolls around the middle */
+.auth-page__blob--core {
+  width: 115%;
+  left: -8%;
+  top: 0;
+  background: radial-gradient(circle, #ff3419 0%, #ff4d1c 50%, rgba(255, 77, 28, 0) 72%);
+  animation: auth-blob-core 12s ease-in-out infinite alternate;
+}
+
+/* A bright spot that travels over the whole glow */
+.auth-page__blob--ember {
+  width: 80%;
+  left: 30%;
+  top: -4%;
+  background: radial-gradient(circle, #ffb347 0%, rgba(255, 179, 71, 0) 66%);
+  animation: auth-blob-ember 8s ease-in-out infinite alternate;
+}
+
+@keyframes auth-blob-sun {
+  0% { transform: translate3d(-25%, -6%, 0) scale(0.95); }
+  100% { transform: translate3d(30%, 14%, 0) scale(1.2); }
+}
+
+@keyframes auth-blob-core {
+  0% { transform: translate3d(-20%, -10%, 0) scale(0.85); }
+  50% { transform: translate3d(14%, 16%, 0) scale(1.15); }
+  100% { transform: translate3d(22%, -8%, 0) scale(0.95); }
+}
+
+@keyframes auth-blob-ember {
+  0% { transform: translate3d(30%, -10%, 0) scale(0.8); }
+  100% { transform: translate3d(-70%, 90%, 0) scale(1.25); }
+}
+
+/* Melts into the base colour towards the bottom, where the logo and the tagline are */
 .auth-page__hero-overlay {
   position: absolute;
   inset: 0;
-  backdrop-filter: blur(26px);
-  background: var(--auth-hero-overlay);
+  background: linear-gradient(
+    180deg,
+    rgba(var(--auth-hero-fade), 0) 42%,
+    rgba(var(--auth-hero-fade), 0.6) 72%,
+    rgba(var(--auth-hero-fade), 0.92) 100%
+  );
 }
 
 .auth-page__hero-content {
@@ -47,7 +105,8 @@
   z-index: 1;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: flex-end;
+  gap: 20px;
   height: 100%;
   min-height: 480px;
   padding: 40px;
@@ -56,6 +115,14 @@
 .auth-page__hero-logo {
   width: 150px;
   height: auto;
+  /* The logo is dark: kept as is on the light hero, drawn white on the dark one */
+  filter: var(--auth-hero-logo-filter);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-page__blob {
+    animation: none;
+  }
 }
 
 .auth-page__hero-tagline {
@@ -64,7 +131,14 @@
   font-size: 30px;
   font-weight: 600;
   line-height: 38px;
-  color: #fff;
+  color: var(--auth-hero-text);
+}
+
+html[data-theme='dark'] .auth-page {
+  --auth-hero-base: #3a1709;
+  --auth-hero-fade: 44, 17, 8;
+  --auth-hero-text: #fff;
+  --auth-hero-logo-filter: brightness(0) invert(1);
 }
 
 .auth-page__panel {
@@ -335,10 +409,6 @@ html[data-theme='dark'] .auth-page .auth-page__switch-link.ant-btn:hover {
   font-size: 12px;
   line-height: 18px;
   color: var(--ant-color-error, #ff4d4f);
-}
-
-html[data-theme='dark'] .auth-page {
-  --auth-hero-overlay: rgba(0, 0, 0, 0.24);
 }
 
 @media (max-width: 980px) {

@@ -26,7 +26,9 @@ const fetchOrganizations = async (): Promise<OrganizationResponse[]> => {
   if (!IS_SURVEYS_APP) return getMyOrganizations();
   const personal = await getPersonalOrganization();
   const all = await getMyOrganizations().catch(() => [personal]);
-  return [personal, ...all.filter((org) => org.id !== personal.id)];
+  // The list says which plan each workspace works on; the answer about the personal one does not
+  const personalInList = all.find((org) => org.id === personal.id);
+  return [personalInList ?? personal, ...all.filter((org) => org.id !== personal.id)];
 };
 
 export const OrganizationProvider = ({ children }: { children: ReactNode }) => {

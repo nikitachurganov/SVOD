@@ -14,7 +14,7 @@ from app.core.name_utils import build_display_name
 from app.core.security import PENDING_ACTIVATION_HASH, is_pending_activation
 from app.models.request_stage import RequestStage
 from app.constants import team_roles
-from app.services import email_service, team_seat_service, welcome_seed_service
+from app.services import billing_service, email_service, team_seat_service, welcome_seed_service
 
 from app.models.external_contractor import ExternalContractor
 from app.models.organization import (
@@ -269,10 +269,17 @@ async def get_my_organizations(
         session, current_user.id, service=request_service.current_service()
     )
     roles = await organization_repository.get_role_tags_for_user(session, current_user.id)
+    # The plan belongs to the owner of the workspace: one lookup per owner, not per workspace
+    plan_by_owner: dict[uuid.UUID, str | None] = {}
     results: list[OrganizationResponse] = []
     for org in orgs:
         count = await organization_repository.count_members(session, org.id)
-        results.append(_to_org_response(org, members_count=count, my_role=roles.get(org.id)))
+        response = _to_org_response(org, members_count=count, my_role=roles.get(org.id))
+        if org.owner_user_id not in plan_by_owner:
+            ent = await billing_service.get_entitlements(session, org.owner_user_id)
+            plan_by_owner[org.owner_user_id] = ent.plan.code if ent.billing_enabled else None
+        response.plan_code = plan_by_owner[org.owner_user_id]
+        results.append(response)
     return results
 
 
@@ -376,6 +383,7 @@ async def get_seat_usage(
     await _ensure_can_manage_members(session, org, current_user)
     usage, ent = await team_seat_service.usage_for_org(session, org)
     unlimited = not ent.billing_enabled or usage.seats_limit >= team_roles.SEATS_UNLIMITED
+    quota = await team_seat_service.ai_quota_for_org(session, org, ent)
     return SeatUsageResponse(
         seats_used=usage.seats_used,
         seats_limit=None if unlimited else usage.seats_limit,
@@ -383,6 +391,11 @@ async def get_seat_usage(
         readers_limit=team_roles.MAX_READERS_PER_TEAM,
         plan_code=ent.plan.code,
         billing_enabled=ent.billing_enabled,
+        ai_pool_used=quota.pool_used,
+        ai_pool_max=quota.pool_max,
+        ai_pool_resets_at=quota.resets_at,
+        ai_spent_by_user=quota.spent_by_user,
+        seat_window_days_left=quota.seat_window_days_left,
     )
 
 

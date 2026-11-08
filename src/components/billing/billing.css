@@ -145,6 +145,11 @@
 /* Inside the signed-in app the content area does not scroll (overflow: hidden), so the page scrolls
    itself: it takes the whole area, which keeps the scrollbar at the window edge, and the same
    1040px column stays in the middle through the side padding */
+/* The plans inside the settings tab: the tab content already has its own padding */
+.settings-page__content > .plans-page {
+  padding: 0;
+}
+
 .app-shell-content > .plans-page {
   flex: 1;
   min-height: 0;
@@ -539,4 +544,92 @@
   display: flex;
   justify-content: space-between;
   gap: 12px;
+}
+
+/* The plan step of «Create a team»: the free plan next to the paid one */
+.team-plans {
+  display: grid;
+  grid-template-columns: 1fr 1.25fr;
+  gap: 12px;
+}
+
+.team-plan {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border-secondary);
+  border-radius: 12px;
+}
+
+.team-plan--accent {
+  border-color: var(--app-menu-active-text);
+}
+
+.team-plan__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--app-text);
+}
+
+.team-plan__price {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--app-text);
+}
+
+.team-plan__period {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--app-text-secondary);
+}
+
+.team-plan__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.team-plan__saving {
+  font-size: 12px;
+  color: var(--app-menu-active-text);
+}
+
+.team-plan__list {
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--app-text-secondary);
+}
+
+.team-plan__list li + li {
+  margin-top: 6px;
+}
+
+.team-plan__list .anticon {
+  margin-right: 6px;
+  color: var(--app-menu-active-text);
+}
+
+.team-plan .billing-actions {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.team-plans__skip {
+  margin-top: 8px;
+  text-align: center;
+}
+
+@media (max-width: 575px) {
+  .team-plans {
+    grid-template-columns: 1fr;
+  }
 }

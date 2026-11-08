@@ -359,7 +359,39 @@ class SeatUsageEndpointTests(unittest.IsolatedAsyncioTestCase):
             "usage_for_org",
             AsyncMock(side_effect=lambda session, org: (self.usage, self.entitlements)),
         ).start()
+        self.quota = team_seat_service.TeamAiQuota()
+        patch.object(
+            organization_service.team_seat_service,
+            "ai_quota_for_org",
+            AsyncMock(side_effect=lambda session, org, ent: self.quota),
+        ).start()
         self.addCleanup(patch.stopall)
+
+    async def test_the_pool_and_the_spending_of_people_come_with_the_places(self):
+        member_id = str(uuid.uuid4())
+        resets = datetime.now(timezone.utc) + timedelta(days=12)
+        self.quota = team_seat_service.TeamAiQuota(
+            pool_used=2_800,
+            pool_max=8_000,
+            resets_at=resets,
+            spent_by_user={member_id: 1_200},
+            seat_window_days_left=5,
+        )
+
+        result = await organization_service.get_seat_usage(None, self.org.id, self.owner)
+
+        self.assertEqual((result.ai_pool_used, result.ai_pool_max), (2_800, 8_000))
+        self.assertEqual(result.ai_pool_resets_at, resets)
+        self.assertEqual(result.ai_spent_by_user, {member_id: 1_200})
+        self.assertEqual(result.seat_window_days_left, 5)
+
+    async def test_without_a_pool_the_fields_are_empty(self):
+        result = await organization_service.get_seat_usage(None, self.org.id, self.owner)
+
+        self.assertIsNone(result.ai_pool_used)
+        self.assertIsNone(result.ai_pool_max)
+        self.assertEqual(result.ai_spent_by_user, {})
+        self.assertEqual(result.seat_window_days_left, 0)
 
     async def test_the_owner_sees_places_and_readers(self):
         result = await organization_service.get_seat_usage(None, self.org.id, self.owner)
@@ -391,6 +423,98 @@ class SeatUsageEndpointTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertIsNone(result.seats_limit)
         self.assertFalse(result.billing_enabled)
+
+
+class TeamAiQuotaTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.owner_id = uuid.uuid4()
+        self.member_id = uuid.uuid4()
+        self.org = SimpleNamespace(id=uuid.uuid4(), owner_user_id=self.owner_id)
+        patch.object(
+            team_seat_service.billing_repository,
+            "get_usage",
+            AsyncMock(return_value={"ai_tokens": 2_800}),
+        ).start()
+        patch.object(
+            team_seat_service.billing_repository,
+            "charged_tokens_by_user",
+            AsyncMock(return_value={self.member_id: 1_200}),
+        ).start()
+        self.addCleanup(patch.stopall)
+
+    async def test_a_paid_team_has_a_pool_and_the_spending_of_each_person(self):
+        ent = _entitlements(RESEARCHER, seats=3)
+
+        quota = await team_seat_service.ai_quota_for_org(None, self.org, ent)
+
+        self.assertEqual(quota.pool_used, 2_800)
+        self.assertEqual(quota.pool_max, ent.plan.ai_tokens_per_period)
+        self.assertEqual(quota.spent_by_user, {str(self.member_id): 1_200})
+
+    async def test_a_team_of_a_free_owner_has_no_pool(self):
+        quota = await team_seat_service.ai_quota_for_org(None, self.org, _entitlements(START, seats=1))
+
+        self.assertIsNone(quota.pool_used)
+        self.assertIsNone(quota.pool_max)
+        self.assertEqual(quota.spent_by_user, {})
+
+    async def test_with_billing_off_there_is_no_pool(self):
+        ent = _entitlements(RESEARCHER, seats=team_roles.SEATS_UNLIMITED, enabled=False)
+
+        quota = await team_seat_service.ai_quota_for_org(None, self.org, ent)
+
+        self.assertIsNone(quota.pool_used)
+
+
+class MyOrganizationsPlanTests(unittest.IsolatedAsyncioTestCase):
+    """The list of workspaces tells which plan each one works on (the plan of its owner)."""
+
+    def setUp(self):
+        me, other = uuid.uuid4(), uuid.uuid4()
+        self.mine = SimpleNamespace(id=uuid.uuid4(), owner_user_id=me)
+        self.theirs = SimpleNamespace(id=uuid.uuid4(), owner_user_id=other)
+        self.plans = {me: _entitlements(RESEARCHER, seats=3), other: _entitlements(START, seats=1)}
+        self.lookups: list = []
+
+        async def entitlements(session, user_id):
+            self.lookups.append(user_id)
+            return self.plans[user_id]
+
+        def to_response(org, members_count=0, my_role=None):
+            return organization_service.OrganizationResponse(
+                id=str(org.id),
+                name="x",
+                description=None,
+                owner_user_id=str(org.owner_user_id),
+                created_at="",
+                updated_at="",
+            )
+
+        repo = organization_service.organization_repository
+        patch.object(repo, "get_orgs_for_user", AsyncMock(return_value=[self.mine, self.theirs, self.mine])).start()
+        patch.object(repo, "get_role_tags_for_user", AsyncMock(return_value={})).start()
+        patch.object(repo, "count_members", AsyncMock(return_value=1)).start()
+        patch.object(organization_service, "_to_org_response", to_response).start()
+        patch.object(billing_service, "get_entitlements", AsyncMock(side_effect=entitlements)).start()
+        self.addCleanup(patch.stopall)
+
+    async def test_each_workspace_carries_the_plan_of_its_owner(self):
+        result = await organization_service.get_my_organizations(None, SimpleNamespace(id=uuid.uuid4()))
+
+        self.assertEqual([item.plan_code for item in result], [RESEARCHER.code, START.code, RESEARCHER.code])
+
+    async def test_an_owner_is_looked_up_once(self):
+        await organization_service.get_my_organizations(None, SimpleNamespace(id=uuid.uuid4()))
+
+        self.assertEqual(len(self.lookups), 2)
+
+    async def test_with_billing_off_there_is_no_plan(self):
+        for owner_id in self.plans:
+            self.plans[owner_id] = _entitlements(RESEARCHER, seats=team_roles.SEATS_UNLIMITED, enabled=False)
+
+        result = await organization_service.get_my_organizations(None, SimpleNamespace(id=uuid.uuid4()))
+
+        self.assertTrue(all(item.plan_code is None for item in result))
 
 
 if __name__ == "__main__":

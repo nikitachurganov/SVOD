@@ -5,7 +5,7 @@ import { checkPasswordResetToken, confirmPasswordReset } from '../shared/api/aut
 import { IS_SURVEYS_APP } from '../shared/config/appMode';
 import { passwordRules, requiredRule } from '../shared/utils/formRules';
 import logoUrl from '../assets/logo.svg';
-import heroBgUrl from '../assets/auth-hero-bg.png';
+import { AuthHeroBackground } from '../components/auth/AuthHeroBackground';
 import './AuthPage.css';
 
 interface ResetFormValues {
@@ -61,8 +61,7 @@ export const ResetPasswordPage = () => {
   return (
     <div className="auth-page">
       <div className="auth-page__hero" aria-hidden="true">
-        <img src={heroBgUrl} alt="" className="auth-page__hero-bg" />
-        <div className="auth-page__hero-overlay" />
+        <AuthHeroBackground />
         <div className="auth-page__hero-content">
           <img src={logoUrl} alt="СВОД" className="auth-page__hero-logo" />
           <p className="auth-page__hero-tagline">

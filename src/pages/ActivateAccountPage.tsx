@@ -11,7 +11,7 @@ import {
 import { useAuth } from '../shared/hooks/auth.hooks';
 import { passwordRules, phoneRules, requiredRule } from '../shared/utils/formRules';
 import logoUrl from '../assets/logo.svg';
-import heroBgUrl from '../assets/auth-hero-bg.png';
+import { AuthHeroBackground } from '../components/auth/AuthHeroBackground';
 import './AuthPage.css';
 
 interface ActivationFormValues {
@@ -83,8 +83,7 @@ export const ActivateAccountPage = () => {
   return (
     <div className="auth-page">
       <div className="auth-page__hero" aria-hidden="true">
-        <img src={heroBgUrl} alt="" className="auth-page__hero-bg" />
-        <div className="auth-page__hero-overlay" />
+        <AuthHeroBackground />
         <div className="auth-page__hero-content">
           <img src={logoUrl} alt="СВОД" className="auth-page__hero-logo" />
           <p className="auth-page__hero-tagline">

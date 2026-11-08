@@ -201,6 +201,23 @@ async def sum_ai_cost_usd(
     return Decimal(str(result.scalar_one()))
 
 
+async def charged_tokens_by_user(
+    session: AsyncSession, organization_id: uuid.UUID, since: datetime
+) -> dict[uuid.UUID, int]:
+    """Токены+ each person spent inside one team since the moment: {user_id: tokens}."""
+    stmt = (
+        select(AIUsageLog.user_id, func.coalesce(func.sum(AIUsageLog.charged_tokens), 0))
+        .where(
+            AIUsageLog.organization_id == organization_id,
+            AIUsageLog.created_at >= since,
+            AIUsageLog.user_id.is_not(None),
+        )
+        .group_by(AIUsageLog.user_id)
+    )
+    result = await session.execute(stmt)
+    return {user_id: int(total) for user_id, total in result.all()}
+
+
 _LIVE_STATUSES = (STATUS_ACTIVE, STATUS_TRIALING, STATUS_PAST_DUE)
 
 

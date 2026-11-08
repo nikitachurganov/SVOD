@@ -269,8 +269,8 @@ export const OrganizationSettingsSection = ({ onAfterDelete }: Props) => {
               <h3 className="org-settings__tile-title">Смена владельца</h3>
               <p className="org-settings__tile-description">
                 Передайте права владельца другому участнику. Вы останетесь участником с ролью
-                «Администратор». Сначала пригласите пользователей {IS_SURVEYS_APP ? 'на вкладке' : 'на странице'}{' '}
-                <Link to="/participants">{IS_SURVEYS_APP ? 'В команде' : 'Участники'}</Link>.
+                «Администратор». Сначала пригласите пользователей на странице{' '}
+                <Link to="/participants">Участники</Link>.
               </p>
 
               {transferCandidates.length === 0 ? (

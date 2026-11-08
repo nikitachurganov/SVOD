@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Button, Dropdown, Empty, Grid, Input, Modal } from 'antd';
 import type { MenuProps } from 'antd';
-import { FolderOutlined, MoreOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons';
+import { FileTextOutlined, FolderOutlined, MoreOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons';
 import axios from 'axios';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -43,6 +43,7 @@ export const SurveysPage = () => {
   const [projects, setProjects] = useState<SurveyProject[]>([]);
   const [loading, setLoading] = useState(true);
   const [surveys, setSurveys] = useState<SurveyListItem[]>([]);
+  const [surveysLoading, setSurveysLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
   const [search, setSearch] = useState('');
   const [formOpen, setFormOpen] = useState(false);
@@ -57,15 +58,18 @@ export const SurveysPage = () => {
     if (!organizationId) {
       setProjects([]);
       setSurveys([]);
+      setSurveysLoading(false);
       setLoading(false);
       return;
     }
     setLoading(true);
+    setSurveysLoading(true);
     setLoadFailed(false);
     // The survey list only feeds the stats; the page still works without it
     getSurveys(organizationId)
       .then(setSurveys)
-      .catch(() => setSurveys([]));
+      .catch(() => setSurveys([]))
+      .finally(() => setSurveysLoading(false));
     getSurveyProjects(organizationId)
       .then(setProjects)
       .catch(() => setLoadFailed(true))
@@ -186,37 +190,65 @@ export const SurveysPage = () => {
     }
     if (projects.length === 0) {
       return (
-        <div className="projects-empty">
-          <div className="projects-empty__art" aria-hidden>
-            <div className="projects-empty__card projects-empty__card--back">
-              <span className="projects-empty__dot" />
-              <span className="projects-empty__line projects-empty__line--short" />
-              <span className="projects-empty__line" />
+        <>
+          <h2 className="home-section__title">Проекты</h2>
+          <section className="projects-empty" aria-label="Первый проект">
+            <div className="projects-empty__body">
+              <h3 className="projects-empty__title">
+                {canEdit ? 'Создайте первый проект' : 'Проектов пока нет'}
+              </h3>
+              <p className="projects-empty__text">
+                {canEdit
+                  ? 'Проект — это папка для опросов одной темы. В ней собираются опросы, ответы и аналитика.'
+                  : 'Проекты и опросы команды появятся здесь, когда их создадут редакторы.'}
+              </p>
+              {canEdit && (
+                <div className="projects-empty__actions">
+                  <Button
+                    type="primary"
+                    size="large"
+                    icon={<PlusOutlined />}
+                    data-tour="new-project"
+                    onClick={() => openForm(null)}
+                  >
+                    Создать проект
+                  </Button>
+                  <Button size="large" onClick={() => setCreateOpen(true)}>
+                    Сразу создать опрос
+                  </Button>
+                </div>
+              )}
+              <ol className="projects-empty__steps">
+                <li>
+                  <span className="projects-empty__step-num">1</span>
+                  Создайте проект
+                </li>
+                <li>
+                  <span className="projects-empty__step-num">2</span>
+                  Добавьте опрос
+                </li>
+                <li>
+                  <span className="projects-empty__step-num">3</span>
+                  Соберите ответы
+                </li>
+              </ol>
             </div>
-            <div className="projects-empty__card projects-empty__card--front">
-              <span className="projects-empty__dot" />
-              <span className="projects-empty__line projects-empty__line--short" />
-              <span className="projects-empty__line" />
+            {/* A sample folder shows what the first project will look like */}
+            <div className="projects-empty__preview" aria-hidden>
+              <div className="project-env projects-empty__folder" data-folder-color="orange">
+                <div className="project-env__tab" />
+                <div className="project-env__shell" />
+                <div className="project-env__sheet" />
+                <div className="project-env__panel">
+                  <div className="project-env__head">
+                    <span className="project-env__link">Мой первый проект</span>
+                  </div>
+                  <div className="project-env__count">0 опросов</div>
+                </div>
+              </div>
             </div>
-          </div>
-          <h2 className="projects-empty__title">Пока нет проектов</h2>
-          <p className="projects-empty__text">
-            {canEdit
-              ? 'Создайте первый проект, чтобы объединять опросы по темам исследований и собирать ответы в одном месте.'
-              : 'Проекты и опросы команды появятся здесь, когда их создадут редакторы.'}
-          </p>
-          {canEdit && (
-            <Button
-              type="primary"
-              size="large"
-              icon={<PlusOutlined />}
-              data-tour="new-project"
-              onClick={() => openForm(null)}
-            >
-              Создать проект
-            </Button>
-          )}
-        </div>
+          </section>
+        </>
       );
     }
     return (
@@ -276,9 +308,27 @@ export const SurveysPage = () => {
           </ul>
         )}
         {canEdit && <BetaBanner onCreateSurvey={() => setCreateOpen(true)} />}
-        {recentSurveys.length > 0 && (
-          <section className="home-section" aria-label="Последние опросы">
-            <h2 className="home-section__title">Последние опросы</h2>
+        <section className="home-section" aria-label="Недавние опросы">
+          <h2 className="home-section__title">Недавние опросы</h2>
+          {surveysLoading ? (
+            <div role="status" aria-busy="true" aria-label="Загрузка опросов">
+              <Bone w="100%" h={66} style={{ marginBottom: 10 }} />
+              <Bone w="100%" h={66} />
+            </div>
+          ) : recentSurveys.length === 0 ? (
+            <div className="recent-empty">
+              <FileTextOutlined className="recent-empty__icon" aria-hidden />
+              <div className="recent-empty__body">
+                <div className="recent-empty__title">Опросов пока нет</div>
+                <div className="recent-empty__text">
+                  Здесь появятся опросы, с которыми вы работали в последнее время.
+                </div>
+              </div>
+              {canEdit && (
+                <Button onClick={() => setCreateOpen(true)}>Создать опрос</Button>
+              )}
+            </div>
+          ) : (
             <ul className="recent-surveys">
               {recentSurveys.map((survey) => (
                 <li key={survey.id} className="recent-surveys__item">
@@ -309,8 +359,8 @@ export const SurveysPage = () => {
                 </li>
               ))}
             </ul>
-          </section>
-        )}
+          )}
+        </section>
       </>
     );
   };

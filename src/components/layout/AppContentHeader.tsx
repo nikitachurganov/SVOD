@@ -5,9 +5,6 @@ import { useTour } from '../tour/useTour';
 import type { AppBreadcrumbItem } from './appBreadcrumbs';
 import { HeaderNotifications } from './HeaderNotifications';
 import { HeaderProfileMenu } from './HeaderProfileMenu';
-import { WorkspaceSwitcher } from './WorkspaceSwitcher';
-import { HOME_PATH } from '../../shared/config/appMode';
-import logoUrl from '../../assets/logo.svg';
 
 interface AppContentHeaderProps {
   breadcrumbs: AppBreadcrumbItem[] | null;
@@ -22,7 +19,7 @@ interface AppContentHeaderProps {
   onCreateOrg: () => void;
   /** Invitations to a team and decisions on join requests */
   showNotifications?: boolean;
-  /** Standalone surveys service: no sidebar, the brand and the workspace switcher live here */
+  /** Standalone surveys service: the brand and the workspace switcher live in its side panel, the account stays here */
   standalone?: boolean;
   showMobileMenu?: boolean;
   onMobileMenuClick?: () => void;
@@ -48,14 +45,6 @@ export const AppContentHeader = ({
 
   return (
   <header className="app-content-header" aria-label="Верхняя панель">
-    {standalone && (
-      <div className="app-header-brand">
-        <Link to={HOME_PATH} className="app-header-brand__link" aria-label="СВОД Опросы — на главную">
-          <img src={logoUrl} alt="СВОД" className="app-header-brand__logo" />
-          <span className="app-header-brand__name">Опросы</span>
-        </Link>
-      </div>
-    )}
     <div className="app-content-header__main">
       <div className="app-content-header__left">
         {showMobileMenu && (
@@ -83,7 +72,6 @@ export const AppContentHeader = ({
         ) : null}
       </div>
       <div className="app-content-header__right">
-        {standalone && <WorkspaceSwitcher onCreateTeam={onCreateOrg} />}
         {showNotifications && (
           <HeaderNotifications
             open={notificationsOpen}

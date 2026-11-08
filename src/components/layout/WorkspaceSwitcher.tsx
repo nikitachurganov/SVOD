@@ -1,52 +1,133 @@
+import { useEffect, useState } from 'react';
 import { Dropdown } from 'antd';
 import type { MenuProps } from 'antd';
-import { DownOutlined, PlusOutlined, TeamOutlined, UserOutlined } from '@ant-design/icons';
+import { PlusOutlined, TeamOutlined, UserOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
+import { getPlans } from '../../shared/api/billing.api';
+import { useAuth } from '../../shared/hooks/auth.hooks';
 import { useOrganization } from '../../shared/hooks/organization.hooks';
 import type { OrganizationResponse } from '../../types/organization';
+import { UpgradeModal } from '../billing/UpgradeModal';
+import { useWorkspaceUsage } from './useWorkspaceUsage';
 
 interface Props {
   onCreateTeam: () => void;
+  placement?: 'bottomRight' | 'bottomLeft' | 'topLeft';
+  /** Fill the width of the container (the side panel) instead of fitting the name */
+  block?: boolean;
 }
 
 const PERSONAL_LABEL = 'Личное пространство';
 
-const workspaceName =(org: OrganizationResponse): string => (org.is_personal ? PERSONAL_LABEL : org.name);
+const workspaceName = (org: OrganizationResponse): string => (org.is_personal ? PERSONAL_LABEL : org.name);
+
+/** The plan of the workspace as the small tag next to its name; the free plan is the quiet one */
+const PLAN_TAGS: Record<string, { label: string; paid: boolean }> = {
+  start: { label: 'Старт', paid: false },
+  unlimited: { label: 'Без лимитов', paid: true },
+  pack: { label: 'Исследование', paid: true },
+  researcher: { label: 'Исследователь', paid: true },
+};
+
+const AVATAR_COLORS = ['#e8b931', '#4c9be8', '#5cc08a', '#d9738c', '#9b7fe6', '#e08a4a'];
+
+/** The same name always gets the same colour */
+const avatarColor = (name: string): string => {
+  let hash = 0;
+  for (const char of name) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  return AVATAR_COLORS[hash % AVATAR_COLORS.length];
+};
+
+/** Two chevrons, one over the other: the switcher opens a list to choose from, not just a menu down */
+const ChevronsUpDown = () => (
+  <svg
+    className="workspace-switcher__arrow"
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden
+  >
+    <path d="m7 15 5 5 5-5" />
+    <path d="m7 9 5-5 5 5" />
+  </svg>
+);
 
 /**
  * Standalone surveys service: which workspace the person is in (their own or one of their teams),
  * the way to the team's people and settings, and the way to start a new team.
  */
-export const WorkspaceSwitcher = ({ onCreateTeam }: Props) => {
+export const WorkspaceSwitcher = ({ onCreateTeam, placement = 'bottomRight', block = false }: Props) => {
   const navigate = useNavigate();
   const { organizations, activeOrganization, isLoading, setActiveOrganizationId } = useOrganization();
+  const activeId = activeOrganization?.id ?? null;
+  // The plan of the active workspace (the owner's plan); the tag is left out while it is unknown
+  // or when the tariffs are switched off
+  const shown = useWorkspaceUsage(activeId);
+  // Whether the payment can be made online right now; without it the tag of a free plan is only a label
+  const [canPay, setCanPay] = useState(false);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const { user } = useAuth();
+
+  useEffect(() => {
+    let cancelled = false;
+    getPlans()
+      .then((plans) => {
+        if (!cancelled) setCanPay(plans.payments_enabled);
+      })
+      .catch(() => {
+        if (!cancelled) setCanPay(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   if (isLoading || !activeOrganization) return null;
 
   const inTeam = !activeOrganization.is_personal;
+  const name = workspaceName(activeOrganization);
+  const tag = shown ? PLAN_TAGS[shown.usage.plan_code] : undefined;
+  // The plan belongs to the person who pays, so only the owner of the workspace can change it: on the free
+  // plan the tag opens the plans, on a paid one the page of the plan and its quota
+  const isOwner = Boolean(user) && activeOrganization.owner_user_id === user?.id;
+  const tagAction: 'buy' | 'manage' | null = !tag || !isOwner ? null : tag.paid ? 'manage' : canPay ? 'buy' : null;
+  const canUpgrade = tagAction === 'buy';
 
   const items: MenuProps['items'] = [
     {
       type: 'group',
       label: 'Рабочие пространства',
-      children: organizations.map((org) => ({
-        key: `org:${org.id}`,
-        icon: org.is_personal ? <UserOutlined /> : <TeamOutlined />,
-        label: workspaceName(org),
-      })),
+      children: organizations.map((org) => {
+        // The active workspace is the freshest (it is re-read after a payment); the others come with the list
+        const code = org.id === activeId && shown ? shown.usage.plan_code : org.plan_code;
+        const planTag = code ? PLAN_TAGS[code] : undefined;
+        return {
+          key: `org:${org.id}`,
+          icon: org.is_personal ? <UserOutlined /> : <TeamOutlined />,
+          label: (
+            <span className="workspace-menu-item">
+              <span className="workspace-menu-item__name">{workspaceName(org)}</span>
+              {planTag ? (
+                <span className={`workspace-switcher__plan${planTag.paid ? ' workspace-switcher__plan--paid' : ''}`}>
+                  {planTag.label}
+                </span>
+              ) : null}
+            </span>
+          ),
+        };
+      }),
     },
     { type: 'divider' },
-    ...(inTeam
-      ? [
-          { key: 'team', icon: <TeamOutlined />, label: 'Участники и настройки' },
-        ]
-      : []),
     { key: 'create', icon: <PlusOutlined />, label: 'Создать команду' },
   ];
 
   const onClick: MenuProps['onClick'] = ({ key }) => {
     if (key === 'create') onCreateTeam();
-    else if (key === 'team') navigate('/participants');
     else if (key.startsWith('org:')) {
       setActiveOrganizationId(key.slice('org:'.length));
       // A page of the previous workspace (a survey, a project) does not exist in the next one
@@ -55,17 +136,59 @@ export const WorkspaceSwitcher = ({ onCreateTeam }: Props) => {
   };
 
   return (
-    <Dropdown
-      classNames={{ root: 'app-menu-dropdown' }}
-      menu={{ items, onClick, selectedKeys: [`org:${activeOrganization.id}`] }}
-      trigger={['click']}
-      placement="bottomRight"
-    >
-      <button type="button" className="workspace-switcher" aria-label="Рабочее пространство" aria-haspopup="menu">
-        {inTeam ? <TeamOutlined aria-hidden /> : <UserOutlined aria-hidden />}
-        <span className="workspace-switcher__name">{workspaceName(activeOrganization)}</span>
-        <DownOutlined className="workspace-switcher__arrow" aria-hidden />
-      </button>
-    </Dropdown>
+    <>
+      <Dropdown
+        classNames={{ root: 'app-menu-dropdown' }}
+        menu={{ items, onClick, selectedKeys: [`org:${activeOrganization.id}`] }}
+        trigger={['click']}
+        placement={placement}
+      >
+        <div className={`workspace-switcher${block ? ' workspace-switcher--block' : ''}`}>
+          <button
+            type="button"
+            className="workspace-switcher__main"
+            aria-label="Рабочее пространство"
+            aria-haspopup="menu"
+          >
+            <span
+              className="workspace-switcher__avatar"
+              style={inTeam ? { background: avatarColor(name) } : undefined}
+              aria-hidden
+            >
+              {inTeam ? name.trim().charAt(0).toUpperCase() : <UserOutlined />}
+            </span>
+            <span className="workspace-switcher__name">{name}</span>
+          </button>
+          {tag ? (
+            tagAction ? (
+              <button
+                type="button"
+                className={`workspace-switcher__plan workspace-switcher__plan--action${tag.paid ? ' workspace-switcher__plan--paid' : ''}`}
+                title={tagAction === 'buy' ? 'Выбрать тариф' : 'Тариф и квота'}
+                aria-label={
+                  tagAction === 'buy' ? `Тариф «${tag.label}»: выбрать тариф` : `Тариф «${tag.label}»: тариф и квота`
+                }
+                onClick={(event) => {
+                  // The tag leads to the plans; the list of workspaces is opened by the rest of the switcher
+                  event.stopPropagation();
+                  if (tagAction === 'buy') setUpgradeOpen(true);
+                  else navigate('/settings?tab=plans');
+                }}
+              >
+                {tag.label}
+              </button>
+            ) : (
+              <span
+                className={`workspace-switcher__plan${tag.paid ? ' workspace-switcher__plan--paid' : ''}`}
+              >
+                {tag.label}
+              </span>
+            )
+          ) : null}
+          <ChevronsUpDown />
+        </div>
+      </Dropdown>
+      {canUpgrade ? <UpgradeModal open={upgradeOpen} onClose={() => setUpgradeOpen(false)} /> : null}
+    </>
   );
 };

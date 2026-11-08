@@ -11,6 +11,8 @@ export interface OrganizationResponse {
   is_personal: boolean;
   /** The caller's role in it; absent in answers that are not about the caller's own membership */
   my_role?: TeamRole | null;
+  /** The plan the workspace works on (its owner's); sent in the list of workspaces, empty when tariffs are off */
+  plan_code?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -40,6 +42,14 @@ export interface SeatUsage {
   readers_limit: number;
   plan_code: string;
   billing_enabled: boolean;
+  /** The shared pool of Токены+ (the owner's counter); null while the owner is on the free plan */
+  ai_pool_used: number | null;
+  ai_pool_max: number | null;
+  ai_pool_resets_at: string | null;
+  /** What each person took from the pool in this period: user id → tokens */
+  ai_spent_by_user: Record<string, number>;
+  /** Days left of the window in which seats 2 and 3 keep the kit price; 0: no window */
+  seat_window_days_left: number;
 }
 
 export interface InvitationResponse {

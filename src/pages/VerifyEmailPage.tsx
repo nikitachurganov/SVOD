@@ -5,7 +5,7 @@ import { confirmEmailVerification } from '../shared/api/auth.api';
 import { useAuth } from '../shared/hooks/auth.hooks';
 import { IS_SURVEYS_APP } from '../shared/config/appMode';
 import logoUrl from '../assets/logo.svg';
-import heroBgUrl from '../assets/auth-hero-bg.png';
+import { AuthHeroBackground } from '../components/auth/AuthHeroBackground';
 import './AuthPage.css';
 
 const INVALID_LINK = 'Ссылка недействительна или устарела. Запросите новое письмо в профиле.';
@@ -42,8 +42,7 @@ export const VerifyEmailPage = () => {
   return (
     <div className="auth-page">
       <div className="auth-page__hero" aria-hidden="true">
-        <img src={heroBgUrl} alt="" className="auth-page__hero-bg" />
-        <div className="auth-page__hero-overlay" />
+        <AuthHeroBackground />
         <div className="auth-page__hero-content">
           <img src={logoUrl} alt="СВОД" className="auth-page__hero-logo" />
           <p className="auth-page__hero-tagline">

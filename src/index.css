@@ -134,13 +134,45 @@ html[data-theme] body {
   object-position: left center;
 }
 
-/* Standalone surveys service: no sidebar and no organizations, the brand lives in the header */
-.app-shell-grid--no-sidebar,
-.app-shell-grid--no-sidebar.app-shell-grid--collapsed {
-  grid-template-columns: minmax(0, 1fr);
+/* Standalone surveys service: «СВОД | Опросы» at the top of the side panel */
+.app-sidebar__brand-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  border-radius: 6px;
+  text-decoration: none;
 }
 
-/* Standalone surveys service: «СВОД | Опросы» is its own block with a divider across the whole
+.app-sidebar__brand-link:focus-visible {
+  outline: 2px solid var(--app-primary);
+  outline-offset: 4px;
+}
+
+.app-sidebar__logo-image.app-sidebar__brand-logo {
+  width: 100px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.app-sidebar__brand-name {
+  padding-left: 12px;
+  border-left: 1px solid var(--app-border-secondary);
+  color: var(--app-text-secondary);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 24px;
+  white-space: nowrap;
+}
+
+/* The workspace (own or a team's) sits at the very bottom, where the account block used to be */
+.app-sidebar__workspace {
+  flex-shrink: 0;
+  padding: 12px;
+  border-top: 1px solid var(--app-border-secondary);
+}
+
+/* Legal pages (outside the shell): «СВОД | Опросы» is its own block with a divider across the whole
    header, the mirror of the account block on the right, so it does not run into the breadcrumbs */
 .app-header-brand {
   display: flex;
@@ -212,9 +244,48 @@ html[data-theme] body {
   background: var(--app-surface-hover);
 }
 
-.workspace-switcher:focus-visible {
+.workspace-switcher:has(:focus-visible) {
   outline: 2px solid var(--app-primary);
   outline-offset: 2px;
+}
+
+/* The avatar and the name are the button that opens the list; the tag and the arrow sit beside it */
+.workspace-switcher__main {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  outline: none;
+}
+
+.workspace-switcher--block .workspace-switcher__main {
+  flex: 1;
+}
+
+/* The tag that opens the plans is a button of its own */
+.workspace-switcher__plan--action {
+  border: 0;
+  font-family: inherit;
+  cursor: pointer;
+  transition: filter 0.15s;
+}
+
+.workspace-switcher__plan--action:hover {
+  filter: brightness(1.15);
+}
+
+.workspace-switcher__plan--action:focus-visible {
+  outline: 2px solid var(--app-primary);
+  outline-offset: 1px;
 }
 
 .workspace-switcher__name {
@@ -225,8 +296,57 @@ html[data-theme] body {
 }
 
 .workspace-switcher__arrow {
-  font-size: 10px;
+  flex-shrink: 0;
   color: var(--app-text-secondary);
+}
+
+/* The workspace's letter (a team) or the person's icon (their own space) in a round badge */
+.workspace-switcher__avatar {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--app-surface-hover);
+  color: #1f1f1f;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+/* The plan of the workspace, to the left of the arrow */
+.workspace-switcher__plan {
+  flex-shrink: 0;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--app-info) 18%, transparent);
+  color: var(--app-info);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+.workspace-switcher__plan--paid {
+  background: var(--app-menu-active-bg);
+  color: var(--app-menu-active-text);
+}
+
+/* A workspace in the list: its name and, to the right, the plan it works on */
+.workspace-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.workspace-menu-item__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 600px) {
@@ -234,6 +354,71 @@ html[data-theme] body {
     max-width: 120px;
     padding: 0 8px;
   }
+}
+
+/* In the side panel the switcher takes the whole width */
+.workspace-switcher.workspace-switcher--block {
+  display: flex;
+  width: 100%;
+  max-width: none;
+  height: 44px;
+  padding: 0 10px;
+}
+
+.workspace-switcher--block .workspace-switcher__name {
+  flex: 1;
+  text-align: left;
+}
+
+/* «Your plan and quota» above the switcher in the side panel */
+.sidebar-plan-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--app-border-secondary);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--app-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.sidebar-plan-card:hover {
+  background: var(--app-surface-hover);
+}
+
+.sidebar-plan-card:focus-visible {
+  outline: 2px solid var(--app-primary);
+  outline-offset: 2px;
+}
+
+.sidebar-plan-card__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.sidebar-plan-card__text strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.sidebar-plan-card__text small {
+  font-size: 12px;
+  color: var(--app-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-plan-card--warn small {
+  color: var(--app-warning, #d89614);
 }
 
 .app-content-header__right {
@@ -3910,75 +4095,142 @@ html[data-theme='dark'] .app-sidebar__logo-image {
 
 /* ── Empty state of the projects start screen ─────────────────────────────── */
 
+/* First-run block: a short pitch on the left, a sample folder on the right */
 .projects-empty {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  max-width: 520px;
-  margin: 24px auto 0;
-  text-align: center;
-}
-
-.projects-empty__art {
-  position: relative;
-  width: 100%;
-  max-width: 480px;
-  aspect-ratio: 16 / 9;
-  margin-bottom: 32px;
+  justify-content: space-between;
+  gap: 32px;
+  padding: 40px 48px;
   overflow: hidden;
-  border-radius: 16px;
-  background:
-    radial-gradient(circle at 12% 88%, #ffd21f 0, transparent 45%),
-    radial-gradient(circle at 90% 90%, #ff5a1f 0, transparent 50%),
-    linear-gradient(135deg, #ff8f70 0%, #ff9a1f 45%, #ff3d5a 100%);
+  background: var(--app-surface);
+  border: 1px solid var(--app-border-secondary);
+  border-radius: 20px;
 }
 
-.projects-empty__card {
-  position: absolute;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  width: 46%;
-  padding: 16px;
-  border-radius: 12px;
-  background: #fff;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-  transform: rotate(-12deg);
+.projects-empty__body {
+  flex: 1;
+  min-width: 0;
+  max-width: 520px;
 }
-
-.projects-empty__card--back { top: -14%; left: 14%; height: 62%; }
-.projects-empty__card--front { top: 34%; left: 44%; height: 62%; }
-
-.projects-empty__dot {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: #111;
-}
-
-.projects-empty__line {
-  height: 10px;
-  border-radius: 6px;
-  background: #ececec;
-}
-
-.projects-empty__line--short { width: 55%; }
 
 .projects-empty__title {
   margin: 0 0 8px;
-  font-size: 20px;
+  font-size: 24px;
   font-weight: 600;
+  line-height: 1.3;
   color: var(--app-text);
 }
 
 .projects-empty__text {
   margin: 0 0 24px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--app-text-secondary);
+}
+
+.projects-empty__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 32px;
+}
+
+.projects-empty__steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin: 0;
+  padding: 0;
+  font-size: 14px;
+  color: var(--app-text-secondary);
+  list-style: none;
+}
+
+.projects-empty__steps li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.projects-empty__step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--app-menu-active-text);
+  background: var(--app-menu-active-bg);
+  border-radius: 50%;
+}
+
+.projects-empty__preview {
+  flex: none;
+  padding: 28px;
+  background: var(--app-bg-hover);
+  border-radius: 16px;
+}
+
+/* A picture of a folder, not a control: no hover, no clicks */
+.projects-empty__folder {
+  width: 288px;
+  max-width: 100%;
+  pointer-events: none;
+}
+
+@media (max-width: 899px) {
+  .projects-empty {
+    flex-direction: column-reverse;
+    align-items: stretch;
+    padding: 24px;
+  }
+  .projects-empty__body { max-width: none; }
+  .projects-empty__preview { display: flex; justify-content: center; padding: 20px; }
+}
+
+@media (max-width: 575px) {
+  .projects-empty__actions .ant-btn { flex: 1 1 100%; }
+}
+
+/* Recent surveys with nothing to show yet */
+.recent-empty {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 24px;
+  background: transparent;
+  border: 1px dashed var(--app-border);
+  border-radius: 12px;
+}
+
+.recent-empty__icon {
+  flex: none;
+  font-size: 24px;
+  color: var(--app-text-secondary);
+}
+
+.recent-empty__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.recent-empty__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--app-text);
+}
+
+.recent-empty__text {
+  margin-top: 2px;
+  font-size: 13px;
   color: var(--app-text-secondary);
 }
 
 @media (max-width: 575px) {
-  .projects-empty { margin-top: 8px; }
-  .projects-empty__art { margin-bottom: 24px; }
+  .recent-empty { flex-wrap: wrap; padding: 16px; }
+  .recent-empty__body { flex-basis: calc(100% - 40px); }
 }
 
 /* ── Start screen: project envelopes + recent surveys ─────────────────────── */

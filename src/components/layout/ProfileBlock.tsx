@@ -47,7 +47,7 @@ export const HeaderProfileMenuContent = ({
 
   const handleOpenPlans = () => {
     onClose();
-    navigate('/plans');
+    navigate('/settings?tab=plans');
   };
 
   const handleOpenAdmin = () => {

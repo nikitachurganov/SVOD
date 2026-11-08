@@ -31,6 +31,9 @@ export const ASSIGNABLE_ROLE_OPTIONS = (['editor', 'reader', 'admin'] as const).
 export const roleOptionsFor = (canAssignAdmin: boolean) =>
   canAssignAdmin ? ASSIGNABLE_ROLE_OPTIONS : ASSIGNABLE_ROLE_OPTIONS.filter((o) => o.value !== 'admin');
 
+/** Every role but the reader is paid for with a seat (same rule as team_roles.takes_seat on the server) */
+export const takesSeat = (role: string | null | undefined): boolean => role !== 'reader';
+
 export const copyToClipboard = async (text: string): Promise<boolean> => {
   try {
     await navigator.clipboard.writeText(text);

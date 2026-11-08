@@ -335,15 +335,13 @@ export const RouteSkeleton = () => {
 
 /** The whole shell (header, sidebar and the page) while the session is checked */
 export const AppShellSkeleton = () => (
-  <div className={IS_SURVEYS_APP ? 'app-shell-grid app-shell-grid--no-sidebar' : 'app-shell-grid'}>
-    {!IS_SURVEYS_APP && (
-      <aside className="sk-sidebar" aria-hidden="true">
-        <Bone w={120} h={28} style={{ marginBottom: 16 }} />
-        {range(5).map((index) => (
-          <Bone key={index} h={32} r={8} />
-        ))}
-      </aside>
-    )}
+  <div className="app-shell-grid">
+    <aside className="sk-sidebar" aria-hidden="true">
+      <Bone w={120} h={28} style={{ marginBottom: 16 }} />
+      {range(IS_SURVEYS_APP ? 3 : 5).map((index) => (
+        <Bone key={index} h={32} r={8} />
+      ))}
+    </aside>
     <div className="app-shell-main">
       <div className="app-content-header sk-header" aria-hidden="true">
         <Bone w={140} h={24} />

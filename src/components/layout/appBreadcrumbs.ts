@@ -24,7 +24,8 @@ export const withStandaloneRoot = (items: AppBreadcrumbItem[] | null): AppBreadc
 
 /** Team pages of the standalone surveys service (the platform shows them under its sidebar, without a trail) */
 export const getTeamBreadcrumbs = (pathname: string): AppBreadcrumbItem[] | null => {
-  if (pathname === '/participants') return [{ title: 'Команда' }];
+  if (pathname === '/participants') return [{ title: 'Участники' }];
+  if (pathname === '/settings') return [{ title: 'Настройки' }];
   return null;
 };
 

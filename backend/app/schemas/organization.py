@@ -29,6 +29,9 @@ class OrganizationResponse(BaseModel):
     # The caller's role in this organization (owner, admin, editor, reader); None when the answer
     # is not about the caller's own membership
     my_role: str | None = None
+    # The plan the workspace works on (the owner's); filled in the list of the caller's workspaces,
+    # None where the answer is not about the plan or when the tariffs are switched off
+    plan_code: str | None = None
     created_at: str
     updated_at: str
 
@@ -68,6 +71,15 @@ class SeatUsageResponse(BaseModel):
     readers_limit: int
     plan_code: str
     billing_enabled: bool
+    # The shared pool of Токены+ of the team (the owner's counter); null while the owner is on the
+    # free plan, where everybody spends their own allowance
+    ai_pool_used: int | None = None
+    ai_pool_max: int | None = None
+    ai_pool_resets_at: datetime | None = None
+    # What each person spent from the pool in this period: {user_id: tokens}
+    ai_spent_by_user: dict[str, int] = Field(default_factory=dict)
+    # Days left of the one-time window in which the 2nd and 3rd seats keep the kit price; 0: no window
+    seat_window_days_left: int = 0
 
 
 class TransferOwnershipRequest(BaseModel):

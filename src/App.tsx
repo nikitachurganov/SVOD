@@ -37,6 +37,8 @@ import { NotificationsProvider } from './shared/context/notifications.context';
 import { useOrganization } from './shared/hooks/organization.hooks';
 
 import { AppSidebar } from './components/layout/AppSidebar';
+import { SurveysSidebar } from './components/layout/SurveysSidebar';
+import { getSurveysNavKey } from './components/layout/surveysNavItems';
 import { NAV_ITEMS } from './components/layout/navItems';
 
 import { AppContentHeader } from './components/layout/AppContentHeader';
@@ -82,6 +84,8 @@ const DemoDraftEntryPage = lazyPage(() => import('./pages/DemoDraftPage'), 'Demo
 const ProfilePage = lazyPage(() => import('./pages/ProfilePage'), 'ProfilePage');
 const AdminPage = lazyPage(() => import('./pages/AdminPage'), 'AdminPage');
 const PlansPage = lazyPage(() => import('./pages/PlansPage'), 'PlansPage');
+const SettingsPage = lazyPage(() => import('./pages/SettingsPage'), 'SettingsPage');
+const UpgradeFlowPage = lazyPage(() => import('./pages/UpgradeFlowPage'), 'UpgradeFlowPage');
 const LegalPage = lazyPage(() => import('./pages/LegalPage'), 'LegalPage');
 const RequestsPage = lazyPage(() => import('./pages/RequestsPage'), 'RequestsPage');
 const CreateRequestPage = lazyPage(() => import('./pages/CreateRequestPage'), 'CreateRequestPage');
@@ -133,6 +137,8 @@ const AppLayoutContent = () => {
   const { entityTitle, entityParent } = useBreadcrumbEntity();
 
   const selectedKey = getSelectedMenuKey(location.pathname);
+
+  const surveysNavKey = getSurveysNavKey(location.pathname);
 
   const { user, profile } = useAuth();
 
@@ -280,9 +286,7 @@ const AppLayoutContent = () => {
 
     'app-shell-grid',
 
-    IS_SURVEYS_APP ? 'app-shell-grid--no-sidebar' : '',
-
-    isDesktop && isSidebarCollapsed ? 'app-shell-grid--collapsed' : '',
+    !IS_SURVEYS_APP && isDesktop && isSidebarCollapsed ? 'app-shell-grid--collapsed' : '',
 
   ]
 
@@ -306,7 +310,17 @@ const AppLayoutContent = () => {
 
       <div className={shellClass}>
 
-        {!IS_SURVEYS_APP && (
+        {IS_SURVEYS_APP ? (
+
+          <SurveysSidebar
+            selectedKey={surveysNavKey}
+            isDesktop={isDesktop}
+            isMobileOpen={mobileSidebarOpen}
+            onNavigate={handleNav}
+            onCreateTeam={openCreateOrg}
+          />
+
+        ) : (
 
           <AppSidebar
 
@@ -330,7 +344,7 @@ const AppLayoutContent = () => {
 
 
 
-        {!IS_SURVEYS_APP && !isDesktop && mobileSidebarOpen && (
+        {!isDesktop && mobileSidebarOpen && (
 
           <button
 
@@ -383,7 +397,7 @@ const AppLayoutContent = () => {
 
             standalone={IS_SURVEYS_APP}
 
-            showMobileMenu={!IS_SURVEYS_APP && !isDesktop}
+            showMobileMenu={!isDesktop}
 
             onMobileMenuClick={toggleSidebar}
 
@@ -508,6 +522,24 @@ const ProtectedLayout = () => {
 };
 
 
+
+// The way to a paid plan is a full-page flow without the side panel; a guest is sent to sign in first
+const UpgradeRoute = () => {
+  const { user, isAuthLoading } = useAuth();
+  const location = useLocation();
+
+  if (isAuthLoading) return <FullPageLoader />;
+
+  if (!user) {
+    return <Navigate to="/auth" replace state={{ from: `${location.pathname}${location.search}` }} />;
+  }
+
+  return (
+    <NotificationsProvider>
+      <UpgradeFlowPage />
+    </NotificationsProvider>
+  );
+};
 
 // Administrator pages: anybody else is sent home. The server checks the role again on every request,
 // so this only spares a normal user a page that would answer 403.
@@ -718,6 +750,9 @@ const surveysRoutes: RouteObject[] = [
 
   ...publicSurveyRoutes,
 
+  // Buying a plan: full-page steps outside the shell (one or a team, seats, payment)
+  { path: '/upgrade/:step', element: <UpgradeRoute /> },
+
   {
 
     path: '/',
@@ -732,12 +767,15 @@ const surveysRoutes: RouteObject[] = [
 
       { path: 'profile', element: <ProfilePage /> },
 
-      { path: 'plans', element: <PlansPage /> },
+      // The plans are a tab of the settings
+      { path: 'plans', element: <Navigate to="/settings?tab=plans" replace /> },
 
       { path: 'participants', element: <TeamOnly><ParticipantsPage /></TeamOnly> },
 
-      // The team's settings are a tab of the «Команда» page
-      { path: 'settings/organization', element: <Navigate to="/participants?tab=settings" replace /> },
+      // The team's settings and the plans: one section
+      { path: 'settings', element: <SettingsPage /> },
+
+      { path: 'settings/organization', element: <Navigate to="/settings" replace /> },
 
       { path: 'admin', element: <AdminRoute /> },
 

@@ -8,6 +8,7 @@ import {
   DownOutlined,
   EditOutlined,
   LinkOutlined,
+  MoreOutlined,
   PlusOutlined,
   SendOutlined,
   SolutionOutlined,
@@ -17,7 +18,7 @@ import { useOrganization } from '../shared/hooks/organization.hooks';
 import { useAuth } from '../shared/hooks/auth.hooks';
 import { buildDisplayName } from '../shared/utils/userName';
 import { localizeAppLink } from '../shared/lib/localizeLink';
-import { HOME_PATH, IS_SURVEYS_APP } from '../shared/config/appMode';
+import { IS_SURVEYS_APP } from '../shared/config/appMode';
 import {
   deleteExternalContractor,
   getMembers,
@@ -42,14 +43,16 @@ import type {
 import { InviteMemberModal, InvitationResult } from '../components/organization/InviteMemberModal';
 import { ContractorModal } from '../components/organization/ContractorModal';
 import { MemberAiLimitInput } from '../components/organization/MemberAiLimitInput';
+import { TeamQuotaSummary } from '../components/organization/TeamQuotaSummary';
+import { formatCredits } from '../components/billing/billingFormat';
 import { JoinLinkModal } from '../components/organization/JoinLinkModal';
 import { JoinRequestsTable } from '../components/organization/JoinRequestsTable';
-import { OrganizationSettingsSection } from '../components/organization/OrganizationSettingsSection';
 import {
   CONTACT_KIND_LABELS,
   ROLE_LABELS,
   copyToClipboard,
   roleOptionsFor,
+  takesSeat,
 } from '../components/organization/participants.utils';
 
 function formatDate(iso: string): string {
@@ -70,16 +73,20 @@ type MemberRow = {
   joined_at: string;
   /** Personal cap of the member in the team's tokens+; null: none */
   token_plus_limit: number | null;
+  /** Токены+ the member took from the team's pool in this period; null: not known */
+  spent: number | null;
 };
 
-type ParticipantsTabKey = 'members' | 'contractors' | 'requests' | 'invitations' | 'settings';
+/** Free seats listed one by one; with more, the rest is one line */
+const FREE_ROWS_SHOWN = 5;
+
+type ParticipantsTabKey = 'members' | 'contractors' | 'requests' | 'invitations';
 
 const TAB_LABELS: Record<ParticipantsTabKey, string> = {
   members: 'В команде',
   contractors: 'Подрядчики',
   requests: 'Заявки на вступление',
   invitations: 'Приглашения',
-  settings: 'Настройки',
 };
 
 const TAB_KEYS = Object.keys(TAB_LABELS) as ParticipantsTabKey[];
@@ -93,6 +100,7 @@ const isExpired = (inv: InvitationResponse): boolean =>
   Boolean(inv.expires_at && new Date(inv.expires_at).getTime() < Date.now());
 
 export const ParticipantsPage = () => {
+  const navigate = useNavigate();
   const { activeOrganization } = useOrganization();
   const { user } = useAuth();
   const isOwner = !!activeOrganization && activeOrganization.owner_user_id === user?.id;
@@ -112,9 +120,8 @@ export const ParticipantsPage = () => {
     open: false,
     contractor: null,
   });
-  // The tab lives in the address (?tab=settings): the team's settings share this page in the surveys service
+  // The tab lives in the address (?tab=requests)
   const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate();
   const tabParam = searchParams.get('tab') as ParticipantsTabKey | null;
   const activeTab: ParticipantsTabKey = tabParam && TAB_KEYS.includes(tabParam) ? tabParam : 'members';
   const setActiveTab = (key: ParticipantsTabKey) =>
@@ -126,11 +133,9 @@ export const ParticipantsPage = () => {
   const isAdmin = members.some((m) => m.user.id === user?.id && m.role_tag === 'admin');
   const canManage = isOwner || isAdmin;
   // Outside contractors are assigned to the stages of requests: the surveys service has no such thing
-  const peopleTabs: ParticipantsTabKey[] = (
+  const visibleTabs: ParticipantsTabKey[] = (
     canManage ? ['members', 'contractors', 'requests', 'invitations'] : ['members', 'contractors']
   ).filter((key) => !(IS_SURVEYS_APP && key === 'contractors')) as ParticipantsTabKey[];
-  // The surveys service has one «Команда» page: people and the team's settings together
-  const visibleTabs: ParticipantsTabKey[] = IS_SURVEYS_APP ? [...peopleTabs, 'settings'] : peopleTabs;
 
   const refreshSeats = useCallback(async () => {
     if (!activeOrganizationId) return;
@@ -249,7 +254,10 @@ export const ParticipantsPage = () => {
     job_title: m.job_title ?? null,
     joined_at: m.joined_at,
     token_plus_limit: m.token_plus_limit ?? null,
-  })), [members]);
+    // Spending is known only while the team has a pool (a paid plan of the owner)
+    spent:
+      seatUsage && typeof seatUsage.ai_pool_max === 'number' ? (seatUsage.ai_spent_by_user?.[m.user.id] ?? 0) : null,
+  })), [members, seatUsage]);
 
   const memberColumns = useMemo<ColumnsType<MemberRow>>(
     () => [
@@ -264,12 +272,6 @@ export const ParticipantsPage = () => {
             <div style={{ fontSize: 12, color: 'var(--app-text-secondary)' }}>{record.email}</div>
           </div>
         ),
-      },
-      {
-        title: 'Должность',
-        dataIndex: 'job_title',
-        key: 'job_title',
-        render: (value: string | null) => value ?? <span style={{ color: 'var(--app-text-secondary)' }}>—</span>,
       },
       {
         title: 'Роль',
@@ -297,56 +299,97 @@ export const ParticipantsPage = () => {
           );
         },
       },
+      ...(seatUsage?.billing_enabled
+        ? [
+            {
+              title: (
+                <Tooltip title="Владелец, администраторы и редакторы занимают оплаченное место. Читатели бесплатны.">
+                  <span>Место</span>
+                </Tooltip>
+              ),
+              key: 'seat',
+              width: 150,
+              render: (_: unknown, record: MemberRow) =>
+                takesSeat(record.role) ? (
+                  <Tag>Занимает место</Tag>
+                ) : (
+                  <Tag color="green">Бесплатно</Tag>
+                ),
+            },
+          ]
+        : []),
       ...(canManage
         ? [
             {
-              title: 'Лимит ИИ',
+              title: (
+                <Tooltip title="Сколько кредитов+ в месяц человек может потратить из общего пула команды">
+                  <span>Лимит ИИ</span>
+                </Tooltip>
+              ),
               dataIndex: 'token_plus_limit',
               key: 'token_plus_limit',
               render: (value: number | null, record: MemberRow) => {
-                // The owner spends the pool freely, a reader has no AI at all
-                if (record.role === 'owner' || record.role === 'reader') {
-                  return <span style={{ color: 'var(--app-text-secondary)' }}>—</span>;
+                const spent =
+                  record.spent !== null && record.role !== 'reader' ? (
+                    <span className="team-quota-spent">Потрачено: {formatCredits(record.spent)} кр.</span>
+                  ) : null;
+                // Say why there is no field instead of a bare dash
+                if (record.role === 'owner') {
+                  return (
+                    <div>
+                      <span style={{ color: 'var(--app-text-secondary)' }}>Без ограничений</span>
+                      {spent}
+                    </div>
+                  );
+                }
+                if (record.role === 'reader') {
+                  return <span style={{ color: 'var(--app-text-secondary)' }}>ИИ недоступен</span>;
                 }
                 return (
-                  <MemberAiLimitInput
-                    value={value}
-                    disabled={busyId === record.id}
-                    onCommit={(tokens) => void changeAiLimit(record.id, tokens)}
-                  />
+                  <div>
+                    <MemberAiLimitInput
+                      value={value}
+                      disabled={busyId === record.id}
+                      onCommit={(tokens) => void changeAiLimit(record.id, tokens)}
+                    />
+                    {spent}
+                  </div>
                 );
               },
             },
           ]
         : []),
       {
-        title: 'Дата вступления',
-        dataIndex: 'joined_at',
-        key: 'joined_at',
-        sorter: (a, b) => new Date(a.joined_at).getTime() - new Date(b.joined_at).getTime(),
-        render: (value: string) => formatDate(value),
-      },
-      {
-        title: 'Действия',
+        // No title: the only action is in the «⋯» menu of the row, and only where it exists
+        title: '',
         key: 'actions',
+        width: 56,
+        align: 'right',
         render: (_, record) => {
           if (!canManage || record.id === user?.id || record.role === 'owner') return null;
           if (!isOwner && record.role === 'admin') return null;
           return (
-            <Button
-              type="text"
-              size="small"
-              danger
-              disabled={busyId === record.id}
-              onClick={() => setConfirmAction({ type: 'remove', id: record.id, name: record.participant })}
+            <Dropdown
+              trigger={['click']}
+              placement="bottomRight"
+              menu={{
+                items: [{ key: 'remove', label: 'Исключить из команды', danger: true }],
+                onClick: () => setConfirmAction({ type: 'remove', id: record.id, name: record.participant }),
+              }}
             >
-              Исключить
-            </Button>
+              <Button
+                type="text"
+                size="small"
+                icon={<MoreOutlined />}
+                aria-label={`Действия с участником ${record.participant}`}
+                disabled={busyId === record.id}
+              />
+            </Dropdown>
           );
         },
       },
     ],
-    [busyId, canManage, changeAiLimit, changeRole, isOwner, user?.id],
+    [busyId, canManage, changeAiLimit, changeRole, isOwner, seatUsage?.billing_enabled, user?.id],
   );
 
   const contractorColumns = useMemo<ColumnsType<ExternalContractor>>(
@@ -519,7 +562,7 @@ export const ParticipantsPage = () => {
 
   if (!activeOrganization) return null;
 
-  const headerAction = canManage && activeTab !== 'settings' ? (
+  const headerAction = canManage ? (
     <Dropdown
       classNames={{ root: 'app-menu-dropdown' }}
       trigger={['click']}
@@ -558,6 +601,12 @@ export const ParticipantsPage = () => {
     </Dropdown>
   ) : null;
 
+  // Paid seats nobody has taken: shown as rows under the people, so the table adds up to the quota
+  const seatsFree =
+    seatUsage && seatUsage.seats_limit !== null ? Math.max(seatUsage.seats_limit - seatUsage.seats_used, 0) : 0;
+  // Unanswered invitations hold a seat too, but are listed on their own tab
+  const pendingSeats = invitations.filter((inv) => takesSeat(inv.role_tag)).length;
+
   const confirmTitle =
     confirmAction?.type === 'remove'
       ? `Исключить ${confirmAction.name}?`
@@ -569,7 +618,7 @@ export const ParticipantsPage = () => {
     <div className="registry-page">
       <div className="registry-page__header">
         <div className="registry-page__title-row">
-          <h1 className="registry-page__title">{IS_SURVEYS_APP ? 'Команда' : 'Участники'}</h1>
+          <h1 className="registry-page__title">Участники</h1>
           {headerAction}
         </div>
         <div className="registry-page__tabs" role="tablist" aria-label="Разделы участников">
@@ -595,9 +644,7 @@ export const ParticipantsPage = () => {
       </div>
 
       <div className="registry-page__content">
-        {activeTab === 'settings' ? (
-          <OrganizationSettingsSection onAfterDelete={() => navigate(HOME_PATH)} />
-        ) : error ? (
+        {error ? (
           <Card className="registry-page__card">
             <Alert type="error" title="Ошибка загрузки" description={error} showIcon />
             <Button type="text" size="small" onClick={() => void load()} style={{ marginTop: 8 }}>
@@ -609,23 +656,11 @@ export const ParticipantsPage = () => {
             {activeTab === 'members' ? (
               <>
               {seatUsage?.billing_enabled ? (
-                <div style={{ margin: '0 0 12px', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <Tooltip title="Владелец, администраторы, редакторы и неотвеченные приглашения занимают место. Читатели бесплатны.">
-                    <Tag
-                      color={
-                        seatUsage.seats_limit !== null && seatUsage.seats_used >= seatUsage.seats_limit
-                          ? 'orange'
-                          : 'default'
-                      }
-                    >
-                      Места: {seatUsage.seats_used}
-                      {seatUsage.seats_limit !== null ? ` из ${seatUsage.seats_limit}` : ''}
-                    </Tag>
-                  </Tooltip>
-                  <Tag color="green">
-                    Читатели: {seatUsage.readers} из {seatUsage.readers_limit}
-                  </Tag>
-                </div>
+                <TeamQuotaSummary
+                  usage={seatUsage}
+                  canBuy={isOwner}
+                  onBuy={() => navigate('/settings?tab=plans')}
+                />
               ) : null}
               <Table<MemberRow>
                 rowKey="id"
@@ -635,6 +670,53 @@ export const ParticipantsPage = () => {
                 locale={{ emptyText: 'Нет участников' }}
                 pagination={false}
                 size="middle"
+                summary={
+                  seatUsage?.billing_enabled && (pendingSeats > 0 || seatsFree > 0)
+                    ? () => (
+                        <Table.Summary>
+                          {pendingSeats > 0 ? (
+                            <Table.Summary.Row>
+                              <Table.Summary.Cell index={0} colSpan={memberColumns.length}>
+                                <div className="team-quota-free-row">
+                                  <span>
+                                    <strong>Ждут ответа на приглашение: {pendingSeats}</strong> — места за ними сохранены
+                                  </span>
+                                  <Button type="link" size="small" onClick={() => setActiveTab('invitations')}>
+                                    Показать
+                                  </Button>
+                                </div>
+                              </Table.Summary.Cell>
+                            </Table.Summary.Row>
+                          ) : null}
+                          {Array.from({ length: Math.min(seatsFree, FREE_ROWS_SHOWN) }, (_, index) => (
+                            <Table.Summary.Row key={`free-${index}`}>
+                              <Table.Summary.Cell index={0} colSpan={memberColumns.length}>
+                                <div className="team-quota-free-row">
+                                  <span>
+                                    <strong>Свободное место</strong> — оплачено, пока не занято
+                                  </span>
+                                  {canManage ? (
+                                    <Button type="link" size="small" onClick={() => setInviteOpen(true)}>
+                                      Пригласить
+                                    </Button>
+                                  ) : null}
+                                </div>
+                              </Table.Summary.Cell>
+                            </Table.Summary.Row>
+                          ))}
+                          {seatsFree > FREE_ROWS_SHOWN ? (
+                            <Table.Summary.Row>
+                              <Table.Summary.Cell index={0} colSpan={memberColumns.length}>
+                                <div className="team-quota-free-row">
+                                  <span>И ещё свободных мест: {seatsFree - FREE_ROWS_SHOWN}</span>
+                                </div>
+                              </Table.Summary.Cell>
+                            </Table.Summary.Row>
+                          ) : null}
+                        </Table.Summary>
+                      )
+                    : undefined
+                }
               />
               </>
             ) : activeTab === 'contractors' ? (

@@ -14,7 +14,7 @@ import {
 import { HOME_PATH, IS_SURVEYS_APP } from '../shared/config/appMode';
 import logoUrl from '../assets/logo.svg';
 import yandexLogoUrl from '../assets/logo-yandex.svg';
-import heroBgUrl from '../assets/auth-hero-bg.png';
+import { AuthHeroBackground } from '../components/auth/AuthHeroBackground';
 import './AuthPage.css';
 
 type AuthMode = 'signIn' | 'signUp' | 'forgot';
@@ -468,8 +468,7 @@ export const AuthPage = () => {
       />
 
       <div className="auth-page__hero" aria-hidden="true">
-        <img src={heroBgUrl} alt="" className="auth-page__hero-bg" />
-        <div className="auth-page__hero-overlay" />
+        <AuthHeroBackground />
         <div className="auth-page__hero-content">
           <img src={logoUrl} alt="СВОД" className="auth-page__hero-logo" />
           <p className="auth-page__hero-tagline">
