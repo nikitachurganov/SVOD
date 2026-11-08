@@ -151,7 +151,7 @@ def _shown_answer(f: dict[str, Any], value: Any) -> str:
 def _explain_attention(pages: Any, answers: dict[str, Any]) -> QualityReason:
     failed: list[dict[str, Any]] = []
     parts: list[str] = []
-    for f in answerable_fields(pages):
+    for f in survey_answers.shown_fields(pages, answers):
         config = f.get("config")
         if not (isinstance(config, dict) and config.get("attentionCheck")):
             continue
@@ -178,8 +178,8 @@ def _explain_attention(pages: Any, answers: dict[str, Any]) -> QualityReason:
     )
 
 
-def _explain_fast(pages: Any, duration_seconds: int | None) -> QualityReason:
-    questions = len(answerable_fields(pages))
+def _explain_fast(pages: Any, answers: dict[str, Any], duration_seconds: int | None) -> QualityReason:
+    questions = len(survey_answers.shown_fields(pages, answers))
     threshold = survey_answers.too_fast_threshold(questions)
     spent = "не указано" if duration_seconds is None else f"{duration_seconds} с"
     return QualityReason(
@@ -220,7 +220,7 @@ def _explain_one(
     if code == "failed_attention_check":
         return _explain_attention(pages, answers)
     if code == "too_fast":
-        return _explain_fast(pages, duration_seconds)
+        return _explain_fast(pages, answers, duration_seconds)
     if code == "straight_lining":
         return _explain_straight_lining(pages, answers)
     return QualityReason(

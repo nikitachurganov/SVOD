@@ -47,6 +47,10 @@ export interface FormPageInstance {
   id: string;
   title: string;
   fields: FormFieldInstance[];
+  /** Survey jumps: where to go after this page when no answer jump fired — a page id or 'end' */
+  next?: string;
+  /** Survey jumps: an ending screen, shown after sending only when a jump leads here */
+  ending?: boolean;
 }
 
 /** Drag data emitted by tool-panel items */

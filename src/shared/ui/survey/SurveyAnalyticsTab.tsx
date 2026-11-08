@@ -216,7 +216,8 @@ export const SurveyAnalyticsTab = ({
                     title={q.label}
                     meta={
                       <span>
-                        Ответили: <strong>{q.answered}</strong> из {results.used}
+                        Ответили: <strong>{q.answered}</strong> из{' '}
+                        {Math.min(q.shown ?? results.used, results.used)}
                       </span>
                     }
                   >

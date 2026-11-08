@@ -8,6 +8,7 @@ import io
 import json
 from typing import Any
 
+from app.services.survey_logic import shown_field_ids
 from app.services.survey_methodology_service import iter_leaf_fields
 
 MAX_ANSWERS_BYTES = 200_000
@@ -41,6 +42,12 @@ def answerable_fields(pages: Any) -> list[dict[str, Any]]:
         for f in iter_leaf_fields(pages)
         if isinstance(f.get("id"), str) and f.get("type") not in _NON_ANSWER_TYPES
     ]
+
+
+def shown_fields(pages: Any, answers: dict[str, Any]) -> list[dict[str, Any]]:
+    """Questions the respondent was shown: with jumps between pages, only those on their path."""
+    shown = shown_field_ids(pages, answers)
+    return [f for f in answerable_fields(pages) if f["id"] in shown]
 
 
 def _option_pairs(field: dict[str, Any]) -> list[tuple[str, str]]:
@@ -192,10 +199,11 @@ class AnswersError(ValueError):
 
 
 def validate_answers(pages: Any, answers: dict[str, Any]) -> dict[str, Any]:
-    """Drops unknown ids, checks required fields, returns the cleaned answers."""
+    """Drops unknown ids and answers to questions off the respondent's path, checks required
+    fields among the shown ones, returns the cleaned answers."""
     if len(json.dumps(answers, ensure_ascii=False, default=str)) > MAX_ANSWERS_BYTES:
         raise AnswersError("answers_too_large")
-    fields = answerable_fields(pages)
+    fields = shown_fields(pages, answers)
     cleaned: dict[str, Any] = {}
     missing: list[str] = []
     for field in fields:
@@ -225,7 +233,7 @@ def quality_flags(
     pages: Any, answers: dict[str, Any], duration_seconds: int | None
 ) -> dict[str, Any] | None:
     flags: dict[str, Any] = {}
-    fields = answerable_fields(pages)
+    fields = shown_fields(pages, answers)
     for field in fields:
         config = field.get("config")
         if not (isinstance(config, dict) and config.get("attentionCheck")):

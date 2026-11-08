@@ -44,6 +44,12 @@ import {
   type FormPageInstance,
 } from '../../types/form-builder.types';
 import { getDefaultFieldConfig } from '../../utils/fieldConfig';
+import { FormTextBlock } from '../../formily/components/FormTextBlock';
+import { surveyPath } from '../../survey-logic/surveyLogic';
+import { useSurveyNavigation } from '../../survey-logic/useSurveyNavigation';
+import { logicProblems, removePageReferences } from '../../survey-logic/surveyLogicEditor';
+import { SurveyLogicContext } from './SurveyLogicContext';
+import { PageLogicBar } from './PageLogicBar';
 import { moveFieldByOffset } from '../../utils/fieldMove.utils';
 
 // ─── Public props ─────────────────────────────────────────────────────────────
@@ -314,18 +320,46 @@ interface InlinePreviewProps {
 const InlinePreview = ({ formTitle, pages, compact = false }: InlinePreviewProps) => {
   const store = useFormStore();
   const fillRef = useRef<FormFillRendererHandle>(null);
-  const [pageIndex, setPageIndex] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  /** Set after «Отправить»: which ending the answers led to (null — the default one) */
+  const [finished, setFinished] = useState<{ ending: number | null } | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  const hasPages = pages.length > 0;
-  const currentPage = hasPages ? pages[Math.min(pageIndex, pages.length - 1)] : null;
-  const isFirst = pageIndex === 0;
-  const isLast = hasPages && pageIndex === pages.length - 1;
+  // The preview follows answer jumps the same way the respondent's form does
+  const nav = useSurveyNavigation(pages);
+  const hasPages = nav.current >= 0;
+  const currentPage = hasPages ? pages[nav.current] : null;
+  const isFirst = nav.isFirst;
+  const isLast = nav.isLast;
 
   const scrollToTop = () => {
     if (containerRef.current) {
       containerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const restart = () => {
+    fillRef.current?.resetFields();
+    nav.reset();
+    setFinished(null);
+    scrollToTop();
+  };
+
+  const handleSubmit = async () => {
+    const raw = fillRef.current?.getFieldsValue() ?? {};
+    const path = surveyPath(pages, raw);
+    try {
+      await fillRef.current?.validateFields(
+        path.pages.flatMap((index) => collectFieldIds(pages[index].fields)),
+      );
+      setIsSubmitting(true);
+      await new Promise<void>((resolve) => setTimeout(resolve, 500));
+      setFinished({ ending: path.ending });
+      scrollToTop();
+    } catch {
+      // Validation errors are shown inline
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -334,32 +368,45 @@ const InlinePreview = ({ formTitle, pages, compact = false }: InlinePreviewProps
     const ids = collectFieldIds(currentPage.fields);
     try {
       await fillRef.current?.validateFields(ids);
-      setPageIndex((idx) => Math.min(idx + 1, pages.length - 1));
-      scrollToTop();
     } catch {
-      // Validation errors are shown inline
+      return; // Validation errors are shown inline
     }
-  };
-
-  const handleBack = () => {
-    setPageIndex((idx) => Math.max(0, idx - 1));
+    const step = nav.goNext(fillRef.current?.getFieldsValue() ?? {});
+    if (step.kind === 'end') {
+      void handleSubmit();
+      return;
+    }
     scrollToTop();
   };
 
-  const handleSubmit = async () => {
-    try {
-      await fillRef.current?.validateFields();
-      setIsSubmitting(true);
-      await new Promise<void>((resolve) => setTimeout(resolve, 500));
-      fillRef.current?.resetFields();
-      setPageIndex(0);
-      scrollToTop();
-    } catch {
-      // Validation errors are shown inline
-    } finally {
-      setIsSubmitting(false);
-    }
+  const handleBack = () => {
+    nav.goBack();
+    scrollToTop();
   };
+
+  if (finished) {
+    const endingBlocks =
+      finished.ending !== null
+        ? pages[finished.ending].fields.filter((field) => field.type === 'textBlock')
+        : [];
+    return (
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: compact ? 16 : 24 }}>
+        <div style={{ maxWidth: 560, margin: '48px auto', textAlign: 'center' }}>
+          {endingBlocks.length > 0 ? (
+            endingBlocks.map((block) => (
+              <FormTextBlock key={block.id} title={block.label} text={block.description} />
+            ))
+          ) : (
+            <h3>Спасибо за участие!</h3>
+          )}
+          <p style={{ color: 'var(--app-text-secondary)', fontSize: 13 }}>
+            Так выглядит завершение. Ответы в предпросмотре не сохраняются.
+          </p>
+          <Button onClick={restart}>Пройти заново</Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -382,8 +429,9 @@ const InlinePreview = ({ formTitle, pages, compact = false }: InlinePreviewProps
             <FormFillRenderer
               ref={fillRef}
               pages={pages}
-              pageIndex={pageIndex}
+              pageIndex={nav.current}
               legacyStore={store}
+              onValuesChange={nav.onValuesChange}
             />
 
             <div
@@ -536,6 +584,33 @@ export const FormEditor = ({
   const activeFields = useMemo<FormFieldInstance[]>(
     () => activePage?.fields ?? [],
     [activePage],
+  );
+
+  // ── Answer jumps (surveys only) ──
+  const activePageIndex = Math.max(0, pages.findIndex((p) => p.id === activePage?.id));
+  const surveyLogic = useMemo(
+    () => (isSurvey ? { pages, pageIndex: activePageIndex } : null),
+    [isSurvey, pages, activePageIndex],
+  );
+  const allProblems = useMemo(() => (isSurvey ? logicProblems(pages) : []), [isSurvey, pages]);
+  const pageProblems = useMemo(
+    () => allProblems.filter((p) => p.pageIndex === activePageIndex),
+    [allProblems, activePageIndex],
+  );
+  const problemPages = useMemo(() => new Set(allProblems.map((p) => p.pageIndex)), [allProblems]);
+  const handleActivePageChange = useCallback(
+    (changes: Partial<FormPageInstance>) => {
+      setPages((prev) =>
+        prev.map((page) => {
+          if (page.id !== activePageId) return page;
+          const merged: FormPageInstance = { ...page, ...changes };
+          if (!merged.next) delete merged.next;
+          if (!merged.ending) delete merged.ending;
+          return merged;
+        }),
+      );
+    },
+    [activePageId],
   );
 
   useEffect(() => {
@@ -1001,7 +1076,11 @@ export const FormEditor = ({
     if (pages.length <= 1) return;
     const index = pages.findIndex((p) => p.id === pageId);
     if (index === -1) return;
-    const next = pages.filter((p) => p.id !== pageId);
+    // Jumps that led to the deleted page fall back to the default order
+    const next = removePageReferences(
+      pages.filter((p) => p.id !== pageId),
+      pageId,
+    );
     setPages(next);
     if (pageId === activePageId && next.length > 0) {
       const newIndex = index > 0 ? index - 1 : 0;
@@ -1216,7 +1295,19 @@ export const FormEditor = ({
                   tabBarStyle={{ margin: 0, padding: isMobile ? '0 12px' : '0 20px' }}
                   items={pages.map((page, index) => ({
                     key: page.id,
-                    label: `Страница ${index + 1}`,
+                    label: (
+                      <span>
+                        {isSurvey && page.ending ? `Завершение · ${index + 1}` : `Страница ${index + 1}`}
+                        {problemPages.has(index) && (
+                          <span
+                            aria-label="Есть проблемы с переходами"
+                            style={{ color: 'var(--app-warning, #faad14)', marginInlineStart: 4 }}
+                          >
+                            ●
+                          </span>
+                        )}
+                      </span>
+                    ),
                     closable: pages.length > 1,
                   }))}
                 />
@@ -1235,6 +1326,15 @@ export const FormEditor = ({
                     flexDirection: 'column',
                   }}
                 >
+                {isSurvey && (
+                  <PageLogicBar
+                    pages={pages}
+                    pageIndex={activePageIndex}
+                    problems={pageProblems}
+                    onChange={handleActivePageChange}
+                  />
+                )}
+                <SurveyLogicContext.Provider value={surveyLogic}>
                 <FormCanvas
                   fields={activeFields}
                   onFieldChange={handleFieldChange}
@@ -1252,6 +1352,7 @@ export const FormEditor = ({
                       : undefined
                   }
                 />
+                </SurveyLogicContext.Provider>
                 </div>
               </div>
 

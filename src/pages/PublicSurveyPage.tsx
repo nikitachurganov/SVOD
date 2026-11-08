@@ -19,6 +19,9 @@ import {
 } from '../shared/ui/form-fill/FormFillRenderer';
 import { FormFillWizardLayout } from '../shared/ui/form-fill/FormFillWizardLayout';
 import { useFormStore } from '../shared/hooks/useFormStore';
+import { FormTextBlock } from '../shared/formily/components/FormTextBlock';
+import { pruneAnswers, surveyPath } from '../shared/survey-logic/surveyLogic';
+import { useSurveyNavigation } from '../shared/survey-logic/useSurveyNavigation';
 import { LEGAL } from '../shared/config/legal';
 import { PublicFormSkeleton } from '../shared/ui/skeletons/PageSkeletons';
 
@@ -49,10 +52,11 @@ export const PublicSurveyPage = ({
   const goBack = () => (onClose ? onClose() : navigate(`/surveys/${surveyId}/form`));
   const source = preview ? surveyId : token;
   const [state, setState] = useState<LoadState>({ status: 'loading' });
-  const [pageIndex, setPageIndex] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  /** Ending screen chosen by a jump; null shows the default thanks */
+  const [endingIndex, setEndingIndex] = useState<number | null>(null);
 
   const formStore = useFormStore();
   const fillRef = useRef<FormFillRendererHandle>(null);
@@ -95,21 +99,22 @@ export const PublicSurveyPage = ({
 
   const survey = state.status === 'ready' ? state.survey : null;
 
-  const pages = useMemo(
-    () =>
-      survey
-        ? pagesPayloadToInstances(survey.pages).filter((page) => page.fields.length > 0)
-        : [],
-    [survey],
-  );
+  // All pages, empty and ending ones included: jumps refer to pages by id, and the navigation
+  // passes empty pages through and shows ending screens only after sending
+  const pages = useMemo(() => (survey ? pagesPayloadToInstances(survey.pages) : []), [survey]);
+  const nav = useSurveyNavigation(pages);
+  const hasQuestions = nav.current >= 0;
 
   // A first page made only of text blocks is the greeting: it is not numbered in the progress line
-  const hasWelcomePage = pages[0]?.fields.every((field) => field.type === 'textBlock') ?? false;
+  const firstShown = surveyPath(pages, {}).pages[0];
+  const hasWelcomePage =
+    firstShown !== undefined &&
+    pages[firstShown].fields.every((field) => field.type === 'textBlock');
   const welcomeOffset = hasWelcomePage ? 1 : 0;
 
-  const currentPage = pages[Math.min(pageIndex, Math.max(pages.length - 1, 0))];
-  const isFirst = pageIndex === 0;
-  const isLast = pageIndex >= pages.length - 1;
+  const currentPage = hasQuestions ? pages[nav.current] : undefined;
+  const isFirst = nav.isFirst;
+  const isLast = nav.isLast;
 
   useEffect(() => {
     if (survey && !onClose) document.title = survey.name;
@@ -124,28 +129,39 @@ export const PublicSurveyPage = ({
     try {
       // The author only looks through the pages: nothing has to be filled in to go on
       if (!preview) await fillRef.current?.validateFields(collectFieldIds(currentPage.fields));
-      setPageIndex((idx) => Math.min(idx + 1, pages.length - 1));
-      scrollToTop();
     } catch {
-      // inline validation errors
+      return; // inline validation errors
     }
+    const step = nav.goNext(fillRef.current?.getFieldsValue() ?? {});
+    // The answer just given ends the survey (the button had no time to change): send right away
+    if (step.kind === 'end') {
+      void handleSubmit();
+      return;
+    }
+    scrollToTop();
   };
 
   const handlePrev = () => {
-    setPageIndex((idx) => Math.max(0, idx - 1));
+    nav.goBack();
     scrollToTop();
   };
 
   const handleSubmit = useCallback(async () => {
     if (!token && !preview) return;
     setSubmitError(null);
+    const raw = fillRef.current?.getFieldsValue() ?? {};
+    const path = surveyPath(pages, raw);
     if (preview) {
       // The author only looks at the form: nothing is validated, sent or stored
+      setEndingIndex(path.ending);
       setSubmitted(true);
       return;
     }
     try {
-      await fillRef.current?.validateFields();
+      // Only the pages on the respondent's path: required questions of other branches stay empty
+      await fillRef.current?.validateFields(
+        path.pages.flatMap((index) => collectFieldIds(pages[index].fields)),
+      );
     } catch {
       scrollToTop();
       return;
@@ -155,13 +171,14 @@ export const PublicSurveyPage = ({
 
     setSubmitting(true);
     try {
-      const raw = fillRef.current?.getFieldsValue() ?? {};
       const leaves = pages.flatMap((page) => collectLeafFields(page.fields));
-      const answers = serializeFormValuesWithFields(raw, leaves);
+      // Answers left on a branch the respondent turned away from are not sent
+      const answers = pruneAnswers(pages, raw, serializeFormValuesWithFields(raw, leaves));
       await submitPublicSurvey(token, {
         answers,
         duration_seconds: Math.round((Date.now() - startedAtRef.current) / 1000),
       });
+      setEndingIndex(path.ending);
       setSubmitted(true);
     } catch (err) {
       setSubmitError(
@@ -206,6 +223,36 @@ export const PublicSurveyPage = ({
             ) : undefined
           }
         />
+      </div>
+    );
+  }
+
+  const endingPage = endingIndex !== null ? pages[endingIndex] : undefined;
+  const endingBlocks = endingPage?.fields.filter((field) => field.type === 'textBlock') ?? [];
+
+  if (submitted && endingBlocks.length > 0) {
+    // Ending screen of the branch: the author's own text instead of the default thanks
+    return (
+      <div className="public-form-flow">
+        {previewBar}
+        <div className="public-form-flow--centered public-form-flow--fade-in" style={{ flex: 1 }}>
+          <div style={{ maxWidth: 560, width: '100%', padding: '0 16px', textAlign: 'center' }}>
+            <CheckCircleFilled style={{ color: 'var(--app-success)', fontSize: 56, marginBottom: 16 }} />
+            {endingBlocks.map((block) => (
+              <FormTextBlock key={block.id} title={block.label} text={block.description} />
+            ))}
+            {preview && (
+              <p style={{ color: 'var(--app-text-secondary)', fontSize: 13, marginTop: 16 }}>
+                Это предпросмотр: ответ не сохранён, статистика не изменилась.
+              </p>
+            )}
+            {preview && (
+              <Button type="primary" onClick={goBack} style={{ marginTop: 8 }}>
+                {onClose ? 'Закрыть' : 'Вернуться к опросу'}
+              </Button>
+            )}
+          </div>
+        </div>
       </div>
     );
   }
@@ -263,8 +310,8 @@ export const PublicSurveyPage = ({
       <div className="public-form-flow__fill-main">
         <FormFillWizardLayout
           contentRef={contentRef}
-          pageIndex={pageIndex - welcomeOffset}
-          pageCount={pages.length - welcomeOffset}
+          pageIndex={nav.position - welcomeOffset}
+          pageCount={nav.total - welcomeOffset}
           pageTitle={currentPage?.title}
           notification={
             submitError ? (
@@ -278,7 +325,7 @@ export const PublicSurveyPage = ({
               />
             ) : null
           }
-          actions={pages.length > 0 ? actions : undefined}
+          actions={hasQuestions ? actions : undefined}
         >
           <h1 className="public-form-flow__form-title">{survey?.name}</h1>
           {isFirst && survey?.description && (
@@ -290,12 +337,13 @@ export const PublicSurveyPage = ({
             </p>
           )}
 
-          {pages.length > 0 ? (
+          {hasQuestions ? (
             <FormFillRenderer
               ref={fillRef}
               pages={pages}
-              pageIndex={Math.min(pageIndex, pages.length - 1)}
+              pageIndex={nav.current}
               legacyStore={formStore}
+              onValuesChange={nav.onValuesChange}
             />
           ) : (
             <p style={{ color: 'var(--app-text-secondary)' }}>В этом опросе пока нет вопросов.</p>

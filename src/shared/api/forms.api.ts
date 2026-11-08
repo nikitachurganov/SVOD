@@ -34,6 +34,10 @@ export interface CreateFormPagePayload {
   id: string;
   title: string;
   fields: CreateFormFieldPayload[];
+  /** Survey jumps: page id or 'end' after this page (see shared/survey-logic) */
+  next?: string;
+  /** Survey jumps: an ending screen */
+  ending?: boolean;
 }
 
 /** Body used when inserting a new form */
@@ -168,6 +172,8 @@ export const mapPagesToPayload = (
     id: page.id,
     title: page.title || `Страница ${index + 1}`,
     fields: mapFieldsToPayload(page.fields),
+    ...(page.next ? { next: page.next } : {}),
+    ...(page.ending ? { ending: true } : {}),
   }));
 
 /**
@@ -196,6 +202,8 @@ const normalizePagesFromApi = (rawFields: unknown): CreateFormPagePayload[] => {
           ? page.title
           : `Страница ${index + 1}`,
       fields: Array.isArray(page.fields) ? page.fields : [],
+      ...(typeof page.next === 'string' && page.next ? { next: page.next } : {}),
+      ...(page.ending === true ? { ending: true } : {}),
     }));
   }
 
@@ -218,6 +226,8 @@ export const pagesPayloadToInstances = (
     id: page.id || crypto.randomUUID(),
     title: page.title || `Страница ${index + 1}`,
     fields: (page.fields ?? []).map(payloadToInstance),
+    ...(typeof page.next === 'string' && page.next ? { next: page.next } : {}),
+    ...(page.ending === true ? { ending: true } : {}),
   }));
 
 // ─── API ──────────────────────────────────────────────────────────────────────

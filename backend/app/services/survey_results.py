@@ -20,6 +20,7 @@ from app.schemas.survey import (
     SurveyResults,
 )
 from app.services import stats_math
+from app.services import survey_logic
 from app.services.survey_answers import answerable_fields, is_empty
 from app.services.survey_quality import excludes_from_analysis
 
@@ -195,9 +196,20 @@ def _text_stat(field: dict[str, Any], values: list[Any]) -> QuestionStat:
     return stat
 
 
+def _shown_sets(pages: Any, answers_list: list[dict[str, Any]]) -> list[set[str]] | None:
+    """Per response, the questions it was shown; None when the survey has no jumps (all shown)."""
+    if pages is None or not survey_logic.has_logic(pages):
+        return None
+    return [survey_logic.shown_field_ids(pages, a) for a in answers_list]
+
+
 def build_question_stats(
-    fields: list[dict[str, Any]], answers_list: list[dict[str, Any]]
+    fields: list[dict[str, Any]],
+    answers_list: list[dict[str, Any]],
+    *,
+    pages: Any = None,
 ) -> list[QuestionStat]:
+    shown_sets = _shown_sets(pages, answers_list)
     stats: list[QuestionStat] = []
     for field in fields:
         values = [
@@ -207,11 +219,17 @@ def build_question_stats(
         ]
         ftype = field.get("type")
         if ftype in CHOICE_TYPES:
-            stats.append(_choice_stat(field, values))
+            stat = _choice_stat(field, values)
         elif ftype in SCALE_TYPES:
-            stats.append(_scale_stat(field, values))
+            stat = _scale_stat(field, values)
         else:
-            stats.append(_text_stat(field, values))
+            stat = _text_stat(field, values)
+        stat.shown = (
+            len(answers_list)
+            if shown_sets is None
+            else sum(1 for shown in shown_sets if field["id"] in shown)
+        )
+        stats.append(stat)
     return stats
 
 
@@ -408,13 +426,20 @@ def _median(values: list[int]) -> int | None:
     return round((ordered[mid - 1] + ordered[mid]) / 2)
 
 
-def _completion_rate(fields: list[dict[str, Any]], answers_list: list[dict[str, Any]]) -> float | None:
-    """Average share of answered questions per response, in percent."""
+def _completion_rate(
+    fields: list[dict[str, Any]], answers_list: list[dict[str, Any]], pages: Any = None
+) -> float | None:
+    """Average share of answered questions per response among the questions it was shown, in percent."""
     if not fields or not answers_list:
         return None
-    shares = [
-        sum(1 for f in fields if not is_empty(a.get(f["id"]))) / len(fields) for a in answers_list
-    ]
+    shown_sets = _shown_sets(pages, answers_list)
+    shares: list[float] = []
+    for index, a in enumerate(answers_list):
+        own = fields if shown_sets is None else [f for f in fields if f["id"] in shown_sets[index]]
+        if own:
+            shares.append(sum(1 for f in own if not is_empty(a.get(f["id"]))) / len(own))
+    if not shares:
+        return None
     return _round(sum(shares) / len(shares) * 100)
 
 
@@ -451,12 +476,12 @@ def build_results(pages: Any, responses: list[Any], *, exclude_flagged: bool = T
         exclude_flagged=exclude_flagged,
         median_duration_seconds=_median(durations),
         mean_duration_seconds=None if mean_duration is None else round(mean_duration),
-        completion_rate=_completion_rate(fields, answers_list),
+        completion_rate=_completion_rate(fields, answers_list, pages),
         first_response_at=min(dates).isoformat() if dates else None,
         last_response_at=max(dates).isoformat() if dates else None,
         responses_by_day=_responses_by_day(dates),
         metrics=compute_metrics(fields, answers_list),
-        questions=build_question_stats(fields, answers_list),
+        questions=build_question_stats(fields, answers_list, pages=pages),
     )
 
 

@@ -1,0 +1,173 @@
+{
+  "_comment": "Shared cases for survey jumps: checked by backend/tests/test_survey_logic.py and scripts/test-survey-logic.ts. Each case: pages + answers -> visible page ids, ending page id (null = default end), shown field ids.",
+  "cases": [
+    {
+      "name": "no logic: all pages in order",
+      "pages": [
+        {"id": "p1", "fields": [{"id": "q1", "type": "shortText"}]},
+        {"id": "p2", "fields": [{"id": "q2", "type": "shortText"}]}
+      ],
+      "answers": {},
+      "path": ["p1", "p2"],
+      "ending": null,
+      "shown": ["q1", "q2"]
+    },
+    {
+      "name": "radio jump by option id (live value)",
+      "pages": [
+        {"id": "p1", "fields": [{"id": "role", "type": "radio", "options": [{"id": "a", "label": "Клиент"}, {"id": "b", "label": "Не клиент"}], "config": {"jumps": {"a": "p2", "b": "p3"}}}]},
+        {"id": "p2", "next": "p4", "fields": [{"id": "client_q", "type": "longText"}]},
+        {"id": "p3", "fields": [{"id": "other_q", "type": "longText"}]},
+        {"id": "p4", "fields": [{"id": "final", "type": "shortText"}]}
+      ],
+      "answers": {"role": "a"},
+      "path": ["p1", "p2", "p4"],
+      "ending": null,
+      "shown": ["role", "client_q", "final"]
+    },
+    {
+      "name": "radio jump by stored label",
+      "pages": [
+        {"id": "p1", "fields": [{"id": "role", "type": "radio", "options": [{"id": "a", "label": "Клиент"}, {"id": "b", "label": "Не клиент"}], "config": {"jumps": {"a": "p2", "b": "p3"}}}]},
+        {"id": "p2", "next": "p4", "fields": [{"id": "client_q", "type": "longText"}]},
+        {"id": "p3", "fields": [{"id": "other_q", "type": "longText"}]},
+        {"id": "p4", "fields": [{"id": "final", "type": "shortText"}]}
+      ],
+      "answers": {"role": " не клиент "},
+      "path": ["p1", "p3", "p4"],
+      "ending": null,
+      "shown": ["role", "other_q", "final"]
+    },
+    {
+      "name": "no answer: default order",
+      "pages": [
+        {"id": "p1", "fields": [{"id": "role", "type": "radio", "options": [{"id": "a", "label": "А"}, {"id": "b", "label": "Б"}], "config": {"jumps": {"a": "p3"}}}]},
+        {"id": "p2", "fields": [{"id": "q2", "type": "shortText"}]},
+        {"id": "p3", "fields": [{"id": "q3", "type": "shortText"}]}
+      ],
+      "answers": {},
+      "path": ["p1", "p2", "p3"],
+      "ending": null,
+      "shown": ["role", "q2", "q3"]
+    },
+    {
+      "name": "jump to end skips the rest",
+      "pages": [
+        {"id": "p1", "fields": [{"id": "ok", "type": "yesNo", "config": {"jumps": {"no": "end"}}}]},
+        {"id": "p2", "fields": [{"id": "q2", "type": "shortText"}]}
+      ],
+      "answers": {"ok": "no"},
+      "path": ["p1"],
+      "ending": null,
+      "shown": ["ok"]
+    },
+    {
+      "name": "ending page reached by a jump, skipped in order",
+      "pages": [
+        {"id": "p1", "fields": [{"id": "ok", "type": "yesNo", "config": {"jumps": {"no": "bye"}}}]},
+        {"id": "bye", "ending": true, "fields": [{"id": "t1", "type": "textBlock"}]},
+        {"id": "p2", "fields": [{"id": "q2", "type": "shortText"}]}
+      ],
+      "answers": {"ok": "yes"},
+      "path": ["p1", "p2"],
+      "ending": null,
+      "shown": ["ok", "q2"]
+    },
+    {
+      "name": "ending page as the target",
+      "pages": [
+        {"id": "p1", "fields": [{"id": "ok", "type": "yesNo", "config": {"jumps": {"no": "bye"}}}]},
+        {"id": "bye", "ending": true, "fields": [{"id": "t1", "type": "textBlock"}]},
+        {"id": "p2", "fields": [{"id": "q2", "type": "shortText"}]}
+      ],
+      "answers": {"ok": "no"},
+      "path": ["p1"],
+      "ending": "bye",
+      "shown": ["ok"]
+    },
+    {
+      "name": "backward and unknown jumps are ignored",
+      "pages": [
+        {"id": "p1", "fields": [{"id": "q1", "type": "shortText"}]},
+        {"id": "p2", "next": "missing", "fields": [{"id": "r", "type": "dropdown", "options": [{"id": "x", "label": "X"}], "config": {"jumps": {"x": "p1"}}}]},
+        {"id": "p3", "fields": [{"id": "q3", "type": "shortText"}]}
+      ],
+      "answers": {"r": "x"},
+      "path": ["p1", "p2", "p3"],
+      "ending": null,
+      "shown": ["q1", "r", "q3"]
+    },
+    {
+      "name": "first fired jump from the top wins, group children count",
+      "pages": [
+        {"id": "p1", "next": "p4", "fields": [
+          {"id": "g", "type": "group", "children": [
+            {"id": "a1", "type": "radio", "options": [{"id": "o1", "label": "1"}, {"id": "o2", "label": "2"}], "config": {"jumps": {"o2": "p3"}}}
+          ]},
+          {"id": "a2", "type": "radio", "options": [{"id": "z", "label": "Z"}], "config": {"jumps": {"z": "p2"}}}
+        ]},
+        {"id": "p2", "fields": [{"id": "q2", "type": "shortText"}]},
+        {"id": "p3", "fields": [{"id": "q3", "type": "shortText"}]},
+        {"id": "p4", "fields": [{"id": "q4", "type": "shortText"}]}
+      ],
+      "answers": {"a1": "o2", "a2": "z"},
+      "path": ["p1", "p3", "p4"],
+      "ending": null,
+      "shown": ["a1", "a2", "q3", "q4"]
+    },
+    {
+      "name": "page next used when no jump fired",
+      "pages": [
+        {"id": "p1", "next": "p4", "fields": [
+          {"id": "a1", "type": "radio", "options": [{"id": "o1", "label": "1"}, {"id": "o2", "label": "2"}], "config": {"jumps": {"o2": "p3"}}}
+        ]},
+        {"id": "p2", "fields": [{"id": "q2", "type": "shortText"}]},
+        {"id": "p3", "fields": [{"id": "q3", "type": "shortText"}]},
+        {"id": "p4", "fields": [{"id": "q4", "type": "shortText"}]}
+      ],
+      "answers": {"a1": "o1"},
+      "path": ["p1", "p4"],
+      "ending": null,
+      "shown": ["a1", "q4"]
+    },
+    {
+      "name": "other option: live {selected} and stored prefix",
+      "pages": [
+        {"id": "p1", "fields": [
+          {"id": "src", "type": "radio", "options": [{"id": "a", "label": "Реклама"}, {"id": "o", "label": "Другое", "isOther": true}], "config": {"jumps": {"o": "p3"}}},
+          {"id": "src2", "type": "dropdown", "options": [{"id": "a", "label": "Реклама"}, {"id": "o", "label": "Другое", "isOther": true}], "config": {"jumps": {"o": "p3"}}}
+        ]},
+        {"id": "p2", "fields": [{"id": "q2", "type": "shortText"}]},
+        {"id": "p3", "fields": [{"id": "q3", "type": "shortText"}]}
+      ],
+      "answers": {"src": "__other__:от друга", "src2": {"selected": "o", "otherText": "x"}},
+      "path": ["p1", "p3"],
+      "ending": null,
+      "shown": ["src", "src2", "q3"]
+    },
+    {
+      "name": "empty page passed through with its next",
+      "pages": [
+        {"id": "p1", "fields": [{"id": "q1", "type": "shortText"}]},
+        {"id": "empty", "next": "p4", "fields": []},
+        {"id": "p3", "fields": [{"id": "q3", "type": "shortText"}]},
+        {"id": "p4", "fields": [{"id": "q4", "type": "shortText"}]}
+      ],
+      "answers": {},
+      "path": ["p1", "p4"],
+      "ending": null,
+      "shown": ["q1", "q4"]
+    },
+    {
+      "name": "checkbox jumps are not used",
+      "pages": [
+        {"id": "p1", "fields": [{"id": "c", "type": "checkbox", "options": [{"id": "a", "label": "A"}], "config": {"jumps": {"a": "end"}}}]},
+        {"id": "p2", "fields": [{"id": "q2", "type": "shortText"}]}
+      ],
+      "answers": {"c": ["a"]},
+      "path": ["p1", "p2"],
+      "ending": null,
+      "shown": ["c", "q2"]
+    }
+  ]
+}

@@ -206,6 +206,8 @@ export interface QuestionStat {
   methodology: string | null;
   kind: 'choice' | 'scale' | 'text';
   answered: number;
+  /** Responses the question was shown to (less than all with jumps between pages) */
+  shown?: number;
   options: QuestionOptionStat[];
   mean: number | null;
   median: number | null;

@@ -6,6 +6,7 @@ import { AutoGrowInput } from './AutoGrowInput';
 import { FieldPreview } from './FieldPreview';
 import { FieldTypeSettings } from './FieldTypeSettings';
 import { FieldMoveControls } from './FieldMoveControls';
+import { FieldJumpsEditor } from './FieldJumpsEditor';
 import type { FieldOption, FormFieldInstance } from '../../types/form-builder.types';
 
 interface FieldBlockProps {
@@ -90,6 +91,7 @@ export const FieldBlock = ({
 
         <FieldPreview field={field} onOptionsChange={handleOptionsChange} />
         <FieldTypeSettings field={field} onChange={onChange} />
+        <FieldJumpsEditor field={field} onChange={onChange} />
 
         <hr
           style={{

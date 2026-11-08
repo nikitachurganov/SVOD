@@ -1,12 +1,13 @@
 import {
   forwardRef,
   Suspense,
+  useEffect,
   useImperativeHandle,
   useMemo,
   useRef,
 } from 'react';
 import { Spin } from 'antd';
-import { createForm, type Form as FormilyFormType } from '@formily/core';
+import { createForm, onFormValuesChange, type Form as FormilyFormType } from '@formily/core';
 
 import type { FormStoreInstance } from '../../hooks/formStore.types';
 import type { FormPageInstance } from '../../types/form-builder.types';
@@ -27,6 +28,8 @@ export interface FormFillRendererProps {
   pages: FormPageInstance[];
   pageIndex: number;
   legacyStore: FormStoreInstance;
+  /** Called with all current values whenever an answer changes (drives answer-based jumps) */
+  onValuesChange?: (values: Record<string, unknown>) => void;
 }
 
 const buildPagesIdentity = (pages: FormPageInstance[]): string =>
@@ -35,7 +38,7 @@ const buildPagesIdentity = (pages: FormPageInstance[]): string =>
     .join('|');
 
 export const FormFillRenderer = forwardRef<FormFillRendererHandle, FormFillRendererProps>(
-  function FormFillRenderer({ pages, pageIndex, legacyStore }, ref) {
+  function FormFillRenderer({ pages, pageIndex, legacyStore, onValuesChange }, ref) {
     const useFormily = shouldUseFormilyRuntime(pages);
     const currentPage = pages[pageIndex];
     const currentFields = useMemo(
@@ -61,6 +64,27 @@ export const FormFillRenderer = forwardRef<FormFillRendererHandle, FormFillRende
 
     const pagesIdentity = formCache.identity;
     const formilyForm = formCache.form;
+
+    const onValuesChangeRef = useRef(onValuesChange);
+    useEffect(() => {
+      onValuesChangeRef.current = onValuesChange;
+    }, [onValuesChange]);
+
+    useEffect(() => {
+      if (!useFormily) return undefined;
+      const effectsId = 'fill-values-change';
+      formilyForm.addEffects(effectsId, () => {
+        onFormValuesChange((form) => {
+          onValuesChangeRef.current?.({ ...(form.values as Record<string, unknown>) });
+        });
+      });
+      return () => formilyForm.removeEffects(effectsId);
+    }, [formilyForm, useFormily]);
+
+    const legacyValues = legacyStore.values;
+    useEffect(() => {
+      if (!useFormily) onValuesChangeRef.current?.(legacyValues);
+    }, [legacyValues, useFormily]);
 
     useImperativeHandle(
       ref,

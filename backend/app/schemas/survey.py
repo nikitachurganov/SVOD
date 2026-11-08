@@ -333,6 +333,8 @@ class QuestionStat(BaseModel):
     methodology: str | None = None
     kind: Literal["choice", "scale", "text"]
     answered: int = 0
+    # Responses the question was shown to: with jumps between pages it is less than the total
+    shown: int = 0
     options: list[QuestionOptionStat] = Field(default_factory=list)
     mean: float | None = None
     median: float | None = None

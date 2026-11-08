@@ -142,7 +142,10 @@ interface QuestionCardProps {
 
 /** One question: how many answered, how many skipped, and the answers themselves */
 const QuestionCard = ({ question, used, surveyId, excludeFlagged, onOpenResponse }: QuestionCardProps) => {
-  const skipped = Math.max(0, used - question.answered);
+  // With jumps between pages a question of one branch is shown only to part of the respondents:
+  // the share is counted from those who saw it, not from everyone
+  const shown = Math.min(question.shown ?? used, used);
+  const skipped = Math.max(0, shown - question.answered);
   const [view, setView] = useState<View>('chart');
   const hasChart = question.answered > 0 && question.kind !== 'text';
   return (
@@ -153,8 +156,13 @@ const QuestionCard = ({ question, used, surveyId, excludeFlagged, onOpenResponse
       actions={hasChart ? <ViewSwitch value={view} onChange={setView} /> : undefined}
       meta={
         <>
+          {shown < used && (
+            <span title="Вопрос стоит в одной из веток опроса и показывается не всем">
+              Показан: {shown} из {used}
+            </span>
+          )}
           <span>
-            Ответили: <strong>{question.answered}</strong> из {used}
+            Ответили: <strong>{question.answered}</strong> из {shown}
           </span>
           {skipped > 0 && <span>Пропустили: {skipped}</span>}
         </>
