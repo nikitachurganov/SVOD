@@ -44,14 +44,23 @@ import { InviteMemberModal, InvitationResult } from '../components/organization/
 import { ContractorModal } from '../components/organization/ContractorModal';
 import { MemberAiLimitInput } from '../components/organization/MemberAiLimitInput';
 import { TeamQuotaSummary } from '../components/organization/TeamQuotaSummary';
+import { ReturnedPaymentNotice } from '../components/billing/ReturnedPaymentNotice';
+import { AddSeatsDialog } from '../components/billing/SeatsPanel';
+import { DEFAULT_SEATS } from '../components/billing/seatPricing';
+import { flowPath } from '../components/billing/upgradeFlow';
 import { formatCredits } from '../components/billing/billingFormat';
+import { getPlans } from '../shared/api/billing.api';
+import { useSubscription } from '../shared/hooks/subscription.hooks';
+import type { PlansResponse } from '../types/billing';
 import { JoinLinkModal } from '../components/organization/JoinLinkModal';
 import { JoinRequestsTable } from '../components/organization/JoinRequestsTable';
 import {
   CONTACT_KIND_LABELS,
-  ROLE_LABELS,
   copyToClipboard,
-  roleOptionsFor,
+  isNoFreeSeat,
+  roleWithSeat,
+  seatOptionsFor,
+  sharePercent,
   takesSeat,
 } from '../components/organization/participants.utils';
 
@@ -65,7 +74,9 @@ const apiErrorText = (err: unknown, fallback: string): string => {
 };
 
 type MemberRow = {
+  /** The user's id for a member, the invitation's id for an invitation not answered yet */
   id: string;
+  kind: 'member' | 'invitation';
   participant: string;
   email: string;
   role: string;
@@ -115,6 +126,11 @@ export const ParticipantsPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteRole, setInviteRole] = useState<AssignableRole>('editor');
+  const [addSeatsOpen, setAddSeatsOpen] = useState(false);
+  const [limitFor, setLimitFor] = useState<MemberRow | null>(null);
+  const [plans, setPlans] = useState<PlansResponse | null>(null);
+  const { subscription } = useSubscription();
   const [resendResult, setResendResult] = useState<InvitationResponse | null>(null);
   const [contractorModal, setContractorModal] = useState<{ open: boolean; contractor: ExternalContractor | null }>({
     open: false,
@@ -166,18 +182,59 @@ export const ParticipantsPage = () => {
         ]);
         setInvitations(inv.filter((i) => i.status === 'pending'));
         setJoinRequests(jr);
-        void refreshSeats();
       } else {
         setInvitations([]);
         setJoinRequests([]);
-        setSeatUsage(null);
       }
+      // The seats and the use of the plan are shown to every member (the spending of others only to managers)
+      void refreshSeats();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Не удалось загрузить данные');
     } finally { setLoading(false); }
   }, [activeOrganizationId, isOwner, user?.id, refreshSeats]);
 
   useEffect(() => { void load(); }, [load]);
+
+  // The owner buys seats: whether that is done in place (more seats to a running plan) depends on the catalogue
+  useEffect(() => {
+    if (!isOwner) return;
+    let cancelled = false;
+    getPlans()
+      .then((next) => {
+        if (!cancelled) setPlans(next);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [isOwner]);
+
+  const runningResearcher =
+    subscription?.plan.code === 'researcher' && subscription.status === 'active' && !subscription.trial_ends_at;
+
+  /** «Докупить места»: more seats to a running plan here, or the way to the plan for a free team */
+  const buySeats = useCallback(() => {
+    if (!activeOrganization) return;
+    const sellsSeats = Boolean(plans?.seat_pricing_enabled && plans.payments_enabled);
+    if (sellsSeats && runningResearcher) {
+      setAddSeatsOpen(true);
+      return;
+    }
+    if (sellsSeats) {
+      const taken = seatUsage?.seats_used ?? 1;
+      navigate(
+        flowPath('seats', {
+          offer: 'researcher',
+          term: 'year',
+          who: 'team',
+          seats: Math.max(DEFAULT_SEATS, taken + 1),
+          org: activeOrganization.id,
+        }),
+      );
+      return;
+    }
+    navigate('/settings?tab=plans');
+  }, [activeOrganization, navigate, plans, runningResearcher, seatUsage?.seats_used]);
 
   const handleConfirm = useCallback(async () => {
     if (!confirmAction || !activeOrganizationId) return;
@@ -224,13 +281,22 @@ export const ParticipantsPage = () => {
       // Often "no free seat": the 402 body is an object, not a string
       const detail = (err as { response?: { data?: { detail?: { code?: string } | string } } })
         ?.response?.data?.detail;
-      if (typeof detail === 'object' && detail?.code === 'limit_reached') {
-        message.error('Нет свободных мест: добавьте место в тарифе или сделайте человека читателем');
+      if (typeof detail === 'object' && isNoFreeSeat(err)) {
+        Modal.confirm({
+          title: 'Свободных платных мест нет',
+          content: isOwner
+            ? 'Докупите место, и человек займёт его. Или оставьте его наблюдателем: это бесплатно.'
+            : 'Попросите владельца команды докупить место или оставьте человека наблюдателем.',
+          okText: isOwner ? 'Докупить место' : 'Понятно',
+          cancelText: 'Отмена',
+          okCancel: isOwner,
+          onOk: isOwner ? buySeats : undefined,
+        });
       } else {
         message.error(apiErrorText(err, 'Не удалось изменить роль'));
       }
     } finally { setBusyId(null); }
-  }, [activeOrganizationId, refreshSeats]);
+  }, [activeOrganizationId, buySeats, isOwner, refreshSeats]);
 
   const changeAiLimit = useCallback(async (userId: string, tokens: number | null) => {
     if (!activeOrganizationId) return;
@@ -246,113 +312,137 @@ export const ParticipantsPage = () => {
     } finally { setBusyId(null); }
   }, [activeOrganizationId]);
 
-  const memberRows = useMemo<MemberRow[]>(() => members.map((m) => ({
-    id: m.user.id,
-    participant: buildDisplayName(m.user) || '—',
-    email: m.user.email,
-    role: m.role_tag,
-    job_title: m.job_title ?? null,
-    joined_at: m.joined_at,
-    token_plus_limit: m.token_plus_limit ?? null,
-    // Spending is known only while the team has a pool (a paid plan of the owner)
-    spent:
-      seatUsage && typeof seatUsage.ai_pool_max === 'number' ? (seatUsage.ai_spent_by_user?.[m.user.id] ?? 0) : null,
-  })), [members, seatUsage]);
+  const hasPool = Boolean(seatUsage && typeof seatUsage.ai_pool_max === 'number');
+  const poolMax = seatUsage?.ai_pool_max ?? 0;
+
+  const memberRows = useMemo<MemberRow[]>(() => {
+    const spentOf = (userId: string): number | null => {
+      // Spending is known only while the team has a pool (a paid plan of the owner)
+      if (!seatUsage || typeof seatUsage.ai_pool_max !== 'number') return null;
+      if (userId === user?.id && typeof seatUsage.ai_spent_me === 'number') return seatUsage.ai_spent_me;
+      // The others' spending comes to the owner and the admins only
+      return canManage ? (seatUsage.ai_spent_by_user?.[userId] ?? 0) : null;
+    };
+    const people: MemberRow[] = members.map((m) => ({
+      id: m.user.id,
+      kind: 'member',
+      participant: buildDisplayName(m.user) || '—',
+      email: m.user.email,
+      role: m.role_tag,
+      job_title: m.job_title ?? null,
+      joined_at: m.joined_at,
+      token_plus_limit: m.token_plus_limit ?? null,
+      spent: spentOf(m.user.id),
+    }));
+    // An unanswered invitation already holds its seat, so it is a row of the team too
+    const waiting: MemberRow[] = invitations.map((inv) => ({
+      id: inv.id,
+      kind: 'invitation',
+      participant: (inv.invited_user ? buildDisplayName(inv.invited_user) : '') || '—',
+      email: inv.email,
+      role: inv.role_tag,
+      job_title: inv.job_title ?? null,
+      joined_at: inv.created_at,
+      token_plus_limit: null,
+      spent: null,
+    }));
+    return [...people, ...waiting];
+  }, [canManage, invitations, members, seatUsage, user?.id]);
+
+  // Paid seats nobody has taken: shown as rows under the people, so the table adds up to the quota
+  const seatsFree =
+    seatUsage && seatUsage.seats_limit !== null ? Math.max(seatUsage.seats_limit - seatUsage.seats_used, 0) : 0;
+  const freeSeatsKnown = seatUsage?.billing_enabled && seatUsage.seats_limit !== null ? seatsFree : null;
 
   const memberColumns = useMemo<ColumnsType<MemberRow>>(
     () => [
       {
-        title: 'Участник',
+        title: 'ФИО',
         dataIndex: 'participant',
         key: 'participant',
         sorter: (a, b) => a.participant.localeCompare(b.participant, 'ru'),
         render: (name: string, record) => (
           <div>
-            <div>{name}</div>
-            <div style={{ fontSize: 12, color: 'var(--app-text-secondary)' }}>{record.email}</div>
+            <span className={record.kind === 'invitation' ? 'team-quota-pending' : undefined}>
+              {name}
+              {record.id === user?.id ? ' (вы)' : ''}
+            </span>
+            {record.kind === 'invitation' ? (
+              <div>
+                <Tag color="gold" style={{ marginTop: 4 }}>
+                  Приглашён, ждёт ответа
+                </Tag>
+              </div>
+            ) : null}
           </div>
         ),
       },
       {
-        title: 'Роль',
+        title: 'Почта',
+        dataIndex: 'email',
+        key: 'email',
+        sorter: (a, b) => a.email.localeCompare(b.email, 'ru'),
+        render: (email: string) => <span style={{ whiteSpace: 'nowrap' }}>{email}</span>,
+      },
+      {
+        title: (
+          <Tooltip title="Владелец, администраторы и редакторы занимают оплаченное место. Наблюдатели бесплатны.">
+            <span>Место и роль</span>
+          </Tooltip>
+        ),
         dataIndex: 'role',
         key: 'role',
         sorter: (a, b) => a.role.localeCompare(b.role, 'ru'),
         render: (role: string, record) => {
-          // An admin changes editors and readers; admins are touched by the owner only
-          if (canManage && record.id !== user?.id && role !== 'owner' && (isOwner || role !== 'admin')) {
+          // An admin changes editors and observers; admins are touched by the owner only
+          const editable =
+            record.kind === 'member' &&
+            canManage &&
+            record.id !== user?.id &&
+            role !== 'owner' &&
+            (isOwner || role !== 'admin');
+          if (editable) {
             return (
               <Select<AssignableRole>
                 size="small"
-                style={{ minWidth: 150 }}
+                style={{ minWidth: 200 }}
                 value={role === 'member' ? 'editor' : (role as AssignableRole)}
-                options={roleOptionsFor(isOwner)}
+                options={seatOptionsFor(isOwner, freeSeatsKnown)}
+                labelRender={({ value }) => roleWithSeat(String(value))}
                 disabled={busyId === record.id}
                 onChange={(value) => void changeRole(record.id, value)}
               />
             );
           }
-          return (
-            <Tag color={role === 'owner' ? 'default' : role === 'reader' ? 'green' : 'blue'}>
-              {ROLE_LABELS[role] ?? 'Участник'}
-            </Tag>
-          );
+          return <Tag color={takesSeat(role) ? 'blue' : 'green'}>{roleWithSeat(role)}</Tag>;
         },
       },
-      ...(seatUsage?.billing_enabled
+      ...(hasPool
         ? [
             {
               title: (
-                <Tooltip title="Владелец, администраторы и редакторы занимают оплаченное место. Читатели бесплатны.">
-                  <span>Место</span>
+                <Tooltip title="Сколько кредитов ИИ человек потратил в этом месяце и какая это доля общего тарифа команды">
+                  <span>Расход ИИ</span>
                 </Tooltip>
               ),
-              key: 'seat',
-              width: 150,
-              render: (_: unknown, record: MemberRow) =>
-                takesSeat(record.role) ? (
-                  <Tag>Занимает место</Tag>
-                ) : (
-                  <Tag color="green">Бесплатно</Tag>
-                ),
-            },
-          ]
-        : []),
-      ...(canManage
-        ? [
-            {
-              title: (
-                <Tooltip title="Сколько кредитов+ в месяц человек может потратить из общего пула команды">
-                  <span>Лимит ИИ</span>
-                </Tooltip>
-              ),
-              dataIndex: 'token_plus_limit',
-              key: 'token_plus_limit',
-              render: (value: number | null, record: MemberRow) => {
-                const spent =
-                  record.spent !== null && record.role !== 'reader' ? (
-                    <span className="team-quota-spent">Потрачено: {formatCredits(record.spent)} кр.</span>
-                  ) : null;
-                // Say why there is no field instead of a bare dash
-                if (record.role === 'owner') {
-                  return (
-                    <div>
-                      <span style={{ color: 'var(--app-text-secondary)' }}>Без ограничений</span>
-                      {spent}
-                    </div>
-                  );
-                }
-                if (record.role === 'reader') {
+              dataIndex: 'spent',
+              key: 'spent',
+              sorter: (a: MemberRow, b: MemberRow) => (a.spent ?? -1) - (b.spent ?? -1),
+              render: (spent: number | null, record: MemberRow) => {
+                if (record.kind === 'invitation') return <span className="team-quota-pending">—</span>;
+                if (!takesSeat(record.role)) {
                   return <span style={{ color: 'var(--app-text-secondary)' }}>ИИ недоступен</span>;
                 }
+                if (spent === null) return <span style={{ color: 'var(--app-text-secondary)' }}>—</span>;
                 return (
-                  <div>
-                    <MemberAiLimitInput
-                      value={value}
-                      disabled={busyId === record.id}
-                      onCommit={(tokens) => void changeAiLimit(record.id, tokens)}
-                    />
-                    {spent}
+                  <div className="team-quota-usage">
+                    <span>
+                      {formatCredits(spent)} кр.{' '}
+                      <span className="team-quota-usage__share">· {sharePercent(spent, poolMax).text}</span>
+                    </span>
+                    {record.token_plus_limit !== null ? (
+                      <span className="team-quota-usage__cap">лимит {formatCredits(record.token_plus_limit)} кр.</span>
+                    ) : null}
                   </div>
                 );
               },
@@ -360,21 +450,55 @@ export const ParticipantsPage = () => {
           ]
         : []),
       {
-        // No title: the only action is in the «⋯» menu of the row, and only where it exists
+        // No title: the actions are in the «⋯» menu of the row, and only where they exist
         title: '',
         key: 'actions',
         width: 56,
         align: 'right',
         render: (_, record) => {
-          if (!canManage || record.id === user?.id || record.role === 'owner') return null;
+          if (!canManage) return null;
+          if (record.kind === 'invitation') {
+            return (
+              <Dropdown
+                trigger={['click']}
+                placement="bottomRight"
+                menu={{
+                  items: [
+                    { key: 'resend', label: 'Отправить ещё раз' },
+                    { key: 'revoke', label: 'Отозвать приглашение', danger: true },
+                  ],
+                  onClick: ({ key }) => {
+                    if (key === 'resend') void handleResend(record.id);
+                    else setConfirmAction({ type: 'revoke', id: record.id, name: record.email });
+                  },
+                }}
+              >
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<MoreOutlined />}
+                  aria-label={`Действия с приглашением ${record.email}`}
+                  disabled={busyId === record.id}
+                />
+              </Dropdown>
+            );
+          }
+          if (record.id === user?.id || record.role === 'owner') return null;
           if (!isOwner && record.role === 'admin') return null;
+          const canCap = hasPool && takesSeat(record.role);
           return (
             <Dropdown
               trigger={['click']}
               placement="bottomRight"
               menu={{
-                items: [{ key: 'remove', label: 'Исключить из команды', danger: true }],
-                onClick: () => setConfirmAction({ type: 'remove', id: record.id, name: record.participant }),
+                items: [
+                  ...(canCap ? [{ key: 'limit', label: 'Личный лимит ИИ…' }] : []),
+                  { key: 'remove', label: 'Исключить из команды', danger: true },
+                ],
+                onClick: ({ key }) => {
+                  if (key === 'limit') setLimitFor(record);
+                  else setConfirmAction({ type: 'remove', id: record.id, name: record.participant });
+                },
               }}
             >
               <Button
@@ -389,7 +513,7 @@ export const ParticipantsPage = () => {
         },
       },
     ],
-    [busyId, canManage, changeAiLimit, changeRole, isOwner, seatUsage?.billing_enabled, user?.id],
+    [busyId, canManage, changeRole, freeSeatsKnown, handleResend, hasPool, isOwner, poolMax, user?.id],
   );
 
   const contractorColumns = useMemo<ColumnsType<ExternalContractor>>(
@@ -590,7 +714,11 @@ export const ParticipantsPage = () => {
         ],
         onClick: ({ key }) => {
           if (key === 'link') setJoinLinkOpen(true);
-          else if (key === 'manual') setInviteOpen(true);
+          else if (key === 'manual') {
+            // Without a free paid seat the form opens with the free role, so it can be sent at once
+            setInviteRole(freeSeatsKnown === 0 ? 'reader' : 'editor');
+            setInviteOpen(true);
+          }
           else setContractorModal({ open: true, contractor: null });
         },
       }}
@@ -601,11 +729,6 @@ export const ParticipantsPage = () => {
     </Dropdown>
   ) : null;
 
-  // Paid seats nobody has taken: shown as rows under the people, so the table adds up to the quota
-  const seatsFree =
-    seatUsage && seatUsage.seats_limit !== null ? Math.max(seatUsage.seats_limit - seatUsage.seats_used, 0) : 0;
-  // Unanswered invitations hold a seat too, but are listed on their own tab
-  const pendingSeats = invitations.filter((inv) => takesSeat(inv.role_tag)).length;
 
   const confirmTitle =
     confirmAction?.type === 'remove'
@@ -644,6 +767,7 @@ export const ParticipantsPage = () => {
       </div>
 
       <div className="registry-page__content">
+        <ReturnedPaymentNotice onSettled={refreshSeats} />
         {error ? (
           <Card className="registry-page__card">
             <Alert type="error" title="Ошибка загрузки" description={error} showIcon />
@@ -656,38 +780,22 @@ export const ParticipantsPage = () => {
             {activeTab === 'members' ? (
               <>
               {seatUsage?.billing_enabled ? (
-                <TeamQuotaSummary
-                  usage={seatUsage}
-                  canBuy={isOwner}
-                  onBuy={() => navigate('/settings?tab=plans')}
-                />
+                <TeamQuotaSummary usage={seatUsage} canBuy={isOwner} onBuy={buySeats} manages={canManage} />
               ) : null}
               <Table<MemberRow>
-                rowKey="id"
+                rowKey={(row) => `${row.kind}:${row.id}`}
                 columns={memberColumns}
                 dataSource={memberRows}
                 loading={loading}
                 locale={{ emptyText: 'Нет участников' }}
                 pagination={false}
+                // On a phone the table scrolls inside the card instead of squeezing the e-mails letter by letter
+                scroll={{ x: 'max-content' }}
                 size="middle"
                 summary={
-                  seatUsage?.billing_enabled && (pendingSeats > 0 || seatsFree > 0)
+                  seatUsage?.billing_enabled && seatsFree > 0
                     ? () => (
                         <Table.Summary>
-                          {pendingSeats > 0 ? (
-                            <Table.Summary.Row>
-                              <Table.Summary.Cell index={0} colSpan={memberColumns.length}>
-                                <div className="team-quota-free-row">
-                                  <span>
-                                    <strong>Ждут ответа на приглашение: {pendingSeats}</strong> — места за ними сохранены
-                                  </span>
-                                  <Button type="link" size="small" onClick={() => setActiveTab('invitations')}>
-                                    Показать
-                                  </Button>
-                                </div>
-                              </Table.Summary.Cell>
-                            </Table.Summary.Row>
-                          ) : null}
                           {Array.from({ length: Math.min(seatsFree, FREE_ROWS_SHOWN) }, (_, index) => (
                             <Table.Summary.Row key={`free-${index}`}>
                               <Table.Summary.Cell index={0} colSpan={memberColumns.length}>
@@ -696,7 +804,14 @@ export const ParticipantsPage = () => {
                                     <strong>Свободное место</strong> — оплачено, пока не занято
                                   </span>
                                   {canManage ? (
-                                    <Button type="link" size="small" onClick={() => setInviteOpen(true)}>
+                                    <Button
+                                      type="link"
+                                      size="small"
+                                      onClick={() => {
+                                        setInviteRole('editor');
+                                        setInviteOpen(true);
+                                      }}
+                                    >
                                       Пригласить
                                     </Button>
                                   ) : null}
@@ -768,7 +883,52 @@ export const ParticipantsPage = () => {
         onClose={() => { setInviteOpen(false); void load(); }}
         organizationId={activeOrganization.id}
         canAssignAdmin={isOwner}
+        freeSeats={freeSeatsKnown}
+        initialRole={inviteRole}
+        onBuySeats={
+          isOwner
+            ? () => {
+                setInviteOpen(false);
+                buySeats();
+              }
+            : undefined
+        }
       />
+
+      {addSeatsOpen && subscription ? (
+        <AddSeatsDialog
+          current={subscription.seats}
+          max={plans?.max_seats ?? subscription.seats + 1}
+          windowDaysLeft={subscription.seat_window_days_left}
+          periodEnd={subscription.current_period_end}
+          initialTarget={subscription.seats + 1}
+          returnTo="participants"
+          onClose={() => setAddSeatsOpen(false)}
+        />
+      ) : null}
+
+      <Modal
+        open={!!limitFor}
+        title={limitFor ? `Личный лимит ИИ: ${limitFor.participant}` : ''}
+        footer={<Button onClick={() => setLimitFor(null)}>Готово</Button>}
+        onCancel={() => setLimitFor(null)}
+        destroyOnHidden
+      >
+        <p style={{ marginTop: 0, color: 'var(--app-text-secondary)' }}>
+          Сколько кредитов ИИ в месяц человек может потратить из общего тарифа команды. Пустое поле — без
+          ограничения.
+        </p>
+        {limitFor ? (
+          <MemberAiLimitInput
+            value={limitFor.token_plus_limit}
+            disabled={busyId === limitFor.id}
+            onCommit={(tokens) => {
+              void changeAiLimit(limitFor.id, tokens);
+              setLimitFor((current) => (current ? { ...current, token_plus_limit: tokens } : current));
+            }}
+          />
+        ) : null}
+      </Modal>
 
       <JoinLinkModal
         open={joinLinkOpen}

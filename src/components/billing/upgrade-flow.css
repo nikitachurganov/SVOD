@@ -230,6 +230,37 @@
   font-weight: 600;
 }
 
+/* The team the seats are for: an existing one or the name of a new one */
+.upgrade-team {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.upgrade-team__label {
+  font-weight: 500;
+}
+
+.upgrade-team__select,
+.upgrade-team__input {
+  max-width: 420px;
+  width: 100%;
+}
+
+.upgrade-team__hint {
+  color: var(--app-text-secondary);
+}
+
+.upgrade-team__error {
+  color: var(--app-error, var(--app-danger));
+}
+
+.upgrade-summary__team {
+  margin: -6px 0 12px;
+  color: var(--app-text-secondary);
+}
+
 @media (max-width: 900px) {
   .upgrade-summary--sticky {
     position: static;

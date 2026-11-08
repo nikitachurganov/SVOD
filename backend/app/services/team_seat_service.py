@@ -4,6 +4,10 @@ A seat is taken by the owner, the admins and the editors, and also by an invitat
 been answered yet (otherwise a team could invite more people than it pays for and let them all in
 later). A reader takes no seat, but there are at most MAX_READERS_PER_TEAM of them.
 
+The seats belong to the owner's subscription, so they are shared by all the teams the owner has in
+one service: a person is counted once however many of those teams they work in, and a second team
+gives no second set of seats. Readers are still counted per team.
+
 The paid places come from the plan of the team owner (Entitlements.seats). The rule follows the
 same switches as every other plan limit: with BILLING_ENABLED off nothing is checked; in shadow
 mode (BILLING_ENFORCE off) a broken rule is only counted in svod_billing_limit_hit_total; when
@@ -12,8 +16,9 @@ enforced it refuses with 402 limit_reached.
 
 from __future__ import annotations
 
+import uuid
 from collections.abc import Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -37,6 +42,32 @@ class SeatUsage:
     seats_used: int
     readers: int
     seats_limit: int
+    # Of seats_used: people who hold a seat only in the owner's other teams
+    seats_elsewhere: int = 0
+    # Who holds a seat in any of the owner's teams ("u:<user id>" or "e:<email>" of an invitation)
+    holders: frozenset[str] = frozenset()
+
+
+@dataclass(frozen=True)
+class Place:
+    """One person (or unanswered invitation) in one of the owner's teams."""
+
+    org_id: uuid.UUID
+    key: str
+    role: str | None
+
+
+def person_key(user_id: uuid.UUID | None, email: str | None = None) -> str:
+    return f"u:{user_id}" if user_id is not None else f"e:{(email or '').strip().lower()}"
+
+
+def tally(places: Iterable[Place], org_id: uuid.UUID, seats_limit: int) -> SeatUsage:
+    """Seats over all the owner's teams (each person once), readers of this team only."""
+    places = list(places)
+    holders = {p.key for p in places if takes_seat(p.role)}
+    here = {p.key for p in places if p.org_id == org_id and takes_seat(p.role)}
+    readers = sum(1 for p in places if p.org_id == org_id and not takes_seat(p.role))
+    return SeatUsage(len(holders), readers, seats_limit, len(holders - here), frozenset(holders))
 
 
 def count_roles(roles: Iterable[str | None]) -> tuple[int, int]:
@@ -53,8 +84,8 @@ def count_roles(roles: Iterable[str | None]) -> tuple[int, int]:
 def without_role(usage: SeatUsage, role: str | None) -> SeatUsage:
     """The usage with one person of this role taken out (they stay, only their role changes)."""
     if takes_seat(role):
-        return SeatUsage(max(usage.seats_used - 1, 0), usage.readers, usage.seats_limit)
-    return SeatUsage(usage.seats_used, max(usage.readers - 1, 0), usage.seats_limit)
+        return replace(usage, seats_used=max(usage.seats_used - 1, 0))
+    return replace(usage, readers=max(usage.readers - 1, 0))
 
 
 def blocking_limit(usage: SeatUsage, role: str | None) -> str | None:
@@ -107,14 +138,27 @@ async def ai_quota_for_org(
 async def usage_for_org(
     session: AsyncSession, org: Organization
 ) -> tuple[SeatUsage, billing_service.Entitlements]:
-    """Places and readers in use now (members and unanswered invitations), with the plan."""
+    """Places and readers in use now (members and unanswered invitations), with the plan.
+
+    Seats are counted over every team of the owner in the same service; readers in this team only.
+    """
     ent = await billing_service.get_entitlements(session, org.owner_user_id)
-    members = await organization_repository.list_members(session, org.id)
-    invitations = await organization_repository.list_invitations(session, org.id)
-    roles = [m.role_tag for m in members]
-    roles += [i.role_tag for i in invitations if i.status == INVITATION_PENDING]
-    seats, readers = count_roles(roles)
-    return SeatUsage(seats, readers, ent.seats), ent
+    teams: list[Organization] = []
+    if not org.is_personal:
+        teams = await organization_repository.list_owned_teams(
+            session, org.owner_user_id, getattr(org, "service", None)
+        )
+    if all(team.id != org.id for team in teams):
+        teams.append(org)
+    places: list[Place] = []
+    for team in teams:
+        for member in await organization_repository.list_members(session, team.id):
+            places.append(Place(team.id, person_key(member.user_id), member.role_tag))
+        for inv in await organization_repository.list_invitations(session, team.id):
+            if inv.status == INVITATION_PENDING:
+                key = person_key(getattr(inv, "invited_user_id", None), inv.email)
+                places.append(Place(team.id, key, inv.role_tag))
+    return tally(places, org.id, ent.seats), ent
 
 
 async def ensure_room(
@@ -124,15 +168,19 @@ async def ensure_room(
     *,
     replacing_role: str | None = None,
     already_counted: bool = False,
+    person: uuid.UUID | None = None,
 ) -> None:
     """Refuse (when enforced) adding a person with ``role`` to a team that has no room for them.
 
     ``replacing_role`` is the current role of a person who stays and only changes role: they are
     taken out of the count first. ``already_counted`` is for accepting an invitation, which
-    already holds its place as a pending invitation.
+    already holds its place as a pending invitation. ``person`` is the user being added: one who
+    already holds a seat in this or another team of the owner takes no new one.
     """
     usage, ent = await usage_for_org(session, org)
     if not ent.billing_enabled:
+        return
+    if person is not None and takes_seat(role) and person_key(person) in usage.holders:
         return
     if replacing_role is not None:
         usage = without_role(usage, replacing_role)

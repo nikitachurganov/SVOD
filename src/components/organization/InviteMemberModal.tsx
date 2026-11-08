@@ -12,7 +12,7 @@ import type {
   InvitationResponse,
   InviteeLookupResponse,
 } from '../../types/organization';
-import { ROLE_HINTS, copyToClipboard, roleOptionsFor } from './participants.utils';
+import { ROLE_HINTS, copyToClipboard, isNoFreeSeat, seatOptionsFor, takesSeat } from './participants.utils';
 
 interface Props {
   open: boolean;
@@ -20,6 +20,12 @@ interface Props {
   organizationId: string;
   /** Only the owner can invite an admin; for an admin the role is not offered */
   canAssignAdmin?: boolean;
+  /** Paid seats nobody holds; null: not known or no limit */
+  freeSeats?: number | null;
+  /** The role the form opens with (a free seat row opens it with a paid one) */
+  initialRole?: AssignableRole;
+  /** The owner can buy a seat when none is free; absent for the others */
+  onBuySeats?: () => void;
 }
 
 interface InviteFormValues {
@@ -93,12 +99,22 @@ export const InvitationResult = ({ invitation }: { invitation: InvitationRespons
   );
 };
 
-export const InviteMemberModal = ({ open, onClose, organizationId, canAssignAdmin = true }: Props) => {
+export const InviteMemberModal = ({
+  open,
+  onClose,
+  organizationId,
+  canAssignAdmin = true,
+  freeSeats = null,
+  initialRole = 'editor',
+  onBuySeats,
+}: Props) => {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<InvitationResponse | null>(null);
   const [form] = Form.useForm<InviteFormValues>();
   const email = Form.useWatch('email', form);
-  const roleTag = Form.useWatch('role_tag', form) ?? 'editor';
+  const roleTag = Form.useWatch('role_tag', form) ?? initialRole;
+  // A paid role with no free seat cannot be sent: the server would refuse it
+  const noSeat = freeSeats === 0 && takesSeat(roleTag);
   // Account detection by email: null — not checked yet (or email incomplete)
   const [lookup, setLookup] = useState<{ email: string; data: InviteeLookupResponse } | null>(null);
   const [lookupLoading, setLookupLoading] = useState(false);
@@ -154,6 +170,10 @@ export const InviteMemberModal = ({ open, onClose, organizationId, canAssignAdmi
       });
       setResult(invitation);
     } catch (err: unknown) {
+      if (isNoFreeSeat(err)) {
+        form.setFields([{ name: 'role_tag', errors: ['Свободных платных мест нет: докупите место или выберите наблюдателя'] }]);
+        return;
+      }
       const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
       const text = typeof detail === 'string' ? detail : '';
       form.setFields([
@@ -190,7 +210,7 @@ export const InviteMemberModal = ({ open, onClose, organizationId, canAssignAdmi
                 type="primary"
                 icon={<MailOutlined />}
                 loading={loading}
-                disabled={blocked || lookupLoading}
+                disabled={blocked || lookupLoading || noSeat}
                 onClick={() => form.submit()}
               >
                 {existingAccount ? 'Пригласить' : 'Создать аккаунт и пригласить'}
@@ -271,12 +291,33 @@ export const InviteMemberModal = ({ open, onClose, organizationId, canAssignAdmi
           ) : null}
           <Form.Item
             name="role_tag"
-            label="Роль"
-            initialValue="editor"
+            label="Место и роль"
+            initialValue={initialRole}
             extra={ROLE_HINTS[roleTag]}
           >
-            <Select options={roleOptionsFor(canAssignAdmin)} />
+            <Select options={seatOptionsFor(canAssignAdmin, freeSeats)} />
           </Form.Item>
+          {noSeat ? (
+            <Alert
+              type="warning"
+              showIcon
+              style={{ marginBottom: 16 }}
+              title="Свободных платных мест нет"
+              description="Докупите место или пригласите человека наблюдателем: он бесплатно смотрит опросы и результаты."
+              action={
+                <div style={{ display: 'grid', gap: 6 }}>
+                  {onBuySeats ? (
+                    <Button size="small" type="primary" onClick={onBuySeats}>
+                      Докупить место
+                    </Button>
+                  ) : null}
+                  <Button size="small" onClick={() => form.setFieldValue('role_tag', 'reader')}>
+                    Наблюдателем
+                  </Button>
+                </div>
+              }
+            />
+          ) : null}
           <Form.Item name="job_title" label="Должность">
             <Input placeholder="Например, дизайнер" maxLength={300} />
           </Form.Item>

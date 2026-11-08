@@ -35,7 +35,10 @@ export interface MemberResponse {
 
 /** Paid places and free readers of a team (members and unanswered invitations) */
 export interface SeatUsage {
+  /** Over all the owner's teams: the seats are the owner's, not the team's */
   seats_used: number;
+  /** Of seats_used: people who hold a seat only in the owner's other teams */
+  seats_used_elsewhere?: number;
   /** null: no limit (billing is switched off) */
   seats_limit: number | null;
   readers: number;
@@ -48,6 +51,8 @@ export interface SeatUsage {
   ai_pool_resets_at: string | null;
   /** What each person took from the pool in this period: user id → tokens */
   ai_spent_by_user: Record<string, number>;
+  /** What the caller spent from the pool in this period; null without a pool */
+  ai_spent_me?: number | null;
   /** Days left of the window in which seats 2 and 3 keep the kit price; 0: no window */
   seat_window_days_left: number;
 }

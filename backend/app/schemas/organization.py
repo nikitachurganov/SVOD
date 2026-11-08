@@ -64,7 +64,10 @@ class UpdateMemberAiLimitRequest(BaseModel):
 class SeatUsageResponse(BaseModel):
     """How many paid places the team uses (members and unanswered invitations) and how many it has."""
 
+    # Over all the owner's teams in this service: the seats are the owner's, not the team's
     seats_used: int
+    # Of seats_used: people who hold a seat only in the owner's other teams
+    seats_used_elsewhere: int = 0
     # null: no limit (billing is switched off)
     seats_limit: int | None
     readers: int
@@ -77,7 +80,10 @@ class SeatUsageResponse(BaseModel):
     ai_pool_max: int | None = None
     ai_pool_resets_at: datetime | None = None
     # What each person spent from the pool in this period: {user_id: tokens}
+    # (to the owner and the admins only; empty for the others)
     ai_spent_by_user: dict[str, int] = Field(default_factory=dict)
+    # What the caller spent from the pool in this period; null without a pool
+    ai_spent_me: int | None = None
     # Days left of the one-time window in which the 2nd and 3rd seats keep the kit price; 0: no window
     seat_window_days_left: int = 0
 

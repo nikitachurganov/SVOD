@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Alert, Button, Modal, Skeleton } from 'antd';
+import { Alert, Button, Input, Modal, Select, Skeleton } from 'antd';
 import {
   ArrowLeftOutlined,
   CloseOutlined,
@@ -20,6 +20,7 @@ import {
   crumbsFor,
   flowPath,
   isFlowStep,
+  NEW_TEAM,
   readFlow,
   type FlowState,
   type FlowStep,
@@ -81,7 +82,13 @@ export const UpgradeFlowPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user, profile } = useAuth();
-  const { activeOrganization } = useOrganization();
+  const {
+    activeOrganization,
+    organizations,
+    isLoading: orgsLoading,
+    createOrganization,
+    setActiveOrganizationId,
+  } = useOrganization();
   const { notifyInfo } = useNotifications();
 
   const [plans, setPlans] = useState<PlansResponse | null>(null);
@@ -91,6 +98,9 @@ export const UpgradeFlowPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [seatsModal, setSeatsModal] = useState<number | null>(null);
   const [people, setPeople] = useState<{ orgId: string; rows: SeatRow[] } | null>(null);
+  const [teamName, setTeamName] = useState<string | null>(null);
+  const [teamNameError, setTeamNameError] = useState<string | null>(null);
+  const [creatingTeam, setCreatingTeam] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -112,11 +122,17 @@ export const UpgradeFlowPage = () => {
   const researcher = plans?.plans.find((plan) => plan.code === 'researcher');
   const pack = plans?.pack;
 
-  // The people shown in the seats table are the team's, and only its owner buys for it
-  const teamOrgId =
-    activeOrganization && !activeOrganization.is_personal && activeOrganization.owner_user_id === user?.id
-      ? activeOrganization.id
-      : null;
+  // The seats are bought for one of the person's own teams, or for a new one made right before the payment
+  const ownTeams = organizations.filter((org) => !org.is_personal && org.owner_user_id === user?.id);
+  const ownTeam = (id: string | null) => (id ? (ownTeams.find((org) => org.id === id) ?? null) : null);
+  const defaultTeamId =
+    ownTeam(activeOrganization?.id ?? null)?.id ?? (ownTeams.length > 0 ? ownTeams[0].id : NEW_TEAM);
+  const chosenTeam: string =
+    flow.org === NEW_TEAM ? NEW_TEAM : (ownTeam(flow.org)?.id ?? defaultTeamId);
+  const teamOrgId = flow.who === 'team' && chosenTeam !== NEW_TEAM ? chosenTeam : null;
+  const teamTitle = ownTeam(teamOrgId)?.name ?? null;
+  const ownerFirstName = profile?.firstName?.trim();
+  const newTeamName = teamName ?? (ownerFirstName ? `Команда ${ownerFirstName}` : 'Моя команда');
 
   useEffect(() => {
     if (!teamOrgId || step !== 'seats') return;
@@ -196,7 +212,7 @@ export const UpgradeFlowPage = () => {
       </div>
     );
   }
-  if (!plans || !researcher || !pack) {
+  if (!plans || !researcher || !pack || orgsLoading) {
     return (
       <div className="upgrade-flow">
         <div className="upgrade-flow__main">
@@ -212,6 +228,10 @@ export const UpgradeFlowPage = () => {
     return <Navigate to={flowPath('checkout', flow)} replace />;
   }
   if (step === 'seats' && flow.who === 'solo') return <Navigate to={flowPath('who', flow)} replace />;
+  // A team's payment needs the team itself: it is chosen (or made) on the seats page
+  if (step === 'checkout' && flow.offer === 'researcher' && flow.who === 'team' && !teamOrgId) {
+    return <Navigate to={flowPath('seats', flow)} replace />;
+  }
 
   const go = (next: FlowStep, state: FlowState = flow, replace = false) =>
     navigate(flowPath(next, state), { replace });
@@ -236,11 +256,21 @@ export const UpgradeFlowPage = () => {
     try {
       const term = flow.offer === 'pack' ? 'one_off' : flow.term;
       const usedTab = await payInNewTab(() =>
-        createCheckout(term, seatMode && flow.offer === 'researcher' ? flow.seats : undefined),
+        createCheckout(
+          term,
+          seatMode && flow.offer === 'researcher' ? flow.seats : undefined,
+          teamOrgId ? 'participants' : 'plans',
+        ),
       );
       if (usedTab) {
         notifyInfo('Оплата открыта в новой вкладке', 'После оплаты тариф включится сразу.');
-        navigate(teamOrgId ? '/participants' : SETTINGS_PLANS);
+        if (teamOrgId) {
+          // The people are invited from the team's own page: open the team the seats were bought for
+          setActiveOrganizationId(teamOrgId);
+          navigate('/participants');
+        } else {
+          navigate(SETTINGS_PLANS);
+        }
       }
     } catch (err) {
       setError(billingActionError(err, 'Не удалось перейти к оплате. Попробуйте ещё раз.'));
@@ -252,6 +282,11 @@ export const UpgradeFlowPage = () => {
   const summary = (
     <aside className="upgrade-summary upgrade-summary--sticky" aria-label="Состав заказа">
       <h2 className="upgrade-summary__title">{flow.offer === 'pack' ? pack.title : 'Исследователь'}</h2>
+      {flow.offer === 'researcher' && flow.who === 'team' ? (
+        <p className="upgrade-summary__team">
+          {teamTitle ? `Команда «${teamTitle}»` : `Новая команда «${newTeamName.trim() || '…'}»`}
+        </p>
+      ) : null}
       {flow.offer === 'researcher' ? (
         <div className="upgrade-radios" role="radiogroup" aria-label="Срок">
           {(['year', 'month'] as QuoteTerm[]).map((kind) => (
@@ -349,16 +384,87 @@ export const UpgradeFlowPage = () => {
     </div>
   );
 
+  /** «Далее: оплата» on the seats page: a new team is made first, so the payment is for a team that exists */
+  const toCheckout = async () => {
+    if (chosenTeam !== NEW_TEAM) {
+      go('checkout', { ...flow, org: chosenTeam });
+      return;
+    }
+    const name = newTeamName.trim();
+    if (!name) {
+      setTeamNameError('Введите название команды');
+      return;
+    }
+    if (name.length > 255) {
+      setTeamNameError('Не более 255 символов');
+      return;
+    }
+    setCreatingTeam(true);
+    setError(null);
+    try {
+      const created = await createOrganization({ name });
+      // Replace the address: «back» from the payment comes to this team, not to a second new one
+      go('seats', { ...flow, org: created.id }, true);
+      go('checkout', { ...flow, org: created.id });
+    } catch {
+      setTeamNameError('Не удалось создать команду. Попробуйте ещё раз.');
+    } finally {
+      setCreatingTeam(false);
+    }
+  };
+
+  const teamPicker = (
+    <div className="upgrade-team">
+      <label className="upgrade-team__label" htmlFor="upgrade-team-name">
+        {ownTeams.length > 0 ? 'Команда' : 'Название команды'}
+      </label>
+      {ownTeams.length > 0 ? (
+        <Select<string>
+          id={chosenTeam === NEW_TEAM ? undefined : 'upgrade-team-name'}
+          className="upgrade-team__select"
+          value={chosenTeam}
+          disabled={creatingTeam}
+          onChange={(value) => go('seats', { ...flow, org: value }, true)}
+          options={[
+            ...ownTeams.map((org) => ({ value: org.id, label: org.name })),
+            { value: NEW_TEAM, label: 'Новая команда…' },
+          ]}
+        />
+      ) : null}
+      {chosenTeam === NEW_TEAM ? (
+        <>
+          <Input
+            id="upgrade-team-name"
+            className="upgrade-team__input"
+            value={newTeamName}
+            maxLength={255}
+            disabled={creatingTeam}
+            status={teamNameError ? 'error' : undefined}
+            placeholder="Например, «Исследования продукта»"
+            onChange={(event) => {
+              setTeamName(event.target.value);
+              setTeamNameError(null);
+            }}
+          />
+          <small className={teamNameError ? 'upgrade-team__error' : 'upgrade-team__hint'}>
+            {teamNameError ?? 'Команда появится сразу, людей пригласите после оплаты в разделе «Участники».'}
+          </small>
+        </>
+      ) : null}
+    </div>
+  );
+
   const seatsStep = (
     <div className="upgrade-flow__wide">
       <h1 className="upgrade-flow__title">
-        Места для {teamOrgId && activeOrganization ? `команды «${activeOrganization.name}»` : 'вашей команды'}
+        Места для {teamTitle ? `команды «${teamTitle}»` : 'вашей команды'}
       </h1>
       <p className="upgrade-flow__lead">
-        Место занимают владелец, администраторы и редакторы. Читатели места не занимают и бесплатны.
+        Место занимают владелец, администраторы и редакторы. Наблюдатели места не занимают и бесплатны.
       </p>
       <div className="upgrade-layout">
         <div>
+          {teamPicker}
           {kitOffer ? (
             <div className="upgrade-offer">
               <div>
@@ -414,8 +520,14 @@ export const UpgradeFlowPage = () => {
             <Button icon={<ArrowLeftOutlined />} onClick={back}>
               Назад
             </Button>
-            <Button type="primary" size="large" disabled={!monthQuote.quote} onClick={() => go('checkout')}>
-              Далее: оплата
+            <Button
+              type="primary"
+              size="large"
+              disabled={!monthQuote.quote}
+              loading={creatingTeam}
+              onClick={() => void toCheckout()}
+            >
+              {chosenTeam === NEW_TEAM ? 'Создать команду и перейти к оплате' : 'Далее: оплата'}
             </Button>
           </div>
         </div>

@@ -25,6 +25,19 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+/**
+ * No free paid seat while inviting someone or changing a role: the people page and the invite form explain
+ * it themselves and offer to buy a seat or pick the free observer, so the general window would only repeat it.
+ */
+const SEAT_SCREENS = [
+  { method: 'post', path: /^\/organizations\/[^/]+\/invitations$/ },
+  { method: 'patch', path: /^\/organizations\/[^/]+\/members\/[^/]+\/role$/ },
+];
+
+const handledOnScreen = (limit: string | undefined, method: string | undefined, url: string | undefined): boolean =>
+  limit === 'seats' &&
+  SEAT_SCREENS.some((screen) => screen.method === method?.toLowerCase() && screen.path.test(url ?? ''));
+
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -37,7 +50,9 @@ api.interceptors.response.use(
     // A plan limit stopped the action: one window offers the way out, whichever screen asked
     if (axios.isAxiosError(error) && error.response?.status === 402) {
       const billing = parseBillingError(error);
-      if (billing) announcePaywall(billing);
+      if (billing && !handledOnScreen(billing.limit, error.config?.method, error.config?.url)) {
+        announcePaywall(billing);
+      }
     }
     return Promise.reject(error);
   },

@@ -181,9 +181,21 @@ def offer(
     return plan, price, DAYS_BY_INTERVAL[term]
 
 
-def _return_url(payment_id: uuid.UUID) -> str:
+# Pages a payment may come back to; anything else (or nothing) gives the default page
+RETURN_PAGES = {
+    "participants": "/participants",
+    "plans": "/settings?tab=plans",
+}
+
+
+def _return_url(payment_id: uuid.UUID, return_to: str | None = None) -> str:
     base = (settings.SURVEYS_APP_PUBLIC_URL.strip() or settings.APP_PUBLIC_URL.strip()).rstrip("/")
-    url = settings.YOOKASSA_RETURN_URL.strip() or f"{base}/profile?tab=subscription"
+    page = RETURN_PAGES.get(return_to or "")
+    if page and base:
+        # A team's payment comes back to the team's people, a person's own to the plans
+        url = f"{base}{page}"
+    else:
+        url = settings.YOOKASSA_RETURN_URL.strip() or f"{base}/profile?tab=subscription"
     parts = urlsplit(url)
     query = [*parse_qsl(parts.query), ("payment", str(payment_id))]
     return urlunsplit(parts._replace(query=urlencode(query)))
@@ -202,7 +214,13 @@ async def _journal(
 
 
 async def create_checkout(
-    session: AsyncSession, user: User, term: str, now: datetime | None = None, *, seats: int = 1
+    session: AsyncSession,
+    user: User,
+    term: str,
+    now: datetime | None = None,
+    *,
+    seats: int = 1,
+    return_to: str | None = None,
 ) -> Payment:
     """Create the payment at the provider and return the row with the page to send the person to."""
     if not settings.payments_enabled:
@@ -226,7 +244,9 @@ async def create_checkout(
             )
 
     description = f"Тариф «{plan.title}»: {_TERM_TITLES[term]}" + (f", мест: {seats}" if seats > 1 else "")
-    return await _open_payment(session, user, plan.code, term, days, seats, amount, description, now)
+    return await _open_payment(
+        session, user, plan.code, term, days, seats, amount, description, now, return_to=return_to
+    )
 
 
 @dataclass(frozen=True)
@@ -285,7 +305,12 @@ async def quote_seat_addition(
 
 
 async def create_seat_addition(
-    session: AsyncSession, user: User, seats: int, now: datetime | None = None
+    session: AsyncSession,
+    user: User,
+    seats: int,
+    now: datetime | None = None,
+    *,
+    return_to: str | None = None,
 ) -> Payment:
     """Pay for more seats in the middle of a period: the price of the new seats for the days that are
     left. The period itself does not change; the seats appear when the payment is settled."""
@@ -296,7 +321,16 @@ async def create_seat_addition(
     plan = get_plan(PLAN_RESEARCHER)
     description = f"Тариф «{plan.title}»: места до {seats}, дней в периоде: {quote.days_left}"
     return await _open_payment(
-        session, user, plan.code, TERM_SEATS_ADD, quote.days_left, seats, quote.amount_kopecks, description, now
+        session,
+        user,
+        plan.code,
+        TERM_SEATS_ADD,
+        quote.days_left,
+        seats,
+        quote.amount_kopecks,
+        description,
+        now,
+        return_to=return_to,
     )
 
 
@@ -339,6 +373,8 @@ async def _open_payment(
     amount: int,
     description: str,
     now: datetime,
+    *,
+    return_to: str | None = None,
 ) -> Payment:
     """Store the payment, then create it at the provider; a second click returns the same page."""
     existing = await payment_repository.find_open_checkout(
@@ -371,7 +407,7 @@ async def _open_payment(
             idempotence_key=payment.idempotence_key,
             amount_kopecks=amount,
             description=description,
-            return_url=_return_url(payment.id),
+            return_url=_return_url(payment.id, return_to),
             metadata={"payment_id": str(payment.id), "user_id": str(user.id)},
         )
     except yookassa_client.ProviderUnavailable as exc:

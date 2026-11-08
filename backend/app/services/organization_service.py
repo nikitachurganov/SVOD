@@ -378,14 +378,21 @@ async def transfer_organization_ownership(
 async def get_seat_usage(
     session: AsyncSession, org_id: uuid.UUID, current_user: User
 ) -> SeatUsageResponse:
-    """Occupied and available places of the team, for the owner and the admins."""
+    """Occupied and available places of the team and the use of its pool, for every member.
+
+    What each person spent is shown to the owner and the admins; the others see only their own.
+    """
     org = await _get_org_or_404(session, org_id)
-    await _ensure_can_manage_members(session, org, current_user)
+    manages = True
+    if org.owner_user_id != current_user.id:
+        member = await _ensure_membership(session, org.id, current_user.id)
+        manages = team_roles.can_manage_members(member.role_tag)
     usage, ent = await team_seat_service.usage_for_org(session, org)
     unlimited = not ent.billing_enabled or usage.seats_limit >= team_roles.SEATS_UNLIMITED
     quota = await team_seat_service.ai_quota_for_org(session, org, ent)
     return SeatUsageResponse(
         seats_used=usage.seats_used,
+        seats_used_elsewhere=usage.seats_elsewhere,
         seats_limit=None if unlimited else usage.seats_limit,
         readers=usage.readers,
         readers_limit=team_roles.MAX_READERS_PER_TEAM,
@@ -394,7 +401,8 @@ async def get_seat_usage(
         ai_pool_used=quota.pool_used,
         ai_pool_max=quota.pool_max,
         ai_pool_resets_at=quota.resets_at,
-        ai_spent_by_user=quota.spent_by_user,
+        ai_spent_by_user=quota.spent_by_user if manages else {},
+        ai_spent_me=quota.spent_by_user.get(str(current_user.id), 0) if quota.pool_max is not None else None,
         seat_window_days_left=quota.seat_window_days_left,
     )
 
@@ -490,7 +498,7 @@ async def update_member_role(
         )
     if new_role != current_role:
         await team_seat_service.ensure_room(
-            session, org, new_role, replacing_role=member.role_tag
+            session, org, new_role, replacing_role=member.role_tag, person=member.user_id
         )
 
     member.role_tag = new_role
@@ -676,7 +684,7 @@ async def create_invitation(
                 middle_name=invited_user.middle_name,
             )
 
-    await team_seat_service.ensure_room(session, org, role)
+    await team_seat_service.ensure_room(session, org, role, person=invited_user.id)
 
     inv = OrganizationInvitation(
         organization_id=org_id,
@@ -788,7 +796,7 @@ async def accept_invitation(
     # The invitation already holds its place, so it does not count against itself
     role = team_roles.normalize_role(inv.role_tag)
     await team_seat_service.ensure_room(
-        session, inv.organization, role, already_counted=True
+        session, inv.organization, role, already_counted=True, person=current_user.id
     )
 
     member = OrganizationMember(

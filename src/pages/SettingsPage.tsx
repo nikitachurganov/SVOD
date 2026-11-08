@@ -1,4 +1,5 @@
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { ReturnedPaymentNotice } from '../components/billing/ReturnedPaymentNotice';
 import { OrganizationSettingsSection } from '../components/organization/OrganizationSettingsSection';
 import { HOME_PATH } from '../shared/config/appMode';
 import { useOrganization } from '../shared/hooks/organization.hooks';
@@ -55,7 +56,10 @@ export const SettingsPage = () => {
         {activeTab === 'team' ? (
           <OrganizationSettingsSection onAfterDelete={() => navigate(HOME_PATH)} />
         ) : (
-          <PlansPage />
+          <>
+            <ReturnedPaymentNotice />
+            <PlansPage />
+          </>
         )}
       </div>
     </div>

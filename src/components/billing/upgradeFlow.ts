@@ -12,7 +12,14 @@ export interface FlowState {
   term: QuoteTerm;
   who: FlowWho;
   seats: number;
+  /** The team the seats are for: its id, NEW_TEAM (to be created before the payment) or null (not chosen yet) */
+  org: string | null;
 }
+
+/** The team does not exist yet: it is created by «Далее: оплата» on the seats page */
+export const NEW_TEAM = 'new';
+
+const ORG_PATTERN = /^[0-9a-f-]{36}$/i;
 
 export const FLOW_ROOT = '/upgrade';
 
@@ -28,7 +35,9 @@ export const readFlow = (params: URLSearchParams, maxSeats: number): FlowState =
   const who: FlowWho = params.get('who') === 'team' ? 'team' : 'solo';
   const asked = params.get('seats');
   const seats = who === 'team' ? clampSeats(asked === null ? DEFAULT_SEATS : Number(asked), maxSeats) : 1;
-  return { offer, term, who, seats };
+  const askedOrg = params.get('org');
+  const org = who === 'team' && askedOrg && (askedOrg === NEW_TEAM || ORG_PATTERN.test(askedOrg)) ? askedOrg : null;
+  return { offer, term, who, seats, org };
 };
 
 export const flowSearch = (state: FlowState): string => {
@@ -39,6 +48,7 @@ export const flowSearch = (state: FlowState): string => {
     params.set('term', state.term);
     params.set('who', state.who);
     if (state.who === 'team') params.set('seats', String(state.seats));
+    if (state.who === 'team' && state.org) params.set('org', state.org);
   }
   return `?${params.toString()}`;
 };

@@ -79,7 +79,9 @@ async def create_checkout(
 ) -> CheckoutResponse:
     """Start paying for the paid plan online: the answer is the payment page to send the person to."""
     _require_billing()
-    payment = await payment_service.create_checkout(session, user, payload.term, seats=payload.seats)
+    payment = await payment_service.create_checkout(
+        session, user, payload.term, seats=payload.seats, return_to=payload.return_to
+    )
     if not payment.confirmation_url:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY, detail={"code": "payment_provider_rejected"}
@@ -103,7 +105,9 @@ async def quote_seats(
 async def add_seats(payload: SeatsRequest, session: DbSession, user: CurrentUser) -> CheckoutResponse:
     """Pay for more seats in the middle of the period: the answer is the payment page."""
     _require_billing()
-    payment = await payment_service.create_seat_addition(session, user, payload.seats)
+    payment = await payment_service.create_seat_addition(
+        session, user, payload.seats, return_to=payload.return_to
+    )
     if not payment.confirmation_url:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY, detail={"code": "payment_provider_rejected"}

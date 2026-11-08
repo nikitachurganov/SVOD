@@ -1,7 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Alert, Button, Modal } from 'antd';
 import { PlusOutlined, ThunderboltOutlined } from '@ant-design/icons';
-import { addSeats, billingActionError, buyAddon, getSeatAdditionQuote } from '../../shared/api/billing.api';
+import {
+  addSeats,
+  billingActionError,
+  buyAddon,
+  getSeatAdditionQuote,
+  type ReturnPage,
+} from '../../shared/api/billing.api';
 import { useNotifications } from '../../shared/context/notifications.context';
 import type { PlansResponse, SeatAdditionQuote, SubscriptionInfo } from '../../types/billing';
 import { SeatStepper } from './SeatConfigurator';
@@ -31,6 +37,12 @@ interface DialogProps {
   windowDaysLeft: number;
   periodEnd: string;
   onClose: () => void;
+  /** Seats to start from (at least one more than now) */
+  initialTarget?: number;
+  /** The page the provider sends the person back to */
+  returnTo?: ReturnPage;
+  /** The payment page was opened */
+  onPaymentOpened?: () => void;
 }
 
 interface Answer {
@@ -40,9 +52,18 @@ interface Answer {
 }
 
 /** Choosing how many seats the team gets; the sum for the rest of the paid period is shown before paying */
-const AddSeatsDialog = ({ current, max, windowDaysLeft, periodEnd, onClose }: DialogProps) => {
+export const AddSeatsDialog = ({
+  current,
+  max,
+  windowDaysLeft,
+  periodEnd,
+  onClose,
+  initialTarget,
+  returnTo,
+  onPaymentOpened,
+}: DialogProps) => {
   const { notifyInfo } = useNotifications();
-  const [target, setTarget] = useState(current + 1);
+  const [target, setTarget] = useState(Math.min(Math.max(initialTarget ?? current + 1, current + 1), max));
   const [answer, setAnswer] = useState<Answer | null>(null);
   const [busy, setBusy] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
@@ -70,9 +91,10 @@ const AddSeatsDialog = ({ current, max, windowDaysLeft, periodEnd, onClose }: Di
     setBusy(true);
     setPayError(null);
     try {
-      const usedTab = await payInNewTab(() => addSeats(target));
+      const usedTab = await payInNewTab(() => addSeats(target, returnTo));
       if (usedTab) {
         notifyInfo('Оплата открыта в новой вкладке', 'После оплаты новые места появятся сразу.');
+        onPaymentOpened?.();
         onClose();
       }
     } catch (err) {

@@ -54,6 +54,19 @@ async def get_personal_org(session: AsyncSession, user_id: uuid.UUID) -> Organiz
     return result.scalar_one_or_none()
 
 
+async def list_owned_teams(
+    session: AsyncSession, owner_id: uuid.UUID, service: str | None
+) -> list[Organization]:
+    """The teams (not the personal workspace) a person owns in one service: their seats are shared."""
+    stmt = select(Organization).where(
+        Organization.owner_user_id == owner_id, Organization.is_personal.is_(False)
+    )
+    if service is not None:
+        stmt = stmt.where(Organization.service == service)
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+
 async def create_org(session: AsyncSession, org: Organization) -> Organization:
     session.add(org)
     await session.flush()

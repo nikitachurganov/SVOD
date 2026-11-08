@@ -82,7 +82,7 @@ export const UpgradeModal = ({ open, onClose }: Props) => {
   };
 
   const chooseResearcher = () => {
-    const base: FlowState = { offer: 'researcher', term, who: 'solo', seats: 1 };
+    const base: FlowState = { offer: 'researcher', term, who: 'solo', seats: 1, org: null };
     if (!seatMode) return openStep('checkout', base);
     if (subscribed) {
       // A running subscription is prolonged for the team it has
@@ -91,7 +91,7 @@ export const UpgradeModal = ({ open, onClose }: Props) => {
     }
     return openStep('who', base);
   };
-  const choosePack = () => openStep('checkout', { offer: 'pack', term, who: 'solo', seats: 1 });
+  const choosePack = () => openStep('checkout', { offer: 'pack', term, who: 'solo', seats: 1, org: null });
 
   const body =
     !plans || !start || !researcher || !pack ? (

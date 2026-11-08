@@ -22,6 +22,8 @@ interface Props {
   onDismiss: () => void;
   /** The plan changed: whatever shows the payments should read them again */
   onSettled: () => void;
+  /** The page the notice is shown on: a link to the same page is left out */
+  currentPath?: string;
 }
 
 interface Result {
@@ -40,7 +42,7 @@ const resultOf = (payment: PaymentInfo, subscription: SubscriptionInfo | null): 
       lines: [
         `Теперь в команде оплачено ${payment.seats} ${seatsWord(payment.seats)}.`,
         until ? `Срок подписки не изменился: до ${until}. Новые места продлеваются вместе со всей командой.` : '',
-        'Пригласите людей на новые места в разделе «Команда».',
+        'Пригласите людей на новые места в разделе «Участники».',
       ],
       link: { to: '/participants', label: 'Открыть команду' },
     };
@@ -71,7 +73,7 @@ const resultOf = (payment: PaymentInfo, subscription: SubscriptionInfo | null): 
     lines: [
       until ? `Действует до ${until}.` : '',
       payment.seats > 1
-        ? `Оплачено мест: ${payment.seats}. Владелец, администраторы и редакторы занимают места, читатели бесплатны.`
+        ? `Оплачено мест: ${payment.seats}. Владелец, администраторы и редакторы занимают места, наблюдатели бесплатны.`
         : 'Оплачено 1 место: ваше.',
       subscription
         ? `Кредитов ИИ в месяц: ${formatCreditsWithWord(subscription.usage.ai_tokens.max)}, они общие для команды.`
@@ -82,7 +84,7 @@ const resultOf = (payment: PaymentInfo, subscription: SubscriptionInfo | null): 
 };
 
 /** What a person sees after coming back from the payment page: the payment is asked about until it is settled */
-export const PaymentReturnNotice = ({ paymentId, onDismiss, onSettled }: Props) => {
+export const PaymentReturnNotice = ({ paymentId, onDismiss, onSettled, currentPath }: Props) => {
   const { refresh, subscription } = useSubscription();
   const [outcome, setOutcome] = useState<Outcome>('checking');
   const [paid, setPaid] = useState<PaymentInfo | null>(null);
@@ -165,7 +167,9 @@ export const PaymentReturnNotice = ({ paymentId, onDismiss, onSettled }: Props) 
                 .map((line) => (
                   <div key={line}>{line}</div>
                 ))}
-              {result.link ? <Link to={result.link.to}>{result.link.label}</Link> : null}
+              {result.link && result.link.to !== currentPath ? (
+                <Link to={result.link.to}>{result.link.label}</Link>
+              ) : null}
             </>
           ) : undefined
         }

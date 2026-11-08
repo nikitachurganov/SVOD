@@ -354,7 +354,7 @@ async def approve(
         )
     member = await organization_repository.get_member(session, org.id, row.user_id)
     if member is None:
-        await team_seat_service.ensure_room(session, org, role)
+        await team_seat_service.ensure_room(session, org, role, person=row.user_id)
         member = await organization_repository.add_member(
             session,
             OrganizationMember(

@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -116,11 +117,14 @@ class CheckoutRequest(BaseModel):
     term: str = INTERVAL_MONTH
     # Seats of the team to pay for; more than one only while SEAT_PRICING_ENABLED is on
     seats: int = Field(default=1, ge=1, le=100)
+    # The page the person comes back to from the provider: a team's people or the plans
+    return_to: Literal["participants", "plans"] | None = None
 
 
 class SeatsRequest(BaseModel):
     # How many seats the team should have after the extra payment
     seats: int = Field(ge=2, le=100)
+    return_to: Literal["participants", "plans"] | None = None
 
 
 class CheckoutResponse(BaseModel):

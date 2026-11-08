@@ -5,7 +5,7 @@ import { CheckOutlined, CloseOutlined } from '@ant-design/icons';
 import { approveJoinRequest, rejectJoinRequest } from '../../shared/api/organizations.api';
 import { buildDisplayName } from '../../shared/utils/userName';
 import type { AssignableRole, JoinRequestResponse } from '../../types/organization';
-import { roleOptionsFor } from './participants.utils';
+import { seatOptionsFor } from './participants.utils';
 import { IS_SURVEYS_APP } from '../../shared/config/appMode';
 import { TEAM_ACC, TEAM_PREP } from '../../shared/lib/teamWords';
 
@@ -170,7 +170,7 @@ export const JoinRequestsTable = ({ requests, loading, onDecided, canAssignAdmin
         </Typography.Paragraph>
         <Form form={approveForm} layout="vertical" onFinish={(v) => void submitApprove(v)}>
           <Form.Item name="role_tag" label="Роль" extra="Читатель бесплатный и не занимает место">
-            <Select options={roleOptionsFor(canAssignAdmin)} />
+            <Select options={seatOptionsFor(canAssignAdmin, null)} />
           </Form.Item>
           <Form.Item name="job_title" label="Должность">
             <Input maxLength={300} />

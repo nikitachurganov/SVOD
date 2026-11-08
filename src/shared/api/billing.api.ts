@@ -50,14 +50,19 @@ export const resumeSubscription = async (): Promise<SubscriptionInfo> => {
 };
 
 /** Starts an online payment; the answer is the provider's page to send the person to */
+/** The page the provider sends the person back to: a team's people or the plans (the server knows no other) */
+export type ReturnPage = 'participants' | 'plans';
+
 export const createCheckout = async (
   term: PlanRequestTerm,
   seats?: number,
+  returnTo?: ReturnPage,
 ): Promise<CheckoutResponse> => {
-  const { data } = await api.post<CheckoutResponse>(
-    '/billing/checkout',
-    seats && seats > 1 ? { term, seats } : { term },
-  );
+  const { data } = await api.post<CheckoutResponse>('/billing/checkout', {
+    term,
+    ...(seats && seats > 1 ? { seats } : {}),
+    ...(returnTo ? { return_to: returnTo } : {}),
+  });
   return data;
 };
 
@@ -74,8 +79,11 @@ export const getSeatAdditionQuote = async (seats: number): Promise<SeatAdditionQ
 };
 
 /** Pays for more seats in the middle of the period; `seats` is how many the team has afterwards */
-export const addSeats = async (seats: number): Promise<CheckoutResponse> => {
-  const { data } = await api.post<CheckoutResponse>('/billing/seats', { seats });
+export const addSeats = async (seats: number, returnTo?: ReturnPage): Promise<CheckoutResponse> => {
+  const { data } = await api.post<CheckoutResponse>('/billing/seats', {
+    seats,
+    ...(returnTo ? { return_to: returnTo } : {}),
+  });
   return data;
 };
 

@@ -167,6 +167,75 @@ class EnsureRoomTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ctx.exception.status_code, 402)
 
 
+class SharedSeatsTests(unittest.IsolatedAsyncioTestCase):
+    """The seats are the owner's: shared by every team the owner has in one service."""
+
+    def setUp(self):
+        self.owner = uuid.uuid4()
+        self.anna, self.boris, self.vera = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+        self.team_a = SimpleNamespace(id=uuid.uuid4(), owner_user_id=self.owner, is_personal=False, service="surveys")
+        self.team_b = SimpleNamespace(id=uuid.uuid4(), owner_user_id=self.owner, is_personal=False, service="surveys")
+        member = lambda user_id, role: SimpleNamespace(user_id=user_id, role_tag=role)  # noqa: E731
+        self.members = {
+            self.team_a.id: [member(self.owner, "owner"), member(self.anna, "editor"), member(self.vera, "reader")],
+            self.team_b.id: [member(self.owner, "owner"), member(self.anna, "admin"), member(self.boris, "editor")],
+        }
+        self.invitations = {
+            self.team_a.id: [
+                SimpleNamespace(status="pending", role_tag="editor", invited_user_id=None, email="New@Example.com"),
+                SimpleNamespace(status="accepted", role_tag="editor", invited_user_id=None, email="old@example.com"),
+            ],
+            self.team_b.id: [],
+        }
+        repo = team_seat_service.organization_repository
+        patch.object(
+            repo, "list_owned_teams", AsyncMock(return_value=[self.team_a, self.team_b])
+        ).start()
+        patch.object(repo, "list_members", AsyncMock(side_effect=lambda s, org_id: self.members[org_id])).start()
+        patch.object(
+            repo, "list_invitations", AsyncMock(side_effect=lambda s, org_id: self.invitations[org_id])
+        ).start()
+        patch.object(
+            team_seat_service.billing_service,
+            "get_entitlements",
+            AsyncMock(return_value=_entitlements(RESEARCHER, seats=4)),
+        ).start()
+        patch.object(team_seat_service.settings, "BILLING_ENFORCE", True).start()
+        self.addCleanup(patch.stopall)
+
+    async def test_a_person_in_two_teams_takes_one_seat(self):
+        usage, _ = await team_seat_service.usage_for_org(None, self.team_a)
+        # owner, Anna (both teams), Boris (team B), the pending invitation of team A
+        self.assertEqual(usage.seats_used, 4)
+        self.assertEqual(usage.seats_elsewhere, 1)  # Boris
+        self.assertEqual(usage.readers, 1)  # Vera, team A only
+        usage_b, _ = await team_seat_service.usage_for_org(None, self.team_b)
+        self.assertEqual((usage_b.seats_used, usage_b.seats_elsewhere, usage_b.readers), (4, 1, 0))
+
+    async def test_a_second_team_gives_no_second_set_of_seats(self):
+        # Four seats bought, four taken over both teams: nobody new fits in either of them
+        for team in (self.team_a, self.team_b):
+            with self.assertRaises(HTTPException) as ctx:
+                await team_seat_service.ensure_room(None, team, "editor", person=uuid.uuid4())
+            self.assertEqual(ctx.exception.detail["limit"], "seats")
+
+    async def test_someone_with_a_seat_in_another_team_fits_without_a_new_one(self):
+        # Boris holds a seat in team B: he joins team A as an editor even though all seats are taken
+        await team_seat_service.ensure_room(None, self.team_a, "editor", person=self.boris)
+        # Vera is only a reader: making her an editor needs a free seat
+        with self.assertRaises(HTTPException):
+            await team_seat_service.ensure_room(
+                None, self.team_a, "editor", replacing_role="reader", person=self.vera
+            )
+
+    async def test_the_personal_workspace_counts_alone(self):
+        personal = SimpleNamespace(id=uuid.uuid4(), owner_user_id=self.owner, is_personal=True, service="surveys")
+        self.members[personal.id] = [SimpleNamespace(user_id=self.owner, role_tag="owner")]
+        self.invitations[personal.id] = []
+        usage, _ = await team_seat_service.usage_for_org(None, personal)
+        self.assertEqual((usage.seats_used, usage.seats_elsewhere), (1, 0))
+
+
 class EntitlementSeatsTests(unittest.TestCase):
     def _sub(self, plan_code, seats):
         now = datetime.now(timezone.utc)
@@ -407,11 +476,29 @@ class SeatUsageEndpointTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result.seats_used, 2)
 
-    async def test_an_editor_does_not(self):
+    async def test_an_editor_sees_the_places_and_only_their_own_spending(self):
         self.role = "editor"
+        editor = SimpleNamespace(id=uuid.uuid4())
+        self.quota = team_seat_service.TeamAiQuota(
+            pool_used=3_000, pool_max=8_000, spent_by_user={str(editor.id): 500, str(uuid.uuid4()): 2_500}
+        )
 
-        with self.assertRaises(HTTPException) as ctx:
-            await organization_service.get_seat_usage(None, self.org.id, SimpleNamespace(id=uuid.uuid4()))
+        result = await organization_service.get_seat_usage(None, self.org.id, editor)
+
+        self.assertEqual((result.seats_used, result.seats_limit), (2, 3))
+        self.assertEqual(result.ai_spent_by_user, {})
+        self.assertEqual(result.ai_spent_me, 500)
+        self.assertEqual(result.ai_pool_used, 3_000)
+
+    async def test_a_stranger_sees_nothing(self):
+        async def no_member(session, org_id, user_id):
+            return None
+
+        with patch.object(
+            organization_service.organization_repository, "get_member", AsyncMock(side_effect=no_member)
+        ):
+            with self.assertRaises(HTTPException) as ctx:
+                await organization_service.get_seat_usage(None, self.org.id, SimpleNamespace(id=uuid.uuid4()))
 
         self.assertEqual(ctx.exception.status_code, 403)
 

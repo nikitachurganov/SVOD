@@ -312,6 +312,37 @@ class OfferTests(unittest.TestCase):
                 payment_service._return_url(payment_id), f"https://x.example/back?payment={payment_id}"
             )
 
+    def test_a_team_payment_comes_back_to_the_people_and_a_personal_one_to_the_plans(self):
+        payment_id = uuid.uuid4()
+        with patch.object(payment_service.settings, "YOOKASSA_RETURN_URL", "https://x.example/back"), patch.object(
+            payment_service.settings, "SURVEYS_APP_PUBLIC_URL", "https://surveys.example/"
+        ):
+            self.assertEqual(
+                payment_service._return_url(payment_id, "participants"),
+                f"https://surveys.example/participants?payment={payment_id}",
+            )
+            self.assertEqual(
+                payment_service._return_url(payment_id, "plans"),
+                f"https://surveys.example/settings?tab=plans&payment={payment_id}",
+            )
+            # An unknown page falls back to the configured one
+            self.assertEqual(
+                payment_service._return_url(payment_id, "elsewhere"),
+                f"https://x.example/back?payment={payment_id}",
+            )
+
+    def test_only_known_return_pages_are_accepted(self):
+        from pydantic import ValidationError
+
+        from app.schemas.billing import CheckoutRequest, SeatsRequest
+
+        self.assertEqual(CheckoutRequest(term="month", return_to="participants").return_to, "participants")
+        self.assertIsNone(CheckoutRequest(term="month").return_to)
+        with self.assertRaises(ValidationError):
+            CheckoutRequest(term="month", return_to="https://evil.example")
+        with self.assertRaises(ValidationError):
+            SeatsRequest(seats=3, return_to="profile")
+
 
 class CheckoutTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
@@ -365,6 +396,17 @@ class CheckoutTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(kwargs["amount_kopecks"], MONTH)
         self.assertIn(f"payment={payment.id}", kwargs["return_url"])
         self.assertEqual(kwargs["metadata"], {"payment_id": str(payment.id), "user_id": str(self.person.id)})
+
+    async def test_the_page_to_come_back_to_reaches_the_provider(self):
+        self.create.return_value = provider_payment(status="pending", paid=False, confirmation_url="https://pay/1")
+        with patch.object(payment_service.settings, "SURVEYS_APP_PUBLIC_URL", "https://surveys.example"):
+            payment = await payment_service.create_checkout(
+                self.session, self.person, "month", NOW, return_to="participants"
+            )
+        self.assertEqual(
+            self.create.await_args.kwargs["return_url"],
+            f"https://surveys.example/participants?payment={payment.id}",
+        )
 
     async def test_the_seats_are_stored_and_priced_when_the_switch_is_on(self):
         never_paid = SimpleNamespace(first_paid_at=None, seat_window_ends_at=None, kit_extra_seats=2)
@@ -1226,7 +1268,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         ) as create:
             result = await billing_routes.create_checkout(CheckoutRequest(term="year"), self.session, person)
 
-        create.assert_awaited_once_with(self.session, person, "year", seats=1)
+        create.assert_awaited_once_with(self.session, person, "year", seats=1, return_to=None)
         self.assertEqual((result.payment_id, result.confirmation_url), (row.id, "https://pay.example/1"))
 
     async def test_the_extra_seats_route_returns_the_page_and_respects_the_billing_switch(self):
@@ -1237,7 +1279,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         ) as create:
             result = await billing_routes.add_seats(SeatsRequest(seats=3), self.session, person)
 
-            create.assert_awaited_once_with(self.session, person, 3)
+            create.assert_awaited_once_with(self.session, person, 3, return_to=None)
             self.assertEqual((result.payment_id, result.confirmation_url), (row.id, "https://pay.example/1"))
 
             with patch.object(billing_routes.settings, "BILLING_ENABLED", False):
