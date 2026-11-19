@@ -94,6 +94,7 @@ const SurveysPage = lazyPage(() => import('./pages/SurveysPage'), 'SurveysPage')
 // The production design (IS_CLASSIC) shows the screens as they were before the redesign
 const SurveysPageClassic = lazyPage(() => import('./pages/SurveysPage.classic'), 'SurveysPageClassic');
 const SurveyHomePage = lazyPage(() => import('./pages/SurveyHomePage'), 'SurveyHomePage');
+const SurveyTestingResultsPage = lazyPage(() => import('./pages/SurveyTestingResultsPage'), 'SurveyTestingResultsPage');
 const SurveyStudiesPage = lazyPage(() => import('./pages/SurveyStudiesPage'), 'SurveyStudiesPage');
 const SurveyProjectsPage = lazyPage(() => import('./pages/SurveyProjectsPage'), 'SurveyProjectsPage');
 const SurveyTemplatesPage = lazyPage(() => import('./pages/SurveyTemplatesPage'), 'SurveyTemplatesPage');
@@ -812,6 +813,8 @@ const surveysRoutes: RouteObject[] = [
   ...publicLegalRoutes,
 
   ...publicSurveyRoutes,
+
+  { path: '/testing-results', element: <SurveyTestingResultsPage /> },
 
   // Buying a plan: full-page steps outside the shell (one or a team, seats, payment)
   { path: '/upgrade/:step', element: <UpgradeRoute /> },
