@@ -565,7 +565,12 @@ async def get_question_answers(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="not_an_open_question"
         )
     analysis = await billing_guard.load_analysis(
-        session, user, survey.id, ceiling=MAX_RESULTS_ROWS, exclude_flagged=exclude_flagged
+        session,
+        user,
+        survey.id,
+        ceiling=MAX_RESULTS_ROWS,
+        exclude_flagged=exclude_flagged,
+        organization_id=survey.organization_id,
     )
     rows = analysis.rows
     exclude_flagged = analysis.exclude_flagged
@@ -598,7 +603,12 @@ async def get_results(
 ) -> SurveyResults:
     survey = await _get_for_member(session, survey_id, user)
     analysis = await billing_guard.load_analysis(
-        session, user, survey.id, ceiling=MAX_RESULTS_ROWS, exclude_flagged=exclude_flagged
+        session,
+        user,
+        survey.id,
+        ceiling=MAX_RESULTS_ROWS,
+        exclude_flagged=exclude_flagged,
+        organization_id=survey.organization_id,
     )
     return survey_results.build_results(
         survey.pages, analysis.rows, exclude_flagged=analysis.exclude_flagged
@@ -615,9 +625,16 @@ async def get_crosstab(
     exclude_flagged: bool = True,
 ) -> CrosstabResult:
     survey = await _get_for_member(session, survey_id, user)
-    await billing_guard.ensure_feature(session, user, FEATURE_CROSSTABS)
+    await billing_guard.ensure_feature(
+        session, user, FEATURE_CROSSTABS, organization_id=survey.organization_id
+    )
     analysis = await billing_guard.load_analysis(
-        session, user, survey.id, ceiling=MAX_RESULTS_ROWS, exclude_flagged=exclude_flagged
+        session,
+        user,
+        survey.id,
+        ceiling=MAX_RESULTS_ROWS,
+        exclude_flagged=exclude_flagged,
+        organization_id=survey.organization_id,
     )
     try:
         return survey_results.build_crosstab(
@@ -666,13 +683,24 @@ async def get_ai_summary(
     return _to_ai_summary(stored, stale=total != stored["responses_used"])
 
 
+def _model_choice(payload: Any) -> dict[str, str]:
+    """The model a person picked for an AI action, as an argument of the meter; nothing if they did not."""
+    model = getattr(payload, "model", None)
+    return {"model": model} if model else {}
+
+
 async def generate_ai_summary(
     session: AsyncSession, user: User, survey_id: str, payload: SurveyAiSummaryRequest
 ) -> SurveyAiSummary:
     # The AI spends the team's Токены+: a reader may read a ready summary, not order a new one
     survey = await _get_for_member(session, survey_id, user, edit=True)
     analysis = await billing_guard.load_analysis(
-        session, user, survey.id, ceiling=MAX_RESULTS_ROWS, exclude_flagged=payload.exclude_flagged
+        session,
+        user,
+        survey.id,
+        ceiling=MAX_RESULTS_ROWS,
+        exclude_flagged=payload.exclude_flagged,
+        organization_id=survey.organization_id,
     )
     rows = analysis.rows
     exclude_flagged = analysis.exclude_flagged
@@ -690,7 +718,11 @@ async def generate_ai_summary(
     )
     # Charged only here: a summary served from the cache above costs nothing
     async with ai_meter.action(
-        user, ai_meter.ACTION_AI_SUMMARY, survey_id=survey.id, organization_id=survey.organization_id
+        user,
+        ai_meter.ACTION_AI_SUMMARY,
+        survey_id=survey.id,
+        organization_id=survey.organization_id,
+        **_model_choice(payload),
     ):
         bullets, evidence = await survey_ai_analysis_service.generate_summary(
             survey.name, results, comparisons
@@ -716,10 +748,19 @@ async def ai_chat(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="last_message_must_be_user"
         )
     analysis = await billing_guard.load_analysis(
-        session, user, survey.id, ceiling=MAX_RESULTS_ROWS, exclude_flagged=payload.exclude_flagged
+        session,
+        user,
+        survey.id,
+        ceiling=MAX_RESULTS_ROWS,
+        exclude_flagged=payload.exclude_flagged,
+        organization_id=survey.organization_id,
     )
     async with ai_meter.action(
-        user, ai_meter.ACTION_AI_CHAT, survey_id=survey.id, organization_id=survey.organization_id
+        user,
+        ai_meter.ACTION_AI_CHAT,
+        survey_id=survey.id,
+        organization_id=survey.organization_id,
+        **_model_choice(payload),
     ):
         return await survey_ai_analysis_service.chat(
             survey.name,
@@ -735,7 +776,9 @@ async def export_responses_csv(
     session: AsyncSession, user: User, survey_id: str
 ) -> tuple[str, str]:
     survey = await _get_for_member(session, survey_id, user)
-    await billing_guard.ensure_feature(session, user, FEATURE_CSV_EXPORT)
+    await billing_guard.ensure_feature(
+        session, user, FEATURE_CSV_EXPORT, organization_id=survey.organization_id
+    )
     rows = await survey_repository.list_responses(session, survey.id)
     return survey.name, survey_answers.build_csv(survey.pages, list(reversed(rows)))
 

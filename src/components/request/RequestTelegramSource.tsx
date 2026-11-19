@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Button, Card, Collapse, Tag, Typography } from 'antd';
-import { SendOutlined } from '@ant-design/icons';
+import { SendOutlined } from '../../shared/ui/materialIcons';
 import dayjs from 'dayjs';
 import {
   getRequestTelegramSource,

@@ -6,7 +6,7 @@ import {
   EditOutlined,
   ExclamationCircleOutlined,
   UpOutlined,
-} from '@ant-design/icons';
+} from '../materialIcons';
 
 import type { MethodologySummary } from '../../api/surveys.api';
 

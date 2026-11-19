@@ -6,7 +6,7 @@ import {
   LinkOutlined,
   UnlockOutlined,
   UserSwitchOutlined,
-} from '@ant-design/icons';
+} from '../../../shared/ui/materialIcons';
 import dayjs from 'dayjs';
 import { getStageArtifactDownloadUrl } from '../../../shared/api/requests.api';
 import type {

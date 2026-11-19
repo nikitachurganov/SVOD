@@ -5,6 +5,8 @@ export const PAYWALL_EVENT = 'svod:paywall';
 
 export type BillingErrorCode =
   | 'limit_reached'
+  | 'ai_suspended'
+  | 'model_locked'
   | 'ai_disabled'
   | 'ai_budget_exceeded'
   | 'ai_forbidden_for_reader';
@@ -27,6 +29,8 @@ export interface BillingError {
   resetsAt?: string | null;
   /** True: the credits that ran out belong to the owner of the team and the person who acts is not the owner */
   teamMember?: boolean;
+  /** The team model: the server's own sentence came with the refusal */
+  fromServer?: boolean;
 }
 
 const FEATURE_TEXT: Record<string, string> = {
@@ -78,11 +82,40 @@ export const parseBillingError = (err: unknown): BillingError | null => {
   if (!detail || typeof detail !== 'object') return null;
   const data = detail as Record<string, unknown>;
 
+  // The team model: a paid month with both balances of Токены+ at zero
+  if (status === 402 && data.code === 'ai_suspended') {
+    return {
+      status,
+      code: 'ai_suspended',
+      message:
+        typeof data.message === 'string'
+          ? data.message
+          : 'Токены+ закончились. ИИ заработает после докупки пакета или нового месяца подписки.',
+      limit: 'ai_tokens',
+      plan: typeof data.plan === 'string' ? data.plan : undefined,
+      upgradeTo: null,
+      resetsAt: typeof data.resets_at === 'string' ? data.resets_at : null,
+      fromServer: true,
+    };
+  }
+  if ((status === 403 || status === 422) && (data.code === 'model_locked' || data.code === 'model_unknown')) {
+    return {
+      status,
+      code: 'model_locked',
+      message:
+        typeof data.message === 'string'
+          ? data.message
+          : 'Эта модель сейчас недоступна команде. Выберите базовую модель.',
+    };
+  }
   if (status === 402 && data.code === 'limit_reached') {
+    // The team model explains its limits itself (the offer that lifts them is named by the server)
+    const serverMessage = typeof data.message === 'string' ? data.message : null;
     return {
       status,
       code: 'limit_reached',
-      message: describeLimit(data),
+      fromServer: serverMessage !== null,
+      message: serverMessage ?? describeLimit(data),
       limit: typeof data.limit === 'string' ? data.limit : undefined,
       feature: typeof data.feature === 'string' ? data.feature : undefined,
       used: typeof data.used === 'number' ? data.used : undefined,

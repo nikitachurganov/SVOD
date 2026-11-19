@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Input, Modal } from 'antd';
 import type { InputRef } from 'antd';
-import { CheckOutlined, CopyOutlined, ExportOutlined } from '@ant-design/icons';
+import { CheckOutlined, CopyOutlined, ExportOutlined } from '../materialIcons';
 
 import { buildPublicSurveyUrl, type SurveyStatus } from '../../api/surveys.api';
 

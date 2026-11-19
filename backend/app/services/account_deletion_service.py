@@ -69,7 +69,7 @@ async def _shared_organization_names(session: AsyncSession, user: User, owned: l
     return [
         org.name
         for org in owned
-        if not org.is_personal and await repo.count_other_members(session, org.id, user.id) > 0
+        if await repo.count_other_members(session, org.id, user.id) > 0
     ]
 
 

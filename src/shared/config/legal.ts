@@ -22,4 +22,6 @@ export const LEGAL = {
   replyDays: 3,
   /** The date of the current version of the offer */
   offerDate: '28 октября 2026 г.',
+  /** The date of the edition for the plans of teams (Plus, Pro, the pack); set to the day TEAM_BILLING_ENABLED is turned on */
+  teamOfferDate: '19 ноября 2026 г.',
 } as const;

@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { Alert, Button, Input, Spin } from 'antd';
-import { ArrowLeftOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined } from '../shared/ui/materialIcons';
 import { useNavigate, useParams } from 'react-router-dom';
 import { PublicFormErrorScreen } from '../components/public/PublicFormErrorScreen';
 import { PublicFormSuccessScreen } from '../components/public/PublicFormSuccessScreen';

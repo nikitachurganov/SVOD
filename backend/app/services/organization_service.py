@@ -3,8 +3,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants import request_execution as C
@@ -14,7 +13,13 @@ from app.core.name_utils import build_display_name
 from app.core.security import PENDING_ACTIVATION_HASH, is_pending_activation
 from app.models.request_stage import RequestStage
 from app.constants import team_roles
-from app.services import billing_service, email_service, team_seat_service, welcome_seed_service
+from app.services import (
+    billing_service,
+    email_service,
+    team_billing_service,
+    team_seat_service,
+    welcome_seed_service,
+)
 
 from app.models.external_contractor import ExternalContractor
 from app.models.organization import (
@@ -48,7 +53,7 @@ from app.schemas.user import PublicAuthorResponse
 INVITE_EXISTING_USER = "existing_user"
 INVITE_NEW_ACCOUNT = "new_account"
 
-PERSONAL_ORGANIZATION_NAME = "Личное пространство"
+DEFAULT_ORGANIZATION_NAME = "Моя команда"
 
 
 # ---------------------------------------------------------------------------
@@ -77,7 +82,6 @@ def _to_org_response(
         owner_user_id=str(org.owner_user_id),
         owner=_to_author(org.owner),
         members_count=members_count,
-        is_personal=org.is_personal,
         my_role=team_roles.normalize_role(my_role) if my_role else None,
         created_at=org.created_at.isoformat(),
         updated_at=org.updated_at.isoformat(),
@@ -164,15 +168,6 @@ async def _ensure_can_manage_members(
     return member
 
 
-def ensure_not_personal(org: Organization) -> None:
-    """A personal workspace belongs to one person: it cannot be deleted, handed over or opened to others."""
-    if org.is_personal:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Личное пространство нельзя удалить, передать или открыть для других",
-        )
-
-
 async def _get_org_or_404(session: AsyncSession, org_id: uuid.UUID) -> Organization:
     org = await organization_repository.get_org_by_id(session, org_id)
     if org is None:
@@ -225,19 +220,42 @@ async def create_organization(
     return _to_org_response(org, members_count=count, my_role=team_roles.ROLE_OWNER)
 
 
-async def get_or_create_personal_organization(
+async def _first_workspace(
+    session: AsyncSession, user: User
+) -> tuple[Organization, str | None] | None:
+    """The workspace to open first in the surveys service: one the person owns, else any of theirs."""
+    orgs = await organization_repository.get_orgs_for_user(
+        session, user.id, service=request_service.SERVICE_SURVEYS
+    )
+    if not orgs:
+        return None
+    roles = await organization_repository.get_role_tags_for_user(session, user.id)
+    owned = sorted((item for item in orgs if item.owner_user_id == user.id), key=lambda item: item.created_at)
+    org = owned[0] if owned else orgs[-1]
+    return org, roles.get(org.id)
+
+
+async def get_or_create_default_organization(
     session: AsyncSession, current_user: User
 ) -> OrganizationResponse:
-    """The user's personal workspace; created on first use. Safe to call repeatedly and concurrently."""
-    org = await organization_repository.get_personal_org(session, current_user.id)
-    if org is None:
-        try:
+    """Makes sure the person has at least one team in the surveys service and returns it.
+
+    A person with no team gets «Моя команда» with a sample survey; it is a team like any other
+    (can be renamed, filled with people, handed over or deleted). Safe to call concurrently:
+    the per-user advisory lock makes the second request see the team the first one created.
+    """
+    found = await _first_workspace(session, current_user)
+    if found is None:
+        await session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key": f"default-org:{current_user.id}"}
+        )
+        found = await _first_workspace(session, current_user)
+        if found is None:
             org = await organization_repository.create_org(
                 session,
                 Organization(
-                    name=PERSONAL_ORGANIZATION_NAME,
+                    name=DEFAULT_ORGANIZATION_NAME,
                     owner_user_id=current_user.id,
-                    is_personal=True,
                     service=request_service.SERVICE_SURVEYS,
                 ),
             )
@@ -247,19 +265,13 @@ async def get_or_create_personal_organization(
                     organization_id=org.id, user_id=current_user.id, role_tag="owner"
                 ),
             )
-            # A new workspace starts with a sample survey; the IntegrityError branch below
-            # means another request created the workspace, so the seed is never doubled
             await welcome_seed_service.seed_welcome_project(session, org.id, current_user.id)
             await session.commit()
-        except IntegrityError:
-            # A parallel request created it first (one personal workspace per user)
-            await session.rollback()
-            org = await organization_repository.get_personal_org(session, current_user.id)
-            if org is None:
-                raise
+            found = (org, team_roles.ROLE_OWNER)
 
+    org, role = found
     count = await organization_repository.count_members(session, org.id)
-    return _to_org_response(org, members_count=count, my_role=team_roles.ROLE_OWNER)
+    return _to_org_response(org, members_count=count, my_role=role)
 
 
 async def get_my_organizations(
@@ -275,10 +287,14 @@ async def get_my_organizations(
     for org in orgs:
         count = await organization_repository.count_members(session, org.id)
         response = _to_org_response(org, members_count=count, my_role=roles.get(org.id))
-        if org.owner_user_id not in plan_by_owner:
-            ent = await billing_service.get_entitlements(session, org.owner_user_id)
-            plan_by_owner[org.owner_user_id] = ent.plan.code if ent.billing_enabled else None
-        response.plan_code = plan_by_owner[org.owner_user_id]
+        if settings.BILLING_ENABLED and settings.TEAM_BILLING_ENABLED:
+            # The team model: every team has a plan of its own
+            response.plan_code = (await team_billing_service.entitlements(session, org.id)).plan.code
+        else:
+            if org.owner_user_id not in plan_by_owner:
+                ent = await billing_service.get_entitlements(session, org.owner_user_id)
+                plan_by_owner[org.owner_user_id] = ent.plan.code if ent.billing_enabled else None
+            response.plan_code = plan_by_owner[org.owner_user_id]
         results.append(response)
     return results
 
@@ -319,7 +335,6 @@ async def delete_organization(
 ) -> None:
     org = await _get_org_or_404(session, org_id)
     _ensure_owner(org, current_user)
-    ensure_not_personal(org)
     await organization_repository.delete_org(session, org_id)
     await session.commit()
 
@@ -333,7 +348,6 @@ async def transfer_organization_ownership(
     """Set organization.owner_user_id and sync member role_tag (the former owner becomes an admin)."""
     org = await _get_org_or_404(session, org_id)
     _ensure_owner(org, current_user)
-    ensure_not_personal(org)
 
     try:
         new_owner_id = uuid.UUID(payload.new_owner_user_id)
@@ -616,8 +630,7 @@ async def create_invitation(
     """
     org = await _get_org_or_404(session, org_id)
     await _ensure_can_manage_members(session, org, current_user)
-    ensure_not_personal(org)
-    email = str(payload.email).strip()
+    email =str(payload.email).strip()
     role = team_roles.parse_assignable_role(payload.role_tag)
     if role is None:
         raise HTTPException(

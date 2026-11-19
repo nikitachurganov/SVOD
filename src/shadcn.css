@@ -1,0 +1,85 @@
+/*
+ * Tailwind v4 + shadcn/ui for the migrated screens (sidebar, home, studies).
+ * No preflight: the other pages are still antd and rely on its reset. Utilities are `important`
+ * so that they win over the unlayered antd / app CSS. Colours are mapped onto the existing
+ * brand tokens, so light/dark follows html[data-theme].
+ */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities) important;
+@import "tw-animate-css";
+
+@custom-variant dark (&:is([data-theme='dark'] *));
+
+@theme inline {
+  --font-sans: inherit;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-border: var(--sidebar-border);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+}
+
+:root {
+  --radius: 0.5rem;
+  --background: var(--app-surface);
+  --foreground: var(--app-text);
+  --card: var(--app-surface);
+  --card-foreground: var(--app-text);
+  --popover: var(--app-surface-elevated);
+  --popover-foreground: var(--app-text);
+  --primary: #fc8507;
+  --primary-foreground: #ffffff;
+  --secondary: var(--app-surface-accent);
+  --secondary-foreground: var(--app-text);
+  --muted: var(--app-surface-accent);
+  --muted-foreground: var(--app-text-helper);
+  --accent: var(--app-surface-accent);
+  --accent-foreground: var(--app-text);
+  --destructive: var(--app-error);
+  --border: var(--app-border-secondary);
+  --input: var(--app-border);
+  --ring: #fc8507;
+  --sidebar: var(--app-surface);
+  --sidebar-foreground: var(--app-text);
+  --sidebar-accent: var(--app-surface-accent);
+  --sidebar-border: var(--app-border-secondary);
+}
+
+/* Local reset instead of preflight: only our own markup and the shadcn portals.
+   :where() keeps the specificity at zero, so component classes always win. */
+:where(.sv-ui, .sv-ui *, [data-slot], [data-slot] *) { box-sizing: border-box; border-color: var(--border); }
+:where(.sv-ui, [data-slot]) button { background: none; border: 0 solid; padding: 0; font: inherit; color: inherit; cursor: pointer; }
+:where(.sv-ui) button:disabled { cursor: not-allowed; }
+:where(.sv-ui, [data-slot]) a { color: inherit; text-decoration: none; }
+:where(.sv-ui) :is(h1, h2, h3, p) { margin: 0; font: inherit; }
+:where(.sv-ui, [data-slot]) input { font: inherit; color: inherit; background: transparent; }
+:where(.sv-ui) :is(svg, img) { display: block; }
+:where(.sv-ui) :is(ul, ol) { list-style: none; margin: 0; padding: 0; }
+:where(.sv-ui, [data-slot]) :focus-visible { outline: 2px solid #fc8507; outline-offset: 2px; }
+:where([data-slot^='dropdown-menu'], [data-slot^='select']) :focus-visible { outline: none; }
+.sv-ui .no-scrollbar::-webkit-scrollbar { display: none; }
+.sv-ui .no-scrollbar { scrollbar-width: none; }

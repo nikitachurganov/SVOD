@@ -6,7 +6,7 @@ import {
   RobotOutlined,
   SendOutlined,
   UndoOutlined,
-} from '@ant-design/icons';
+} from '../materialIcons';
 import axios from 'axios';
 
 import {
@@ -36,6 +36,18 @@ import { getAiQuota } from '../../lib/aiQuota';
 import { billingErrorMessage } from '../../lib/billingErrors';
 import { MethodologyReportModal } from '../survey/MethodologyReportModal';
 import { MethodologyPickerModal } from '../survey/MethodologyPickerModal';
+import { answerKindLabel } from '../survey/surveyFormat';
+import { AiModelSelect } from '../survey/AiModelSelect';
+
+const ProposalFields = ({ fields }: { fields: CreateFormFieldPayload[] }) => (
+  <ol>{fields.map((field, index) => <li key={field.id ?? index}>
+    <strong>{field.label || 'Без названия'}</strong>
+    <div className="research-ai-proposal__meta">{answerKindLabel(field.type, field.config)} · {field.required ? 'Обязательный' : 'Необязательный'}</div>
+    {field.placeholder && <p>{field.placeholder}</p>}
+    {field.options?.length ? <ul>{field.options.map((option, optionIndex) => <li key={typeof option === 'string' ? optionIndex : option.id}>{typeof option === 'string' ? option : option.label}</li>)}</ul> : null}
+    {field.children?.length ? <ProposalFields fields={field.children} /> : null}
+  </li>)}</ol>
+);
 
 // ─── Response → builder state ─────────────────────────────────────────────────
 
@@ -116,6 +128,9 @@ export interface ChatEntry extends FormAiChatMessage {
   isError?: boolean;
   /** Form state before this assistant message applied its changes */
   snapshot?: { title: string; pages: FormPageInstance[]; methodology?: MethodologyState };
+  proposal?: { title: string; pages: FormPageInstance[]; methodology?: MethodologyState; basis: string };
+  appliedState?: string;
+  decision?: 'applied' | 'rejected' | 'undone';
 }
 
 export interface AiFormBuilderPanelProps {
@@ -178,10 +193,10 @@ export const AiFormBuilderPanel = ({
 }: AiFormBuilderPanelProps) => {
   const isSurvey = mode === 'survey';
   // Only the survey builder spends the plan's AI actions; the base product's form builder is not metered
-  const { subscription, refresh: refreshSubscription } = useSubscription();
+  const { subscription, team, refresh: refreshSubscription } = useSubscription();
   // Inside a paid team the survey builder spends the team's pool, so the server needs to know the team
   const { activeOrganization } = useOrganization();
-  const quotaExhausted = isSurvey && getAiQuota(subscription).exhausted;
+  const quotaExhausted = isSurvey && getAiQuota(subscription, team).exhausted;
   const [reportOpen, setReportOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const pagePayload = useMemo(() => mapPagesToPayload(pages), [pages]);
@@ -197,10 +212,12 @@ export const AiFormBuilderPanel = ({
   }, [entries, isLoading]);
 
   const lastAppliedId = [...entries].reverse().find((entry) => entry.snapshot)?.id;
+  const currentState = JSON.stringify({ title: formTitle, pages, methodology });
+  const awaitingProposal = entries.some((entry) => entry.proposal);
 
   const send = async (text: string, methodologyIds?: string[]) => {
     const content = text.trim();
-    if (!content || isLoading || quotaExhausted) return;
+    if (!content || isLoading || quotaExhausted || awaitingProposal) return;
 
     const userEntry: ChatEntry = { id: crypto.randomUUID(), role: 'user', content };
     const history = [...entries, userEntry];
@@ -210,7 +227,7 @@ export const AiFormBuilderPanel = ({
 
     try {
       const chatMessages = history
-        .filter((entry) => !entry.isError)
+        .filter((entry) => !entry.isError && entry.decision !== 'rejected')
         .map(({ role, content: c }) => ({ role, content: c }));
       const response = isSurvey
         ? await buildSurveyWithAi({
@@ -231,7 +248,16 @@ export const AiFormBuilderPanel = ({
         ? (methodology ?? { meta: null, summary: null })
         : undefined;
       let snapshot: ChatEntry['snapshot'];
-      if (response.pages) {
+      let proposal: ChatEntry['proposal'];
+      if (isSurvey && (response.pages || response.title)) {
+        const surveyResponse = response as SurveyAiBuildResponse;
+        proposal = {
+          title: response.title ?? formTitle,
+          pages: response.pages ? responseToPages(response.pages, pages) : pages,
+          methodology: response.pages ? { meta: surveyResponse.methodology_meta, summary: surveyResponse.methodology_summary } : previousMethodology,
+          basis: currentState,
+        };
+      } else if (response.pages) {
         snapshot = { title: formTitle, pages, methodology: previousMethodology };
         onApply(response.title, responseToPages(response.pages, pages));
         if (isSurvey) {
@@ -248,7 +274,7 @@ export const AiFormBuilderPanel = ({
 
       setEntries((prev) => [
         ...prev,
-        { id: crypto.randomUUID(), role: 'assistant', content: response.reply, snapshot },
+        { id: crypto.randomUUID(), role: 'assistant', content: response.reply, snapshot, proposal },
       ]);
     } catch (error) {
       setEntries((prev) => [
@@ -269,10 +295,25 @@ export const AiFormBuilderPanel = ({
 
   const handleUndo = (entry: ChatEntry) => {
     if (!entry.snapshot) return;
+    if (entry.appliedState && entry.appliedState !== currentState) return;
     onRestore(entry.snapshot.title, entry.snapshot.pages, entry.snapshot.methodology);
     setEntries((prev) =>
-      prev.map((e) => (e.id === entry.id ? { ...e, snapshot: undefined } : e)),
+      prev.map((e) => (e.id === entry.id ? { ...e, snapshot: undefined, decision: 'undone' } : e)),
     );
+  };
+
+  const decide = (entry: ChatEntry, apply: boolean) => {
+    const proposal = entry.proposal;
+    if (!proposal || (apply && proposal.basis !== currentState)) return;
+    if (apply) {
+      onApply(proposal.title, proposal.pages);
+      if (proposal.methodology) onMethodologyChange?.(proposal.methodology);
+    }
+    setEntries((previous) => previous.map((item) => item.id === entry.id ? {
+      ...item, proposal: undefined, decision: apply ? 'applied' : 'rejected',
+      snapshot: apply ? { title: formTitle, pages, methodology } : undefined,
+      appliedState: apply ? JSON.stringify({ title: proposal.title, pages: proposal.pages, methodology: proposal.methodology }) : undefined,
+    } : item));
   };
 
   return (
@@ -284,22 +325,30 @@ export const AiFormBuilderPanel = ({
         flexShrink: 0,
         display: 'flex',
         flexDirection: 'column',
-        borderLeft: typeof width === 'number' ? '1px solid var(--app-border)' : 'none',
+        borderLeft: typeof width === 'number' ? '1px solid var(--app-border-secondary)' : 'none',
         background: 'var(--app-surface)',
       }}
     >
-      {/* Header */}
+      {/* Header: no rule under it, the chat flows from the title (Gemini) */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '12px 16px',
-          borderBottom: '1px solid var(--app-border)',
+          padding: '12px 12px 4px 16px',
           flexShrink: 0,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600 }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            fontFamily: 'var(--app-font-display)',
+            fontSize: 16,
+            fontWeight: 500,
+          }}
+        >
           <RobotOutlined style={{ color: 'var(--app-primary)' }} />
           {isSurvey ? 'ИИ-конструктор опросов' : 'ИИ-конструктор'}
         </div>
@@ -365,15 +414,18 @@ export const AiFormBuilderPanel = ({
                   type="button"
                   onClick={() => send(prompt)}
                   disabled={quotaExhausted}
+                  // Gemini suggestion card: a tonal tile with generous corners
+                  className="ai-suggestion"
                   style={{
                     opacity: quotaExhausted ? 0.5 : 1,
                     textAlign: 'left',
-                    padding: '8px 12px',
-                    border: '1px solid var(--app-border)',
-                    borderRadius: 8,
-                    background: 'var(--app-bg)',
+                    padding: '12px 16px',
+                    border: 'none',
+                    borderRadius: 'var(--app-radius-md)',
+                    background: 'var(--app-surface-accent)',
                     color: 'var(--app-text)',
                     fontSize: 13,
+                    lineHeight: 1.45,
                     cursor: 'pointer',
                   }}
                 >
@@ -398,35 +450,42 @@ export const AiFormBuilderPanel = ({
                 gap: 4,
               }}
             >
+              {/* Gemini: the person's message is a grey bubble, the assistant answers in plain text */}
               <div
                 style={{
-                  padding: '8px 12px',
-                  borderRadius: 12,
+                  padding: isUser || entry.isError ? '10px 16px' : '2px 0',
+                  borderRadius: isUser ? '20px 4px 20px 20px' : 'var(--app-radius-md)',
                   fontSize: 13,
-                  lineHeight: 1.5,
+                  lineHeight: 1.55,
                   whiteSpace: 'pre-wrap',
                   wordBreak: 'break-word',
                   background: isUser
-                    ? 'var(--app-primary)'
+                    ? 'var(--app-surface-accent)'
                     : entry.isError
                       ? 'color-mix(in srgb, var(--app-error) 10%, var(--app-surface))'
-                      : 'var(--app-bg)',
-                  color: isUser
-                    ? '#fff'
-                    : entry.isError
-                      ? 'var(--app-text-error)'
-                      : 'var(--app-text)',
+                      : 'transparent',
+                  color: entry.isError && !isUser ? 'var(--app-text-error)' : 'var(--app-text)',
                 }}
               >
                 {entry.content}
               </div>
+              {entry.proposal && <div className="research-ai-proposal">
+                <strong>Предлагаемая структура опроса</strong>
+                <p>Название: {entry.proposal.title}</p>
+                <p>После применения вопросы будут заменены этим набором. Текущая версия сохранится для отмены.</p>
+                <details><summary>Текущие вопросы</summary><ProposalFields fields={mapPagesToPayload(pages).flatMap((page) => page.fields)} /></details>
+                <div className="research-ai-proposal__preview">{mapPagesToPayload(entry.proposal.pages).map((page) => <section key={page.id}><h4>{page.title}</h4><ProposalFields fields={page.fields} /></section>)}</div>
+                {entry.proposal.basis !== currentState && <p role="status">Опрос уже изменён вручную. Отклоните предложение и запросите новое.</p>}
+                <div><Button type="primary" size="small" disabled={isLoading || entry.proposal.basis !== currentState} onClick={() => decide(entry, true)}>Применить изменения</Button><Button size="small" onClick={() => decide(entry, false)}>Отклонить</Button></div>
+              </div>}
+              {entry.decision && <small role="status">{entry.decision === 'applied' ? 'Изменения применены' : entry.decision === 'rejected' ? 'Предложение отклонено' : 'Изменения отменены'}</small>}
               {entry.snapshot && entry.id === lastAppliedId && (
                 <Button
                   type="link"
                   size="small"
                   icon={<UndoOutlined />}
                   onClick={() => handleUndo(entry)}
-                  disabled={isLoading}
+                  disabled={isLoading || (!!entry.appliedState && entry.appliedState !== currentState)}
                   style={{ padding: 0, height: 'auto', fontSize: 12 }}
                 >
                   Отменить изменения
@@ -440,9 +499,7 @@ export const AiFormBuilderPanel = ({
           <div
             style={{
               alignSelf: 'flex-start',
-              padding: '8px 12px',
-              borderRadius: 12,
-              background: 'var(--app-bg)',
+              padding: '2px 0',
               color: 'var(--app-text-secondary)',
               fontSize: 13,
             }}
@@ -453,19 +510,14 @@ export const AiFormBuilderPanel = ({
       </div>
 
       {isSurvey && <AiQuotaNote className="ai-quota-note" />}
+      {isSurvey && <div style={{ padding: '0 12px' }}><AiModelSelect /></div>}
 
-      {/* Composer */}
-      <div
-        style={{
-          padding: 12,
-          borderTop: '1px solid var(--app-border)',
-          display: 'flex',
-          gap: 8,
-          alignItems: 'flex-end',
-          flexShrink: 0,
-        }}
-      >
+      {/* Composer: the Gemini input pill — the text and a round send button in one rounded field */}
+      <div style={{ padding: '8px 12px 12px', flexShrink: 0 }}>
+      {awaitingProposal && <p className="research-ai-pending" role="status">Примените или отклоните предложенные изменения перед следующим запросом.</p>}
+      <div className="ai-composer">
         <Input.TextArea
+          variant="borderless"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onPressEnter={(e) => {
@@ -478,17 +530,19 @@ export const AiFormBuilderPanel = ({
             isSurvey ? 'Например: сделай короче и добавь вопрос про общежитие' : 'Например: добавь поле с датой доставки'
           }
           autoSize={{ minRows: 1, maxRows: 6 }}
-          disabled={isLoading || quotaExhausted}
+          disabled={isLoading || quotaExhausted || awaitingProposal}
           maxLength={4000}
         />
         <Button
           type="primary"
+          shape="circle"
           icon={<SendOutlined />}
           aria-label="Отправить"
           onClick={() => send(draft)}
-          disabled={isLoading || quotaExhausted || !draft.trim()}
+          disabled={isLoading || quotaExhausted || awaitingProposal || !draft.trim()}
           loading={isLoading}
         />
+      </div>
       </div>
 
       {isSurvey && (

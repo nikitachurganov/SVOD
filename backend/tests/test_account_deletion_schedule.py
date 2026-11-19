@@ -48,8 +48,8 @@ def free():
     return paid(plan_code="start", current_period_end=NOW + 25 * DAY)
 
 
-def org_ns(name="Орг", is_personal=False):
-    return SimpleNamespace(id=uuid.uuid4(), name=name, is_personal=is_personal)
+def org_ns(name="Орг"):
+    return SimpleNamespace(id=uuid.uuid4(), name=name)
 
 
 def session_mock():

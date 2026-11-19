@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Alert, Avatar, Button, Upload } from 'antd';
-import { DeleteOutlined, LoadingOutlined, UploadOutlined } from '@ant-design/icons';
+import { DeleteOutlined, LoadingOutlined, UploadOutlined } from '../../shared/ui/materialIcons';
 import { deleteMyAvatar, uploadMyAvatar } from '../../shared/api/profiles.api';
 import { useAuth } from '../../shared/hooks/auth.hooks';
 import { useNotifications } from '../../shared/context/notifications.context';

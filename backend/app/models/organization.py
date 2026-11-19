@@ -21,10 +21,6 @@ class Organization(Base):
     # Reusable "join organization" link: people apply by it, the owner moderates requests
     join_token: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True, index=True)
     join_link_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    # Personal workspace of the owner (standalone surveys service): one per user, never shared
-    is_personal: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, server_default="false"
-    )
     # The service the team lives in: "platform" (requests) or "surveys"; never visible in the other one
     service: Mapped[str] = mapped_column(
         String(16), nullable=False, default="platform", server_default="platform", index=True

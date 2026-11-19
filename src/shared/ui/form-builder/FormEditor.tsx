@@ -6,7 +6,7 @@ import {
   EyeOutlined,
   PlusOutlined,
   RobotOutlined,
-} from '@ant-design/icons';
+} from '../materialIcons';
 import {
   DndContext,
   DragOverlay,
@@ -51,6 +51,7 @@ import { logicProblems, removePageReferences } from '../../survey-logic/surveyLo
 import { SurveyLogicContext } from './SurveyLogicContext';
 import { PageLogicBar } from './PageLogicBar';
 import { moveFieldByOffset } from '../../utils/fieldMove.utils';
+import { useResearchUnsavedChanges } from '../../hooks/useResearchUnsavedChanges';
 
 // ─── Public props ─────────────────────────────────────────────────────────────
 
@@ -69,6 +70,9 @@ export interface FormEditorProps {
   /** 'survey' switches the AI builder to methodology-aware survey generation */
   mode?: 'form' | 'survey';
   initialMethodology?: MethodologyState;
+  initialAiEntries?: ChatEntry[];
+  headerContent?: ReactNode;
+  aiHistoryStorageKey?: string;
 }
 
 // ─── FormTitleInput ───────────────────────────────────────────────────────────
@@ -95,9 +99,10 @@ const FormTitleInput = ({
         aria-invalid={error ? true : undefined}
         style={{
           padding: 0,
-          fontSize: '1.25rem',
-          fontWeight: 600,
-          lineHeight: 1.4,
+          fontFamily: 'var(--app-font-display)',
+          fontSize: '1.5rem',
+          fontWeight: 400,
+          lineHeight: 1.33,
           color: 'var(--app-text)',
           background: 'transparent',
           width: '100%',
@@ -128,11 +133,11 @@ const PanelDragChip = ({ label }: { label: string }) => {
       style={{
         display: 'inline-flex',
         alignItems: 'center',
-        padding: '6px 14px',
+        padding: '8px 16px',
         background: 'var(--app-surface)',
         border: '1px solid var(--app-primary)',
-        borderRadius: 8,
-        boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
+        borderRadius: 'var(--app-radius-pill)',
+        boxShadow: 'var(--app-elevation-2)',
         color: 'var(--app-primary)',
         fontSize: 13,
         fontWeight: 500,
@@ -213,7 +218,7 @@ const ToolPanelDropZone = ({
           minHeight: 0,
           borderRight: deleteMode
             ? '2px dashed var(--app-error)'
-            : '1px solid var(--app-border)',
+            : '1px solid var(--app-border-secondary)',
           background: deleteMode
             ? 'color-mix(in srgb, var(--app-error) 10%, var(--app-surface))'
             : 'var(--app-surface)',
@@ -494,6 +499,9 @@ export const FormEditor = ({
   onBack,
   mode = 'form',
   initialMethodology,
+  initialAiEntries = [],
+  headerContent,
+  aiHistoryStorageKey,
 }: FormEditorProps) => {
   const isSurvey = mode === 'survey';
   const entityName = isSurvey ? 'опроса' : 'формы';
@@ -501,8 +509,12 @@ export const FormEditor = ({
     initialMethodology ?? { meta: null, summary: null },
   );
   // AI chat history is kept here: the panel unmounts in preview mode and when it is closed
-  const [aiEntries, setAiEntries] = useState<ChatEntry[]>([]);
+  const [aiEntries, setAiEntries] = useState<ChatEntry[]>(initialAiEntries);
   const [aiDraft, setAiDraft] = useState('');
+  useEffect(() => {
+    if (!aiHistoryStorageKey) return;
+    try { sessionStorage.setItem(aiHistoryStorageKey, JSON.stringify(aiEntries)); } catch { /* History stays available until the editor is closed. */ }
+  }, [aiEntries, aiHistoryStorageKey]);
   const [formTitle, setFormTitle] = useState<string>(initialTitle);
   const resolvedInitialPages: FormPageInstance[] =
     initialPages && initialPages.length
@@ -519,12 +531,16 @@ export const FormEditor = ({
   const [activePageId, setActivePageId] = useState<string>(
     resolvedInitialPages[0]?.id ?? crypto.randomUUID(),
   );
-  const [toolboxWidth, setToolboxWidth] = useState<number>(360);
+  const [toolboxWidth, setToolboxWidth] = useState<number>(isSurvey ? 280 : 360);
   const resizeStateRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const [activeDrag, setActiveDrag] = useState<ActiveDragInfo>(null);
   // Droppable under the pointer while dragging a field from the panel (drop-position hint)
   const [panelDropTargetId, setPanelDropTargetId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const savingNavigation = useRef(false);
+  const initialState = useRef(JSON.stringify({ title: initialTitle, pages: resolvedInitialPages, methodology: initialMethodology ?? { meta: null, summary: null } }));
+  const hasUnsavedChanges = JSON.stringify({ title: formTitle, pages, methodology }) !== initialState.current;
+  useResearchUnsavedChanges(hasUnsavedChanges || aiDraft.trim().length > 0, savingNavigation);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [titleError, setTitleError] = useState<string | null>(null);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
@@ -540,7 +556,7 @@ export const FormEditor = ({
   const [undoNow, setUndoNow] = useState(() => Date.now());
   const isMobile = useMediaQuery(MOBILE_QUERY);
   // Narrow screens get the AI chat as a full-screen drawer that starts closed
-  const [isAiPanelOpen, setIsAiPanelOpen] = useState(() => window.matchMedia(AI_PANEL_DEFAULT_QUERY).matches);
+  const [isAiPanelOpen, setIsAiPanelOpen] = useState(() => initialAiEntries.length > 0 && window.matchMedia(AI_PANEL_DEFAULT_QUERY).matches);
   const [isToolboxOpen, setIsToolboxOpen] = useState(false);
   // Set while the bottom sheet is adding a child into a group instead of a page-level field
   const [toolboxGroupId, setToolboxGroupId] = useState<string | null>(null);
@@ -1031,6 +1047,7 @@ export const FormEditor = ({
 
     setSaveError(null);
     setIsSaving(true);
+    savingNavigation.current = true;
     try {
       await onSave(formTitle.trim(), pages, isSurvey ? methodology : undefined);
     } catch (err) {
@@ -1038,6 +1055,7 @@ export const FormEditor = ({
         err instanceof Error ? err.message : `Не удалось сохранить ${isSurvey ? 'опрос' : 'форму'}.`,
       );
     } finally {
+      savingNavigation.current = false;
       setIsSaving(false);
     }
   }, [formTitle, pages, onSave, isSurvey, methodology, entityName]);
@@ -1128,8 +1146,8 @@ export const FormEditor = ({
         <div
           style={{
             background: 'var(--app-surface)',
-            borderBottom: '1px solid var(--app-border)',
-            padding: isMobile ? '8px 12px' : '12px 24px 16px',
+            borderBottom: '1px solid var(--app-border-secondary)',
+            padding: isMobile ? '8px 12px' : '12px 24px',
             flexShrink: 0,
           }}
         >
@@ -1164,6 +1182,7 @@ export const FormEditor = ({
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+              {isSurvey && !isMobile && <span role="status" className="research-save-status">{isSaving ? 'Сохраняется…' : saveError ? 'Ошибка сохранения' : hasUnsavedChanges ? 'Есть несохранённые изменения' : initialTitle ? 'Сохранено' : 'Новый черновик'}</span>}
               {!isPreviewMode && (
                 <Button
                   icon={<RobotOutlined />}
@@ -1196,6 +1215,8 @@ export const FormEditor = ({
               <Button
                 type="primary"
                 data-tour="save-survey"
+                aria-label={saveButtonLabel}
+                aria-busy={isSaving}
                 onClick={handleSave}
                 disabled={isSaving}
               >
@@ -1203,6 +1224,7 @@ export const FormEditor = ({
               </Button>
             </div>
           </div>
+          {headerContent}
         </div>
 
         {saveError && (
@@ -1251,7 +1273,8 @@ export const FormEditor = ({
                   height: '100%',
                   display: 'flex',
                   flexDirection: 'column',
-                  background: 'var(--app-bg)',
+                  // Google Forms: white question cards on a dim work area
+                  background: 'var(--app-surface-dim)',
                   color: 'var(--app-text)',
                 }}
               >
@@ -1363,7 +1386,7 @@ export const FormEditor = ({
                     flexShrink: 0,
                     padding: '8px 12px calc(8px + env(safe-area-inset-bottom))',
                     background: 'var(--app-surface)',
-                    borderTop: '1px solid var(--app-border)',
+                    borderTop: '1px solid var(--app-border-secondary)',
                   }}
                 >
                   <Button
@@ -1384,6 +1407,7 @@ export const FormEditor = ({
               {/* Far right — AI builder chat */}
               {isAiPanelOpen && !isMobile && (
                 <AiFormBuilderPanel
+                  width={340}
                   formTitle={formTitle}
                   pages={pages}
                   entries={aiEntries}

@@ -45,10 +45,11 @@ export const FieldBlock = ({
   return (
     <div
       style={{
+        // Google Forms question card: white, radius 16, lifted only while it is dragged
         background: 'var(--app-surface)',
-        border: `1px solid ${isDraggingOverlay ? 'var(--app-primary)' : 'var(--app-border)'}`,
-        borderRadius: 4,
-        boxShadow: isDraggingOverlay ? '0 4px 8px rgba(0,0,0,0.1)' : 'none',
+        border: `1px solid ${isDraggingOverlay ? 'var(--app-primary)' : 'var(--app-border-secondary)'}`,
+        borderRadius: 'var(--app-radius-md)',
+        boxShadow: isDraggingOverlay ? 'var(--app-elevation-2)' : 'none',
         overflow: 'hidden',
       }}
     >

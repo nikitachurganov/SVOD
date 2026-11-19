@@ -2,13 +2,12 @@ import { lazy, Suspense, useCallback, useEffect, useState, type ReactNode } from
 import { Alert, Button, Dropdown, Empty, Grid, Modal, Spin, Switch, Tabs, Tag } from 'antd';
 import type { MenuProps } from 'antd';
 import {
-  ArrowLeftOutlined,
   InboxOutlined,
-  MessageOutlined,
   MoreOutlined,
   ShareAltOutlined,
   ThunderboltOutlined,
-} from '@ant-design/icons';
+  RobotOutlined,
+} from '../shared/ui/materialIcons';
 import axios from 'axios';
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 
@@ -31,6 +30,7 @@ import { useTour } from '../components/tour/useTour';
 import { useBreadcrumbEntity } from '../shared/context/breadcrumb.context';
 import { useNotifications } from '../shared/context/notifications.context';
 import { useOrganization } from '../shared/hooks/organization.hooks';
+import { IS_SURVEYS_APP } from '../shared/config/appMode';
 import { AiConsentModal } from '../shared/ui/survey/AiConsentModal';
 import { hasAiConsent, rememberAiConsent } from '../shared/ui/survey/aiConsent';
 import { MethodologyReportModal } from '../shared/ui/survey/MethodologyReportModal';
@@ -38,8 +38,10 @@ import { ShareSurveyModal } from '../shared/ui/survey/ShareSurveyModal';
 import { SurveyAiChatPanel } from '../shared/ui/survey/SurveyAiChatPanel';
 import { SurveyAnalyticsTab } from '../shared/ui/survey/SurveyAnalyticsTab';
 import { SurveyFormTab } from '../shared/ui/survey/SurveyFormTab';
-import { SurveyOverviewTab, type SurveyTabKey } from '../shared/ui/survey/SurveyOverviewTab';
+import { SurveyOverviewTab } from '../shared/ui/survey/SurveyOverviewTab';
 import { SurveyResponsesTab } from '../shared/ui/survey/SurveyResponsesTab';
+import { SurveyPublicationTab } from '../shared/ui/survey/SurveyPublicationTab';
+import { researchRoute, researchViewPath, type ResearchView } from '../shared/utils/researchNavigation';
 import { PublicFormSkeleton, SurveyViewSkeleton } from '../shared/ui/skeletons/PageSkeletons';
 import { SURVEY_STATUS_COLOR, SURVEY_STATUS_LABEL } from './surveyStatus';
 import './SurveyViewPage.glass.css';
@@ -69,20 +71,19 @@ const useSurveyGlass = (search: string): boolean => {
 // The respondent form (and its form runtime) is needed only when the author opens the preview
 const PublicSurveyPage = lazy(() => import('./PublicSurveyPage').then((m) => ({ default: m.PublicSurveyPage })));
 
-const TAB_SEGMENTS: SurveyTabKey[] = ['form', 'responses', 'analytics'];
-const TAB_ORDER: SurveyTabKey[] = ['overview', 'form', 'responses', 'analytics'];
+const TAB_ORDER: ResearchView[] = ['overview', 'form', 'publication', 'responses', 'analytics', 'insights'];
 
 /** Starter questions for «Спросить ИИ» that fit the tab the user is looking at */
-const AI_SUGGESTIONS: Record<SurveyTabKey, string[]> = {
+const AI_SUGGESTIONS: Partial<Record<ResearchView, string[]>> = {
   overview: [
     'Какие главные выводы по результатам опроса?',
     'Какие выводы можно сделать, а какие пока нельзя?',
     'Какие вопросы чаще всего пропускали?',
   ],
   form: [
-    'Помоги улучшить формулировки вопросов этой анкеты',
-    'Нет ли в анкете наводящих или двойных вопросов?',
-    'Каких вопросов не хватает, чтобы ответить на цель исследования?',
+    'Какие главные выводы по результатам опроса?',
+    'Какие вопросы чаще всего пропускали?',
+    'Чем различаются ответы разных групп респондентов?',
   ],
   responses: [
     'Какие вопросы чаще всего пропускали?',
@@ -109,21 +110,26 @@ const aiErrorMessage = (err: unknown): string => {
 };
 
 export const SurveyViewPage = () => {
+  const { id } = useParams<{ id: string }>();
+  const { activeOrganization } = useOrganization();
+  return <SurveyViewContent key={`${activeOrganization?.id}:${id}`} />;
+};
+
+const SurveyViewContent = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const { pathname, search } = useLocation();
+  const { pathname, search, hash } = useLocation();
   const glass = useSurveyGlass(search);
   const { setEntityTitle, setEntityParent } = useBreadcrumbEntity();
   const { notifySuccess, notifyError } = useNotifications();
-  const { canEdit } = useOrganization();
+  const { canEdit, activeOrganization } = useOrganization();
   const { step: tourStep, next: tourNext } = useTour();
   const [demoBusy, setDemoBusy] = useState(false);
 
   // /surveys/:id[/form|/responses[/:responseId]|/analytics] — the tab lives in the address
-  const [, , , tabSegment, responseSegment] = pathname.split('/');
-  const tabIsKnown = !tabSegment || (TAB_SEGMENTS as string[]).includes(tabSegment);
-  const activeTab: SurveyTabKey = tabIsKnown && tabSegment ? (tabSegment as SurveyTabKey) : 'overview';
-  const selectedResponseId = activeTab === 'responses' && responseSegment ? responseSegment : null;
+  const route = researchRoute(pathname);
+  const activeTab = route.view;
+  const selectedResponseId = route.responseId ?? null;
 
   const [survey, setSurvey] = useState<SurveyDetail | null>(null);
   const [results, setResults] = useState<SurveyResults | null>(null);
@@ -140,14 +146,21 @@ export const SurveyViewPage = () => {
   const { refresh: refreshSubscription } = useSubscription();
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
-  const [chatOpen, setChatOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
   // Tabs opened at least once stay mounted (hidden), keeping their filters and paging
-  const [visitedTabs, setVisitedTabs] = useState<Set<SurveyTabKey>>(() => new Set([activeTab]));
+  const [visitedTabs, setVisitedTabs] = useState<Set<ResearchView>>(() => new Set([activeTab]));
   if (!visitedTabs.has(activeTab)) setVisitedTabs(new Set(visitedTabs).add(activeTab));
   // An action that needs the researcher's OK to send the survey data to the external AI
   const [pendingAi, setPendingAi] = useState<(() => void) | null>(null);
   const isMobile = Grid.useBreakpoint().md === false;
   const controlSize = isMobile ? 'large' : 'middle';
+  useEffect(() => {
+    if (activeTab !== 'analytics' || !hash || loading) return;
+    let target: string;
+    try { target = decodeURIComponent(hash.slice(1)); } catch { return; }
+    const frame = requestAnimationFrame(() => document.getElementById(target)?.scrollIntoView({ block: 'start', behavior: 'smooth' }));
+    return () => cancelAnimationFrame(frame);
+  }, [activeTab, hash, loading, results]);
 
   const withAiConsent = (action: () => void) => {
     if (id && hasAiConsent(id)) action();
@@ -165,7 +178,7 @@ export const SurveyViewPage = () => {
     try {
       const [detail, aggregated, summary] = await Promise.all([
         getSurveyById(id),
-        getSurveyResults(id, true),
+        getSurveyResults(id, true).catch(() => null),
         // A missing summary is not an error — it just was not generated yet
         getSurveyAiSummary(id).catch(() => null),
       ]);
@@ -305,23 +318,24 @@ export const SurveyViewPage = () => {
     }
   };
 
-  if (!tabIsKnown) return <Navigate to={`/surveys/${id}`} replace />;
+  if (!route.known) return <Navigate to={`/surveys/${id}`} replace />;
 
   if (loading) return <SurveyViewSkeleton />;
 
   if (error || !survey) {
     return (
       <div style={{ padding: 24 }}>
-        <Alert type="error" showIcon message={error ?? 'Опрос не найден'} />
+        <Alert type="error" showIcon message={error ?? 'Опрос не найден'} action={<Button onClick={() => { setLoading(true); void load(); }}>Повторить</Button>} />
       </div>
     );
   }
+  if (survey.organization_id !== activeOrganization?.id) return <Alert type="warning" showIcon message="Исследование находится в другом пространстве" description="Выберите нужную команду или вернитесь к проектам текущего пространства." action={<Button onClick={() => navigate(IS_SURVEYS_APP ? '/surveys/projects' : '/surveys')}>К проектам</Button>} />;
 
   const isArchived = survey.status === 'archived';
   const base = `/surveys/${survey.id}`;
   // A reader looks at the survey and its results: no changes, no AI
   const canChange = canEdit;
-  const tabPath = (tab: SurveyTabKey) => (tab === 'overview' ? base : `${base}/${tab}`);
+  const tabPath = (tab: ResearchView) => researchViewPath(survey.id, tab);
   const totalResponses = results?.total ?? survey.responses_count;
 
   const statusAction: { key: string; label: string; status: 'draft' | 'open' | 'closed' } | null =
@@ -334,7 +348,7 @@ export const SurveyViewPage = () => {
           : null;
 
   const menuItems: MenuProps['items'] = [
-    ...(statusAction && canChange ? [{ key: statusAction.key, label: statusAction.label }] : []),
+    ...(statusAction && canChange ? [{ key: 'publication', label: 'Управление публикацией' }] : []),
     { key: 'csv', label: 'Скачать ответы (CSV)', disabled: totalResponses === 0 },
     ...(isArchived || !canChange
       ? []
@@ -344,7 +358,7 @@ export const SurveyViewPage = () => {
   const onMenuClick: MenuProps['onClick'] = ({ key }) => {
     if (key === 'archive') setArchiveOpen(true);
     else if (key === 'csv') void downloadCsv();
-    else if (statusAction && key === statusAction.key) void changeStatus(statusAction.status);
+    else if (key === 'publication') navigate(tabPath('publication'));
   };
 
   const qualityFilter = (
@@ -361,12 +375,19 @@ export const SurveyViewPage = () => {
 
   const tabItems = [
     { key: 'overview', label: 'Обзор' },
-    { key: 'form', label: 'Вопросы' },
+    { key: 'analytics', label: <span data-tour="tab-analytics">Вопросы</span> },
     { key: 'responses', label: <span data-tour="tab-responses">{`Ответы (${totalResponses})`}</span> },
-    { key: 'analytics', label: <span data-tour="tab-analytics">Аналитика</span> },
+    { key: 'insights', label: 'ИИ-инсайты' },
   ];
 
-  const panels: Record<SurveyTabKey, ReactNode> = {
+  const resultError = <Alert type="error" showIcon message="Не удалось загрузить результаты" action={<Button onClick={() => void load()}>Повторить</Button>} />;
+  const openQuestion = (questionId: string) => {
+    navigate(`${tabPath('analytics')}#question-${encodeURIComponent(questionId)}`);
+  };
+  const analyticsPanel = (view: 'questions' | 'insights') => !results ? resultError : results.total === 0 ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Результаты появятся после первых ответов" /> : (
+    <Spin spinning={resultsLoading}><SurveyAnalyticsTab view={view} readOnly={!canChange} onOpenQuestion={openQuestion} qualityControl={qualityFilter} surveyId={survey.id} results={results} excludeFlagged={excludeFlagged} aiSummary={aiSummary} aiLoading={aiLoading} aiError={aiError} onGenerateAiSummary={(force) => withAiConsent(() => void generateAiSummary(force))} onOpenResponse={(responseId) => navigate(`${tabPath('responses')}/${responseId}`)} /></Spin>
+  );
+  const panels: Record<ResearchView, ReactNode> = {
     overview: results ? (
       <SurveyOverviewTab
         survey={survey}
@@ -374,7 +395,8 @@ export const SurveyViewPage = () => {
         onShare={() => setShareOpen(true)}
         onOpenTab={(tab) => navigate(tabPath(tab))}
       />
-    ) : null,
+    ) : resultError,
+    publication: <SurveyPublicationTab key={survey.id} survey={survey} canEdit={canChange} busy={busy} onPreview={() => setPreviewOpen(true)} onChangeStatus={(status) => void changeStatus(status)} />,
     form: (
       <SurveyFormTab
         survey={survey}
@@ -389,32 +411,38 @@ export const SurveyViewPage = () => {
         surveyId={survey.id}
         totalCount={totalResponses}
         selectedId={selectedResponseId}
-        onOpen={(responseId) => navigate(`${base}/responses/${responseId}`)}
-        onCloseDetail={() => navigate(`${base}/responses`)}
+        onOpen={(responseId) => navigate(`${tabPath('responses')}/${responseId}`)}
+        onCloseDetail={() => navigate(tabPath('responses'))}
         onDownloadCsv={() => void downloadCsv()}
       />
     ),
-    analytics: !results ? null : results.total === 0 ? (
-      <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Аналитика появится после первых ответов" />
-    ) : (
-      <Spin spinning={resultsLoading}>
-        <SurveyAnalyticsTab
-          qualityControl={qualityFilter}
-          surveyId={survey.id}
-          results={results}
-          excludeFlagged={excludeFlagged}
-          aiSummary={aiSummary}
-          aiLoading={aiLoading}
-          aiError={aiError}
-          onGenerateAiSummary={(force) => withAiConsent(() => void generateAiSummary(force))}
-          onOpenResponse={(responseId) => navigate(`${base}/responses/${responseId}`)}
-        />
-      </Spin>
-    ),
+    analytics: analyticsPanel('questions'),
+    insights: analyticsPanel('insights'),
   };
 
+  const backToProject = (
+      <Button type="text" className="survey-page__back-link" onClick={() => navigate(`/surveys/projects/${survey.project_id}`)}>
+        Вернуться к проекту
+      </Button>
+  );
+  const surveyStatus = (
+      <Tag color={SURVEY_STATUS_COLOR[survey.status]} className={`survey-page__status survey-page__status--${survey.status}`}>
+        {SURVEY_STATUS_LABEL[survey.status]}
+      </Tag>
+  );
+  const surveyActions = (
+    <div className="survey-page__actions">
+      {tourStep === 'demo' && <Button type="primary" size={controlSize} icon={<ThunderboltOutlined />} data-tour="demo-responses" loading={demoBusy} onClick={() => void generateDemo()}>Сгенерировать тестовые ответы</Button>}
+      {canChange && <Button icon={<RobotOutlined />} aria-pressed={aiOpen} onClick={() => setAiOpen((value) => !value)}>{aiOpen ? 'Скрыть ИИ' : 'Спросить ИИ'}</Button>}
+      {!isArchived && <Button type="primary" size={controlSize} icon={<ShareAltOutlined />} data-tour="share-survey" onClick={() => setShareOpen(true)}>Поделиться</Button>}
+      <Dropdown menu={{ items: menuItems, onClick: onMenuClick }} trigger={['click']} placement="bottomRight">
+        <Button size={controlSize} icon={<MoreOutlined />} aria-label="Другие действия" loading={busy} />
+      </Dropdown>
+    </div>
+  );
+
   return (
-    <div className={glass ? 'survey-page survey-page--glass' : 'survey-page'}>
+    <div className={`survey-page survey-page--agent-layout research-workspace${glass ? ' survey-page--glass' : ''}`}>
       {glass && (
         <div className="sg-aurora" aria-hidden="true">
           <i className="sg-aurora__beam" />
@@ -425,91 +453,23 @@ export const SurveyViewPage = () => {
       )}
       <div className="survey-page__main">
       <header className="survey-page__header">
-        <div className="survey-page__container">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <Button
-            type="text"
-            icon={<ArrowLeftOutlined />}
-            aria-label="Вернуться к проекту"
-            onClick={() => navigate(`/surveys/projects/${survey.project_id}`)}
-          />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: '0 1 auto' }}>
-            <h1 style={{ margin: 0, fontSize: 22, lineHeight: 1.3, wordBreak: 'break-word', color: 'var(--app-text)' }}>{survey.name}</h1>
-            <Tag
-              color={SURVEY_STATUS_COLOR[survey.status]}
-              style={{ margin: 0, flex: 'none', lineHeight: '22px' }}
-            >
-              {SURVEY_STATUS_LABEL[survey.status]}
-            </Tag>
-          </div>
-          <div
-            style={{
-              marginLeft: isMobile ? 0 : 'auto',
-              width: isMobile ? '100%' : undefined,
-              display: 'flex',
-              gap: 8,
-              flexWrap: 'wrap',
-            }}
-          >
-            {tourStep === 'demo' && (
-              <Button
-                type="primary"
-                size={controlSize}
-                icon={<ThunderboltOutlined />}
-                data-tour="demo-responses"
-                loading={demoBusy}
-                onClick={() => void generateDemo()}
-              >
-                Сгенерировать тестовые ответы
-              </Button>
-            )}
-            {!isArchived && (
-              <Button
-                type="primary"
-                size={controlSize}
-                icon={<ShareAltOutlined />}
-                data-tour="share-survey"
-                onClick={() => setShareOpen(true)}
-              >
-                Поделиться
-              </Button>
-            )}
-            {canChange && (
-              <Button
-                size={controlSize}
-                icon={<MessageOutlined />}
-                onClick={() => withAiConsent(() => setChatOpen(true))}
-              >
-                {glass ? 'Агент' : 'Спросить ИИ'}
-              </Button>
-            )}
-            <Dropdown menu={{ items: menuItems, onClick: onMenuClick }} trigger={['click']} placement="bottomRight">
-              <Button size={controlSize} icon={<MoreOutlined />} aria-label="Другие действия" loading={busy} />
-            </Dropdown>
-          </div>
-        </div>
-        {survey.description?.trim() && (
-          <p
-            style={{
-              margin: '8px 0 0',
-              color: 'var(--app-text-secondary)',
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
-            }}
-          >
-            {survey.description.trim()}
-          </p>
-        )}
+        <div className="research-workspace__heading survey-page__container">
+          {backToProject}
+          <h1>{survey.name}</h1>
+          {surveyStatus}
+          {surveyActions}
         </div>
 
         {/* The tab bar lives in the header (like the registry pages); the panels are below */}
         <div className="survey-page__container">
+          <Tabs activeKey={route.section} onChange={(section) => navigate(section === 'builder' ? tabPath('form') : section === 'publication' ? tabPath('publication') : tabPath('overview'))} items={[{ key: 'builder', label: 'Конструктор' }, { key: 'publication', label: 'Публикация' }, { key: 'results', label: 'Результаты' }]} />
+          {route.section === 'results' &&
           <Tabs
             className="survey-page__tabs"
             activeKey={activeTab}
-            onChange={(key) => navigate(tabPath(key as SurveyTabKey))}
+            onChange={(key) => navigate(tabPath(key as ResearchView))}
             items={tabItems}
-          />
+          />}
         </div>
       </header>
 
@@ -525,8 +485,9 @@ export const SurveyViewPage = () => {
       </div>
       </div>
 
-      <SurveyAiChatPanel
-        dock={glass}
+      {canChange && <SurveyAiChatPanel
+        key={survey.id}
+        dock={!isMobile}
         agentContext={{
           name: survey.name,
           meta: [
@@ -537,12 +498,13 @@ export const SurveyViewPage = () => {
             .filter(Boolean)
             .join(' · '),
         }}
-        open={chatOpen}
-        onClose={() => setChatOpen(false)}
+        open={aiOpen}
+        onClose={() => setAiOpen(false)}
+        requestConsent={withAiConsent}
         surveyId={survey.id}
         excludeFlagged={excludeFlagged}
         suggestions={AI_SUGGESTIONS[activeTab]}
-      />
+      />}
 
       <Modal
         open={previewOpen}

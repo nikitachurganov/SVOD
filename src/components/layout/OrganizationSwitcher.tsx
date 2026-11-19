@@ -1,6 +1,6 @@
 import { Avatar, Dropdown } from 'antd';
 import type { MenuProps } from 'antd';
-import { SwapOutlined } from '@ant-design/icons';
+import { SwapOutlined } from '../../shared/ui/materialIcons';
 import { useOrganization } from '../../shared/hooks/organization.hooks';
 
 const ORG_PLAN_LABEL = 'Тариф «Бизнес»';

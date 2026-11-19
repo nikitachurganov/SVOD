@@ -54,7 +54,7 @@ export const DraggableFieldItem = ({
         padding: tapToAdd ? '10px 8px' : '6px 4px',
         minHeight: tapToAdd ? 44 : undefined,
         cursor: tapToAdd ? 'pointer' : isDragging ? 'grabbing' : 'grab',
-        borderRadius: 4,
+        borderRadius: 'var(--app-radius-sm)',
         background: isDragging
           ? 'var(--app-highlight)'
           : hovered
@@ -75,10 +75,10 @@ export const DraggableFieldItem = ({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          width: 24,
-          height: 24,
+          width: 28,
+          height: 28,
           background: iconBackground ?? 'var(--app-highlight)',
-          borderRadius: 4,
+          borderRadius: 'var(--app-radius-xs)',
           color: iconColor ?? 'var(--app-link)',
           flexShrink: 0,
         }}

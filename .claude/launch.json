@@ -12,6 +12,18 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev:surveys"],
       "port": 5174
+    },
+    {
+      "name": "backend-team",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "cd backend && set BILLING_ENABLED=true&& set TEAM_BILLING_ENABLED=true&& set BILLING_ENFORCE=true&& .venv\\Scripts\\python.exe -m uvicorn app.main:app --port 8010"],
+      "port": 8010
+    },
+    {
+      "name": "surveys-team",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "set VITE_API_URL=http://localhost:8010&& npx vite --mode surveys --port 5175 --strictPort"],
+      "port": 5175
     }
   ]
 }

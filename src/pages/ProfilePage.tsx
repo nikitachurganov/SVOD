@@ -8,7 +8,7 @@ import {
   RobotOutlined,
   SendOutlined,
   UserOutlined,
-} from '@ant-design/icons';
+} from '../shared/ui/materialIcons';
 import { changeMyPassword, deleteMyAccount } from '../shared/api/auth.api';
 import { updateMyProfile } from '../shared/api/profiles.api';
 import { useAuth } from '../shared/hooks/auth.hooks';

@@ -42,7 +42,6 @@ from app.services.organization_service import (
     _get_org_or_404,
     _to_author,
     _to_member_response,
-    ensure_not_personal,
 )
 
 STATUS_PENDING = "pending"
@@ -122,7 +121,6 @@ async def set_join_link_enabled(
 ) -> JoinLinkResponse:
     org = await _get_org_or_404(session, org_id)
     _ensure_owner(org, user)
-    ensure_not_personal(org)
     if enabled and not org.join_token:
         org.join_token = secrets.token_urlsafe(32)
     org.join_link_enabled = enabled
@@ -134,7 +132,6 @@ async def regenerate_join_link(session: AsyncSession, org_id: uuid.UUID, user: U
     """Issue a new token: the previous link stops working immediately."""
     org = await _get_org_or_404(session, org_id)
     _ensure_owner(org, user)
-    ensure_not_personal(org)
     org.join_token = secrets.token_urlsafe(32)
     org.join_link_enabled = True
     await session.commit()

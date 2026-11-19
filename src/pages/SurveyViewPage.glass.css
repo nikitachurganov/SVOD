@@ -137,6 +137,57 @@ html:has(.survey-page--glass) .app-content-header {
 
 /* ── ИИ-чат: колонка страницы, а не выезжающая шторка ────────────────────────────── */
 
+.survey-page__back-link.ant-btn {
+  padding-inline: 0;
+  color: var(--app-text-secondary);
+}
+
+.survey-page__back-link.ant-btn:hover {
+  color: var(--app-text);
+  background: transparent;
+}
+
+body:has(.survey-page--agent-layout) .ant-dropdown .ant-dropdown-menu {
+  padding: 6px !important;
+}
+
+body:has(.survey-page--agent-layout) .ant-dropdown .ant-dropdown-menu-item {
+  min-height: 40px;
+  margin: 2px 0;
+  padding: 9px 12px;
+  border-radius: 10px;
+  color: var(--app-text);
+  transition: background-color 140ms ease;
+}
+
+body:has(.survey-page--agent-layout)
+  .ant-dropdown
+  .ant-dropdown-menu-item:not(.ant-dropdown-menu-item-disabled):not(.ant-dropdown-menu-item-danger):hover {
+  background: var(--app-surface-hover);
+}
+
+body:has(.survey-page--agent-layout) .ant-dropdown .ant-dropdown-menu-item-danger {
+  color: var(--app-error, #d9363e);
+}
+
+body:has(.survey-page--agent-layout)
+  .ant-dropdown
+  .ant-dropdown-menu-item-danger:not(.ant-dropdown-menu-item-disabled):hover {
+  background: color-mix(in srgb, var(--app-error, #d9363e) 22%, var(--app-surface-elevated));
+}
+
+body:has(.survey-page--agent-layout) .ant-dropdown .ant-dropdown-menu-item-divider {
+  margin: 6px 4px;
+  background: var(--app-border);
+}
+
+body:has(.survey-page--agent-layout)
+  .ant-dropdown
+  .ant-dropdown-menu-item-disabled {
+  color: var(--app-text-tertiary, var(--app-text-secondary));
+  opacity: 0.65;
+}
+
 .survey-page--glass .survey-ai-dock {
   position: relative;
   z-index: 3;
@@ -152,6 +203,156 @@ html:has(.survey-page--glass) .app-content-header {
   box-shadow: inset 1px 0 0 var(--sg-brd);
   -webkit-backdrop-filter: blur(28px) saturate(1.5);
   backdrop-filter: blur(28px) saturate(1.5);
+}
+
+/* Keep the agent beside the survey on the regular page theme as well. */
+.survey-page--agent-layout {
+  flex-direction: row;
+}
+
+.survey-page--agent-layout .survey-page__main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.survey-page--agent-layout .survey-ai-dock {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex: 0 0 420px;
+  flex-direction: column;
+  width: 420px;
+  min-height: 0;
+  margin: 0;
+  overflow: hidden;
+  border-left: 1px solid var(--app-border);
+  background: var(--app-surface);
+  color: var(--app-text);
+}
+
+.survey-page--agent-layout .survey-ai-dock__head {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 8px 10px 18px;
+  font-weight: 600;
+  color: var(--app-text);
+  border-bottom: 1px solid var(--app-border);
+}
+
+.survey-page--agent-layout .ag-feed {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px 18px 8px;
+}
+
+.survey-page--agent-layout .ag-intro h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  color: var(--app-text);
+}
+
+.survey-page--agent-layout .ag-intro p,
+.survey-page--agent-layout .ag-hint {
+  color: var(--app-text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.survey-page--agent-layout .ag-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.survey-page--agent-layout .ag-chip {
+  padding: 10px 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  background: var(--app-surface-elevated);
+  color: var(--app-text);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+
+.survey-page--agent-layout .ag-chip:hover {
+  border-color: var(--app-primary);
+  background: var(--app-surface-hover);
+}
+
+.survey-page--agent-layout .ag-chip:focus-visible {
+  outline: 2px solid var(--app-primary);
+  outline-offset: 2px;
+}
+
+.survey-page--agent-layout .ag-composer-wrap {
+  flex-shrink: 0;
+  padding: 4px 12px 18px;
+}
+
+.survey-page--agent-layout .ai-quota-note {
+  margin-bottom: 12px;
+}
+
+.survey-page--agent-layout .ag-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--app-border);
+  border-radius: 24px;
+  background: var(--app-bg);
+}
+
+.survey-page--agent-layout .ag-input {
+  color: var(--app-text);
+}
+
+.survey-page--agent-layout .ag-send {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--app-primary);
+  color: var(--app-on-primary, #fff);
+  cursor: pointer;
+}
+
+.survey-page--agent-layout .ag-send:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.survey-page--agent-layout .ag-hint {
+  margin: 14px 0 0;
+  text-align: center;
+}
+
+@media (max-width: 1100px) {
+  .survey-page--agent-layout .survey-ai-dock {
+    flex-basis: 360px;
+    width: 360px;
+  }
+}
+
+@media (max-width: 767px) {
+  .survey-page--agent-layout .survey-ai-dock {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    width: auto;
+    border: 0;
+  }
 }
 
 .survey-page--glass .survey-ai-dock__head {
@@ -1041,4 +1242,82 @@ body:has(.survey-page--glass) .ant-select-dropdown .ant-select-item-option-disab
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }
+}
+
+/* Chat is the workspace; the survey stays available in the adjoining panel. */
+.survey-page--chat-first .survey-ai-dock {
+  order: 1;
+  position: relative;
+  inset: auto;
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.survey-page--chat-first .survey-page__main {
+  order: 2;
+  flex: 0 1 520px;
+  width: min(520px, 47%);
+  border-left: 1px solid var(--app-border);
+  background: var(--app-surface);
+}
+
+.survey-page--chat-first.survey-page--read-only .survey-page__main {
+  flex: 1;
+  width: auto;
+  border: 0;
+}
+
+.survey-page--chat-first .survey-page__container { padding-inline: 20px; }
+.survey-page--chat-first .survey-page__header h1 { font-size: 17px !important; }
+.survey-page--chat-first .survey-ai-dock__head { min-height: 60px; padding-inline: 24px; }
+.survey-page--chat-first .ag-feed { width: 100%; max-width: 800px; margin: 0 auto; padding: 32px 24px; }
+.survey-page--chat-first .ag-intro { max-width: 650px; margin: 8vh auto 0; }
+.survey-page--chat-first .ag-intro h2 { font-size: 28px; line-height: 1.25; }
+.survey-page--chat-first .ag-intro p { font-size: 15px; }
+.survey-page--chat-first .ag-chips { flex-direction: row; flex-wrap: wrap; }
+.survey-page--chat-first .ag-chip { font-size: 14px; }
+.survey-page--chat-first .ag-msg { margin-bottom: 24px; font-size: 15px; line-height: 1.6; }
+.survey-page--chat-first .ag-msg--user { display: flex; justify-content: flex-end; }
+.survey-page--chat-first .ag-bubble { max-width: 80%; padding: 12px 16px; border-radius: 20px 6px 20px 20px; background: var(--app-surface-elevated); white-space: pre-wrap; overflow-wrap: anywhere; }
+.survey-page--chat-first .ag-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.survey-page--chat-first .ag-msg--error .ag-text { color: var(--app-text-error); }
+.survey-page--chat-first .ag-quote { margin: 12px 0; padding: 8px 14px; border-left: 3px solid var(--app-primary); }
+.survey-page--chat-first .ag-quote span { display: block; color: var(--app-text-secondary); font-size: 12px; }
+.survey-page--chat-first .ag-block { overflow-x: auto; }
+.survey-page--chat-first .ag-working { color: var(--app-text-secondary); }
+.survey-page--chat-first .ag-composer-wrap { width: 100%; max-width: 800px; margin: 0 auto; padding: 4px 24px 20px; }
+.survey-page--chat-first .ag-composer { padding: 10px 12px; border-radius: 999px; background: var(--app-surface-elevated); }
+.survey-page--chat-first .ag-composer .ag-input.ant-input { border-radius: 999px; }
+.survey-page--chat-first .ag-send { width: 40px; height: 40px; flex-basis: 40px; }
+.survey-page--chat-first .ai-quota-note { width: 100%; max-width: 752px; margin: 0 auto 8px; }
+.survey-page--chat-first .survey-ai-dock__panel-button,
+.survey-page--chat-first .survey-page__mobile-back { display: none; }
+.survey-page--chat-first .survey-page__panel-controls { display: none; }
+.survey-page--chat-first .survey-page__reader-controls { padding-bottom: 12px; }
+.survey-page--chat-first .survey-page__reader-controls h1 { margin: 0 0 8px; }
+.survey-page--chat-first .survey-ai-dock__head { display: flex; flex-direction: column; align-items: stretch; gap: 0; padding-block: 8px 12px; }
+.survey-page--chat-first .survey-ai-dock__back .survey-page__back-link { height: auto; min-height: 28px; }
+.survey-page--chat-first .survey-ai-dock__title-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.survey-page--chat-first .survey-ai-dock__title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.survey-page--chat-first .survey-ai-dock__title-row > .ant-tag { flex: none; margin: 0; }
+.survey-page--chat-first .survey-ai-dock__title-row > .survey-page__actions { margin-left: auto; }
+.survey-page--chat-first .survey-page__actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.survey-page--chat-first .survey-page__actions .ant-tag { margin: 0; }
+
+@media (max-width: 900px) {
+  .survey-page--chat-first { display: flex; overflow: hidden; }
+  .survey-page--chat-first:not(.survey-page--read-only) .survey-page__main { display: none; }
+  .survey-page--chat-first.survey-page--mobile-panel .survey-page__main { display: flex; flex: 1; width: 100%; border: 0; }
+  .survey-page--chat-first.survey-page--mobile-panel .survey-ai-dock { display: none; }
+  .survey-page--chat-first .survey-ai-dock__panel-button,
+  .survey-page--chat-first .survey-page__mobile-back { display: inline-flex; }
+  .survey-page--chat-first .survey-page__panel-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-bottom: 12px; }
+  .survey-page--chat-first .survey-page__panel-controls .survey-page__actions { justify-content: flex-start; }
+  .survey-page--chat-first .ag-intro { margin-top: 5vh; }
+  .survey-page--chat-first .survey-page__body { overflow-y: auto; }
 }

@@ -30,7 +30,7 @@ from app.core.metrics import BILLING_LIMIT_HIT
 from app.knowledge.methodologies import METHODOLOGIES
 from app.models.user import User
 from app.repositories import billing_repository, survey_repository
-from app.services import billing_service, survey_methodology_service, survey_quality
+from app.services import billing_service, survey_methodology_service, survey_quality, team_billing_service
 from app.services import subscription_lifecycle_service as lifecycle
 from app.services.billing_service import Entitlements
 
@@ -54,7 +54,17 @@ def _broken(ent: Entitlements, limit: str) -> bool:
     return enforced
 
 
-async def entitlements(session: AsyncSession, user: User) -> Entitlements:
+def _team_model() -> bool:
+    """The rights belong to the team (docs/MONETIZATION_TEAM_SPEC.md), not to the person."""
+    return settings.BILLING_ENABLED and settings.TEAM_BILLING_ENABLED
+
+
+async def entitlements(
+    session: AsyncSession, user: User, organization_id: uuid.UUID | None = None
+) -> Entitlements:
+    """The rights of the person, or, in the team model, of the team the action works for."""
+    if organization_id is not None and _team_model():
+        return await team_billing_service.entitlements(session, organization_id)
     return await billing_service.get_entitlements(session, user.id)
 
 
@@ -62,6 +72,9 @@ async def entitlements(session: AsyncSession, user: User) -> Entitlements:
 
 
 async def ensure_can_open_survey(session: AsyncSession, user: User) -> None:
+    if _team_model():
+        # No limit on the surveys in the team model until the number of active forms is agreed
+        return
     ent = await entitlements(session, user)
     if not ent.billing_enabled:
         return
@@ -72,6 +85,8 @@ async def ensure_can_open_survey(session: AsyncSession, user: User) -> None:
 
 
 async def ensure_can_add_project(session: AsyncSession, user: User) -> None:
+    if _team_model():
+        return
     ent = await entitlements(session, user)
     if not ent.billing_enabled:
         return
@@ -89,6 +104,9 @@ async def ensure_questions_within_limit(
     With ``previous_pages`` (an edit) a survey that is already over the limit, because the plan
     got smaller, can still be edited; it just cannot be made longer.
     """
+    if _team_model():
+        # The length of a survey is not limited by any offer of the team model
+        return
     ent = await entitlements(session, user)
     if not ent.billing_enabled:
         return
@@ -112,8 +130,12 @@ def question_cap(ent: Entitlements) -> int | None:
 # ─── Features of the plan ─────────────────────────────────────────────────────
 
 
-async def ensure_feature(session: AsyncSession, user: User, feature: str) -> None:
-    ent = await entitlements(session, user)
+async def ensure_feature(
+    session: AsyncSession, user: User, feature: str, organization_id: uuid.UUID | None = None
+) -> None:
+    """The team's right to a tool. It does not look at any balance: the last Токен+ may be spent on
+    an analysis and the answers exported right after it."""
+    ent = await entitlements(session, user, organization_id)
     if not ent.billing_enabled or feature in ent.plan.features:
         return
     if _broken(ent, f"feature_{feature}"):
@@ -153,7 +175,8 @@ async def register_response(session: AsyncSession, survey: Any) -> bool:
     submissions are neither counted twice nor skipped. The quota blocks only when enforced; in
     shadow mode the overflow is just counted. Demo-tour responses do not come through here.
     """
-    if not settings.BILLING_ENABLED:
+    if not settings.BILLING_ENABLED or _team_model():
+        # The team model does not limit the responses
         return False
     owner_id = survey.organization.owner_user_id
     ent = await billing_service.get_entitlements(session, owner_id)
@@ -191,6 +214,7 @@ async def load_analysis(
     *,
     ceiling: int,
     exclude_flagged: bool = True,
+    organization_id: uuid.UUID | None = None,
 ) -> Analysis:
     """The responses an analysis (results, answers, AI) works on, within the plan's limits.
 
@@ -198,7 +222,7 @@ async def load_analysis(
     collected and come back with a bigger plan. The free plan marks bad responses (a failed
     attention check, too fast) but only the paid one takes them out of the analysis.
     """
-    ent = await entitlements(session, user)
+    ent = await entitlements(session, user, organization_id)
     enforced = _enforced(ent)
     cap = ent.plan.max_analyzed_responses
     limit = min(ceiling, cap) if enforced else ceiling

@@ -4,7 +4,7 @@ import { Button, Result, Spin } from 'antd';
 const SHOW_ERROR_AFTER_MS = 3000;
 
 /**
- * Standalone surveys service: shown while the personal workspace is not loaded yet.
+ * Standalone surveys service: shown while the first team is not loaded yet.
  * A spinner first (the workspace is usually there within a moment), then an explanation and a retry.
  */
 export const WorkspaceUnavailableState = ({ onRetry }: { onRetry: () => void }) => {

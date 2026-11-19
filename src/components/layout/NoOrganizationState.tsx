@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Button, Result, Spin, message } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+import { PlusOutlined } from '../../shared/ui/materialIcons';
 import { getMyJoinRequests, withdrawJoinRequest } from '../../shared/api/organizations.api';
 import { useOrganization } from '../../shared/hooks/organization.hooks';
 import type { JoinRequestResponse } from '../../types/organization';

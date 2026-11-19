@@ -7,8 +7,6 @@ export interface OrganizationResponse {
   owner_user_id: string;
   owner: AuthorPreview | null;
   members_count: number;
-  /** Personal workspace of the owner (standalone surveys service) */
-  is_personal: boolean;
   /** The caller's role in it; absent in answers that are not about the caller's own membership */
   my_role?: TeamRole | null;
   /** The plan the workspace works on (its owner's); sent in the list of workspaces, empty when tariffs are off */

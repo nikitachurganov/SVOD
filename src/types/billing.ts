@@ -1,5 +1,54 @@
 /** Shapes of the billing API (backend/app/schemas/billing.py); the server speaks snake_case */
 
+// ─── The team model (docs/MONETIZATION_TEAM_SPEC.md) ─────────────────────────
+
+export interface TeamBalanceInfo {
+  remaining: number;
+  quota: number;
+  resets_at: string | null;
+}
+
+export interface TeamOfferInfo {
+  kind: string;
+  title: string;
+  price_kopecks: number;
+  tokens: number;
+  seats: number;
+  days: number | null;
+  available: boolean;
+}
+
+export interface TeamPaymentInfo {
+  id: string;
+  /** team_pack, plus or pro */
+  plan_code: string;
+  amount_kopecks: number;
+  status: string;
+  created_at: string;
+  paid_at: string | null;
+  refunded_kopecks: number;
+}
+
+export interface TeamBillingSummary {
+  organization_id: string;
+  plan_code: string | null;
+  plan_title: string | null;
+  period_end: string | null;
+  seats: number;
+  subscription: TeamBalanceInfo | null;
+  purchased_tokens: number;
+  free: TeamBalanceInfo;
+  /** paid: Токены+ and a model choice; free: the base model; suspended: a paid month with nothing left */
+  ai_mode: 'paid' | 'free' | 'suspended';
+  models: string[];
+  features: string[];
+  permanent_tools: boolean;
+  can_buy: boolean;
+  /** True: an empty balance blocks the AI; false: the shadow mode, it is only counted */
+  enforced: boolean;
+  offers: TeamOfferInfo[];
+}
+
 export type PlanCode = 'start' | 'pack' | 'researcher' | 'unlimited' | (string & {});
 
 export interface PlanLimits {
@@ -37,6 +86,11 @@ export interface PlansResponse {
   addon_price_kopecks: number;
   addon_tokens: number;
   addon_days: number;
+  /** The team model: the price page shows the team offers (Plus, Pro, the pack) instead of the plans above */
+  team_billing_enabled?: boolean;
+  team_offers?: TeamOfferInfo[];
+  team_free_tokens?: number;
+  team_strong_models?: string[];
 }
 
 export type QuoteTerm = 'month' | 'year';

@@ -173,8 +173,8 @@ class SharedSeatsTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.owner = uuid.uuid4()
         self.anna, self.boris, self.vera = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
-        self.team_a = SimpleNamespace(id=uuid.uuid4(), owner_user_id=self.owner, is_personal=False, service="surveys")
-        self.team_b = SimpleNamespace(id=uuid.uuid4(), owner_user_id=self.owner, is_personal=False, service="surveys")
+        self.team_a = SimpleNamespace(id=uuid.uuid4(), owner_user_id=self.owner, service="surveys")
+        self.team_b = SimpleNamespace(id=uuid.uuid4(), owner_user_id=self.owner, service="surveys")
         member = lambda user_id, role: SimpleNamespace(user_id=user_id, role_tag=role)  # noqa: E731
         self.members = {
             self.team_a.id: [member(self.owner, "owner"), member(self.anna, "editor"), member(self.vera, "reader")],
@@ -227,13 +227,6 @@ class SharedSeatsTests(unittest.IsolatedAsyncioTestCase):
             await team_seat_service.ensure_room(
                 None, self.team_a, "editor", replacing_role="reader", person=self.vera
             )
-
-    async def test_the_personal_workspace_counts_alone(self):
-        personal = SimpleNamespace(id=uuid.uuid4(), owner_user_id=self.owner, is_personal=True, service="surveys")
-        self.members[personal.id] = [SimpleNamespace(user_id=self.owner, role_tag="owner")]
-        self.invitations[personal.id] = []
-        usage, _ = await team_seat_service.usage_for_org(None, personal)
-        self.assertEqual((usage.seats_used, usage.seats_elsewhere), (1, 0))
 
 
 class EntitlementSeatsTests(unittest.TestCase):

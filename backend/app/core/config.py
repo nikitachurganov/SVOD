@@ -72,6 +72,16 @@ class Settings(BaseSettings):
     # The price of the paid plan by seats (docs/TARIFFS_FINAL.md): 690 / 300 / 300 / 420 ₽, the year -12 %.
     # Off: the old per-person price and one seat. Turn on together with the new offer and price page.
     SEAT_PRICING_ENABLED: bool = False
+    # The model of docs/MONETIZATION_TEAM_SPEC.md: the plan, the balances and the rights belong to a
+    # team (free 150 000 a month, a pack of 99 ₽, two subscriptions). Needs BILLING_ENABLED. Turn it on
+    # only after the existing teams are moved over (spec, section 6, item 6).
+    TEAM_BILLING_ENABLED: bool = False
+    # Strong models a team with Токены+ may choose, comma-separated OpenRouter ids, the first is the
+    # recommended one. Chosen from the measurements of docs/TARIFFS_FINAL.md (section 10): glm-5.3 costs
+    # ~81 ₽ per million tokens and keeps every tariff above 50 % margin even at full use; gpt-5.4-mini
+    # (~140 ₽) keeps all of them in the plus. qwen3.7-plus is left out: its answers are cut off at the
+    # current token limits. Empty: only the base model. Re-measure after a week of real use.
+    AI_STRONG_MODELS: str = "z-ai/glm-5.3,openai/gpt-5.4-mini"
     # How long a paid plan keeps working after a failed renewal
     BILLING_PAST_DUE_GRACE_DAYS: int = 3
     # The free trial of the paid plan, given once to a person

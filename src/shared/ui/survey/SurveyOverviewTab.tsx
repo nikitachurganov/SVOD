@@ -1,5 +1,5 @@
 import { Button, Card, Empty, Statistic, Tooltip } from 'antd';
-import { InfoCircleOutlined } from '@ant-design/icons';
+import { InfoCircleOutlined } from '../materialIcons';
 
 import type { SurveyDetail, SurveyResults } from '../../api/surveys.api';
 import { DailyResponsesChart } from './SurveyCharts';
@@ -8,7 +8,7 @@ import { formatDateTime, formatDuration, formatNumber } from './surveyFormat';
 export type SurveyTabKey = 'overview' | 'form' | 'responses' | 'analytics';
 
 /** Compact tiles: six of them fit in a row */
-const STAT_STYLES = { title: { fontSize: 13, marginBottom: 2 }, content: { fontSize: 18 } };
+const STAT_STYLES = { title: { fontSize: 14, marginBottom: 2, whiteSpace: 'nowrap' as const }, content: { fontSize: 16 } };
 
 interface SurveyOverviewTabProps {
   survey: SurveyDetail;

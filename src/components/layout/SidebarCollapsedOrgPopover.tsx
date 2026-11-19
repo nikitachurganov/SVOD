@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Popover } from 'antd';
-import { BankOutlined } from '@ant-design/icons';
+import { BankOutlined } from '../../shared/ui/materialIcons';
 import { useOrganization } from '../../shared/hooks/organization.hooks';
 import { OrganizationSwitcher } from './OrganizationSwitcher';
 import { SidebarOrgActions } from './SidebarOrgActions';

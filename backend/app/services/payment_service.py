@@ -23,6 +23,10 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants.billing_plans import (
+    PLAN_TEAM_PACK,
+    TEAM_PACK_PRICE_KOPECKS,
+    TEAM_PERIOD_DAYS,
+    TEAM_PLANS,
     ADDON_DAYS,
     ADDON_PRICE_KOPECKS,
     ADDON_TOKENS,
@@ -35,6 +39,7 @@ from app.constants.billing_plans import (
     Plan,
     get_plan,
 )
+from app.constants import team_roles
 from app.core.config import settings
 from app.core.metrics import PAYMENTS
 from app.models.payment import (
@@ -54,12 +59,20 @@ from app.models.token_grant import GRANT_ADDON, TokenGrant
 from app.models.user import User
 from app.repositories import (
     billing_repository,
+    organization_repository,
     payment_repository,
     plan_request_repository,
     token_grant_repository,
     user_repository,
 )
-from app.services import billing_mail, billing_service, pricing, seat_window, yookassa_client
+from app.services import (
+    billing_mail,
+    billing_service,
+    pricing,
+    seat_window,
+    team_billing_service,
+    yookassa_client,
+)
 from app.services import subscription_lifecycle_service as lifecycle
 from app.services.plan_request_service import DAYS_BY_INTERVAL
 
@@ -111,6 +124,9 @@ class Settlement:
 
 
 EFFECT_ADDON = "addon_revoked"
+# A refund of a team's payment takes nothing back by itself: what happens to tokens that were already
+# spent and to the permanent rights is not decided yet (spec, section 6, item 5), a person looks
+EFFECT_TEAM_MANUAL = "team_manual_review"
 
 
 async def _take_back(
@@ -118,6 +134,8 @@ async def _take_back(
 ) -> str:
     """The payment was refunded: take away what it gave. ``whole_period`` is for a refund of a part,
     which ends the paid period instead of subtracting the days of this payment."""
+    if payment.organization_id is not None:
+        return EFFECT_TEAM_MANUAL
     if payment.term == TERM_ADDON:
         # What was spent from the pack stays spent
         revoked = await token_grant_repository.revoke_for_payment(session, payment.id, now)
@@ -210,7 +228,78 @@ async def _journal(
     await billing_repository.add_event(session, subscription_id=sub.id, kind=kind, payload=payload)
 
 
+def _journal_owner(payment: Payment) -> uuid.UUID | None:
+    """Whose subscription journal a payment is written to: a team's payment has none (the payments
+    table is its history), so it must not create a subscription of the person who paid."""
+    return None if payment.organization_id is not None else payment.user_id
+
+
 # ─── Starting a payment ───────────────────────────────────────────────────────
+
+
+async def create_team_checkout(
+    session: AsyncSession,
+    user: User,
+    organization_id: uuid.UUID,
+    kind: str,
+    now: datetime | None = None,
+    *,
+    return_to: str | None = None,
+) -> Payment:
+    """Pay for a team: a pack of 99 ₽, or a month of one of the two plans.
+
+    The buyer is the owner of the team (who else may buy is still to be decided: spec, section 6, item
+    5). What is paid is added to that team only, however many teams the person has. The plan is
+    fixed-priced: seats do not change it.
+    """
+    if not (settings.payments_enabled and settings.TEAM_BILLING_ENABLED):
+        raise _error(status.HTTP_409_CONFLICT, "payments_disabled", "Онлайн-оплата пока не подключена")
+    now = now or _now()
+    org = await organization_repository.get_org_by_id(session, organization_id)
+    member = await organization_repository.get_member(session, organization_id, user.id)
+    if org is None or member is None:
+        raise _error(status.HTTP_403_FORBIDDEN, "not_a_member", "Вы не участник этой команды")
+    if not team_roles.can_manage_billing(member.role_tag):
+        raise _error(status.HTTP_403_FORBIDDEN, "billing_forbidden", "Оплачивает владелец команды")
+
+    if kind == team_billing_service.KIND_PACK:
+        return await _open_payment(
+            session,
+            user,
+            PLAN_TEAM_PACK,
+            INTERVAL_ONE_OFF,
+            0,
+            1,
+            TEAM_PACK_PRICE_KOPECKS,
+            f"Разовый пакет: 500 000 Токенов+, команда «{org.name}»",
+            now,
+            return_to=return_to,
+            organization_id=organization_id,
+        )
+    plan = TEAM_PLANS.get(kind)
+    if plan is None:
+        raise _error(status.HTTP_422_UNPROCESSABLE_ENTITY, "invalid_plan", "Неизвестный тариф")
+    state = await team_billing_service.get_state(session, organization_id, now)
+    if state.plan is not None and state.plan.code != plan.code:
+        # Moving between the two subscriptions (the day, the price, the places) is not decided yet
+        raise _error(
+            status.HTTP_409_CONFLICT,
+            "plan_change_unavailable",
+            f"У команды действует «{state.plan.title}». Смена тарифа пока недоступна.",
+        )
+    return await _open_payment(
+        session,
+        user,
+        plan.code,
+        INTERVAL_MONTH,
+        TEAM_PERIOD_DAYS,
+        plan.seats,
+        plan.price_kopecks,
+        f"Тариф «{plan.title}»: 1 месяц, команда «{org.name}»",
+        now,
+        return_to=return_to,
+        organization_id=organization_id,
+    )
 
 
 async def create_checkout(
@@ -375,10 +464,17 @@ async def _open_payment(
     now: datetime,
     *,
     return_to: str | None = None,
+    organization_id: uuid.UUID | None = None,
 ) -> Payment:
     """Store the payment, then create it at the provider; a second click returns the same page."""
     existing = await payment_repository.find_open_checkout(
-        session, user.id, term, seats=seats, since=now - REUSE_CHECKOUT_FOR
+        session,
+        user.id,
+        term,
+        seats=seats,
+        since=now - REUSE_CHECKOUT_FOR,
+        organization_id=organization_id,
+        plan_code=plan_code if organization_id is not None else None,
     )
     if existing is not None:
         return existing
@@ -387,6 +483,7 @@ async def _open_payment(
         session,
         Payment(
             user_id=user.id,
+            organization_id=organization_id,
             payer_email=user.email,
             provider=PROVIDER_YOOKASSA,
             idempotence_key=yookassa_client.new_idempotence_key(),
@@ -408,7 +505,11 @@ async def _open_payment(
             amount_kopecks=amount,
             description=description,
             return_url=_return_url(payment.id, return_to),
-            metadata={"payment_id": str(payment.id), "user_id": str(user.id)},
+            metadata={
+                "payment_id": str(payment.id),
+                "user_id": str(user.id),
+                **({"organization_id": str(organization_id)} if organization_id else {}),
+            },
         )
     except yookassa_client.ProviderUnavailable as exc:
         logger.warning("YooKassa is unavailable, payment %s was not created: %s", payment.id, exc)
@@ -474,7 +575,7 @@ async def _apply(
             payment.failure_reason = "amount_mismatch"
             await _journal(
                 session,
-                payment.user_id,
+                _journal_owner(payment),
                 EVENT_PAYMENT_MISMATCH,
                 {"payment_id": str(payment.id), "provider_kopecks": provider.amount_kopecks},
                 now,
@@ -488,6 +589,18 @@ async def _apply(
             payment.status = PAYMENT_SUCCEEDED
             payment.paid_at = payment.paid_at or now
             payment.is_test = provider.is_test
+            if payment.organization_id is not None:
+                # The team model: the balances and rights of the team, not of the person who paid
+                try:
+                    await team_billing_service.apply_payment(session, payment, now)
+                except ValueError as exc:
+                    payment.failure_reason = "grant_failed"
+                    logger.error("Team payment %s succeeded but could not be applied: %s", payment.id, exc)
+                    PAYMENTS.labels("succeeded").inc()
+                    return Settlement(OUTCOME_UNCHANGED, payment, user)
+                payment.applied_at = now
+                PAYMENTS.labels("succeeded").inc()
+                return Settlement(OUTCOME_APPLIED, payment, user)
             if user is None:
                 # Paid, but the account is gone: nothing to extend. The money has to go back by hand.
                 payment.failure_reason = "no_account"
@@ -578,7 +691,7 @@ async def _apply(
                 effect = await _take_back(session, payment, now, whole_period=not full_now)
             await _journal(
                 session,
-                payment.user_id,
+                _journal_owner(payment),
                 EVENT_PAYMENT_REFUNDED,
                 {
                     "payment_id": str(payment.id),
@@ -596,7 +709,7 @@ async def _apply(
         payment.failure_reason = (provider.cancel_reason or "canceled")[:100]
         await _journal(
             session,
-            payment.user_id,
+            _journal_owner(payment),
             EVENT_PAYMENT_CANCELED,
             {"payment_id": str(payment.id), "reason": payment.failure_reason},
             now,

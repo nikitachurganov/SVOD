@@ -1,5 +1,5 @@
 import { Button } from 'antd';
-import { ArrowDownOutlined, ArrowUpOutlined } from '@ant-design/icons';
+import { ArrowDownOutlined, ArrowUpOutlined } from '../materialIcons';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 
 interface FieldMoveControlsProps {

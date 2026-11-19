@@ -1,5 +1,5 @@
 import { Button, Result } from 'antd';
-import { CloseCircleFilled } from '@ant-design/icons';
+import { CloseCircleFilled } from '../../shared/ui/materialIcons';
 import { useNavigate } from 'react-router-dom';
 import { getPublicLinkErrorView, type PublicLinkErrorCode } from '../../shared/api/public.api';
 

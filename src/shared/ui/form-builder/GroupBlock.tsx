@@ -52,8 +52,8 @@ export const GroupBlock = ({
     <div
       style={{
         background: 'var(--app-surface)',
-        border: '1px solid var(--app-border)',
-        borderRadius: 4,
+        border: '1px solid var(--app-border-secondary)',
+        borderRadius: 'var(--app-radius-md)',
         boxShadow: 'none',
         overflow: 'hidden',
       }}
@@ -73,8 +73,9 @@ export const GroupBlock = ({
           onChange={(next) => onChange({ label: next })}
           style={{
             padding: '0 4px',
+            fontFamily: 'var(--app-font-display)',
             fontSize: '1rem',
-            fontWeight: 600,
+            fontWeight: 500,
             color: 'var(--app-text)',
             width: '100%',
             marginBottom: 2,
@@ -104,7 +105,7 @@ export const GroupBlock = ({
           ref={setNodeRef}
           style={{
             minHeight: 80,
-            borderRadius: 4,
+            borderRadius: 'var(--app-radius-sm)',
             border: `2px dashed ${isOver ? 'var(--app-primary)' : 'var(--app-border)'}`,
             background: isOver ? 'var(--app-highlight)' : 'var(--app-surface-accent)',
             transition: 'border-color 250ms, background 250ms',

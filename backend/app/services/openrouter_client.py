@@ -45,7 +45,8 @@ async def _request_completion(
     timeout: float,
 ) -> str:
     body: dict = {
-        "model": settings.OPENROUTER_MODEL,
+        # The model chosen for the metered action (checked on the server), else the shared setting
+        "model": ai_usage.requested_model() or settings.OPENROUTER_MODEL,
         "messages": messages,
         "temperature": temperature,
         "max_tokens": max_tokens,
@@ -70,7 +71,8 @@ async def _request_completion(
     data = response.json()
     if isinstance(data, dict):
         # Counted before the answer is checked: a truncated or empty completion was still paid for
-        ai_usage.record(data.get("usage"), data.get("model") or settings.OPENROUTER_MODEL)
+        # The cost follows the model that really answered; the requested one when the reply names none
+        ai_usage.record(data.get("usage"), data.get("model") or body["model"])
     try:
         choice = data["choices"][0]
         content = choice["message"]["content"]

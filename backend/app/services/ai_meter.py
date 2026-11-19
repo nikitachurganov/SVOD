@@ -34,7 +34,7 @@ from app.core.database import async_session_factory
 from app.core.metrics import AI_ACTIONS, AI_COST_USD, AI_TOKENS, BILLING_LIMIT_HIT
 from app.models.user import User
 from app.repositories import billing_repository, token_grant_repository
-from app.services import ai_pool, ai_usage, billing_service
+from app.services import ai_pool, ai_usage, billing_service, team_billing_service
 from app.services import subscription_lifecycle_service as lifecycle
 
 logger = logging.getLogger(__name__)
@@ -65,6 +65,9 @@ class _Reservation:
     limit: int
     # The plan that sets the weight of a token of the base model
     plan: Plan
+    # The team model: the team whose balances pay for the action, and the model it was cleared to use
+    team_org_id: uuid.UUID | None = None
+    model: str | None = None
 
 
 def _flag(enforced: bool) -> str:
@@ -94,16 +97,52 @@ async def check_service_budget() -> None:
         await _check_daily_budget(session)
 
 
-async def _reserve(user: User, organization_id: uuid.UUID | None) -> _Reservation | None:
+def _refuse_model(model: str | None) -> None:
+    """Outside the team model nobody picks a model: the shared setting is the only one."""
+    if not team_billing_service.is_base_model(model):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "model_locked", "message": "Выбор модели для этой команды недоступен."},
+        )
+
+
+async def _reserve(
+    user: User, organization_id: uuid.UUID | None, model: str | None = None
+) -> _Reservation | None:
     """Check that the allowance of AI tokens is not used up, before the LLM is called.
 
     The allowance is the user's own, or the pool of the team owner when the action runs inside a
-    paid team (then the member's personal cap is checked too). Returns None when there is nothing
-    to charge later (billing is off).
+    paid team (then the member's personal cap is checked too). In the team model it is the team's
+    own balances, and the model the person asked for is checked here, on the server. Returns None
+    when there is nothing to charge later (billing is off).
     """
     async with async_session_factory() as session:
         await _check_daily_budget(session)
         payer = await ai_pool.resolve_payer(session, user, organization_id)
+        if payer.team and organization_id is not None:
+            access = await team_billing_service.check_ai_access(session, organization_id, model)
+            ent = team_billing_service.entitlements_of(access.state)
+            if payer.cap is not None:
+                member_counters = await billing_repository.get_usage(
+                    session, payer.cap.user_id, ent.ai_window_start
+                )
+                _check_limit(
+                    ent,
+                    LIMIT_AI_MEMBER,
+                    member_counters.get(payer.cap.metric, 0),
+                    payer.cap.limit,
+                    team_member=True,
+                )
+            await session.commit()
+            return _Reservation(
+                payer=payer,
+                window_start=ent.ai_window_start,
+                limit=ent.plan.ai_tokens_per_period,
+                plan=ent.plan,
+                team_org_id=organization_id,
+                model=access.model,
+            )
+        _refuse_model(model)
         ent = await billing_service.get_entitlements(session, payer.user_id)
         if not ent.billing_enabled:
             return None
@@ -197,9 +236,21 @@ async def _settle(
         if charge and reservation is not None
         else None
     )
+    # (in the team model the amount is set again below, from the balance the team really spends)
     try:
         async with async_session_factory() as session:
-            if charge and reservation is not None and charged is not None:
+            if charge and reservation is not None and reservation.team_org_id is not None:
+                # The team model: both balances of the team, one lock, never below zero
+                taken = await team_billing_service.charge(
+                    session, reservation.team_org_id, tokens, collector.model
+                )
+                charged = taken.amount
+                payer = reservation.payer
+                if payer.cap is not None:
+                    await billing_repository.add_usage(
+                        session, payer.cap.user_id, payer.cap.metric, reservation.window_start, charged
+                    )
+            elif charge and reservation is not None and charged is not None:
                 payer = reservation.payer
                 total = await billing_repository.add_usage(
                     session, payer.user_id, METRIC_AI_TOKENS, reservation.window_start, charged
@@ -253,11 +304,13 @@ async def action(
     *,
     survey_id: uuid.UUID | None = None,
     organization_id: uuid.UUID | None = None,
+    model: str | None = None,
 ) -> AsyncIterator[ai_usage.UsageCollector]:
     """Wrap everything that calls the LLM for one user-facing AI action.
 
     ``organization_id`` is the team the action works for (the team of the survey): inside a paid
-    team the tokens come from its pool, and a reader is refused.
+    team the tokens come from its pool, and a reader is refused. ``model`` is the model the person
+    picked; it is checked against the team's balances, and the base model is used when it is None.
     """
     if not user.ai_enabled:
         raise HTTPException(
@@ -267,8 +320,10 @@ async def action(
                 "message": "ИИ отключён для вашего аккаунта. Напишите в поддержку.",
             },
         )
-    reservation = await _reserve(user, organization_id)
-    collector = ai_usage.UsageCollector()
+    reservation = await _reserve(user, organization_id, model)
+    collector = ai_usage.UsageCollector(
+        model_override=reservation.model if reservation is not None else None
+    )
     token = ai_usage.activate(collector)
     outcome = OUTCOME_OK
     try:

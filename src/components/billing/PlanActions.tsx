@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Button } from 'antd';
-import { CheckCircleOutlined, CreditCardOutlined, SendOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, CreditCardOutlined, SendOutlined } from '../../shared/ui/materialIcons';
 import { billingActionError, getPlans, startTrial } from '../../shared/api/billing.api';
 import { useNotifications } from '../../shared/context/notifications.context';
 import { useSubscription } from '../../shared/hooks/subscription.hooks';

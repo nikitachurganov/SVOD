@@ -23,6 +23,8 @@ class UsageCollector:
     prompt_tokens: int = 0
     completion_tokens: int = 0
     cost_usd: Decimal = Decimal(0)
+    # The model the action asked for (a team with Токены+ may pick one); None: the base model
+    model_override: str | None = None
     model: str | None = None
 
 
@@ -37,6 +39,12 @@ def activate(collector: UsageCollector) -> contextvars.Token:
 
 def deactivate(token: contextvars.Token) -> None:
     _current.reset(token)
+
+
+def requested_model() -> str | None:
+    """The model the running metered action was cleared to use, if it chose one."""
+    collector = _current.get()
+    return collector.model_override if collector is not None else None
 
 
 def _is_number(value: Any) -> bool:

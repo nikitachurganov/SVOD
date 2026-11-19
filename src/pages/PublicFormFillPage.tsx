@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Button, Form, Input } from 'antd';
-import { ArrowLeftOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined } from '../shared/ui/materialIcons';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   mapPublicApiError,

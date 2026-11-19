@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState } from 'react';
 import { Button, Empty, Grid, Pagination, Segmented, Select, Skeleton, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { DownloadOutlined, InfoCircleOutlined, RightOutlined } from '@ant-design/icons';
+import { DownloadOutlined, InfoCircleOutlined, RightOutlined } from '../materialIcons';
 
 import {
   getSurveyResponses,

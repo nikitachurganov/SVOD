@@ -47,6 +47,10 @@ class Payment(Base):
     user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+    # The team a payment of the team model was made for (None: a payment of the per-person model)
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True
+    )
     payer_email: Mapped[str] = mapped_column(String(320), nullable=False)
     provider: Mapped[str] = mapped_column(String(32), nullable=False, default=PROVIDER_YOOKASSA)
     provider_payment_id: Mapped[str | None] = mapped_column(String(64), nullable=True)

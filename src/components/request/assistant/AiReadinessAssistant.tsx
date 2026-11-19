@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Alert, Button, Card, Tag } from 'antd';
-import { ReloadOutlined } from '@ant-design/icons';
+import { ReloadOutlined } from '../../../shared/ui/materialIcons';
 import type { AIRequestAnalysis } from '../../../types/request';
 import { toQualityAnalysisViewModel } from './qualityAnalysisViewModel';
 import { generateRequestAnalysis, getAIJob } from '../../../shared/api/requests.api';

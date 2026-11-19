@@ -1,0 +1,36 @@
+.survey-start { display:flex; flex:1; min-height:0; height:100%; color:var(--app-text); }
+.survey-start__chat { display:flex; flex:1; min-width:0; min-height:0; flex-direction:column; }
+.survey-start__feed { flex:1; min-height:0; overflow-y:auto; width:100%; max-width:800px; margin:auto; padding:32px 24px; }
+.survey-start__intro { display:flex; flex-direction:column; justify-content:center; max-width:760px; min-height:100%; margin:0 auto; }
+.survey-start__panel-head > span { color:var(--app-primary); font-size:12px; font-weight:600; letter-spacing:.08em; }
+.survey-start__intro h1 { margin:2px 0 10px; font-size:clamp(28px, 3vw, 36px); font-weight:500; line-height:1.2; letter-spacing:-.02em; }
+.survey-start__intro p,.survey-start__panel-head p { max-width:580px; color:var(--app-text-secondary); font-size:15px; line-height:1.6; }
+.survey-start__intro .survey-start__greeting { margin:0; font-size:20px; }
+.survey-start__prompts { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-top:24px; }
+.survey-start__prompts button { display:flex; flex-direction:column; align-items:flex-start; gap:6px; min-height:144px; padding:16px; border:1px solid var(--app-border); border-radius:20px; background:var(--app-surface-elevated); color:var(--app-text); text-align:left; cursor:pointer; }
+.survey-start__prompt-icon { display:grid; place-items:center; width:40px; height:40px; margin-bottom:6px; border-radius:12px; background:var(--app-surface-accent); color:var(--app-primary); font-size:22px; }
+.survey-start__prompts strong { font-size:15px; font-weight:500; line-height:1.3; }
+.survey-start__prompts small { margin-top:auto; color:var(--app-text-secondary); font-size:12px; }
+.survey-start__prompts button:hover { border-color:var(--app-primary); }
+.survey-start__prompts button:focus-visible { outline:2px solid var(--app-primary); outline-offset:2px; }
+.survey-start__prompts button:disabled { opacity:.5; cursor:not-allowed; }
+.survey-start__message { display:flex; margin-bottom:24px; line-height:1.65; white-space:pre-wrap; overflow-wrap:anywhere; }
+.survey-start__message--user { justify-content:flex-end; }
+.survey-start__message--user > div { max-width:80%; padding:12px 16px; border-radius:20px 6px 20px 20px; background:var(--app-surface-elevated); }
+.survey-start__message--error { color:var(--app-text-error); }
+.survey-start__working { color:var(--app-text-secondary); }
+.survey-start__bottom { width:100%; max-width:800px; margin:0 auto; padding:0 24px 20px; }
+.survey-start__composer { display:flex; align-items:flex-end; gap:8px; padding:10px 12px; border:1px solid var(--app-border); border-radius:24px; background:var(--app-surface-elevated); }
+.survey-start__composer .ant-btn { flex:none; width:40px; height:40px; }
+.survey-start__bottom > p { margin:10px 0 0; text-align:center; color:var(--app-text-secondary); font-size:12px; }
+.survey-start__panel { display:flex; flex:0 1 440px; min-width:320px; flex-direction:column; border-left:1px solid var(--app-border); background:var(--app-surface); }
+.survey-start__panel-head { padding:26px 24px 12px; }
+.survey-start__panel-head h2 { margin:10px 0 4px; font-size:20px; }
+.survey-start__panel-head p { margin:0; font-size:14px; }
+.survey-start__questions { flex:1; min-height:0; overflow:auto; padding:0 24px 24px; }
+.survey-start__questions h3 { margin:16px 0 8px; font-size:14px; }
+.survey-start__questions ol { padding-left:24px; }
+.survey-start__questions li { padding:10px 0; border-bottom:1px solid var(--app-border); line-height:1.5; }
+.survey-start__save { display:flex; flex-direction:column; gap:10px; padding:18px 24px 24px; border-top:1px solid var(--app-border); }
+.survey-start__save label { font-size:13px; color:var(--app-text-secondary); }
+@media (max-width:767px) { .survey-start { height:auto; min-height:100%; flex-direction:column; overflow:auto; } .survey-start__chat { flex:none; min-height:65vh; } .survey-start__feed { min-height:300px; } .survey-start__prompts { grid-template-columns:repeat(2,minmax(0,1fr)); } .survey-start__panel { flex:none; min-width:0; border-left:0; border-top:1px solid var(--app-border); } .survey-start__questions { overflow:visible; } }

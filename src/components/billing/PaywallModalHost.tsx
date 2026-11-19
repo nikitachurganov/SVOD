@@ -13,6 +13,8 @@ export const PaywallModalHost = () => {
   const [error, setError] = useState<BillingError | null>(null);
   // While the plan is sold by seats, the owner of a used-up pool can buy an extra pack of credits
   const [packsSold, setPacksSold] = useState(false);
+  // The team model: the plans belong to the team, everything is bought on the page of plans
+  const [teamMode, setTeamMode] = useState(false);
 
   useEffect(() => {
     const onPaywall = (event: Event) => setError((event as CustomEvent<BillingError>).detail);
@@ -24,7 +26,9 @@ export const PaywallModalHost = () => {
     let cancelled = false;
     getPlans()
       .then((plans) => {
-        if (!cancelled) setPacksSold(plans.seat_pricing_enabled);
+        if (cancelled) return;
+        setPacksSold(plans.seat_pricing_enabled);
+        setTeamMode(Boolean(plans.team_billing_enabled));
       })
       .catch(() => {});
     return () => {
@@ -38,6 +42,42 @@ export const PaywallModalHost = () => {
   // Somebody else pays for this pool: nothing to buy here, the owner of the team has to be asked
   const askOwner = !!error?.teamMember;
   const canBuyPack = isTokens && !askOwner && !canUpgrade && packsSold;
+
+  if (teamMode && error) {
+    const suspended = error.code === 'ai_suspended';
+    // Who may buy is told by the server only through the team summary; the window just leads to the plans
+    return (
+      <Modal
+        open
+        onCancel={close}
+        title={
+          error.limit === 'feature'
+            ? 'Эта возможность на другом тарифе'
+            : suspended
+              ? 'Токены+ закончились'
+              : error.limit === 'ai_tokens'
+                ? 'Токены закончились'
+                : error.limit === 'ai_member_tokens'
+                  ? 'Личный лимит исчерпан'
+                  : 'Лимит тарифа достигнут'
+        }
+        okText="Открыть тарифы"
+        cancelText="Закрыть"
+        onOk={() => {
+          close();
+          navigate('/plans');
+        }}
+        destroyOnHidden
+      >
+        <p style={{ margin: 0 }}>{error.message}</p>
+        <p style={{ margin: '12px 0 0', fontSize: 12, color: 'var(--app-text-secondary)' }}>
+          {suspended
+            ? 'Всё, что вы уже сделали, сохранено, остальные инструменты работают. Пакет за 99 ₽ добавляет 500 000 Токенов+ без срока. Оплачивает владелец команды.'
+            : 'Всё, что вы уже сделали, сохранено. Тарифы и пакеты подключаются для команды, оплачивает владелец.'}
+        </p>
+      </Modal>
+    );
+  }
 
   if (askOwner) {
     return (

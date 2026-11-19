@@ -7,7 +7,7 @@ import {
   DeleteOutlined,
   PlusOutlined,
   ReloadOutlined,
-} from '@ant-design/icons';
+} from '../../../shared/ui/materialIcons';
 import type { AIStagePlan, AIStagePlanItem } from '../../../types/request';
 import {
   applyRequestStagePlan,

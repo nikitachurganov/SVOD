@@ -11,6 +11,8 @@ import type {
   SeatAdditionQuote,
   SubscriptionHistoryItem,
   SubscriptionInfo,
+  TeamBillingSummary,
+  TeamPaymentInfo,
 } from '../../types/billing';
 
 let plansRequest: Promise<PlansResponse> | null = null;
@@ -113,6 +115,31 @@ export const createPlanRequest = async (payload: PlanRequestPayload): Promise<Pl
   return data;
 };
 
+/** The plan, both balances and the rights of one team; 409 team_billing_disabled while the model is off */
+export const getTeamBilling = async (organizationId: string): Promise<TeamBillingSummary> => {
+  const { data } = await api.get<TeamBillingSummary>(`/billing/teams/${organizationId}`);
+  return data;
+};
+
+/** The purchases of a team that went through (its owner sees them) */
+export const listTeamPayments = async (organizationId: string): Promise<TeamPaymentInfo[]> => {
+  const { data } = await api.get<TeamPaymentInfo[]>(`/billing/teams/${organizationId}/payments`);
+  return data;
+};
+
+/** Pays for the pack ('pack') or a month of a plan for this team only */
+export const createTeamCheckout = async (
+  organizationId: string,
+  kind: string,
+  returnTo?: ReturnPage,
+): Promise<CheckoutResponse> => {
+  const { data } = await api.post<CheckoutResponse>(`/billing/teams/${organizationId}/checkout`, {
+    kind,
+    ...(returnTo ? { return_to: returnTo } : {}),
+  });
+  return data;
+};
+
 /** The server explains its refusals in `detail.message` (Russian) or by `detail.code`; the fallback is the last resort */
 export const billingActionError = (err: unknown, fallback: string): string => {
   const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
@@ -136,6 +163,14 @@ export const billingActionError = (err: unknown, fallback: string): string => {
         return 'Тарифы пока не включены.';
       case 'payments_disabled':
         return 'Онлайн-оплата пока не подключена. Оставьте заявку, и мы выставим счёт.';
+      case 'team_billing_enabled':
+        return 'Тарифы теперь подключаются для команды: откройте страницу «Тарифы».';
+      case 'billing_forbidden':
+        return 'Оплачивает владелец команды.';
+      case 'plan_change_unavailable':
+        return 'У команды уже действует другой тариф. Смена тарифа пока недоступна.';
+      case 'ai_suspended':
+        return 'Токены+ закончились. ИИ заработает после докупки пакета или нового месяца подписки.';
       case 'seats_unavailable':
         return 'Покупка мест пока недоступна.';
       case 'invalid_seats':

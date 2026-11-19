@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent, type MouseEvent, type ReactNode } from 'react';
 import { Alert, Button, Checkbox, Divider, Form, Input, Segmented, Typography } from 'antd';
-import { MoonOutlined, SunOutlined } from '@ant-design/icons';
+import { MoonOutlined, SunOutlined } from '../shared/ui/materialIcons';
 import axios from 'axios';
 import { useHref, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../shared/hooks/auth.hooks';
@@ -38,9 +38,20 @@ interface SignUpValues extends SignInValues {
 }
 
 const HEADINGS: Record<AuthMode, string> = {
-  signIn: 'Вход',
+  signIn: 'С возвращением!',
   signUp: 'Создать аккаунт',
   forgot: 'Восстановление пароля',
+};
+
+/** Glues short words (prepositions, conjunctions) to the next word, so none is left hanging at a line's end */
+const glueShortWords = (text: string) =>
+  text.replace(/(^|\s)([А-Яа-яЁёA-Za-z]{1,3}|[—–-]) /g, '$1$2 ');
+
+/** One line under the heading of the form card */
+const SUBTITLES: Record<AuthMode, string> = {
+  signIn: 'Войдите, чтобы создавать опросы и смотреть ответы.',
+  signUp: 'Пара минут — и можно собирать первые ответы.',
+  forgot: 'Пришлём на почту ссылку для нового пароля.',
 };
 
 /** What the server puts into ?oauth_error= when the return from Yandex ID did not end in a sign-in */
@@ -471,14 +482,22 @@ export const AuthPage = () => {
         <AuthHeroBackground />
         <div className="auth-page__hero-content">
           <img src={logoUrl} alt="СВОД" className="auth-page__hero-logo" />
-          <p className="auth-page__hero-tagline">
-            {IS_SURVEYS_APP ? 'Опросы и анкетирование' : 'Все заявки в одном управляемом потоке'}
-          </p>
+          <div className="auth-page__hero-text">
+            <p className="auth-page__hero-tagline">
+              {IS_SURVEYS_APP ? 'Спросите. Поймите. Решите.' : 'Все заявки в одном управляемом потоке'}
+            </p>
+            {IS_SURVEYS_APP && (
+              <p className="auth-page__hero-lead">
+                {glueShortWords('Опросы и анкеты с ИИ-конструктором: от черновика до разбора ответов в одном сервисе.')}
+              </p>
+            )}
+          </div>
         </div>
       </div>
 
       <section className="auth-page__panel" aria-label="Форма авторизации">
         <h1 className="auth-page__heading">{HEADINGS[mode]}</h1>
+        <p className="auth-page__subtitle">{glueShortWords(SUBTITLES[mode])}</p>
 
         <div className="auth-page__panel-body">
           {/* On a phone the bottom link is a long scroll away, so the same prompt is repeated under the heading */}

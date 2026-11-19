@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CloseOutlined } from '@ant-design/icons';
+import { CloseOutlined } from '../../shared/ui/materialIcons';
 
 import folderArt from '../../assets/beta-folder.webp';
 

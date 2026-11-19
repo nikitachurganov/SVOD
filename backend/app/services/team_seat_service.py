@@ -29,7 +29,7 @@ from app.core.config import settings
 from app.core.metrics import BILLING_LIMIT_HIT
 from app.models.organization import Organization
 from app.repositories import billing_repository, organization_repository
-from app.services import billing_service, seat_window
+from app.services import billing_service, seat_window, team_billing_service
 
 LIMIT_SEATS = "seats"
 LIMIT_READERS = "readers"
@@ -121,6 +121,18 @@ async def ai_quota_for_org(
     A team whose owner is on the free plan has no pool (everybody spends their own allowance, see
     ai_pool.py), so only the seat window is reported for it.
     """
+    if settings.BILLING_ENABLED and settings.TEAM_BILLING_ENABLED:
+        # The team model: the pool is the quota of the paid month of this team, apart from its packs
+        state = await team_billing_service.get_state(session, org.id)
+        if state.plan is None:
+            return TeamAiQuota()
+        spent = await billing_repository.charged_tokens_by_user(session, org.id, state.period_start)
+        return TeamAiQuota(
+            pool_used=state.plan.quota_tokens - state.plan_tokens,
+            pool_max=state.plan.quota_tokens,
+            resets_at=state.period_end,
+            spent_by_user={str(user_id): tokens for user_id, tokens in spent.items()},
+        )
     window_left = seat_window.days_left(ent, datetime.now(timezone.utc))
     if not ent.billing_enabled or ent.plan.code == PLAN_START:
         return TeamAiQuota(seat_window_days_left=window_left)
@@ -142,14 +154,17 @@ async def usage_for_org(
 
     Seats are counted over every team of the owner in the same service; readers in this team only.
     """
-    ent = await billing_service.get_entitlements(session, org.owner_user_id)
-    teams: list[Organization] = []
-    if not org.is_personal:
+    if settings.BILLING_ENABLED and settings.TEAM_BILLING_ENABLED:
+        # The team model: the seats are the team's own, nothing is shared with the owner's other teams
+        ent = await team_billing_service.entitlements(session, org.id)
+        teams = [org]
+    else:
+        ent = await billing_service.get_entitlements(session, org.owner_user_id)
         teams = await organization_repository.list_owned_teams(
             session, org.owner_user_id, getattr(org, "service", None)
         )
-    if all(team.id != org.id for team in teams):
-        teams.append(org)
+        if all(team.id != org.id for team in teams):
+            teams.append(org)
     places: list[Place] = []
     for team in teams:
         for member in await organization_repository.list_members(session, team.id):

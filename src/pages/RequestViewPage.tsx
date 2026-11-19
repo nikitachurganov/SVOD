@@ -13,7 +13,7 @@ import {
   FloatButton,
   Input,
 } from 'antd';
-import { ArrowLeftOutlined, FileTextOutlined, DownloadOutlined, RobotOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, FileTextOutlined, DownloadOutlined, RobotOutlined } from '../shared/ui/materialIcons';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMediaQuery } from '../shared/hooks/useMediaQuery';
 import { RequestAssistantSidebar } from '../components/request/assistant/RequestAssistantSidebar';

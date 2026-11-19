@@ -1,4 +1,4 @@
-import { HolderOutlined } from '@ant-design/icons';
+import { HolderOutlined } from '../materialIcons';
 
 interface DragHandleProps {
   dragProps: React.HTMLAttributes<HTMLDivElement>;

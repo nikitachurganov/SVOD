@@ -1,17 +1,31 @@
 :root {
-  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: var(--app-font-text);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-  /* One shared "elevated menu" style for every header/nav dropdown & popover
-     (profile menu, notifications, sidebar org switcher, "Добавить" menus, …) */
-  --app-menu-radius: 8px;
-  --app-menu-shadow:
-    0 6px 8px rgba(0, 0, 0, 0.08),
-    0 3px 3px rgba(0, 0, 0, 0),
-    0 9px 14px rgba(0, 0, 0, 0.05);
+  /* The shared "elevated menu" style for every header/nav dropdown & popover
+     (--app-menu-radius / --app-menu-shadow) lives in brand-tokens.css, per theme. */
+}
+
+/* Headings, buttons and navigation speak in Google Sans; body copy stays in Google Sans Text */
+h1,
+h2,
+h3,
+h4,
+.ant-modal-title,
+.ant-drawer-title,
+.ant-btn,
+.ant-segmented,
+.ant-tabs-tab,
+.ant-menu {
+  font-family: var(--app-font-display);
+}
+
+/* M3 dialog headline: 22px, regular weight */
+.ant-modal-title {
+  font-weight: 400;
 }
 
 *,
@@ -69,13 +83,56 @@ html[data-theme] body {
   overflow: hidden;
 }
 
+/* The content is one rounded panel on the canvas (Google Drive / Gemini). Inside it, everything
+   that paints the "page" colour gets the panel's colour instead, so pages need no changes. */
 .app-shell-content {
+  --app-bg: var(--app-surface);
   flex: 1;
   min-height: 0;
+  margin: 0 16px 16px 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  background: var(--app-bg);
+  border-radius: var(--app-radius-md);
+  background: var(--app-surface);
+}
+
+@media (max-width: 1055px) {
+  .app-shell-content {
+    margin: 0;
+    border-radius: var(--app-radius-md) var(--app-radius-md) 0 0;
+  }
+}
+
+/* The "confirm your e-mail" strip: a rounded tonal card on the canvas above the content panel */
+.app-email-banner.ant-alert {
+  margin: 0 16px 8px 0;
+  padding: 8px 8px 8px 16px;
+  border: 0;
+  border-radius: var(--app-radius-md);
+}
+
+@media (max-width: 1055px) {
+  .app-email-banner.ant-alert {
+    margin: 0 8px 8px;
+  }
+}
+
+/* On a phone the button goes under the text instead of squeezing it into a narrow column */
+@media (max-width: 600px) {
+  .app-email-banner.ant-alert {
+    flex-wrap: wrap;
+    padding: 12px 16px;
+  }
+
+  .app-email-banner .ant-alert-section {
+    flex: 1 1 calc(100% - 32px);
+  }
+
+  .app-email-banner .ant-alert-actions,
+  .app-email-banner .ant-alert-action {
+    margin: 8px 0 0 28px;
+  }
 }
 
 .app-shell-loading,
@@ -101,8 +158,8 @@ html[data-theme] body {
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  background: var(--app-surface);
-  border-inline-end: 1px solid var(--app-border-secondary);
+  /* Same colour as the canvas and the header: no rule between them (Gemini) */
+  background: var(--app-bg);
   overflow: hidden;
   z-index: 1000;
 }
@@ -112,9 +169,8 @@ html[data-theme] body {
   align-items: center;
   justify-content: space-between;
   height: var(--app-header-height);
-  padding: 0 20px;
+  padding: 0 20px 0 24px;
   flex-shrink: 0;
-  border-bottom: 1px solid var(--app-border-secondary);
 }
 
 .app-sidebar__logo {
@@ -157,10 +213,11 @@ html[data-theme] body {
 
 .app-sidebar__brand-name {
   padding-left: 12px;
-  border-left: 1px solid var(--app-border-secondary);
+  border-left: 1px solid var(--app-border);
   color: var(--app-text-secondary);
-  font-size: 15px;
-  font-weight: 500;
+  font-family: var(--app-font-display);
+  font-size: 18px;
+  font-weight: 400;
   line-height: 24px;
   white-space: nowrap;
 }
@@ -168,8 +225,7 @@ html[data-theme] body {
 /* The workspace (own or a team's) sits at the very bottom, where the account block used to be */
 .app-sidebar__workspace {
   flex-shrink: 0;
-  padding: 12px;
-  border-top: 1px solid var(--app-border-secondary);
+  padding: 8px 12px 16px;
 }
 
 /* Legal pages (outside the shell): «СВОД | Опросы» is its own block with a divider across the whole
@@ -230,8 +286,8 @@ html[data-theme] body {
   max-width: 240px;
   height: 32px;
   padding: 0 10px;
-  border: 1px solid var(--app-border-secondary);
-  border-radius: 8px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-pill);
   background: transparent;
   color: var(--app-text);
   font: inherit;
@@ -320,7 +376,7 @@ html[data-theme] body {
 .workspace-switcher__plan {
   flex-shrink: 0;
   padding: 0 8px;
-  border-radius: 6px;
+  border-radius: var(--app-radius-pill);
   background: color-mix(in srgb, var(--app-info) 18%, transparent);
   color: var(--app-info);
   font-size: 12px;
@@ -337,12 +393,15 @@ html[data-theme] body {
 /* A workspace in the list: its name and, to the right, the plan it works on */
 .workspace-menu-item {
   display: flex;
+  width: 100%;
+  min-width: 0;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
 
 .workspace-menu-item__name {
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -361,8 +420,15 @@ html[data-theme] body {
   display: flex;
   width: 100%;
   max-width: none;
-  height: 44px;
-  padding: 0 10px;
+  height: 48px;
+  padding: 0 12px;
+  border-color: transparent;
+  border-radius: var(--app-radius-md);
+  background: var(--app-surface-accent);
+}
+
+.workspace-switcher.workspace-switcher--block:hover {
+  background: var(--app-bg-hover);
 }
 
 .workspace-switcher--block .workspace-switcher__name {
@@ -378,9 +444,9 @@ html[data-theme] body {
   gap: 8px;
   width: 100%;
   margin-bottom: 8px;
-  padding: 10px 12px;
-  border: 1px solid var(--app-border-secondary);
-  border-radius: 10px;
+  padding: 12px 16px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-md);
   background: transparent;
   color: var(--app-text);
   font: inherit;
@@ -401,12 +467,14 @@ html[data-theme] body {
 .sidebar-plan-card__text {
   display: flex;
   flex-direction: column;
+  gap: 4px;
   min-width: 0;
 }
 
 .sidebar-plan-card__text strong {
-  font-size: 13px;
-  font-weight: 600;
+  font-family: var(--app-font-display);
+  font-size: 14px;
+  font-weight: 500;
 }
 
 .sidebar-plan-card__text small {
@@ -500,26 +568,28 @@ html[data-theme] body {
 .app-sidebar__nav {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   padding: 8px 12px;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
 }
 
+/* Gemini nav item: a pill, the active one filled with primary-container */
 .app-sidebar__nav-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 14px;
   width: 100%;
   height: 40px;
-  padding: 0 12px 0 24px;
+  padding: 0 16px;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--app-radius-pill);
   background: transparent;
-  color: var(--app-text);
+  color: var(--app-text-secondary);
+  font-family: var(--app-font-display);
   font-size: 14px;
-  font-family: inherit;
+  font-weight: 500;
   cursor: pointer;
   text-align: left;
   transition: background 0.15s, color 0.15s;
@@ -527,6 +597,12 @@ html[data-theme] body {
 
 .app-sidebar__nav-item:hover {
   background: var(--app-bg-hover);
+  color: var(--app-text);
+}
+
+.app-sidebar__nav-item:focus-visible {
+  outline: 2px solid var(--app-focus);
+  outline-offset: -2px;
 }
 
 .app-sidebar__nav-item--active {
@@ -654,8 +730,8 @@ html[data-theme] body {
   align-items: stretch;
   height: var(--app-header-height);
   flex-shrink: 0;
-  background: var(--app-surface);
-  border-bottom: 1px solid var(--app-border-secondary);
+  /* On the canvas, like the side panel: the content panel below carries the shape */
+  background: var(--app-bg);
 }
 
 .app-content-header__main {
@@ -775,7 +851,26 @@ html[data-theme] body {
 .app-menu-dropdown .ant-dropdown-menu {
   border-radius: var(--app-menu-radius) !important;
   box-shadow: var(--app-menu-shadow) !important;
-  background: var(--app-surface) !important;
+  background: var(--app-surface-elevated) !important;
+}
+
+/* Keep the workspace list aligned with its trigger and allow long names to shrink. */
+.workspace-dropdown {
+  min-width: 0 !important;
+}
+
+.workspace-dropdown .ant-dropdown-menu-title-content {
+  min-width: 0;
+}
+
+/* Shared raised surfaces for menus, select lists and popovers. */
+.ant-dropdown .ant-dropdown-menu,
+.ant-select-dropdown,
+.ant-picker-dropdown .ant-picker-panel-container,
+.ant-popover .ant-popover-container {
+  background: var(--app-surface-elevated) !important;
+  border-radius: var(--app-menu-radius) !important;
+  box-shadow: var(--app-menu-shadow) !important;
 }
 
 .app-sidebar-collapsed-org-popover .app-sidebar-org-profile-wrap {
@@ -791,9 +886,9 @@ html[data-theme] body {
   height: 40px;
   border: none;
   background: transparent;
-  color: var(--app-text);
+  color: var(--app-text-secondary);
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: 50%;
 }
 
 .app-header__action-btn:hover,
@@ -1794,8 +1889,7 @@ html[data-theme] body {
   justify-content: flex-end;
   width: 280px;
   min-height: var(--app-header-height);
-  padding: 4px 8px;
-  border-inline-start: 1px solid var(--app-border-secondary);
+  padding: 8px 16px 8px 8px;
   box-sizing: border-box;
   flex-shrink: 0;
 }
@@ -1823,7 +1917,7 @@ html[data-theme] body {
 .app-profile-dropdown-popover .ant-popover-container {
   border-radius: var(--app-menu-radius) !important;
   box-shadow: var(--app-menu-shadow) !important;
-  background: var(--app-surface) !important;
+  background: var(--app-surface-elevated) !important;
 }
 
 .app-profile-trigger {
@@ -1833,10 +1927,10 @@ html[data-theme] body {
   flex: 1;
   min-width: 0;
   width: 100%;
-  min-height: calc(var(--app-header-height) - 8px);
-  padding: 0 8px;
+  min-height: calc(var(--app-header-height) - 16px);
+  padding: 0 12px 0 4px;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--app-radius-pill);
   background: transparent;
   color: var(--app-text);
   cursor: pointer;
@@ -1848,13 +1942,13 @@ html[data-theme] body {
 
 .app-profile-trigger:hover,
 .app-profile-trigger--open {
-  background: var(--app-surface-hover);
+  background: var(--app-bg-hover);
 }
 
 .app-profile-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
   background: var(--app-text-placeholder);
   color: var(--app-text-on-brand);
   display: grid;
@@ -1906,7 +2000,7 @@ html[data-theme] body {
   display: flex;
   flex-direction: column;
   width: 264px;
-  padding: 4px;
+  padding: 8px;
   box-sizing: border-box;
 }
 
@@ -1914,10 +2008,10 @@ html[data-theme] body {
   display: flex;
   align-items: center;
   width: 100%;
-  height: 32px;
-  padding: 4px 12px;
+  min-height: 40px;
+  padding: 8px 12px;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--app-radius-sm);
   background: transparent;
   font-size: 14px;
   line-height: 22px;
@@ -1944,14 +2038,49 @@ html[data-theme] body {
   cursor: default;
 }
 
-.app-profile-dropdown__item--switch:hover {
-  background: var(--app-surface-hover);
+.app-profile-dropdown__item--switch:hover:not(:disabled) {
+  background: transparent;
 }
 
 .app-profile-dropdown__label {
   font-size: 14px;
   line-height: 22px;
   color: var(--app-text);
+}
+
+.profile-theme-control {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--app-radius-pill);
+  background: var(--app-surface-hover);
+}
+
+.profile-theme-control__option {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: var(--app-text-secondary);
+  background: transparent;
+  cursor: pointer;
+}
+
+.profile-theme-control__option:not([aria-pressed='true']):hover {
+  background: color-mix(in srgb, var(--app-text) 14%, transparent);
+}
+
+.profile-theme-control__option[aria-pressed='true'] {
+  background: var(--app-menu-active-bg);
+  color: var(--app-menu-active-text);
+}
+
+.profile-theme-control__option:focus-visible {
+  outline: 2px solid var(--app-focus);
+  outline-offset: 1px;
 }
 
 .app-profile-dropdown__item--danger {
@@ -1966,7 +2095,7 @@ html[data-theme] body {
 .app-profile-dropdown__divider {
   border: none;
   border-top: 1px solid var(--app-border-secondary);
-  margin: 0;
+  margin: 4px 0;
   height: 0;
   width: 100%;
 }
@@ -1996,7 +2125,8 @@ html[data-theme] body {
     width: var(--app-sidebar-width);
     transform: translateX(-100%);
     transition: transform 0.16s ease-in-out;
-    box-shadow: 0 4px 16px var(--app-shadow, rgba(0, 0, 0, 0.3));
+    border-radius: 0 var(--app-radius-md) var(--app-radius-md) 0;
+    box-shadow: var(--app-elevation-3);
   }
 
   .app-sidebar--mobile-open {
@@ -2039,8 +2169,7 @@ html[data-theme] body {
 
 .app-header-notifications-popover-content {
   /* A lifted surface with an outline: on a dark page the shadow alone does not separate the panel from it */
-  background: color-mix(in srgb, var(--app-surface) 92%, var(--app-text) 8%);
-  border: 1px solid var(--app-border);
+  background: var(--app-surface-elevated);
   box-shadow: var(--app-menu-shadow);
   border-radius: var(--app-menu-radius);
   box-sizing: border-box;
@@ -2234,7 +2363,7 @@ html[data-theme] body {
 .registry-page__header {
   flex-shrink: 0;
   background: var(--app-surface);
-  padding: 16px 24px 0;
+  padding: 24px 24px 0;
 }
 
 .registry-page__title-row {
@@ -2245,55 +2374,71 @@ html[data-theme] body {
   margin-bottom: 16px;
 }
 
+/* M3 headline: large and light, in Google Sans */
 .registry-page__title {
   margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-  line-height: 1.4;
+  font-family: var(--app-font-display);
+  font-size: 28px;
+  font-weight: 400;
+  line-height: 36px;
   color: var(--app-text);
 }
 
 .registry-page__create-btn {
-  height: 32px;
+  height: 40px;
   font-size: 14px;
 }
 
+/* M3 primary tabs: 48px tall, the active one in primary with a 3px rounded indicator */
 .registry-page__tabs {
   display: flex;
   align-items: flex-end;
-  gap: 32px;
+  gap: 8px;
+  overflow-x: auto;
   border-bottom: 1px solid var(--app-border-secondary);
+  scrollbar-width: none;
 }
 
 .registry-page__tab {
   position: relative;
-  padding: 0 0 12px;
+  height: 48px;
+  padding: 0 16px;
   border: none;
+  border-radius: var(--app-radius-xs) var(--app-radius-xs) 0 0;
   background: none;
   font-size: 14px;
-  font-family: inherit;
-  color: var(--app-text);
+  font-family: var(--app-font-display);
+  font-weight: 500;
+  color: var(--app-text-secondary);
   cursor: pointer;
   white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
 }
 
 .registry-page__tab:hover {
-  color: var(--app-menu-active-text);
+  color: var(--app-text);
+  background: var(--app-surface-hover);
 }
 
-.registry-page__tab--active {
-  color: var(--app-menu-active-text);
+.registry-page__tab:focus-visible {
+  outline: 2px solid var(--app-focus);
+  outline-offset: -2px;
+}
+
+.registry-page__tab--active,
+.registry-page__tab--active:hover {
+  color: var(--app-primary);
 }
 
 .registry-page__tab--active::after {
   content: '';
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -1px;
-  height: 2px;
-  background: var(--app-menu-active-text);
-  border-radius: 2px 2px 0 0;
+  left: 16px;
+  right: 16px;
+  bottom: 0;
+  height: 3px;
+  background: var(--app-primary);
+  border-radius: 3px 3px 0 0;
 }
 
 .registry-page__content {
@@ -2304,14 +2449,16 @@ html[data-theme] body {
   padding: 16px 24px 24px;
 }
 
-.registry-page__card {
-  border-radius: 8px;
-  border: 1px solid var(--app-border-secondary);
-  overflow: hidden;
+/* Lists sit straight on the content panel (Google Drive): no card frame around the table */
+.registry-page__card.ant-card {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
 }
 
 .registry-page__card .ant-card-body {
-  padding: 12px;
+  padding: 0;
 }
 
 .registry-page__card .ant-table-wrapper .ant-table-pagination.ant-pagination {
@@ -2500,6 +2647,18 @@ html[data-theme] body {
   max-width: 1480px;
   margin: 0 auto;
   padding: 0 32px;
+}
+
+.survey-page__status--open.ant-tag {
+  color: #b9f6ca !important;
+  background: #14532d !important;
+  border-color: #267442 !important;
+}
+
+html[data-theme='light'] .survey-page__status--open.ant-tag {
+  color: #0a3818 !important;
+  background: #c4eed0 !important;
+  border-color: #a5dcb4 !important;
 }
 
 .survey-page__tabs.ant-tabs > .ant-tabs-nav {
@@ -4073,10 +4232,82 @@ html[data-theme='dark'] .org-settings__integration-icon--red { background: #481b
   display: none;
 }
 
-/* The active page tab shares the background of the field area below it, so they read as one */
+/* AI builder (AiFormBuilderPanel): Gemini suggestion tiles and the input pill */
+.ai-suggestion {
+  transition: background 0.15s;
+}
+
+.ai-suggestion:hover:not(:disabled) {
+  background: var(--app-bg-hover) !important;
+}
+
+.ai-suggestion:focus-visible {
+  outline: 2px solid var(--app-focus);
+  outline-offset: 2px;
+}
+
+.ai-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 6px 6px 6px 8px;
+  border-radius: var(--app-radius-xl);
+  background: var(--app-pill-bg);
+  transition: background 0.15s, box-shadow 0.15s;
+}
+
+.ai-composer:focus-within {
+  background: var(--app-pill-bg-focus);
+  box-shadow: var(--app-elevation-1);
+}
+
+/* The editor paints every input white with a frame (.app-form-editor .ant-input): not inside the pill */
+.ai-composer .ant-input,
+.app-form-editor .ai-composer .ant-input,
+.app-form-editor .ai-composer .ant-input:hover,
+.app-form-editor .ai-composer .ant-input:focus {
+  padding-block: 8px;
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.ai-composer .ant-btn {
+  flex-shrink: 0;
+}
+
+/* Page tabs: rounded folder tabs in Google Sans; the active one shares the dim work area below it,
+   so they read as one (Google Forms) */
+.form-editor__pages.ant-tabs > .ant-tabs-nav .ant-tabs-tab {
+  border-color: transparent;
+  border-radius: var(--app-radius-sm) var(--app-radius-sm) 0 0 !important;
+  background: transparent;
+  font-family: var(--app-font-display);
+  font-weight: 500;
+}
+
+.form-editor__pages.ant-tabs > .ant-tabs-nav .ant-tabs-tab:hover {
+  background: var(--app-surface-hover);
+}
+
 .form-editor__pages.ant-tabs > .ant-tabs-nav .ant-tabs-tab-active {
-  background: var(--app-bg);
-  border-bottom-color: var(--app-bg);
+  background: var(--app-surface-dim);
+  border-color: transparent;
+  border-bottom-color: var(--app-surface-dim);
+}
+
+.form-editor__pages.ant-tabs > .ant-tabs-nav .ant-tabs-nav-add {
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.form-editor__pages.ant-tabs > .ant-tabs-nav .ant-tabs-nav-add:hover {
+  background: var(--app-surface-hover);
+}
+
+.form-editor__pages.ant-tabs > .ant-tabs-nav::before {
+  border-bottom-color: transparent;
 }
 
 @media (max-width: 767px) {
@@ -4240,9 +4471,11 @@ html[data-theme='dark'] .app-sidebar__logo-image {
 }
 
 .home-section__title {
-  margin: 0 0 12px;
-  font-size: 18px;
-  font-weight: 600;
+  margin: 0 0 16px;
+  font-family: var(--app-font-display);
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 28px;
   color: var(--app-text);
 }
 
@@ -4516,7 +4749,7 @@ html[data-theme='dark'] [data-folder-color='gray'] { --folder-color: #6b7280; --
 
 /* Folders keep the mockup's 288px width; on a phone a folder takes the whole row */
 .project-grid:has(.project-env) {
-  grid-template-columns: repeat(auto-fill, minmax(260px, 288px));
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
 }
 
 @media (max-width: 575px) {
@@ -4525,13 +4758,15 @@ html[data-theme='dark'] [data-folder-color='gray'] { --folder-color: #6b7280; --
   }
 }
 
+/* Recent surveys: a Drive-style list — flat rows with hairlines, a tonal hover */
 .recent-surveys {
   display: flex;
   flex-direction: column;
-  gap: 10px;
   margin: 0;
-  padding: 0;
+  padding: 8px;
   list-style: none;
+  background: var(--app-surface-accent);
+  border-radius: 16px;
 }
 
 .recent-surveys__item {
@@ -4539,17 +4774,22 @@ html[data-theme='dark'] [data-folder-color='gray'] { --folder-color: #6b7280; --
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 16px 20px;
-  background: var(--app-surface);
-  border: 1px solid var(--app-border-secondary);
-  border-radius: 8px;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  min-height: 64px;
+  padding: 10px 16px;
+  background: transparent;
+  border-bottom: 1px solid var(--app-border-secondary);
+  border-radius: 0;
+  transition: background 0.15s;
+}
+
+.recent-surveys__item:last-child {
+  border-bottom: 0;
 }
 
 .recent-surveys__item:hover,
 .recent-surveys__item:focus-within {
-  border-color: var(--app-border, var(--app-border-secondary));
-  box-shadow: 0 2px 8px var(--app-shadow);
+  background: color-mix(in srgb, var(--app-text) 7%, transparent);
+  border-radius: var(--app-radius-sm);
 }
 
 .recent-surveys__main {
@@ -4561,6 +4801,7 @@ html[data-theme='dark'] [data-folder-color='gray'] { --folder-color: #6b7280; --
   display: block;
   min-width: 0;
   overflow: hidden;
+  font-family: var(--app-font-display);
   font-size: 16px;
   font-weight: 500;
   line-height: 1.4;
@@ -4575,7 +4816,7 @@ html[data-theme='dark'] [data-folder-color='gray'] { --folder-color: #6b7280; --
   content: '';
   position: absolute;
   inset: 0;
-  border-radius: 8px;
+  border-radius: var(--app-radius-sm);
 }
 
 .recent-surveys__name:focus-visible {
@@ -4610,11 +4851,12 @@ html[data-theme='dark'] [data-folder-color='gray'] { --folder-color: #6b7280; --
   gap: 6px;
   /* Fixed width keeps the status column aligned across cards */
   width: 200px;
-  padding: 3px 10px;
+  height: 32px;
+  padding: 0 12px;
   font-size: 13px;
   color: var(--app-text-secondary);
-  border: 1px solid var(--app-border-secondary);
-  border-radius: 6px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-xs);
 }
 
 .recent-surveys__project .anticon {
@@ -4627,29 +4869,34 @@ html[data-theme='dark'] [data-folder-color='gray'] { --folder-color: #6b7280; --
   white-space: nowrap;
 }
 
-/* Status as coloured text with a dot, like the Active/Inactive label of the reference */
+/* Status as a tonal pill (M3 assist chip): grey draft, green collecting, orange closed */
 .recent-surveys__status {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   flex: none;
   gap: 6px;
-  width: 92px;
-  font-size: 13px;
+  height: 24px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 500;
   color: var(--app-text-secondary);
+  background: var(--app-surface-accent);
+  border-radius: var(--app-radius-pill);
 }
 
 .recent-surveys__status::before {
   content: '';
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   background: currentcolor;
   border-radius: 50%;
 }
 
-.recent-surveys__status--open { color: #389e0d; }
-.recent-surveys__status--closed { color: #d46b08; }
-html[data-theme='dark'] .recent-surveys__status--open { color: #73d13d; }
-html[data-theme='dark'] .recent-surveys__status--closed { color: #ffa940; }
+.recent-surveys__status--open { color: #0a3818; background: #c4eed0; }
+.recent-surveys__status--closed { color: var(--brand-900); background: var(--brand-100); }
+html[data-theme='dark'] .recent-surveys__status--open { color: #c4eed0; background: #0f5223; }
+html[data-theme='dark'] .recent-surveys__status--closed { color: var(--brand-100); background: #4a2412; }
 
 @media (max-width: 767px) {
   .recent-surveys__item {
@@ -4674,9 +4921,9 @@ html[data-theme='dark'] .recent-surveys__status--closed { color: #ffa940; }
   margin-top: 32px;
   padding: 20px 64px 20px 150px;
   overflow: hidden;
-  background: var(--app-surface);
-  border: 1px solid var(--app-border);
-  border-radius: 20px;
+  background: var(--app-surface-accent);
+  border: 0;
+  border-radius: var(--app-radius-lg);
 }
 
 /* The illustration sits in the bottom-left corner and bleeds off the rounded edges */
@@ -4779,15 +5026,16 @@ html[data-theme='dark'] .recent-surveys__status--closed { color: #ffa940; }
   min-width: 0;
   padding: 16px 20px 18px;
   background: var(--app-surface);
-  border: 1px solid var(--app-border-secondary);
-  border-radius: 12px;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-md);
+  transition: background 0.15s, box-shadow 0.15s;
 }
 
+/* M3 card hover: a tonal layer and elevation 1, no darker border */
 .survey-card:hover,
 .survey-card:focus-within {
-  border-color: var(--app-text-placeholder, var(--app-border-secondary));
-  box-shadow: 0 2px 10px var(--app-shadow);
+  background: var(--app-surface-hover);
+  box-shadow: var(--app-elevation-1);
 }
 
 .survey-card__top {
@@ -4797,27 +5045,32 @@ html[data-theme='dark'] .recent-surveys__status--closed { color: #ffa940; }
   min-height: 24px;
 }
 
-/* Status as coloured text with a dot, the same as in the recent surveys list */
+/* Status as a tonal pill, the same as in the recent surveys list */
 .survey-card__status {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
+  height: 24px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 500;
   color: var(--app-text-secondary);
+  background: var(--app-surface-accent);
+  border-radius: var(--app-radius-pill);
 }
 
 .survey-card__status::before {
   content: '';
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   background: currentcolor;
   border-radius: 50%;
 }
 
-.survey-card__status--open { color: #389e0d; }
-.survey-card__status--closed { color: #d46b08; }
-html[data-theme='dark'] .survey-card__status--open { color: #73d13d; }
-html[data-theme='dark'] .survey-card__status--closed { color: #ffa940; }
+.survey-card__status--open { color: #0a3818; background: #c4eed0; }
+.survey-card__status--closed { color: var(--brand-900); background: var(--brand-100); }
+html[data-theme='dark'] .survey-card__status--open { color: #c4eed0; background: #0f5223; }
+html[data-theme='dark'] .survey-card__status--closed { color: var(--brand-100); background: #4a2412; }
 
 .survey-card__menu {
   position: relative;
@@ -4828,8 +5081,9 @@ html[data-theme='dark'] .survey-card__status--closed { color: #ffa940; }
 .survey-card__name {
   display: -webkit-box;
   overflow: hidden;
-  font-size: 17px;
-  font-weight: 600;
+  font-family: var(--app-font-display);
+  font-size: 18px;
+  font-weight: 400;
   line-height: 1.35;
   color: var(--app-text);
   text-decoration: none;
@@ -4842,7 +5096,7 @@ html[data-theme='dark'] .survey-card__status--closed { color: #ffa940; }
   content: '';
   position: absolute;
   inset: 0;
-  border-radius: 12px;
+  border-radius: var(--app-radius-md);
 }
 
 .survey-card__name:focus-visible {
@@ -4870,8 +5124,9 @@ html[data-theme='dark'] .survey-card__status--closed { color: #ffa940; }
 }
 
 .survey-card__stats strong {
-  font-size: 15px;
-  font-weight: 600;
+  font-family: var(--app-font-display);
+  font-size: 16px;
+  font-weight: 500;
   color: var(--app-text);
 }
 
@@ -4894,9 +5149,35 @@ html[data-theme='dark'] .survey-card__status--closed { color: #ffa940; }
   margin-bottom: 16px;
 }
 
+/* Search is the Google pill: tonal fill, no border, white (lifted) on focus */
 .project-page__search {
   flex: 1 1 240px;
   max-width: 360px;
+}
+
+.project-page__search.ant-input-affix-wrapper,
+.project-page__search .ant-input-affix-wrapper {
+  border-color: transparent;
+  border-radius: var(--app-radius-xl);
+  background: var(--app-pill-bg);
+}
+
+.project-page__search.ant-input-affix-wrapper .ant-input,
+.project-page__search .ant-input-affix-wrapper .ant-input {
+  background: transparent;
+}
+
+.project-page__search.ant-input-affix-wrapper:hover,
+.project-page__search .ant-input-affix-wrapper:hover {
+  border-color: transparent;
+  background: var(--app-bg-hover);
+}
+
+.project-page__search.ant-input-affix-wrapper-focused,
+.project-page__search .ant-input-affix-wrapper-focused {
+  border-color: transparent;
+  background: var(--app-pill-bg-focus);
+  box-shadow: var(--app-elevation-1);
 }
 
 .project-page__select {
@@ -5049,3 +5330,27 @@ html[data-theme='dark'] .survey-card__status--closed { color: #ffa940; }
     padding-left: 20px;
   }
 }
+
+/* Standalone surveys: the project tree scrolls independently of workspace controls. */
+.surveys-sidebar__create { padding: 8px 12px 12px; }
+.surveys-sidebar__tree { flex: 1; min-height: 0; overflow-y: auto; padding: 0 12px 12px; }
+.surveys-sidebar__heading { font-weight: 600; }
+.surveys-sidebar__project { gap: 8px; padding-left: 16px; }
+.surveys-sidebar__survey { gap: 8px; padding-left: 48px; }
+.surveys-sidebar__project span:last-child, .surveys-sidebar__survey span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.surveys-sidebar__message { margin: 8px 16px; color: var(--app-text-secondary); font-size: 13px; }
+.surveys-sidebar__empty { margin-left: 48px; }
+.surveys-sidebar__message button { border: 0; background: none; padding: 0; color: var(--app-link); cursor: pointer; text-decoration: underline; }
+.surveys-sidebar__footer { flex-shrink: 0; padding: 8px 12px 16px; border-top: 1px solid var(--app-border-secondary); }
+.surveys-sidebar__footer nav { padding-bottom: 8px; }
+.surveys-sidebar__project-row { position: relative; }
+.surveys-sidebar__project-row .surveys-sidebar__project { padding-right: 48px; }
+.surveys-sidebar__project-menu.ant-btn { position: absolute; right: 3px; top: 2px; width: 36px; height: 36px; color: var(--app-text-secondary); border-radius: 50%; }
+.surveys-sidebar__all { display: block; min-height: 36px; margin-left: 48px; padding: 4px 0; border: 0; background: transparent; color: var(--app-text-secondary); font: inherit; font-size: 13px; cursor: pointer; text-align: left; }
+.surveys-sidebar__all:hover { color: var(--app-primary); }
+.surveys-sidebar__all:focus-visible { outline: 2px solid var(--app-primary); outline-offset: 2px; }
+.sidebar-plan-card__text { flex: 1; }
+.sidebar-plan-card__quota { display: flex; flex-direction: column; gap: 5px; margin-top: 2px; }
+.sidebar-plan-card__quota-label { display: flex; justify-content: space-between; gap: 8px; color: var(--app-text-secondary); font-size: 12px; }
+.sidebar-plan-card__track { display: block; height: 5px; overflow: hidden; border-radius: 999px; background: var(--app-border); }
+.sidebar-plan-card__track > span { display: block; height: 100%; border-radius: inherit; background: var(--app-primary); }

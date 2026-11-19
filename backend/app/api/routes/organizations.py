@@ -48,12 +48,12 @@ async def create_organization(
     return await organization_service.create_organization(session, payload, user)
 
 
-@router.post("/personal", response_model=OrganizationResponse)
-async def get_or_create_personal_organization(
+@router.post("/default", response_model=OrganizationResponse)
+async def get_or_create_default_organization(
     session: DbSession, user: CurrentUser
 ) -> OrganizationResponse:
-    """The caller's personal workspace (created on first use) — the standalone surveys service lives in it."""
-    return await organization_service.get_or_create_personal_organization(session, user)
+    """The team to open first in the surveys service; «Моя команда» is created when the caller has none."""
+    return await organization_service.get_or_create_default_organization(session, user)
 
 
 @router.get("/my", response_model=list[OrganizationResponse])

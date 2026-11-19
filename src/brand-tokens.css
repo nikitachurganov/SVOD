@@ -1,245 +1,148 @@
 /**
-
- * Brand palette + semantic design tokens mapped to Ant Design CSS variables.
-
+ * Brand palette + semantic design tokens.
+ *
+ * Visual language: Google / Gemini (Material 3) surfaces and shapes with the СВОД orange as the
+ * one accent — see docs/DESIGN_GEMINI_STYLE.md (variant B). Values resolve on <html>: Ant Design
+ * CSS variables are scoped to ConfigProvider and cannot safely be referenced from root properties.
  */
-
-
 
 :root {
-
-  --brand-50: #fff2e8;
-
-  --brand-100: #ffd8bf;
-
-  --brand-200: #ffbb96;
-
+  /* Orange tonal palette (M3 tones: 50 ≈ 95, 100 ≈ 90, 200 ≈ 80, 500 = brand) */
+  --brand-50: #ffede6;
+  --brand-100: #ffdbcc;
+  --brand-200: #ffb595;
   --brand-300: #ff9c6e;
-
   --brand-400: #ff7a45;
-
   --brand-500: #c2410c;
-
   --brand-600: #9a3412;
-
   --brand-700: #b83d09;
-
   --brand-800: #993107;
-
   --brand-900: #7a2605;
 
+  /* Type: Google Sans for headings, buttons and navigation; Google Sans Text for body copy */
+  --app-font-display: 'Google Sans', 'Google Sans Text', Roboto, Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --app-font-text: 'Google Sans Text', 'Google Sans', Roboto, Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
 
+  /* Shape (M3): pills for anything pressable, 28 for dialogs and sheets */
+  --app-radius-xs: 8px;
+  --app-radius-sm: 12px;
+  --app-radius-md: 16px;
+  --app-radius-lg: 24px;
+  --app-radius-xl: 28px;
+  --app-radius-pill: 999px;
 
-  --app-bg: var(--ant-color-bg-layout, #f5f5f5);
+  /* Elevation: only floating things get a shadow */
+  --app-elevation-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px 1px rgba(0, 0, 0, 0.15);
+  --app-elevation-2: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 6px 2px rgba(0, 0, 0, 0.15);
+  --app-elevation-3: 0 1px 3px rgba(0, 0, 0, 0.3), 0 4px 8px 3px rgba(0, 0, 0, 0.15);
 
-  --app-bg-hover: var(--ant-color-fill-tertiary, #f0f0f0);
-
-  --app-surface: var(--ant-color-bg-container, #ffffff);
-
-  --app-surface-elevated: var(--ant-color-bg-elevated, #fafafa);
-
-  --app-surface-accent: var(--ant-color-fill-quaternary, #f5f5f5);
-
-  --app-surface-hover: var(--ant-color-fill-tertiary, #f0f0f0);
-
-  --app-surface-selected: var(--ant-color-primary-bg, #fff2e8);
-
-  --app-surface-selected-hover: var(--ant-color-primary-bg-hover, #ffd8bf);
-
-  --app-highlight: var(--ant-color-primary-bg, #fff2e8);
-
-  --app-input-bg: var(--ant-color-bg-container, #ffffff);
-
-
-
-  --app-border: var(--ant-color-border, #d9d9d9);
-
-  --app-border-secondary: var(--ant-color-border-secondary, #f0f0f0);
-
-  --app-border-strong: var(--ant-color-border-secondary, #bfbfbf);
-
-
-
-  --app-text: var(--ant-color-text, rgba(0, 0, 0, 0.88));
-
-  --app-text-secondary: var(--ant-color-text-secondary, rgba(0, 0, 0, 0.65));
-
-  --app-text-placeholder: var(--ant-color-text-quaternary, rgba(0, 0, 0, 0.25));
-
-  --app-text-helper: var(--ant-color-text-description, rgba(0, 0, 0, 0.45));
-
-  --app-text-error: var(--ant-color-error, #ff4d4f);
-
-  --app-text-on-brand: var(--ant-color-white, #ffffff);
-
-
-
-  --app-primary: var(--ant-color-primary, var(--brand-500));
-
-  --app-link: var(--ant-color-primary, var(--brand-500));
-
-  --app-link-hover: var(--brand-700);
-
-  --app-focus: var(--ant-color-primary, var(--brand-500));
-
-  --app-menu-active-bg: #fff2e8;
-
-  --app-menu-active-text: var(--brand-600);
-
-
-
-  --app-success: var(--ant-color-success, #52c41a);
-
-  --app-warning: var(--ant-color-warning, #faad14);
-
-  --app-info: var(--ant-color-info, #1677ff);
-
-  --app-sidebar-org-link: var(--ant-color-info, #1677ff);
-
-  --app-sidebar-org-link-hover: var(--ant-color-info-hover, #4096ff);
-
-  --app-error: var(--ant-color-error, #ff4d4f);
-
-
-
-  --app-overlay: var(--ant-color-bg-mask, rgba(0, 0, 0, 0.45));
-
-  --app-shadow: rgba(0, 0, 0, 0.2);
-
-
-
-  --app-sidebar-width: 258px;
-
-  --app-sidebar-collapsed-width: 56px;
-
-  --app-header-height: 56px;
-
-
+  --app-sidebar-width: 272px;
+  --app-sidebar-collapsed-width: 72px;
+  --app-header-height: 64px;
 
   --app-space-2: 0.25rem;
-
   --app-space-3: 0.5rem;
-
   --app-space-4: 0.75rem;
-
   --app-space-5: 1rem;
-
   --app-space-6: 1.5rem;
-
 }
 
-
-
-html[data-theme='light'] {
-
-  --app-bg: var(--ant-color-bg-layout, #f5f5f5);
-
-  --app-text: var(--ant-color-text, rgba(0, 0, 0, 0.88));
-
-  --app-link: var(--brand-600);
-
-  --app-link-hover: var(--brand-700);
-
-  --app-sidebar-org-link: var(--ant-color-info, #1677ff);
-
-  --app-sidebar-org-link-hover: var(--ant-color-info-hover, #4096ff);
-
-}
-
-
-
-html[data-theme='dark'] {
-
-  --app-bg: var(--ant-color-bg-layout, #141414);
-
-  --app-text: var(--ant-color-text, #f4f4f4);
-
-  --app-link: var(--brand-300);
-
-  --app-link-hover: var(--brand-200);
-
-  --app-menu-active-bg: rgba(245, 87, 13, 0.15);
-
-  --app-sidebar-org-link: var(--ant-color-info, #1677ff);
-
-  --app-sidebar-org-link-hover: var(--ant-color-info-hover, #4096ff);
-
-}
-
-
-/*
- * App tokens must resolve on <html>: Ant Design CSS variables are scoped to
- * ConfigProvider and cannot safely be referenced from root custom properties.
- */
+/* ── Light ─────────────────────────────────────────────────────────────── */
 :root,
 html[data-theme='light'] {
-  --app-bg: #f5f5f5;
-  --app-bg-hover: #f0f0f0;
+  /* Canvas (page, header, side panel) and the white content panel on it */
+  --app-bg: #f8f9fa;
+  --app-bg-hover: #e8eaed;
   --app-surface: #ffffff;
   --app-surface-elevated: #ffffff;
-  --app-surface-accent: #fafafa;
-  --app-surface-hover: #f5f5f5;
-  --app-surface-selected: var(--brand-50);
-  --app-surface-selected-hover: var(--brand-100);
+  /* surface-container-low / -container: tiles, the input pill, hover */
+  --app-surface-accent: #f1f3f4;
+  --app-surface-hover: #f1f3f4;
+  --app-surface-selected: var(--brand-100);
+  --app-surface-selected-hover: #ffcfb8;
   --app-highlight: var(--brand-50);
   --app-input-bg: #ffffff;
-  --app-border: #d9d9d9;
-  --app-border-secondary: #e2e5e9;
-  --app-border-strong: #9ca3af;
-  --app-text: #141414;
-  --app-text-secondary: #595959;
-  --app-text-placeholder: #6b7280;
-  --app-text-helper: #6b7280;
-  --app-text-error: #d9363e;
+  --app-pill-bg: #f1f3f4;
+  --app-pill-bg-focus: #ffffff;
+  /* surface-dim: a work area under white cards (the form builder canvas, Google Forms) */
+  --app-surface-dim: #f1f3f4;
+
+  --app-border: #dadce0;
+  --app-border-secondary: #e8eaed;
+  --app-border-strong: #80868b;
+
+  --app-text: #1f1f1f;
+  --app-text-secondary: #444746;
+  --app-text-placeholder: #747775;
+  --app-text-helper: #5f6368;
+  --app-text-error: #b3261e;
   --app-text-on-brand: #ffffff;
+
   --app-primary: var(--brand-500);
-  --app-link: var(--brand-600);
-  --app-link-hover: var(--brand-700);
+  --app-link: #fd6a12;
+  --app-link-hover: #e85a08;
   --app-focus: var(--brand-500);
-  --app-menu-active-bg: var(--brand-50);
-  --app-menu-active-text: var(--brand-600);
-  --app-success: #389e0d;
-  --app-warning: #d48806;
-  --app-info: #1677ff;
-  --app-sidebar-org-link: #1677ff;
-  --app-sidebar-org-link-hover: #4096ff;
-  --app-error: #d9363e;
-  --app-overlay: rgba(0, 0, 0, 0.45);
-  --app-shadow: rgba(0, 0, 0, 0.2);
+  /* primary-container / on-primary-container: the selected nav pill, chips, tonal buttons */
+  --app-menu-active-bg: var(--brand-100);
+  --app-menu-active-text: var(--brand-900);
+
+  --app-success: #146c2e;
+  --app-warning: #b45309;
+  --app-info: #0b57d0;
+  --app-sidebar-org-link: var(--app-link);
+  --app-sidebar-org-link-hover: var(--app-link-hover);
+  --app-error: #b3261e;
+  --app-overlay: rgba(0, 0, 0, 0.32);
+  --app-shadow: rgba(0, 0, 0, 0.15);
+
+  --app-menu-radius: var(--app-radius-md);
+  --app-menu-shadow: var(--app-elevation-2);
 }
 
+/* ── Dark (Gemini dark surfaces) ───────────────────────────────────────── */
 html[data-theme='dark'] {
-  --app-bg: #121417;
-  --app-bg-hover: #242830;
-  --app-surface: #1b1e23;
-  --app-surface-elevated: #23272e;
-  --app-surface-accent: #23272e;
-  --app-surface-hover: #2b3038;
-  --app-surface-selected: #3b1a0b;
-  --app-surface-selected-hover: #53230e;
-  --app-highlight: #3b1a0b;
-  --app-input-bg: #1b1e23;
-  --app-border: #434343;
-  --app-border-secondary: #3e444d;
-  --app-border-strong: #6b7280;
-  --app-text: #f5f5f5;
-  --app-text-secondary: #bfbfbf;
-  --app-text-placeholder: #a8afb9;
-  --app-text-helper: #a8afb9;
-  --app-text-error: #ff7875;
-  --app-text-on-brand: #ffffff;
-  --app-primary: var(--brand-400);
-  --app-link: var(--brand-300);
-  --app-link-hover: var(--brand-200);
-  --app-focus: var(--brand-300);
-  --app-menu-active-bg: #3b1a0b;
-  --app-menu-active-text: var(--brand-300);
-  --app-success: #95de64;
-  --app-warning: #ffd666;
-  --app-info: #91caff;
-  --app-sidebar-org-link: #91caff;
-  --app-sidebar-org-link-hover: #bae0ff;
-  --app-error: #ff7875;
-  --app-overlay: rgba(0, 0, 0, 0.65);
+  --app-bg: #131314;
+  --app-bg-hover: #282a2c;
+  --app-surface: #1e1f20;
+  --app-surface-elevated: #282a2c;
+  --app-surface-accent: #282a2c;
+  --app-surface-hover: #333537;
+  --app-surface-selected: #4a2412;
+  --app-surface-selected-hover: #5c2e18;
+  --app-highlight: #4a2412;
+  --app-input-bg: #1e1f20;
+  --app-pill-bg: #282a2c;
+  --app-pill-bg-focus: #333537;
+  --app-surface-dim: #131314;
+
+  --app-border: #444746;
+  --app-border-secondary: #393b3d;
+  --app-border-strong: #8e918f;
+
+  --app-text: #e3e3e3;
+  --app-text-secondary: #c4c7c5;
+  --app-text-placeholder: #8e918f;
+  --app-text-helper: #a8abaa;
+  --app-text-error: #f2b8b5;
+  /* on-primary: dark text on the pastel orange */
+  --app-text-on-brand: #561f00;
+
+  --app-primary: var(--brand-200);
+  --app-link: #ff8a3d;
+  --app-link-hover: #ffa66b;
+  --app-focus: var(--brand-200);
+  --app-menu-active-bg: #4a2412;
+  --app-menu-active-text: var(--brand-100);
+
+  --app-success: #6dd58c;
+  --app-warning: #ffb951;
+  --app-info: #a8c7fa;
+  --app-sidebar-org-link: var(--app-link);
+  --app-sidebar-org-link-hover: var(--app-link-hover);
+  --app-error: #f2b8b5;
+  --app-overlay: rgba(0, 0, 0, 0.6);
   --app-shadow: rgba(0, 0, 0, 0.45);
+
+  --app-menu-radius: var(--app-radius-md);
+  --app-menu-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 2px 6px 2px rgba(0, 0, 0, 0.35);
 }

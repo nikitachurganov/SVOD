@@ -1,5 +1,5 @@
 import { Button, Checkbox, Input, Space } from 'antd';
-import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import { DeleteOutlined, PlusOutlined } from '../../shared/ui/materialIcons';
 
 import type {
   FieldOption,

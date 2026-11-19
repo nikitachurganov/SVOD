@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button, Select } from 'antd';
-import { BranchesOutlined, DownOutlined, UpOutlined } from '@ant-design/icons';
+import { BranchesOutlined, DownOutlined, UpOutlined } from '../materialIcons';
 
 import type { FormFieldInstance } from '../../types/form-builder.types';
 import { fieldOptions, jumpsOf } from '../../survey-logic/surveyLogic';

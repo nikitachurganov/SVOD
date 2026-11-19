@@ -1,5 +1,5 @@
 import { Button, Result } from 'antd';
-import { CheckCircleFilled } from '@ant-design/icons';
+import { CheckCircleFilled } from '../../shared/ui/materialIcons';
 
 interface PublicFormSuccessScreenProps {
   organizationName: string;

@@ -46,6 +46,7 @@ export const EmailVerificationBanner = () => {
   return (
     <Alert
       banner
+      className="app-email-banner"
       type={error ? 'error' : 'warning'}
       showIcon
       message={

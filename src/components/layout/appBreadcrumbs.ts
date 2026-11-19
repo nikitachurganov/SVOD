@@ -1,3 +1,6 @@
+import { IS_SURVEYS_APP } from '../../shared/config/appMode';
+import { SURVEY_RESOURCES } from '../../shared/data/surveyResources';
+
 export type AppBreadcrumbItem = {
   title: string;
   path?: string;
@@ -87,11 +90,22 @@ export const getBreadcrumbsForPath = (
   }
 
   const surveysRoot: AppBreadcrumbItem = { title: 'Опросы', path: '/surveys' };
+  if (IS_SURVEYS_APP) {
+    const titles: Record<string, string> = {
+      '/surveys/studies': 'Исследования',
+      '/surveys/projects': 'Проекты',
+      '/surveys/templates': 'Готовые анкеты',
+    };
+    if (titles[pathname]) return [surveysRoot, { title: titles[pathname] }];
+    if (pathname.startsWith('/surveys/resources/')) {
+      return [surveysRoot, { title: SURVEY_RESOURCES.find((item) => pathname === `/surveys/resources/${item.slug}`)?.title ?? 'Материал не найден' }];
+    }
+  }
   // Survey pages know their project; without it the crumb is simply left out
   const projectCrumb: AppBreadcrumbItem[] = entityParent ? [entityParent] : [];
 
   if (/^\/surveys\/projects\/[^/]+$/.test(pathname)) {
-    return [surveysRoot, { title: entityTitle?.trim() || LOADING_TITLE }];
+    return [surveysRoot, ...(IS_SURVEYS_APP ? [{ title: 'Проекты', path: '/surveys/projects' }] : []), { title: entityTitle?.trim() || LOADING_TITLE }];
   }
 
   if (pathname === '/surveys/create') {
@@ -109,7 +123,7 @@ export const getBreadcrumbsForPath = (
   }
 
   const surveyDetailMatch = pathname.match(
-    /^\/surveys\/([^/]+)(?:\/(?:form|analytics|responses(?:\/[^/]+)?))?$/,
+    /^\/surveys\/([^/]+)(?:\/(?:form|publication|analytics|responses(?:\/[^/]+)?|results(?:\/(?:overview|questions|insights|responses(?:\/[^/]+)?))?))?$/,
   );
   if (surveyDetailMatch && surveyDetailMatch[1] !== 'create') {
     return [surveysRoot, ...projectCrumb, { title: entityTitle?.trim() || LOADING_TITLE }];

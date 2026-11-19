@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Button, Card, Input, Select, Space, Table, Tag } from 'antd';
 import type { ColumnsType, TablePaginationConfig } from 'antd/es/table';
 import type { SorterResult } from 'antd/es/table/interface';
-import { ReloadOutlined } from '@ant-design/icons';
+import { ReloadOutlined } from '../../shared/ui/materialIcons';
 import { adminErrorText, listAdminUsers } from '../../shared/api/admin.api';
 import type {
   AdminSortField,

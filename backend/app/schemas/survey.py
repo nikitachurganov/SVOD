@@ -209,6 +209,8 @@ class SurveyAiBuildRequest(BaseModel):
     methodology_ids: list[str] | None = None
     # The team the survey is built for: inside a paid team the tokens come from its pool
     organization_id: str | None = None
+    # The model picked by a team with Токены+; the server checks it. None: the base model
+    model: str | None = Field(default=None, max_length=100)
 
 
 class SurveyAiBuildResponse(BaseModel):
@@ -405,11 +407,14 @@ class SurveyAiSummary(BaseModel):
 class SurveyAiSummaryRequest(BaseModel):
     exclude_flagged: bool = True
     force: bool = False
+    # The model picked by a team with Токены+; the server checks it. None: the base model
+    model: str | None = Field(default=None, max_length=100)
 
 
 class SurveyAiAnalysisChatRequest(BaseModel):
     messages: list[SurveyAiChatMessage] = Field(..., min_length=1, max_length=20)
     exclude_flagged: bool = True
+    model: str | None = Field(default=None, max_length=100)
 
 
 class SurveyAiQuote(BaseModel):

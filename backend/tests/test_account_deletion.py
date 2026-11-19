@@ -24,8 +24,8 @@ def user_ns(**overrides):
     return SimpleNamespace(**data)
 
 
-def org_ns(name="Орг", is_personal=False):
-    return SimpleNamespace(id=uuid.uuid4(), name=name, is_personal=is_personal)
+def org_ns(name="Орг"):
+    return SimpleNamespace(id=uuid.uuid4(), name=name)
 
 
 def session_mock():
@@ -68,7 +68,7 @@ class DeleteAccountTests(unittest.IsolatedAsyncioTestCase):
         session.commit.assert_not_awaited()
 
     async def test_organization_with_other_members_blocks_deletion(self):
-        self.repo["list_owned_organizations"].return_value = [org_ns("Команда"), org_ns("Личное", True)]
+        self.repo["list_owned_organizations"].return_value = [org_ns("Команда")]
         self.repo["count_other_members"].return_value = 3
         session = session_mock()
 
@@ -77,13 +77,12 @@ class DeleteAccountTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(ctx.exception.status_code, 409)
         self.assertIn("«Команда»", ctx.exception.detail)
-        self.assertNotIn("Личное", ctx.exception.detail)
         self.repo["delete_user"].assert_not_awaited()
         session.commit.assert_not_awaited()
 
     async def test_everything_is_deleted_and_files_removed_after_commit(self):
         user = user_ns()
-        personal, own_empty = org_ns("Личное", True), org_ns("Моя")
+        personal, own_empty = org_ns("Личное"), org_ns("Моя")
         self.repo["list_owned_organizations"].return_value = [personal, own_empty]
         self.repo["list_request_ids"].return_value = [1, 2]
         bucket = service.settings.S3_BUCKET

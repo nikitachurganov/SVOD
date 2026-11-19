@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Button, Drawer, Grid, Input, Tag } from 'antd';
-import { CloseOutlined, CopyOutlined, RobotOutlined, SendOutlined } from '@ant-design/icons';
+import { CopyOutlined, RobotOutlined, SendOutlined } from '../materialIcons';
 import axios from 'axios';
 
 import {
@@ -74,6 +74,9 @@ const ReplyText = ({ text }: { text: string }) => (
 interface SurveyAiChatPanelProps {
   open: boolean;
   onClose: () => void;
+  consentOpen?: boolean;
+  onConsentConfirm?: () => void;
+  onConsentCancel?: () => void;
   surveyId: string;
   excludeFlagged: boolean;
   /** Starter questions that fit the tab the user is on */
@@ -82,22 +85,34 @@ interface SurveyAiChatPanelProps {
   dock?: boolean;
   /** Shown in the intro of the docked agent: survey name and a one-line summary */
   agentContext?: { name: string; meta: string };
+  /** Ask for consent before sending survey data to the AI service. */
+  requestConsent?: (action: () => void) => void;
+  headerBack?: ReactNode;
+  headerStatus?: ReactNode;
+  headerActions?: ReactNode;
 }
 
 export const SurveyAiChatPanel = ({
   open,
   onClose,
+  consentOpen = false,
+  onConsentConfirm,
+  onConsentCancel,
   surveyId,
   excludeFlagged,
   suggestions,
   dock = false,
   agentContext,
+  requestConsent,
+  headerBack,
+  headerStatus,
+  headerActions,
 }: SurveyAiChatPanelProps) => {
   // Inside the docked glass page --app-bg is transparent, so bubbles need a visible fill
   const bubbleBg = dock ? 'var(--app-surface-elevated)' : 'var(--app-bg)';
   const isMobile = Grid.useBreakpoint().md === false;
-  const { subscription, refresh: refreshSubscription } = useSubscription();
-  const quotaExhausted = getAiQuota(subscription).exhausted;
+  const { subscription, team, refresh: refreshSubscription } = useSubscription();
+  const quotaExhausted = getAiQuota(subscription, team).exhausted;
   const [entries, setEntries] = useState<ChatEntry[]>([]);
   const [draft, setDraft] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -107,9 +122,17 @@ export const SurveyAiChatPanel = ({
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' });
   }, [entries, isLoading]);
 
-  const send = async (text: string) => {
+  const send = (text: string) => {
     const content = text.trim();
     if (!content || isLoading || quotaExhausted) return;
+    if (requestConsent) {
+      requestConsent(() => void sendWithConsent(content));
+    } else {
+      void sendWithConsent(content);
+    }
+  };
+
+  const sendWithConsent = async (content: string) => {
     const userEntry: ChatEntry = { id: crypto.randomUUID(), role: 'user', content };
     const history = [...entries, userEntry];
     setEntries(history);
@@ -148,6 +171,41 @@ export const SurveyAiChatPanel = ({
       <RobotOutlined style={{ color: 'var(--app-primary)', marginRight: 8 }} />
       Спросить ИИ о результатах
     </span>
+  );
+
+  const consentContent = (
+    <section
+      aria-labelledby="survey-ai-consent-title"
+      style={{
+        margin: 16,
+        padding: 20,
+        border: '1px solid var(--app-border)',
+        borderRadius: 12,
+        background: 'var(--app-surface-elevated)',
+        color: 'var(--app-text)',
+        lineHeight: 1.55,
+      }}
+    >
+      <h2 id="survey-ai-consent-title" style={{ margin: '0 0 8px', fontSize: 18 }}>
+        Передать данные опроса ИИ?
+      </h2>
+      <p style={{ margin: '0 0 8px' }}>
+        ИИ-помощник работает через внешний сервис (OpenRouter). Ему будут переданы:
+      </p>
+      <ul style={{ paddingLeft: 20, margin: '0 0 12px' }}>
+        <li>сводные цифры по вопросам и показатели опроса;</li>
+        <li>до 30 цитат из открытых ответов, телефоны и e-mail в них заменяются метками;</li>
+        <li>тексты вопросов анкеты.</li>
+      </ul>
+      <p style={{ margin: '0 0 16px' }}>
+        Продолжая, вы подтверждаете, что вправе передавать эти данные: опрос анонимный или респонденты
+        согласились на такую обработку. Решение запоминается для этого опроса в вашем браузере.
+      </p>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+        <Button onClick={onConsentCancel}>Отмена</Button>
+        <Button type="primary" onClick={onConsentConfirm}>Да, продолжить</Button>
+      </div>
+    </section>
   );
 
   const content = (
@@ -327,17 +385,19 @@ export const SurveyAiChatPanel = ({
     return (
       <aside className="survey-ai-dock" aria-label="Агент">
         <div className="survey-ai-dock__head">
-          <span className="survey-ai-dock__title">
-            <RobotOutlined style={{ color: 'var(--app-primary)', marginRight: 8 }} />
-            Агент
-          </span>
-          <Button type="text" icon={<CloseOutlined />} aria-label="Закрыть агента" onClick={onClose} />
+          {headerBack && <div className="survey-ai-dock__back">{headerBack}</div>}
+          <div className="survey-ai-dock__title-row">
+            <span className="survey-ai-dock__title">{agentContext?.name ?? 'Опрос'}</span>
+            {headerStatus}
+            {headerActions}
+            <Button className="survey-ai-dock__panel-button" aria-label="Закрыть ИИ-помощника" onClick={onClose}>Закрыть</Button>
+          </div>
         </div>
 
-        <div className="ag-feed" ref={listRef}>
+        {consentOpen ? consentContent : <div className="ag-feed" ref={listRef}>
           {entries.length === 0 && (
             <div className="ag-intro">
-              <h2>{agentContext?.name ?? 'Этот опрос'}</h2>
+              <h2>Что вы хотите узнать?</h2>
               <p>
                 {agentContext?.meta ? `${agentContext.meta}. ` : ''}
                 Спросите про ответы: агент сопоставит группы, посчитает различия и найдёт цитаты.
@@ -394,11 +454,9 @@ export const SurveyAiChatPanel = ({
               Работаю…
             </div>
           )}
-        </div>
+        </div>}
 
-        <AiQuotaNote className="ai-quota-note" />
-
-        <div className="ag-composer-wrap">
+        {!consentOpen && <div className="ag-composer-wrap">
           <div className="ag-composer">
             <Input.TextArea
               className="ag-input"
@@ -411,7 +469,7 @@ export const SurveyAiChatPanel = ({
                   void send(draft);
                 }
               }}
-              placeholder="Напишите, что узнать про ответы"
+              placeholder="Спросите об ответах опроса"
               autoSize={{ minRows: 1, maxRows: 6 }}
               disabled={isLoading || quotaExhausted}
               maxLength={2000}
@@ -427,7 +485,7 @@ export const SurveyAiChatPanel = ({
             </button>
           </div>
           <div className="ag-hint">Агент опирается на ответы опроса и может ошибаться</div>
-        </div>
+        </div>}
       </aside>
     );
   }
@@ -440,7 +498,7 @@ export const SurveyAiChatPanel = ({
       title={title}
       styles={{ body: { padding: 0, display: 'flex', flexDirection: 'column' } }}
     >
-      {content}
+      {consentOpen ? consentContent : content}
     </Drawer>
   );
 };

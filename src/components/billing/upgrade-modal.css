@@ -7,14 +7,15 @@
   align-items: stretch;
 }
 
+/* Google One plan cards: radius 24, a hairline outline; the recommended one gets a 2px primary frame */
 .upgrade-card {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 20px;
-  border: 1px solid var(--app-border-secondary);
-  border-radius: 12px;
-  background: var(--app-surface);
+  gap: 6px;
+  padding: 24px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-lg);
+  background: var(--app-surface-elevated);
 }
 
 .upgrade-card--featured {
@@ -26,6 +27,17 @@
   border-color: var(--app-primary);
 }
 
+/* Month / year: the selected half is filled with primary, like the Google One toggle */
+.upgrade-card .ant-segmented {
+  margin: 8px 0 4px;
+}
+
+.upgrade-card .ant-segmented-item-selected,
+.upgrade-card .ant-segmented-thumb {
+  background: var(--app-primary);
+  color: var(--app-text-on-brand);
+}
+
 .upgrade-card__title-row {
   display: flex;
   align-items: center;
@@ -33,18 +45,25 @@
   gap: 8px;
 }
 
+/* «Самый популярный» / «Ваш тариф»: a tonal chip, not a solid block */
 .upgrade-card__badge {
-  padding: 2px 8px;
-  border-radius: 999px;
+  padding: 2px 10px;
+  border-radius: var(--app-radius-pill);
   font-size: 12px;
-  line-height: 18px;
+  font-weight: 500;
+  line-height: 20px;
   white-space: nowrap;
-  color: var(--app-text-on-brand);
-  background: var(--app-primary);
+  color: var(--app-menu-active-text);
+  background: var(--app-menu-active-bg);
 }
 
+/* The purchase button spans the whole card */
 .upgrade-card__cta {
-  margin: 12px 0 8px;
+  margin: 16px 0 12px;
+}
+
+.upgrade-card__cta .ant-btn {
+  width: 100%;
 }
 
 .upgrade-card .plan-card__list {
@@ -63,9 +82,9 @@
   flex-direction: column;
   align-items: flex-start;
   gap: 4px;
-  padding: 16px;
-  border: 1px solid var(--app-border-secondary);
-  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-md);
   background: var(--app-surface);
   color: var(--app-text);
   font: inherit;
@@ -82,13 +101,32 @@
 .upgrade-option--selected:hover {
   border-color: var(--app-primary);
   box-shadow: 0 0 0 1px var(--app-primary);
-  background: var(--app-surface-accent);
+  background: var(--app-highlight);
 }
 
+.upgrade-option:focus-visible {
+  outline: 2px solid var(--app-focus);
+  outline-offset: 2px;
+}
+
+/* The icon sits in a tonal circle (M3 avatar) */
 .upgrade-option__icon {
-  font-size: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
   margin-bottom: 8px;
-  color: var(--app-primary);
+  font-size: 20px;
+  color: var(--app-menu-active-text);
+  background: var(--app-menu-active-bg);
+  border-radius: 50%;
+}
+
+.upgrade-option strong {
+  font-family: var(--app-font-display);
+  font-size: 16px;
+  font-weight: 500;
 }
 
 .upgrade-option span:not(.upgrade-option__icon) {
@@ -109,26 +147,29 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px 16px;
-  border: 1px solid var(--app-border-secondary);
-  border-radius: 12px;
+  padding: 12px 16px 12px 20px;
+  border-radius: var(--app-radius-md);
+  background: var(--app-surface-accent);
 }
 
 .upgrade-seats__label {
+  font-family: var(--app-font-display);
   font-weight: 500;
 }
 
+/* The order summary: a grey tile (Gemini usage tile), no frame */
 .upgrade-summary {
-  padding: 16px;
-  border: 1px solid var(--app-border-secondary);
-  border-radius: 12px;
-  background: var(--app-surface-hover);
+  padding: 20px;
+  border-radius: var(--app-radius-lg);
+  background: var(--app-surface-accent);
 }
 
 .upgrade-summary__title {
-  margin: 0 0 12px;
-  font-size: 15px;
-  font-weight: 600;
+  margin: 0 0 16px;
+  font-family: var(--app-font-display);
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 400;
 }
 
 .upgrade-summary__row {
@@ -142,9 +183,10 @@
 .upgrade-summary__row--total {
   margin-top: 8px;
   padding-top: 12px;
-  border-top: 1px solid var(--app-border-secondary);
-  font-size: 15px;
-  font-weight: 600;
+  border-top: 1px solid var(--app-border);
+  font-family: var(--app-font-display);
+  font-size: 18px;
+  font-weight: 500;
 }
 
 .upgrade-summary__row--muted {
@@ -169,9 +211,9 @@
   flex-direction: column;
   align-items: flex-start;
   gap: 4px;
-  padding: 14px 16px;
-  border: 1px solid var(--app-border-secondary);
-  border-radius: 12px;
+  padding: 16px 20px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-md);
   background: var(--app-surface);
   color: var(--app-text);
   font: inherit;
@@ -193,7 +235,7 @@
 .upgrade-term--selected:hover:not(:disabled) {
   border-color: var(--app-primary);
   box-shadow: 0 0 0 1px var(--app-primary);
-  background: var(--app-surface-accent);
+  background: var(--app-highlight);
 }
 
 .upgrade-term__name {
@@ -203,19 +245,21 @@
   font-weight: 600;
 }
 
+/* «выгоднее»: a small tonal chip */
 .upgrade-term__tag {
   padding: 0 8px;
-  border-radius: 999px;
+  border-radius: var(--app-radius-pill);
   font-size: 12px;
   font-weight: 500;
-  line-height: 18px;
-  color: var(--app-text-on-brand);
-  background: var(--app-primary);
+  line-height: 20px;
+  color: var(--app-menu-active-text);
+  background: var(--app-menu-active-bg);
 }
 
 .upgrade-term__price {
-  font-size: 18px;
-  font-weight: 600;
+  font-family: var(--app-font-display);
+  font-size: 22px;
+  font-weight: 400;
 }
 
 .upgrade-term__note {

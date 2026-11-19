@@ -7,7 +7,10 @@ import { getSurveyById, updateSurvey, type SurveyDetail } from '../shared/api/su
 import { mapPagesToPayload, pagesPayloadToInstances } from '../shared/api/forms.api';
 import { FormEditor } from '../shared/ui/form-builder/FormEditor';
 import type { FormPageInstance } from '../shared/types/form-builder.types';
-import type { MethodologyState } from '../shared/ui/form-builder/AiFormBuilderPanel';
+import type { ChatEntry, MethodologyState } from '../shared/ui/form-builder/AiFormBuilderPanel';
+import { useOrganization } from '../shared/hooks/organization.hooks';
+import { ResearchNavigation } from '../shared/ui/survey/ResearchNavigation';
+import { useAuth } from '../shared/hooks/auth.hooks';
 import { useBreadcrumbEntity } from '../shared/context/breadcrumb.context';
 import { FormEditorSkeleton } from '../shared/ui/skeletons/PageSkeletons';
 
@@ -23,6 +26,10 @@ const structureLockMessage = (err: unknown): string | null => {
 export const EditSurveyPage = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  const { activeOrganization } = useOrganization();
+  const organizationId = activeOrganization?.id;
+  const { user } = useAuth();
+  const userId = user?.id;
   const { setEntityTitle, setEntityParent } = useBreadcrumbEntity();
 
   const [survey, setSurvey] = useState<SurveyDetail | null>(null);
@@ -82,6 +89,12 @@ export const EditSurveyPage = () => {
     }),
     [survey],
   );
+  const initialAiEntries = useMemo<ChatEntry[]>(() => {
+    try {
+      const saved: unknown = JSON.parse(sessionStorage.getItem(`survey-preparation:${userId}:${organizationId}:${id}`) ?? '[]');
+      return Array.isArray(saved) ? saved.filter((entry): entry is ChatEntry => entry && typeof entry.id === 'string' && ['user', 'assistant'].includes(entry.role) && typeof entry.content === 'string') : [];
+    } catch { return []; }
+  }, [userId, organizationId, id]);
 
   if (loading) {
     return <FormEditorSkeleton />;
@@ -94,6 +107,7 @@ export const EditSurveyPage = () => {
       </div>
     );
   }
+  if (survey.organization_id !== organizationId) return <Alert type="warning" showIcon message="Исследование находится в другом пространстве. Выберите нужную команду в шапке." />;
 
   const handleSave = async (
     title: string,
@@ -124,6 +138,9 @@ export const EditSurveyPage = () => {
       initialTitle={survey.name}
       initialPages={initialPages}
       initialMethodology={initialMethodology}
+      initialAiEntries={initialAiEntries}
+      aiHistoryStorageKey={`survey-preparation:${userId}:${organizationId}:${id}`}
+      headerContent={<ResearchNavigation survey={survey} />}
       onSave={handleSave}
       onBack={() => navigate(`/surveys/${id}/form`)}
     />

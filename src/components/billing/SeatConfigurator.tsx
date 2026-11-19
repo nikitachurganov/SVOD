@@ -1,5 +1,5 @@
 import { Button, Segmented } from 'antd';
-import { MinusOutlined, PlusOutlined } from '@ant-design/icons';
+import { MinusOutlined, PlusOutlined } from '../../shared/ui/materialIcons';
 import type { QuoteTerm } from '../../types/billing';
 
 interface StepperProps {

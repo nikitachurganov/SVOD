@@ -75,7 +75,7 @@ export const CreateSurveyModal = ({
   return (
     <Modal
       open={open}
-      title="Создать опрос"
+      title="Создать исследование"
       okText="Продолжить"
       cancelText="Отмена"
       okButtonProps={{ disabled: !canContinue }}
@@ -87,7 +87,7 @@ export const CreateSurveyModal = ({
     >
       <p style={{ marginTop: 12, color: 'var(--app-text-secondary)' }}>
         Опрос создаётся внутри проекта. Выберите существующий или начните с нового — после этого
-        откроется конструктор формы.
+        откроется подготовка опроса с ИИ. Вы также сможете начать вручную.
       </p>
       <Radio.Group
         value={target}

@@ -5,6 +5,8 @@
  * page, and moves on by itself when the person does the thing (see TourProvider), or by «Далее».
  */
 
+import { IS_SURVEYS_APP } from '../../shared/config/appMode';
+
 export type TourStepId =
   | 'project'
   | 'survey'
@@ -43,7 +45,7 @@ export interface TourStepConfig {
   freeInteraction?: boolean;
 }
 
-export const TOUR_START_PATH = '/surveys';
+export const TOUR_START_PATH = IS_SURVEYS_APP ? '/surveys/projects' : '/surveys';
 
 const surveyPath = (data: TourData) => `/surveys/${data.surveyId ?? ''}`;
 const onSurvey = (path: string, data: TourData) =>
@@ -57,7 +59,7 @@ export const TOUR_STEPS: TourStepConfig[] = [
       'Проект — это папка для опросов одной темы. Нажмите «Новый проект», придумайте название и нажмите «Создать».',
     // The whole window while it is open, so that its fields stay usable
     targets: ['.tour-project-modal .ant-modal', '[data-tour="new-project"]'],
-    isHere: (path) => path === '/surveys',
+    isHere: (path) => path === TOUR_START_PATH,
     resumePath: () => TOUR_START_PATH,
   },
   {

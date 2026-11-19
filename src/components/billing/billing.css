@@ -107,7 +107,7 @@
 }
 
 .billing-note a {
-  color: var(--app-menu-active-text);
+  color: var(--app-link);
 }
 
 /* Under the composer of an AI panel and inside the summary card */
@@ -148,6 +148,7 @@
 /* The plans inside the settings tab: the tab content already has its own padding */
 .settings-page__content > .plans-page {
   padding: 0;
+  margin-inline: 0;
 }
 
 .app-shell-content > .plans-page {
@@ -184,8 +185,8 @@
   flex-direction: column;
   gap: 16px;
   padding: 24px;
-  border: 1px solid var(--app-border-secondary);
-  border-radius: 12px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-lg);
   background: var(--app-surface);
 }
 
@@ -198,14 +199,10 @@
   }
 }
 
-/* The plan we suggest: tinted at the top and outlined in the brand colour */
+/* The plan we suggest (Google One «Recommended»): a 2px primary frame on a flat surface */
 .plan-card--featured {
   border-color: var(--app-primary);
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--app-primary) 9%, var(--app-surface)) 0,
-    var(--app-surface) 240px
-  );
+  box-shadow: 0 0 0 1px var(--app-primary);
 }
 
 /* The plan the person has: a thicker ring, so it reads at a glance without a coloured tag */
@@ -240,24 +237,26 @@
   gap: 8px;
 }
 
+/* Google One plan name: Google Sans, regular weight, a touch larger */
 .plan-card__name {
   margin: 0;
-  font-size: 20px;
+  font-family: var(--app-font-display);
+  font-size: 22px;
   line-height: 28px;
-  font-weight: 600;
+  font-weight: 400;
   color: var(--app-text);
 }
 
 .plan-card__badge {
   flex-shrink: 0;
   padding: 0 10px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--app-primary) 40%, transparent);
-  background: color-mix(in srgb, var(--app-primary) 14%, transparent);
-  color: var(--app-primary);
+  border-radius: var(--app-radius-pill);
+  border: 0;
+  background: var(--app-menu-active-bg);
+  color: var(--app-menu-active-text);
   font-size: 12px;
-  line-height: 22px;
-  font-weight: 600;
+  line-height: 24px;
+  font-weight: 500;
 }
 
 .plan-card__tagline {
@@ -276,10 +275,10 @@
 }
 
 .plan-card__amount {
+  font-family: var(--app-font-display);
   font-size: 36px;
   line-height: 44px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-weight: 400;
 }
 
 .plan-card__period {
@@ -299,8 +298,8 @@
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  padding: 12px;
-  border-radius: 8px;
+  padding: 12px 16px;
+  border-radius: var(--app-radius-md);
   background: var(--app-surface-accent);
 }
 
@@ -430,7 +429,7 @@
 }
 
 .plans-faq__answer a {
-  color: var(--app-menu-active-text);
+  color: var(--app-link);
 }
 
 .plans-legal-footer {
@@ -451,12 +450,13 @@
 
 .plans-legal-footer__note a,
 .plans-legal-footer__links a {
-  color: var(--app-menu-active-text);
+  color: var(--app-link);
   text-decoration: none;
 }
 
 .plans-legal-footer__note a:hover,
 .plans-legal-footer__links a:hover {
+  color: var(--app-link-hover);
   text-decoration: underline;
 }
 
@@ -484,7 +484,7 @@
 }
 
 .plans-page__terms a {
-  color: var(--app-menu-active-text);
+  color: var(--app-link);
 }
 
 .plans-page__table {

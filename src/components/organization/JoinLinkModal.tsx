@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Alert, Button, Input, Modal, Popconfirm, Spin, Switch, Typography, message } from 'antd';
-import { CopyOutlined, ReloadOutlined } from '@ant-design/icons';
+import { CopyOutlined, ReloadOutlined } from '../../shared/ui/materialIcons';
 import {
   getJoinLink,
   regenerateJoinLink,

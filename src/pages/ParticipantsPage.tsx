@@ -13,7 +13,7 @@ import {
   SendOutlined,
   SolutionOutlined,
   UserAddOutlined,
-} from '@ant-design/icons';
+} from '../shared/ui/materialIcons';
 import { useOrganization } from '../shared/hooks/organization.hooks';
 import { useAuth } from '../shared/hooks/auth.hooks';
 import { buildDisplayName } from '../shared/utils/userName';
@@ -48,7 +48,7 @@ import { ReturnedPaymentNotice } from '../components/billing/ReturnedPaymentNoti
 import { AddSeatsDialog } from '../components/billing/SeatsPanel';
 import { DEFAULT_SEATS } from '../components/billing/seatPricing';
 import { flowPath } from '../components/billing/upgradeFlow';
-import { formatCredits } from '../components/billing/billingFormat';
+import { formatCredits, formatNumber } from '../components/billing/billingFormat';
 import { getPlans } from '../shared/api/billing.api';
 import { useSubscription } from '../shared/hooks/subscription.hooks';
 import type { PlansResponse } from '../types/billing';
@@ -130,7 +130,7 @@ export const ParticipantsPage = () => {
   const [addSeatsOpen, setAddSeatsOpen] = useState(false);
   const [limitFor, setLimitFor] = useState<MemberRow | null>(null);
   const [plans, setPlans] = useState<PlansResponse | null>(null);
-  const { subscription } = useSubscription();
+  const { subscription, team: teamBilling } = useSubscription();
   const [resendResult, setResendResult] = useState<InvitationResponse | null>(null);
   const [contractorModal, setContractorModal] = useState<{ open: boolean; contractor: ExternalContractor | null }>({
     open: false,
@@ -215,6 +215,11 @@ export const ParticipantsPage = () => {
   /** «Докупить места»: more seats to a running plan here, or the way to the plan for a free team */
   const buySeats = useCallback(() => {
     if (!activeOrganization) return;
+    if (teamBilling) {
+      // The team model: the places come with the plan of the team (Plus 3, Pro 10), not one by one
+      navigate('/plans');
+      return;
+    }
     const sellsSeats = Boolean(plans?.seat_pricing_enabled && plans.payments_enabled);
     if (sellsSeats && runningResearcher) {
       setAddSeatsOpen(true);
@@ -234,7 +239,7 @@ export const ParticipantsPage = () => {
       return;
     }
     navigate('/settings?tab=plans');
-  }, [activeOrganization, navigate, plans, runningResearcher, seatUsage?.seats_used]);
+  }, [teamBilling, activeOrganization, navigate, plans, runningResearcher, seatUsage?.seats_used]);
 
   const handleConfirm = useCallback(async () => {
     if (!confirmAction || !activeOrganizationId) return;
@@ -421,7 +426,7 @@ export const ParticipantsPage = () => {
         ? [
             {
               title: (
-                <Tooltip title="Сколько кредитов ИИ человек потратил в этом месяце и какая это доля общего тарифа команды">
+                <Tooltip title={teamBilling ? 'Сколько Токенов+ человек потратил в этом периоде и какая это доля квоты команды' : 'Сколько кредитов ИИ человек потратил в этом месяце и какая это доля общего тарифа команды'}>
                   <span>Расход ИИ</span>
                 </Tooltip>
               ),
@@ -437,11 +442,11 @@ export const ParticipantsPage = () => {
                 return (
                   <div className="team-quota-usage">
                     <span>
-                      {formatCredits(spent)} кр.{' '}
+                      {teamBilling ? `${formatNumber(spent)} Токенов+` : `${formatCredits(spent)} кр.`}{' '}
                       <span className="team-quota-usage__share">· {sharePercent(spent, poolMax).text}</span>
                     </span>
                     {record.token_plus_limit !== null ? (
-                      <span className="team-quota-usage__cap">лимит {formatCredits(record.token_plus_limit)} кр.</span>
+                      <span className="team-quota-usage__cap">лимит {teamBilling ? `${formatNumber(record.token_plus_limit)} Токенов+` : `${formatCredits(record.token_plus_limit)} кр.`}</span>
                     ) : null}
                   </div>
                 );
@@ -513,7 +518,7 @@ export const ParticipantsPage = () => {
         },
       },
     ],
-    [busyId, canManage, changeRole, freeSeatsKnown, handleResend, hasPool, isOwner, poolMax, user?.id],
+    [busyId, canManage, changeRole, freeSeatsKnown, handleResend, hasPool, isOwner, poolMax, teamBilling, user?.id],
   );
 
   const contractorColumns = useMemo<ColumnsType<ExternalContractor>>(
@@ -780,7 +785,7 @@ export const ParticipantsPage = () => {
             {activeTab === 'members' ? (
               <>
               {seatUsage?.billing_enabled ? (
-                <TeamQuotaSummary usage={seatUsage} canBuy={isOwner} onBuy={buySeats} manages={canManage} />
+                <TeamQuotaSummary usage={seatUsage} canBuy={isOwner} onBuy={buySeats} manages={canManage} team={teamBilling} />
               ) : null}
               <Table<MemberRow>
                 rowKey={(row) => `${row.kind}:${row.id}`}
@@ -915,12 +920,14 @@ export const ParticipantsPage = () => {
         destroyOnHidden
       >
         <p style={{ marginTop: 0, color: 'var(--app-text-secondary)' }}>
-          Сколько кредитов ИИ в месяц человек может потратить из общего тарифа команды. Пустое поле — без
-          ограничения.
+          {teamBilling
+            ? 'Сколько Токенов+ в месяц человек может потратить из общего баланса команды. Пустое поле — без ограничения.'
+            : 'Сколько кредитов ИИ в месяц человек может потратить из общего тарифа команды. Пустое поле — без ограничения.'}
         </p>
         {limitFor ? (
           <MemberAiLimitInput
             value={limitFor.token_plus_limit}
+            unit={teamBilling ? 'tokens_plus' : 'credits'}
             disabled={busyId === limitFor.id}
             onCommit={(tokens) => {
               void changeAiLimit(limitFor.id, tokens);

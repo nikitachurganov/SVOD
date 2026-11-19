@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from 'antd';
-import { MessageOutlined } from '@ant-design/icons';
+import { MessageOutlined } from '../../shared/ui/materialIcons';
 import { getTelegramStatus, type TelegramStatus } from '../../shared/api/telegram.api';
 import { TelegramLinkModal } from '../layout/TelegramLinkModal';
 

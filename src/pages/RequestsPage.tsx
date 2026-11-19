@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Table, Tag, Tooltip, Button, Modal, Card } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { PlusOutlined, DeleteOutlined, EyeOutlined, UserAddOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, EyeOutlined, UserAddOutlined } from '../shared/ui/materialIcons';
 import { Link, useNavigate } from 'react-router-dom';
 import { IconDefaultButton } from '../shared/ui/IconDefaultButton';
 import {

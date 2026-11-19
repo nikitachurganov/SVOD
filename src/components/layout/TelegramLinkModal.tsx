@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Alert, Button, Modal, Popconfirm, Spin, Typography, message } from 'antd';
-import { SendOutlined } from '@ant-design/icons';
+import { SendOutlined } from '../../shared/ui/materialIcons';
 import {
   createTelegramLink,
   getTelegramStatus,

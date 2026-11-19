@@ -42,6 +42,12 @@ class PlansResponse(BaseModel):
     addon_price_kopecks: int = 0
     addon_tokens: int = 0
     addon_days: int = 0
+    # The team model (docs/MONETIZATION_TEAM_SPEC.md): the price page shows these offers instead
+    team_billing_enabled: bool = False
+    team_offers: list["TeamOfferInfo"] = Field(default_factory=list)
+    team_free_tokens: int = 0
+    # The strong models a team with Токены+ may pick (the base model is always there)
+    team_strong_models: list[str] = Field(default_factory=list)
 
 
 class QuoteLine(BaseModel):
@@ -190,3 +196,73 @@ class SubscriptionResponse(BaseModel):
     seats: int = 1
     seat_window_ends_at: datetime | None = None
     seat_window_days_left: int = 0
+
+
+# ─── The team model (docs/MONETIZATION_TEAM_SPEC.md) ──────────────────────────
+
+
+class TeamBalanceInfo(BaseModel):
+    """One balance of the team: what is left, the full quota and when it is renewed (None: never)."""
+
+    remaining: int
+    quota: int
+    resets_at: datetime | None = None
+
+
+class TeamOfferInfo(BaseModel):
+    kind: str
+    title: str
+    price_kopecks: int
+    tokens: int
+    # Seats with the owner; 0 for the pack, which adds none
+    seats: int
+    # A paid month in days; None for the pack, which has no term
+    days: int | None = None
+    # False when it cannot be bought now (a different subscription is running)
+    available: bool = True
+
+
+class TeamBillingSummary(BaseModel):
+    organization_id: uuid.UUID
+    # The running subscription, None without one
+    plan_code: str | None = None
+    plan_title: str | None = None
+    period_end: datetime | None = None
+    seats: int
+    # The quota of the paid month (until period_end) and the packs with no expiry, shown apart
+    subscription: TeamBalanceInfo | None = None
+    purchased_tokens: int
+    # The free ordinary tokens; used only while the team has no Токены+
+    free: TeamBalanceInfo
+    # "paid" (Токены+, a model can be chosen), "free" (the base model) or "suspended" (a paid month
+    # with both balances at zero: the AI waits for a pack or the next quota)
+    ai_mode: str
+    models: list[str]
+    features: list[str]
+    permanent_tools: bool
+    can_buy: bool
+    # True: the limits block (BILLING_ENFORCE); False: the shadow mode, an empty balance stops nothing
+    enforced: bool = False
+    offers: list[TeamOfferInfo]
+
+
+class TeamCheckoutRequest(BaseModel):
+    # "pack", or the code of a team plan
+    kind: str
+    return_to: str | None = None
+
+
+class TeamPaymentInfo(BaseModel):
+    id: uuid.UUID
+    plan_code: str
+    amount_kopecks: int
+    status: str
+    created_at: datetime
+    paid_at: datetime | None = None
+    refunded_kopecks: int = 0
+
+    model_config = {"from_attributes": True}
+
+
+# PlansResponse names TeamOfferInfo before it is defined
+PlansResponse.model_rebuild()

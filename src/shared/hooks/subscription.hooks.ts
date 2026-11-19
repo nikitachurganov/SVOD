@@ -6,6 +6,7 @@ import {
 
 const NO_PLANS: SubscriptionContextValue = {
   subscription: null,
+  team: null,
   isLoading: false,
   refresh: async () => {},
   replace: () => {},

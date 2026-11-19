@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Button, Result, Tag } from 'antd';
-import { CheckCircleFilled, CloseOutlined } from '@ant-design/icons';
+import { CheckCircleFilled, CloseOutlined } from '../shared/ui/materialIcons';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import {

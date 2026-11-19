@@ -1,5 +1,6 @@
 import axios from 'axios';
 import api from '../lib/api';
+import { aiModelField } from '../lib/aiModel';
 import type { AuthorPreview } from '../../types/author';
 import type { CreateFormPagePayload } from './forms.api';
 
@@ -302,6 +303,10 @@ export interface PublicSurvey {
   anonymous: boolean;
 }
 
+export const SURVEYS_CHANGED_EVENT = 'surveys:changed';
+
+const notifySurveysChanged = () => window.dispatchEvent(new Event(SURVEYS_CHANGED_EVENT));
+
 // ─── Surveys ──────────────────────────────────────────────────────────────────
 
 export const getSurveys = async (
@@ -356,6 +361,7 @@ export const createSurveyProject = async (
     description: payload.description ?? null,
     color: payload.color ?? null,
   });
+  notifySurveysChanged();
   return data;
 };
 
@@ -368,12 +374,14 @@ export const updateSurveyProject = async (
     description: payload.description ?? null,
     color: payload.color ?? null,
   });
+  notifySurveysChanged();
   return data;
 };
 
 /** Only an empty project can be deleted; otherwise the server answers 409 `project_not_empty` */
 export const deleteSurveyProject = async (id: string): Promise<void> => {
   await api.delete(`/survey-projects/${id}`);
+  notifySurveysChanged();
 };
 
 export const moveSurveyToProject = async (
@@ -383,6 +391,7 @@ export const moveSurveyToProject = async (
   const { data } = await api.patch<SurveyDetail>(`/surveys/${surveyId}/project`, {
     project_id: projectId,
   });
+  notifySurveysChanged();
   return data;
 };
 
@@ -405,6 +414,7 @@ export const createSurvey = async (
     methodology_meta: payload.methodology_meta ?? null,
     anonymous: payload.anonymous ?? true,
   });
+  notifySurveysChanged();
   return data;
 };
 
@@ -417,6 +427,7 @@ export const createSurveyFromDemo = async (
     organization_id: organizationId,
     draft_id: draftId,
   });
+  notifySurveysChanged();
   return data;
 };
 
@@ -429,6 +440,7 @@ export const updateSurvey = async (id: string, payload: SurveyPayload): Promise<
     anonymous: payload.anonymous ?? true,
     closes_at: payload.closes_at ?? null,
   });
+  notifySurveysChanged();
   return data;
 };
 
@@ -437,11 +449,13 @@ export const setSurveyStatus = async (
   status: Exclude<SurveyStatus, 'archived'>,
 ): Promise<SurveyDetail> => {
   const { data } = await api.patch<SurveyDetail>(`/surveys/${id}/status`, { status });
+  notifySurveysChanged();
   return data;
 };
 
 export const archiveSurvey = async (id: string): Promise<void> => {
   await api.delete(`/surveys/${id}`);
+  notifySurveysChanged();
 };
 
 /**
@@ -548,7 +562,7 @@ export const generateSurveyAiSummary = async (
 ): Promise<SurveyAiSummary> => {
   const { data } = await api.post<SurveyAiSummary>(
     `/surveys/${id}/ai-summary`,
-    { exclude_flagged: options.excludeFlagged ?? true, force: options.force ?? false },
+    { exclude_flagged: options.excludeFlagged ?? true, force: options.force ?? false, ...aiModelField() },
     { timeout: 120_000 },
   );
   return data;
@@ -561,7 +575,7 @@ export const askSurveyAnalysisChat = async (
 ): Promise<SurveyAnalysisChatResponse> => {
   const { data } = await api.post<SurveyAnalysisChatResponse>(
     `/surveys/${id}/ai-chat`,
-    { messages, exclude_flagged: excludeFlagged },
+    { messages, exclude_flagged: excludeFlagged, ...aiModelField() },
     { timeout: 190_000 },
   );
   return data;
@@ -622,7 +636,7 @@ export interface SurveyAiBuildResponse {
 export const buildSurveyWithAi = async (
   payload: SurveyAiBuildPayload,
 ): Promise<SurveyAiBuildResponse> => {
-  const { data } = await api.post<SurveyAiBuildResponse>('/surveys/ai-builder', payload, {
+  const { data } = await api.post<SurveyAiBuildResponse>('/surveys/ai-builder', { ...payload, ...aiModelField() }, {
     timeout: 190_000,
   });
   return data;

@@ -2,6 +2,8 @@ import { Button, Progress } from 'antd';
 import { daysWord } from '../billing/billingText';
 import { formatCredits, formatDay } from '../billing/billingFormat';
 import type { SeatUsage } from '../../types/organization';
+import type { TeamBillingSummary } from '../../types/billing';
+import { formatNumber } from '../billing/billingFormat';
 import { sharePercent } from './participants.utils';
 import './team-quota.css';
 
@@ -12,13 +14,15 @@ interface Props {
   onBuy: () => void;
   /** The caller manages people: they see everybody's spending in the table, the others only their own here */
   manages: boolean;
+  /** The team model: the plan and the balances of this team; null in the per-person model */
+  team?: TeamBillingSummary | null;
 }
 
 /**
  * What the team has paid for and what is left of it: the seats (paid, taken, free), the free observers,
  * the share of the team's plan (its shared pool of AI credits) already used, and the days of the kit price.
  */
-export const TeamQuotaSummary = ({ usage, canBuy, onBuy, manages }: Props) => {
+export const TeamQuotaSummary = ({ usage, canBuy, onBuy, manages, team = null }: Props) => {
   const limit = usage.seats_limit;
   const free = limit === null ? null : Math.max(limit - usage.seats_used, 0);
   const full = limit !== null && usage.seats_used >= limit;
@@ -48,12 +52,42 @@ export const TeamQuotaSummary = ({ usage, canBuy, onBuy, manages }: Props) => {
           />
         ) : null}
         <small className="team-quota__hint">
-          {elsewhere > 0 ? `Из занятых ${elsewhere} — в других ваших командах. ` : ''}
-          Наблюдатели: {usage.readers} из {usage.readers_limit}, бесплатно
+          {elsewhere > 0 && !team ? `Из занятых ${elsewhere} — в других ваших командах. ` : ''}
+          {team ? 'Читатели не занимают мест: ' : 'Наблюдатели: '}
+          {usage.readers} из {usage.readers_limit}, бесплатно
         </small>
       </div>
 
-      {hasPool ? (
+      {team ? (
+        <div className="team-quota__item">
+          <span className="team-quota__label">Тариф команды</span>
+          <strong className="team-quota__value">{team.plan_title ?? 'Бесплатный'}</strong>
+          {team.subscription ? (
+            <>
+              <Progress
+                percent={sharePercent(team.subscription.quota - team.subscription.remaining, team.subscription.quota).value}
+                showInfo={false}
+                size="small"
+                status={team.ai_mode === 'suspended' ? 'exception' : 'normal'}
+              />
+              <small className="team-quota__hint">
+                {formatNumber(team.subscription.remaining)} из {formatNumber(team.subscription.quota)} Токенов+ до{' '}
+                {formatDay(team.subscription.resets_at)}
+                {team.purchased_tokens > 0 ? ` · купленных ${formatNumber(team.purchased_tokens)}, без срока` : ''}
+                {!manages && typeof usage.ai_spent_me === 'number'
+                  ? ` · вы потратили ${formatNumber(usage.ai_spent_me)}`
+                  : ''}
+              </small>
+            </>
+          ) : (
+            <small className="team-quota__hint">
+              {team.purchased_tokens > 0
+                ? `Купленных Токенов+: ${formatNumber(team.purchased_tokens)}, без срока`
+                : `Бесплатных токенов: ${formatNumber(team.free.remaining)} из ${formatNumber(team.free.quota)}, обновятся ${formatDay(team.free.resets_at)}`}
+            </small>
+          )}
+        </div>
+      ) : hasPool ? (
         <div className="team-quota__item">
           <span className="team-quota__label">Тариф команды использован</span>
           <strong className="team-quota__value team-quota__value--big">{poolPercent.text}</strong>
@@ -82,7 +116,7 @@ export const TeamQuotaSummary = ({ usage, canBuy, onBuy, manages }: Props) => {
       )}
 
       <div className="team-quota__item team-quota__item--action">
-        {usage.seat_window_days_left > 0 ? (
+        {usage.seat_window_days_left > 0 && !team ? (
           <small className="team-quota__offer">
             Места 2 и 3 по цене комплекта (300 ₽) — ещё {usage.seat_window_days_left}{' '}
             {daysWord(usage.seat_window_days_left)}
@@ -90,7 +124,15 @@ export const TeamQuotaSummary = ({ usage, canBuy, onBuy, manages }: Props) => {
         ) : null}
         {canBuy ? (
           <Button type={full || !paid ? 'primary' : 'default'} onClick={onBuy}>
-            {paid ? 'Докупить места' : 'Подключить тариф для команды'}
+            {team
+              ? team.plan_code === 'pro'
+                ? 'Тарифы команды'
+                : full
+                  ? 'Больше мест — на Plus и Pro'
+                  : 'Тарифы команды'
+              : paid
+                ? 'Докупить места'
+                : 'Подключить тариф для команды'}
           </Button>
         ) : null}
       </div>

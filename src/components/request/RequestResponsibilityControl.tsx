@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button, Modal, Select } from 'antd';
-import { UserSwitchOutlined } from '@ant-design/icons';
+import { UserSwitchOutlined } from '../../shared/ui/materialIcons';
 import type { AuthorPreview } from '../../types/author';
 import type { MemberResponse } from '../../types/organization';
 import { getMembers } from '../../shared/api/organizations.api';

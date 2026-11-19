@@ -44,23 +44,11 @@ async def get_orgs_for_user(
     return list(result.scalars().all())
 
 
-async def get_personal_org(session: AsyncSession, user_id: uuid.UUID) -> Organization | None:
-    stmt = (
-        select(Organization)
-        .options(selectinload(Organization.owner))
-        .where(Organization.owner_user_id == user_id, Organization.is_personal.is_(True))
-    )
-    result = await session.execute(stmt)
-    return result.scalar_one_or_none()
-
-
 async def list_owned_teams(
     session: AsyncSession, owner_id: uuid.UUID, service: str | None
 ) -> list[Organization]:
-    """The teams (not the personal workspace) a person owns in one service: their seats are shared."""
-    stmt = select(Organization).where(
-        Organization.owner_user_id == owner_id, Organization.is_personal.is_(False)
-    )
+    """The teams a person owns in one service: their seats are shared."""
+    stmt = select(Organization).where(Organization.owner_user_id == owner_id)
     if service is not None:
         stmt = stmt.where(Organization.service == service)
     result = await session.execute(stmt)

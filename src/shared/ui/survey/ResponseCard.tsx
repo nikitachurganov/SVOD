@@ -1,6 +1,6 @@
 import type { KeyboardEvent } from 'react';
 import { Tag } from 'antd';
-import { ArrowRightOutlined } from '@ant-design/icons';
+import { ArrowRightOutlined } from '../materialIcons';
 
 import type { SurveyResponseItem } from '../../api/surveys.api';
 import {

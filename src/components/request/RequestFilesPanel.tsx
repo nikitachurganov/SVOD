@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Alert, Button, Card, Spin, Tag } from 'antd';
-import { FileOutlined } from '@ant-design/icons';
+import { FileOutlined } from '../../shared/ui/materialIcons';
 import { getRequestTimeline, getStageArtifactDownloadUrl } from '../../shared/api/requests.api';
 import type { RequestTimelineDTO } from '../../types/execution';
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Button, Dropdown, Empty, Grid, Input, Modal } from 'antd';
 import type { MenuProps } from 'antd';
-import { FileTextOutlined, FolderOutlined, MoreOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons';
+import { FileTextOutlined, FolderOutlined, MoreOutlined, PlusOutlined, SearchOutlined, SendOutlined } from '../shared/ui/materialIcons';
 import axios from 'axios';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -16,12 +16,9 @@ import {
   type SurveyProjectPayload,
 } from '../shared/api/surveys.api';
 import { resolveFolderColor } from '../shared/lib/folderColors';
-import { BetaBanner } from '../components/layout/BetaBanner';
 import { useOrganization } from '../shared/hooks/organization.hooks';
 import { IS_SURVEYS_APP } from '../shared/config/appMode';
 import { useNotifications } from '../shared/context/notifications.context';
-import { CreateSurveyModal } from '../shared/ui/survey/CreateSurveyModal';
-import { NewProjectFolder } from '../shared/ui/survey/NewProjectFolder';
 import { ProjectFormModal } from '../shared/ui/survey/ProjectFormModal';
 import { Bone, ProjectGridSkeleton } from '../shared/ui/skeletons/PageSkeletons';
 import {
@@ -44,10 +41,11 @@ export const SurveysPage = () => {
   const [loading, setLoading] = useState(true);
   const [surveys, setSurveys] = useState<SurveyListItem[]>([]);
   const [surveysLoading, setSurveysLoading] = useState(true);
+  const [surveysFailed, setSurveysFailed] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
   const [search, setSearch] = useState('');
+  const [researchPrompt, setResearchPrompt] = useState('');
   const [formOpen, setFormOpen] = useState(false);
-  const [createOpen, setCreateOpen] = useState(false);
   const navigate = useNavigate();
   const [editing, setEditing] = useState<SurveyProject | null>(null);
   const [deleting, setDeleting] = useState<SurveyProject | null>(null);
@@ -64,11 +62,12 @@ export const SurveysPage = () => {
     }
     setLoading(true);
     setSurveysLoading(true);
+    setSurveysFailed(false);
     setLoadFailed(false);
     // The survey list only feeds the stats; the page still works without it
     getSurveys(organizationId)
       .then(setSurveys)
-      .catch(() => setSurveys([]))
+      .catch(() => { setSurveys([]); setSurveysFailed(true); })
       .finally(() => setSurveysLoading(false));
     getSurveyProjects(organizationId)
       .then(setProjects)
@@ -156,6 +155,11 @@ export const SurveysPage = () => {
   });
 
   const deleteBlocked = !!deleting && deleting.surveys_count > 0;
+  const startWithAi = () => {
+    const prompt = researchPrompt.trim();
+    if (!prompt || !organizationId || !canEdit) return;
+    navigate('/surveys/create', { state: { initialPrompt: prompt, preparationId: crypto.randomUUID() } });
+  };
 
   const renderBody = () => {
     if (!organizationId) {
@@ -183,7 +187,6 @@ export const SurveysPage = () => {
     if (loading) {
       return (
         <div role="status" aria-busy="true" aria-label="Загрузка проектов">
-          <Bone w={120} h={24} style={{ marginBottom: 16 }} />
           <ProjectGridSkeleton count={SKELETON_CARDS} />
         </div>
       );
@@ -191,7 +194,6 @@ export const SurveysPage = () => {
     if (projects.length === 0) {
       return (
         <>
-          <h2 className="home-section__title">Проекты</h2>
           <section className="projects-empty" aria-label="Первый проект">
             <div className="projects-empty__body">
               <h3 className="projects-empty__title">
@@ -212,9 +214,6 @@ export const SurveysPage = () => {
                     onClick={() => openForm(null)}
                   >
                     Создать проект
-                  </Button>
-                  <Button size="large" onClick={() => setCreateOpen(true)}>
-                    Сразу создать опрос
                   </Button>
                 </div>
               )}
@@ -253,7 +252,6 @@ export const SurveysPage = () => {
     }
     return (
       <>
-        <h2 className="home-section__title">Проекты</h2>
         {projects.length > SEARCH_FROM && (
           <Input
             allowClear
@@ -300,22 +298,16 @@ export const SurveysPage = () => {
                 </div>
               </li>
             ))}
-            {canEdit && !search.trim() && (
-              <li className="project-env project-env--new" data-tour="new-project">
-                <NewProjectFolder onClick={() => openForm(null)} />
-              </li>
-            )}
           </ul>
         )}
-        {canEdit && <BetaBanner onCreateSurvey={() => setCreateOpen(true)} />}
-        <section className="home-section" aria-label="Недавние опросы">
-          <h2 className="home-section__title">Недавние опросы</h2>
+        <section className="home-section" aria-label="Недавние исследования">
+          <h2 className="home-section__title">Недавние исследования</h2>
           {surveysLoading ? (
             <div role="status" aria-busy="true" aria-label="Загрузка опросов">
               <Bone w="100%" h={66} style={{ marginBottom: 10 }} />
               <Bone w="100%" h={66} />
             </div>
-          ) : recentSurveys.length === 0 ? (
+          ) : surveysFailed ? <Alert type="error" showIcon message="Не удалось загрузить недавние исследования" action={<Button onClick={load}>Повторить</Button>} /> : recentSurveys.length === 0 ? (
             <div className="recent-empty">
               <FileTextOutlined className="recent-empty__icon" aria-hidden />
               <div className="recent-empty__body">
@@ -324,9 +316,6 @@ export const SurveysPage = () => {
                   Здесь появятся опросы, с которыми вы работали в последнее время.
                 </div>
               </div>
-              {canEdit && (
-                <Button onClick={() => setCreateOpen(true)}>Создать опрос</Button>
-              )}
             </div>
           ) : (
             <ul className="recent-surveys">
@@ -367,19 +356,30 @@ export const SurveysPage = () => {
 
   return (
     <div className="registry-page">
-      <div className="registry-page__content">{renderBody()}</div>
-
-      <CreateSurveyModal
-        open={createOpen}
-        organizationId={organizationId}
-        projects={projects}
-        onContinue={(project, created) => {
-          if (created) setProjects((prev) => [project, ...prev]);
-          setCreateOpen(false);
-          navigate(`/surveys/create?project=${project.id}`);
-        }}
-        onClose={() => setCreateOpen(false)}
-      />
+      <div className="registry-page__content">
+        {canEdit && organizationId && <section className="research-home-hero" aria-labelledby="research-home-title">
+          <div className="research-home-hero__content">
+            <h1 id="research-home-title">Создайте опрос с помощью ИИ</h1>
+            <p>Расскажите, что хотите узнать. ИИ предложит вопросы, а вы сможете их изменить перед публикацией.</p>
+            <div className="research-home-hero__composer">
+              <Input.TextArea id="research-home-prompt" aria-label="Что вы хотите узнать?" variant="borderless" value={researchPrompt} onChange={(event) => setResearchPrompt(event.target.value)} onPressEnter={(event) => { if (!event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); startWithAi(); } }} placeholder="Например: почему уходят клиенты?" autoSize={{ minRows: 1, maxRows: 6 }} maxLength={4000} />
+              <Button type="primary" aria-label="Создать опрос" icon={<SendOutlined />} disabled={!researchPrompt.trim()} title="Создать опрос" onClick={startWithAi} />
+            </div>
+            <Button type="link" className="research-home-hero__manual" onClick={() => navigate('/surveys/create?mode=manual')}>Создать опрос вручную</Button>
+          </div>
+        </section>}
+        <div className="research-home__projects">
+        <header className="research-home__heading">
+          {canEdit && organizationId ? <h2>Проекты</h2> : <h1>Проекты</h1>}
+          {canEdit && projects.length > 0 && (
+            <Button icon={<PlusOutlined />} data-tour="new-project" onClick={() => openForm(null)}>
+              Новый проект
+            </Button>
+          )}
+        </header>
+        {renderBody()}
+        </div>
+      </div>
 
       <ProjectFormModal
         open={formOpen}

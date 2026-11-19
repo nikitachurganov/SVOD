@@ -1,5 +1,5 @@
 import { Button, Switch } from 'antd';
-import { ApiOutlined, BellOutlined, FormOutlined, RobotOutlined } from '@ant-design/icons';
+import { ApiOutlined, BellOutlined, FormOutlined, RobotOutlined } from '../../shared/ui/materialIcons';
 import { TelegramIntegrationCard } from '../organization/TelegramIntegrationCard';
 import { FeaturePlaceholder } from './FeaturePlaceholder';
 

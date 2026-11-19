@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Button, Form, Input, Modal, Select, Table, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { CheckOutlined, CloseOutlined } from '@ant-design/icons';
+import { CheckOutlined, CloseOutlined } from '../../shared/ui/materialIcons';
 import { approveJoinRequest, rejectJoinRequest } from '../../shared/api/organizations.api';
 import { buildDisplayName } from '../../shared/utils/userName';
 import type { AssignableRole, JoinRequestResponse } from '../../types/organization';

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Button, Card, Form, Input, Modal, Progress, Select, Switch, Tag, Tooltip, message } from 'antd';
 import { Link } from 'react-router-dom';
-import { CalendarOutlined, EditOutlined, FormOutlined, InfoCircleOutlined, MailOutlined, MessageOutlined, RobotOutlined, SaveOutlined } from '@ant-design/icons';
+import { CalendarOutlined, EditOutlined, FormOutlined, InfoCircleOutlined, MailOutlined, MessageOutlined, RobotOutlined, SaveOutlined } from '../../shared/ui/materialIcons';
 import { useAuth } from '../../shared/hooks/auth.hooks';
 import { useOrganization } from '../../shared/hooks/organization.hooks';
 import {

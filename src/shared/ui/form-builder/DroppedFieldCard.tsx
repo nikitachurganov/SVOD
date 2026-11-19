@@ -171,10 +171,10 @@ export const CanvasFieldOverlay = ({ field }: CanvasFieldOverlayProps) => {
       style={{
         background: 'var(--app-surface)',
         border: '1px solid var(--app-primary)',
-        borderRadius: 4,
+        borderRadius: 'var(--app-radius-md)',
         // The overlay is rendered outside the app container, so it must set its own text colour
         color: 'var(--app-text)',
-        boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
+        boxShadow: 'var(--app-elevation-2)',
         padding: '12px 16px',
         display: 'flex',
         flexDirection: 'column',

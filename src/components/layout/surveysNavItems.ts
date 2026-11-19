@@ -1,4 +1,4 @@
-import { FormOutlined, SettingOutlined, TeamOutlined } from '@ant-design/icons';
+import { FormOutlined, SettingOutlined, TeamOutlined } from '../../shared/ui/materialIcons';
 import type { ComponentType, CSSProperties } from 'react';
 
 export interface SurveysNavItem {
@@ -6,13 +6,11 @@ export interface SurveysNavItem {
   label: string;
   path: string;
   Icon: ComponentType<{ style?: CSSProperties }>;
-  /** Shown only inside a team: the personal workspace has no people to manage */
-  teamOnly?: boolean;
 }
 
 export const SURVEYS_NAV_ITEMS: SurveysNavItem[] = [
   { key: 'surveys', label: 'Опросы', path: '/surveys', Icon: FormOutlined },
-  { key: 'participants', label: 'Участники', path: '/participants', Icon: TeamOutlined, teamOnly: true },
+  { key: 'participants', label: 'Участники', path: '/participants', Icon: TeamOutlined },
   { key: 'settings', label: 'Настройки', path: '/settings', Icon: SettingOutlined },
 ];
 

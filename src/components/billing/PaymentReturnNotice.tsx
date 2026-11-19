@@ -3,8 +3,8 @@ import { Alert, Button, Spin } from 'antd';
 import { Link } from 'react-router-dom';
 import { getPayment } from '../../shared/api/billing.api';
 import { useSubscription } from '../../shared/hooks/subscription.hooks';
-import type { PaymentInfo, SubscriptionInfo } from '../../types/billing';
-import { formatCreditsWithWord } from './billingFormat';
+import type { PaymentInfo, SubscriptionInfo, TeamBillingSummary } from '../../types/billing';
+import { formatCreditsWithWord, formatNumber } from './billingFormat';
 import { dayForSentence, daysWord } from './billingText';
 import { seatsWord } from './seatPricing';
 import './billing.css';
@@ -34,7 +34,34 @@ interface Result {
 }
 
 /** What the payment changed, said in numbers: the plan and its end, the seats, the credits */
-const resultOf = (payment: PaymentInfo, subscription: SubscriptionInfo | null): Result => {
+const resultOf = (
+  payment: PaymentInfo,
+  subscription: SubscriptionInfo | null,
+  team: TeamBillingSummary | null,
+): Result => {
+  // The team model (docs/MONETIZATION_TEAM_SPEC.md): a pack or a month of Plus / Pro for one team
+  if (payment.plan_code === 'team_pack') {
+    return {
+      title: 'Оплата прошла, пакет добавлен команде',
+      lines: [
+        '500 000 Токенов+ без срока действия. Они тратятся после квоты подписки, если она есть.',
+        'Все методики и выгрузка CSV открыты для команды навсегда.',
+        team ? `Купленных Токенов+ сейчас: ${formatNumber(team.purchased_tokens)}.` : '',
+      ],
+    };
+  }
+  if (payment.plan_code === 'plus' || payment.plan_code === 'pro') {
+    const title = payment.plan_code === 'plus' ? 'Plus' : 'Pro';
+    return {
+      title: `Оплата прошла, тариф ${title} включён`,
+      lines: [
+        team?.period_end ? `Оплачено до ${dayForSentence(team.period_end)}.` : '',
+        team?.subscription ? `Токенов+ на месяц: ${formatNumber(team.subscription.quota)}, они общие для команды.` : '',
+        `Мест с учётом владельца: ${payment.seats}. Читатели — сверх лимита.`,
+      ],
+      link: { to: '/participants', label: 'Пригласить людей' },
+    };
+  }
   const until = subscription ? dayForSentence(subscription.current_period_end) : null;
   if (payment.term === 'seats_add') {
     return {
@@ -85,7 +112,7 @@ const resultOf = (payment: PaymentInfo, subscription: SubscriptionInfo | null): 
 
 /** What a person sees after coming back from the payment page: the payment is asked about until it is settled */
 export const PaymentReturnNotice = ({ paymentId, onDismiss, onSettled, currentPath }: Props) => {
-  const { refresh, subscription } = useSubscription();
+  const { refresh, subscription, team } = useSubscription();
   const [outcome, setOutcome] = useState<Outcome>('checking');
   const [paid, setPaid] = useState<PaymentInfo | null>(null);
 
@@ -152,7 +179,7 @@ export const PaymentReturnNotice = ({ paymentId, onDismiss, onSettled, currentPa
     );
   }
   if (outcome === 'succeeded') {
-    const result = paid ? resultOf(paid, subscription) : null;
+    const result = paid ? resultOf(paid, subscription, team) : null;
     return (
       <Alert
         className="billing-alert"

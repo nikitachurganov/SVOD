@@ -45,6 +45,18 @@ export const formatCreditsWithWord = (tokens: number): string =>
   `${formatCredits(tokens)} ${creditsWord(toCredits(tokens))}`;
 
 /** What the AI actions cost, roughly; an estimate until it is replaced with the numbers of ai_usage_log */
+/** An amount of an AI allowance in its own unit: credits of a person's plan, the team's tokens as they are */
+export const formatQuotaAmount = (value: number, unit: 'credits' | 'tokens_plus' | 'tokens'): string =>
+  unit === 'credits' ? formatCredits(value) : formatNumber(value);
+
+export const quotaUnitWord = (unit: 'credits' | 'tokens_plus' | 'tokens'): string =>
+  unit === 'credits' ? 'кредитов ИИ' : unit === 'tokens_plus' ? 'Токенов+' : 'бесплатных токенов';
+
+/** What an AI action costs in the team model: ~3 700 tokens, weighted 0.2 on the base model and 1 on a strong
+ * one (docs/TARIFFS_FINAL.md, section 10); the free tokens of the base model count one to one */
+export const TEAM_ACTION_HINT =
+  'Действие с ИИ стоит около 750 Токенов+ на базовой модели и около 3 700 на сильной.';
+
 export const AI_ACTION_HINT =
   'Создание анкеты стоит около 9 кредитов, резюме ответов — около 4, сообщение в чате — около 10.';
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Alert, Button, Form, Input, Modal, Select, Typography } from 'antd';
-import { CheckCircleFilled, CopyOutlined, MailOutlined } from '@ant-design/icons';
+import { CheckCircleFilled, CopyOutlined, MailOutlined } from '../../shared/ui/materialIcons';
 import { inviteUser, lookupInvitee } from '../../shared/api/organizations.api';
 import { localizeAppLink } from '../../shared/lib/localizeLink';
 import { IS_SURVEYS_APP } from '../../shared/config/appMode';

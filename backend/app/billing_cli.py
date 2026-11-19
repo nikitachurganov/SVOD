@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
+import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,7 +17,7 @@ from app.core.database import async_session_factory, engine
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.repositories import billing_repository, survey_repository, user_repository
-from app.services import billing_service, launch_service
+from app.services import billing_service, launch_service, team_billing_service
 from app.services import subscription_lifecycle_service as lifecycle
 
 BETA_NOTE = "beta"
@@ -194,6 +195,21 @@ async def _run(args: argparse.Namespace) -> int:
                 print(f"Счётчиков ответов, которые {verb}: {rows} (ответов в них: {counted}).")
                 if settings.BILLING_ENFORCE and not args.dry_run:
                     print("Внимание: лимиты уже блокируют, обнулять счётчики нужно было до их включения.")
+            elif args.command == "grant-team":
+                state = await team_billing_service.grant(session, args.organization_id, args.kind)
+                await session.commit()
+                plan = f"тариф {state.plan.title} до {_moment(state.period_end)}" if state.plan else "без подписки"
+                print(
+                    f"Команда {args.organization_id}: {plan}; "
+                    f"Токенов+ по подписке {state.plan_tokens}, купленных {state.purchased_tokens}."
+                )
+            elif args.command == "revoke-team":
+                state = await team_billing_service.revoke(session, args.organization_id, args.kind)
+                await session.commit()
+                print(
+                    f"Команда {args.organization_id}: снято «{args.kind}». "
+                    f"Тариф: {state.plan.title if state.plan else 'нет'}; купленных Токенов+ {state.purchased_tokens}."
+                )
             elif args.command == "funnel":
                 _, report = await launch_service.funnel(session, days=args.days)
                 print(report)
@@ -255,6 +271,19 @@ def main(argv: list[str] | None = None) -> int:
 
     show = commands.add_parser("show", help="тариф, использование и события аккаунта")
     show.add_argument("email", help="почта аккаунта")
+
+    team = commands.add_parser(
+        "grant-team",
+        help="выдать команде месяц Plus/Pro или пакет без онлайн-оплаты: оплата по счёту, подарок",
+    )
+    team.add_argument("organization_id", type=uuid.UUID, help="id команды")
+    team.add_argument("--kind", required=True, choices=["plus", "pro", "pack"], help="что выдать")
+
+    revoke = commands.add_parser(
+        "revoke-team", help="снять с команды месяц Plus/Pro или пакет после возврата денег"
+    )
+    revoke.add_argument("organization_id", type=uuid.UUID, help="id команды")
+    revoke.add_argument("--kind", required=True, choices=["plus", "pro", "pack"], help="что снять")
 
     commands.add_parser(
         "preflight", help="проверить, готов ли сервис к платному запуску (код выхода 1, если нет)"

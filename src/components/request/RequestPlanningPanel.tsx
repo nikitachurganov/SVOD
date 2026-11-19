@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button, Card, Divider, Input, Modal, message } from 'antd';
-import { ThunderboltOutlined, UserOutlined } from '@ant-design/icons';
+import { ThunderboltOutlined, UserOutlined } from '../../shared/ui/materialIcons';
 import type { RequestEntity } from '../../types/request';
 import {
   releaseRequest,

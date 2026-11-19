@@ -12,11 +12,40 @@ import { AI_ACTION_HINT, formatCredits, formatDay, formatPrice, STATUS_LABELS } 
 import { dayForSentence } from '../billing/billingText';
 import { getPlans } from '../../shared/api/billing.api';
 import { useSubscription } from '../../shared/hooks/subscription.hooks';
-import type { PlansResponse } from '../../types/billing';
+import type { PlansResponse, TeamBillingSummary } from '../../types/billing';
+import { useOrganization } from '../../shared/hooks/organization.hooks';
+import { ReturnedPaymentNotice } from '../billing/ReturnedPaymentNotice';
+import { TeamPaymentHistory, TeamPlansPanel } from '../billing/TeamPlansPanel';
 import '../billing/billing.css';
 
-/** The person's plan, what is used of it and what can be done: try, pay, ask for an invoice */
+/** The team model: the plan is the active team's, the profile only leads to it */
+const TeamSubscriptionView = ({ team }: { team: TeamBillingSummary }) => {
+  const { activeOrganization } = useOrganization();
+  const { refresh } = useSubscription();
+  return (
+    <div className="profile-subscription" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <ReturnedPaymentNotice onSettled={() => void refresh()} />
+      <Alert
+        type="info"
+        showIcon
+        title={`Тариф и баланс относятся к команде${activeOrganization ? ` «${activeOrganization.name}»` : ''}`}
+        description="Если у вас несколько команд, у каждой свой тариф и свои Токены+. Переключите команду, чтобы увидеть её данные."
+      />
+      <TeamPlansPanel summary={team} onChanged={() => void refresh()} />
+      {team.can_buy ? <TeamPaymentHistory organizationId={team.organization_id} /> : null}
+      <Link to="/plans">Сравнение вариантов и частые вопросы</Link>
+    </div>
+  );
+};
+
+/** The person's plan, or in the team model the plan of the active team */
 export const ProfileSubscriptionTab = () => {
+  const { team } = useSubscription();
+  return team ? <TeamSubscriptionView team={team} /> : <PersonSubscriptionTab />;
+};
+
+/** The person's plan, what is used of it and what can be done: try, pay, ask for an invoice */
+const PersonSubscriptionTab = () => {
   const { subscription, isLoading, refresh } = useSubscription();
   const [searchParams, setSearchParams] = useSearchParams();
   // The payment page sends the person back with ?payment=<id>

@@ -13,6 +13,6 @@ export const PANEL_DROP_PLACEHOLDER_HEIGHT = 120;
 export const DROP_SLOT_STYLE: CSSProperties = {
   boxSizing: 'border-box',
   border: '2px dashed var(--app-primary)',
-  borderRadius: 4,
+  borderRadius: 'var(--app-radius-md)',
   background: 'var(--app-highlight)',
 };

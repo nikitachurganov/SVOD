@@ -1,16 +1,20 @@
 import { Link } from 'react-router-dom';
 import { LEGAL } from '../shared/config/legal';
+import { useTeamModelEnabled } from '../shared/hooks/teamBilling.hooks';
 import '../components/legal/legal.css';
 
 /**
  * Refund terms complying with art. 32 of the Law on Protection of Consumer Rights and art. 782 of the Civil Code.
  * Required by YuKassa and published at /refund.
  */
-export const RefundPage = () => (
+export const RefundPage = () => {
+  // The plans of teams (docs/MONETIZATION_TEAM_SPEC.md) change the clauses about what is bought
+  const team = useTeamModelEnabled();
+  return (
   <article className="legal-doc">
     <h1>Условия возврата денежных средств</h1>
     <p className="legal-doc__meta">
-      Сервис {LEGAL.serviceName}, {LEGAL.siteUrl}. Редакция от {LEGAL.offerDate}
+      Сервис {LEGAL.serviceName}, {LEGAL.siteUrl}. Редакция от {team ? LEGAL.teamOfferDate : LEGAL.offerDate}
     </p>
 
     <p>
@@ -47,7 +51,11 @@ export const RefundPage = () => (
         при блокировке аккаунта за грубые нарушения правил сервиса (рассылка спама, фишинг, размещение незаконного
         контента, сбор персональных данных респондентов обманным путём);
       </li>
-      <li>за бесплатный ознакомительный период (пробный тариф «Исследователь» на 14 дней).</li>
+      {team ? (
+        <li>за Токены+, уже израсходованные на действия с ИИ.</li>
+      ) : (
+        <li>за бесплатный ознакомительный период (пробный тариф «Исследователь» на 14 дней).</li>
+      )}
     </ul>
 
     <h2>3. Порядок оформления и сроки</h2>
@@ -71,12 +79,14 @@ export const RefundPage = () => (
 
     <h2>4. Статус аккаунта и чеки</h2>
     <p>
-      4.1. После проведения возврата за неиспользованный период платный тариф отключается, а аккаунт переводится на
-      бесплатный тариф «Старт». Опросы и ответы респондентов сохраняются в течение 90 дней.
+      {team
+        ? '4.1. После проведения возврата за неиспользованный период оплаченный тариф или пакет команды отключается. Опросы и ответы респондентов сохраняются в течение 90 дней.'
+        : '4.1. После проведения возврата за неиспользованный период платный тариф отключается, а аккаунт переводится на бесплатный тариф «Старт». Опросы и ответы респондентов сохраняются в течение 90 дней.'}
     </p>
     <p>
       4.2. При возврате формируется электронный чек на возврат / аннулирование в приложении «Мой налог» (422-ФЗ) и
       направляется на email Заказчика.
     </p>
   </article>
-);
+  );
+};

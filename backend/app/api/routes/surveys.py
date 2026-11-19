@@ -36,6 +36,8 @@ from app.schemas.survey import (
     UpdateSurveyRequest,
 )
 from app.schemas.landing_demo import CreateSurveyFromDemoRequest
+from app.schemas.survey_template import CreateSurveyFromTemplateRequest, SurveyTemplateDetail, SurveyTemplateItem
+from app.services import survey_template_service
 from app.schemas.survey_demo import (
     DemoResponsesRemoved,
     DemoResponsesRequest,
@@ -58,6 +60,24 @@ router = APIRouter()
 public_router = APIRouter()
 methodologies_router = APIRouter()
 projects_router = APIRouter()
+templates_router = APIRouter()
+
+
+@templates_router.get("", response_model=list[SurveyTemplateItem])
+async def list_templates(_user: CurrentUser) -> list[SurveyTemplateItem]:
+    return survey_template_service.list_templates()
+
+
+@templates_router.get("/{template_id}", response_model=SurveyTemplateDetail)
+async def get_template(template_id: str, _user: CurrentUser) -> SurveyTemplateDetail:
+    return survey_template_service.get_template(template_id)
+
+
+@router.post("/from-template", response_model=SurveyDetail, status_code=201)
+async def create_survey_from_template(
+    payload: CreateSurveyFromTemplateRequest, session: DbSession, user: CurrentUser,
+) -> SurveyDetail:
+    return await survey_template_service.create_from_template(session, user, payload)
 
 
 # ─── Methodology catalogue ────────────────────────────────────────────────────
@@ -155,16 +175,18 @@ async def build_survey_with_ai(
     # Unconfirmed accounts are rejected before the burst limit so they cannot use up its budget
     _require_verified_email(user)
     _ai_rate_limit(user.id)
-    ent = await billing_guard.entitlements(session, user)
-    # Methodologies picked by hand that the plan does not include are refused before any AI is spent
-    billing_guard.ensure_methodologies(ent, payload.methodology_ids)
-    # Existing pages in the request mean the user is refining a survey, not building a new one
-    action = ai_meter.ACTION_SURVEY_EDIT if payload.pages else ai_meter.ACTION_SURVEY_BUILD
     try:
         organization_id = uuid.UUID(payload.organization_id) if payload.organization_id else None
     except ValueError as exc:
         raise HTTPException(status_code=404, detail="Organization not found") from exc
-    async with ai_meter.action(user, action, organization_id=organization_id):
+    # The rights are the team's in the team model, so the team is known before they are read
+    ent = await billing_guard.entitlements(session, user, organization_id)
+    # Methodologies picked by hand that the plan does not include are refused before any AI is spent
+    billing_guard.ensure_methodologies(ent, payload.methodology_ids)
+    # Existing pages in the request mean the user is refining a survey, not building a new one
+    action = ai_meter.ACTION_SURVEY_EDIT if payload.pages else ai_meter.ACTION_SURVEY_BUILD
+    chosen = {"model": payload.model} if payload.model else {}
+    async with ai_meter.action(user, action, organization_id=organization_id, **chosen):
         return await survey_ai_builder_service.build_survey(
             payload,
             allowed_methodologies=billing_guard.allowed_methodologies(ent),

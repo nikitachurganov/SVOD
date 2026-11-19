@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react';
-import { PlusOutlined } from '@ant-design/icons';
+import { PlusOutlined } from '../materialIcons';
 
 const HEIGHT = 210;
 const TAB_WIDTH = 132;

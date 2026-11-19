@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Alert, Button, Collapse, Skeleton, Table } from 'antd';
-import { ThunderboltOutlined } from '@ant-design/icons';
+import { ThunderboltOutlined } from '../shared/ui/materialIcons';
 import type { CollapseProps } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { Link } from 'react-router-dom';
 import { PlanActions } from '../components/billing/PlanActions';
+import { TeamPaymentHistory, TeamPlansFaq, TeamPlansPanel, TeamPublicCatalog } from '../components/billing/TeamPlansPanel';
 import { SeatStepper, TermSwitch } from '../components/billing/SeatConfigurator';
 import {
   DEFAULT_SEATS,
@@ -24,6 +25,7 @@ import { getPlans } from '../shared/api/billing.api';
 import { LEGAL } from '../shared/config/legal';
 import { useAuth } from '../shared/hooks/auth.hooks';
 import { useSubscription } from '../shared/hooks/subscription.hooks';
+import { useTeamBilling } from '../shared/hooks/teamBilling.hooks';
 import type { PlanInfo, PlansResponse, QuoteTerm } from '../types/billing';
 import '../components/billing/billing.css';
 
@@ -106,6 +108,25 @@ const TokensRow = ({ amount, when, hint }: { amount: number; when: string; hint:
   </div>
 );
 
+/** Whom the money goes to and on what terms; under every version of the price page */
+const LegalFooter = () => (
+  <div className="plans-legal-footer">
+    <p className="plans-legal-footer__note">
+      Оплачивая тариф, вы принимаете <Link to="/legal#offer">публичную оферту</Link>. Исполнитель:{' '}
+      {LEGAL.fullName}, ИНН {LEGAL.inn}, статус: {LEGAL.taxStatus}.
+    </p>
+    <nav className="plans-legal-footer__links">
+      <Link to="/legal#refund">Условия возврата</Link>
+      <span className="plans-legal-footer__sep">•</span>
+      <Link to="/legal#contacts">Контакты и реквизиты</Link>
+      <span className="plans-legal-footer__sep">•</span>
+      <Link to="/legal#privacy">Политика конфиденциальности</Link>
+      <span className="plans-legal-footer__sep">•</span>
+      <Link to="/legal#terms">Пользовательское соглашение</Link>
+    </nav>
+  </div>
+);
+
 /**
  * The plans side by side; what is not in the catalogue is not promised here.
  * Also the public price list (`/pricing`), which the payment provider checks before connecting payments.
@@ -113,6 +134,7 @@ const TokensRow = ({ amount, when, hint }: { amount: number; when: string; hint:
 export const PlansPage = () => {
   const { user } = useAuth();
   const { subscription } = useSubscription();
+  const team = useTeamBilling();
   const [plans, setPlans] = useState<PlansResponse | null>(null);
   const [failed, setFailed] = useState(false);
   // The configurator of the Researcher card; it exists only while the plan is sold by seats
@@ -135,6 +157,24 @@ export const PlansPage = () => {
     };
   }, []);
 
+  if (team.summary || plans?.team_billing_enabled) {
+    // The team model: the plan and the balances of the active team, or the public catalogue of the offers
+    const offers = team.summary?.offers ?? plans?.team_offers ?? [];
+    const freeTokens = team.summary?.free.quota ?? plans?.team_free_tokens ?? 0;
+    return (
+      <div className="plans-page">
+        <h1 className="plans-page__title">Тарифы</h1>
+        {team.summary ? (
+          <TeamPlansPanel summary={team.summary} onChanged={team.reload} />
+        ) : (
+          <TeamPublicCatalog offers={offers} freeTokens={freeTokens} signedIn={!!user} />
+        )}
+        {team.summary?.can_buy ? <TeamPaymentHistory organizationId={team.summary.organization_id} /> : null}
+        <TeamPlansFaq offers={offers} freeTokens={freeTokens} />
+        <LegalFooter />
+      </div>
+    );
+  }
   if (failed) {
     return (
       <div className="plans-page">
@@ -429,21 +469,7 @@ export const PlansPage = () => {
         />
       </section>
 
-      <div className="plans-legal-footer">
-        <p className="plans-legal-footer__note">
-          Оплачивая тариф, вы принимаете <Link to="/legal#offer">публичную оферту</Link>. Исполнитель:{' '}
-          {LEGAL.fullName}, ИНН {LEGAL.inn}, статус: {LEGAL.taxStatus}.
-        </p>
-        <nav className="plans-legal-footer__links">
-          <Link to="/legal#refund">Условия возврата</Link>
-          <span className="plans-legal-footer__sep">•</span>
-          <Link to="/legal#contacts">Контакты и реквизиты</Link>
-          <span className="plans-legal-footer__sep">•</span>
-          <Link to="/legal#privacy">Политика конфиденциальности</Link>
-          <span className="plans-legal-footer__sep">•</span>
-          <Link to="/legal#terms">Пользовательское соглашение</Link>
-        </nav>
-      </div>
+      <LegalFooter />
     </div>
   );
 };

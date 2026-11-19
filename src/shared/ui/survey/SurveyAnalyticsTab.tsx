@@ -1,6 +1,7 @@
+import { AiModelSelect } from './AiModelSelect';
 import type { ReactNode } from 'react';
 import { Alert, Button, Card, Tag } from 'antd';
-import { ReloadOutlined, RobotOutlined } from '@ant-design/icons';
+import { ReloadOutlined, RobotOutlined } from '../materialIcons';
 
 import type { SurveyAiSummary, SurveyResults } from '../../api/surveys.api';
 import { AiQuotaNote } from '../../../components/billing/AiQuotaNote';
@@ -22,6 +23,8 @@ interface AiSummaryCardProps {
   onGenerate: (force: boolean) => void;
   /** question id -> its text, for the "see the data" links under every conclusion */
   questionLabels: Map<string, string>;
+  onOpenQuestion?: (id: string) => void;
+  readOnly?: boolean;
 }
 
 /** The button is switched off once the plan's AI actions are used up: the server would refuse it anyway */
@@ -34,14 +37,14 @@ const GenerateSummaryButton = ({
   loading: boolean;
   onGenerate: (force: boolean) => void;
 }) => {
-  const { subscription } = useSubscription();
+  const { subscription, team } = useSubscription();
   return (
     <Button
       size="small"
       data-tour="ai-summary"
       icon={hasSummary ? <ReloadOutlined /> : <RobotOutlined />}
       loading={loading}
-      disabled={getAiQuota(subscription).exhausted}
+      disabled={getAiQuota(subscription, team).exhausted}
       onClick={() => onGenerate(true)}
     >
       {hasSummary ? 'Обновить' : 'Сформировать ИИ-резюме'}
@@ -52,7 +55,7 @@ const GenerateSummaryButton = ({
 const showQuestion = (id: string) =>
   document.getElementById(`question-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-const AiSummaryCard = ({ aiSummary, aiLoading, aiError, onGenerate, questionLabels }: AiSummaryCardProps) => (
+const AiSummaryCard = ({ aiSummary, aiLoading, aiError, onGenerate, questionLabels, onOpenQuestion, readOnly }: AiSummaryCardProps) => (
   <Card
     size="small"
     title={
@@ -61,7 +64,7 @@ const AiSummaryCard = ({ aiSummary, aiLoading, aiError, onGenerate, questionLabe
         ИИ-резюме
       </span>
     }
-    extra={<GenerateSummaryButton hasSummary={!!aiSummary} loading={aiLoading} onGenerate={onGenerate} />}
+    extra={readOnly ? undefined : <GenerateSummaryButton hasSummary={!!aiSummary} loading={aiLoading} onGenerate={onGenerate} />}
   >
     {aiError && <Alert type="error" showIcon message={aiError} style={{ marginBottom: 8 }} />}
     <AiQuotaNote className="ai-quota-note--card" />
@@ -80,7 +83,7 @@ const AiSummaryCard = ({ aiSummary, aiLoading, aiError, onGenerate, questionLabe
                       type="link"
                       size="small"
                       style={{ padding: 0, height: 'auto', fontSize: 12 }}
-                      onClick={() => showQuestion(id)}
+                      onClick={() => onOpenQuestion ? onOpenQuestion(id) : showQuestion(id)}
                     >
                       {questionLabels.get(id) ?? id}
                     </Button>
@@ -124,6 +127,9 @@ const AiSummaryCard = ({ aiSummary, aiLoading, aiError, onGenerate, questionLabe
 );
 
 interface SurveyAnalyticsTabProps {
+  view?: 'questions' | 'insights';
+  onOpenQuestion?: (id: string) => void;
+  readOnly?: boolean;
   surveyId: string;
   results: SurveyResults;
   excludeFlagged: boolean;
@@ -146,6 +152,9 @@ export const SurveyAnalyticsTab = ({
   onGenerateAiSummary,
   onOpenResponse,
   qualityControl,
+  view = 'questions',
+  onOpenQuestion,
+  readOnly = false,
 }: SurveyAnalyticsTabProps) => {
   const questionLabels = new Map(results.questions.map((q) => [q.field_id, q.label]));
   // Segmentation questions: closed questions with few options that are not a methodology block
@@ -187,13 +196,21 @@ export const SurveyAnalyticsTab = ({
         />
       ) : (
         <>
-          <AiSummaryCard
+          {view === 'insights' && <>
+          {!readOnly && <AiModelSelect />}
+          <Alert type="info" showIcon message="Выводы требуют проверки" description={`В расчёте ${results.used} ответов. Выборка может быть нерепрезентативной; наблюдения ИИ не доказывают причинно-следственную связь. Открывайте основания каждого вывода.`} />
+          {aiSummary && aiSummary.exclude_flagged !== excludeFlagged && <Alert type="warning" showIcon message="Инсайты рассчитаны с другим фильтром качества" description="Обновите ИИ-резюме, чтобы его основания соответствовали текущему набору ответов." />}
+          {readOnly ? (aiSummary ? <AiSummaryCard readOnly aiSummary={aiSummary} aiLoading={false} aiError={null} onGenerate={() => {}} questionLabels={questionLabels} onOpenQuestion={onOpenQuestion} /> : <p>ИИ-инсайты ещё не сформированы. Это может сделать редактор исследования.</p>) : <AiSummaryCard
             aiSummary={aiSummary}
             aiLoading={aiLoading}
             aiError={aiError}
             onGenerate={onGenerateAiSummary}
             questionLabels={questionLabels}
-          />
+            onOpenQuestion={onOpenQuestion}
+          />}
+          </>}
+
+          {view === 'questions' && <>
 
           {results.metrics.length > 0 && (
             <div>
@@ -234,6 +251,7 @@ export const SurveyAnalyticsTab = ({
             excludeFlagged={excludeFlagged}
             onOpenResponse={onOpenResponse}
           />
+          </>}
         </>
       )}
     </div>

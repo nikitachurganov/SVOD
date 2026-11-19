@@ -6,13 +6,14 @@
   color: var(--app-text);
 }
 
+/* Top bar on the canvas, no rule under it (Gemini); the current step is a tonal chip */
 .upgrade-flow__bar {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 12px;
+  min-height: var(--app-header-height);
   padding: 8px 16px;
-  border-bottom: 1px solid var(--app-border-secondary);
 }
 
 .upgrade-flow__bar > :first-child {
@@ -22,14 +23,47 @@
 .upgrade-flow__crumbs {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   justify-content: center;
-  font-size: 13px;
+  row-gap: 4px;
+  font-family: var(--app-font-display);
+  font-size: 14px;
+  font-weight: 500;
   color: var(--app-text-secondary);
 }
 
+.upgrade-flow__crumb {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: var(--app-radius-pill);
+}
+
+.upgrade-flow__crumb > [aria-hidden] {
+  margin-right: 12px;
+}
+
 .upgrade-flow__crumb--current {
-  color: var(--app-text);
-  font-weight: 600;
+  color: var(--app-menu-active-text);
+  background: var(--app-menu-active-bg);
+}
+
+/* The «›» before the current step sits outside its chip */
+.upgrade-flow__crumb--current > [aria-hidden] {
+  display: none;
+}
+
+.upgrade-flow__crumb--current:not(:first-child)::before {
+  content: '›';
+  position: relative;
+  left: -24px;
+  width: 0;
+  color: var(--app-text-secondary);
+}
+
+.upgrade-flow__crumb--current:not(:first-child) {
+  margin-left: 20px;
 }
 
 .upgrade-flow__main {
@@ -50,11 +84,13 @@
   text-align: center;
 }
 
+/* M3 headline in Google Sans, light weight */
 .upgrade-flow__title {
   margin: 0 0 8px;
-  font-size: 24px;
-  line-height: 32px;
-  font-weight: 600;
+  font-family: var(--app-font-display);
+  font-size: 32px;
+  line-height: 40px;
+  font-weight: 400;
 }
 
 .upgrade-flow__lead {
@@ -69,7 +105,7 @@
 
 .upgrade-card--plain {
   display: block;
-  padding: 20px;
+  padding: 24px;
 }
 
 .upgrade-summary--sticky {
@@ -84,8 +120,8 @@
 
 /* The people of the team and the places they take */
 .upgrade-table {
-  border: 1px solid var(--app-border-secondary);
-  border-radius: 12px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-md);
   background: var(--app-surface);
   overflow: hidden;
 }
@@ -100,7 +136,9 @@
 }
 
 .upgrade-table__head {
-  font-size: 12px;
+  font-family: var(--app-font-display);
+  font-size: 13px;
+  font-weight: 500;
   color: var(--app-text-secondary);
   border-bottom: 1px solid var(--app-border-secondary);
 }
@@ -135,7 +173,7 @@
 }
 
 .upgrade-table__row--free {
-  background: var(--app-surface-hover);
+  background: var(--app-surface-accent);
 }
 
 .upgrade-table__row--free .upgrade-table__who strong,
@@ -162,10 +200,10 @@
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 16px;
-  padding: 14px 16px;
-  border: 1px solid var(--app-primary);
-  border-radius: 12px;
-  background: var(--app-surface-accent);
+  padding: 16px 20px;
+  border: 0;
+  border-radius: var(--app-radius-md);
+  background: var(--app-highlight);
 }
 
 .upgrade-offer p {
@@ -182,14 +220,16 @@
   margin-bottom: 12px;
 }
 
+/* Google Play payment-method rows: 56px, the radio on the left */
 .upgrade-radio {
   display: grid;
-  grid-template-columns: 16px minmax(0, 1fr) auto;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 1px solid var(--app-border-secondary);
-  border-radius: 10px;
+  gap: 12px;
+  min-height: 56px;
+  padding: 8px 16px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-sm);
   background: var(--app-surface);
   color: var(--app-text);
   font: inherit;
@@ -205,18 +245,31 @@
 .upgrade-radio--selected {
   border-color: var(--app-primary);
   box-shadow: 0 0 0 1px var(--app-primary);
+  background: var(--app-highlight);
 }
 
+/* On the tinted selected row the tonal chip would melt in: fill it with primary there */
+.upgrade-radio--selected .upgrade-term__tag {
+  color: var(--app-text-on-brand);
+  background: var(--app-primary);
+}
+
+.upgrade-radio:focus-visible {
+  outline: 2px solid var(--app-focus);
+  outline-offset: 2px;
+}
+
+/* M3 radio: 20px ring in outline, the selected one in primary with a 10px dot */
 .upgrade-radio__dot {
-  width: 14px;
-  height: 14px;
-  border: 2px solid var(--app-border-secondary);
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--app-border-strong);
   border-radius: 50%;
 }
 
 .upgrade-radio--selected .upgrade-radio__dot {
   border-color: var(--app-primary);
-  background: radial-gradient(circle, var(--app-primary) 40%, transparent 45%);
+  background: radial-gradient(circle, var(--app-primary) 5px, transparent 5.5px);
 }
 
 .upgrade-radio__name {
@@ -227,7 +280,8 @@
 }
 
 .upgrade-radio__price {
-  font-weight: 600;
+  font-family: var(--app-font-display);
+  font-weight: 500;
 }
 
 /* The team the seats are for: an existing one or the name of a new one */

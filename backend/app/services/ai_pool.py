@@ -59,6 +59,9 @@ class Payer:
     cap: MemberCap | None = None
     # True: the counter is the team owner's pool, not the acting person's own allowance
     pooled: bool = False
+    # True: the team model (docs/MONETIZATION_TEAM_SPEC.md), the balances are the team's own and
+    # are spent through team_billing_service; no counter of a person is charged
+    team: bool = False
 
 
 def charged_tokens(tokens: int, model: str | None, plan: Plan) -> int:
@@ -101,7 +104,13 @@ async def resolve_payer(
                 "message": "Читатель не может пользоваться ИИ. Попросите владельца сменить роль.",
             },
         )
-    if org.is_personal or org.owner_user_id == user.id:
+    if settings.BILLING_ENABLED and settings.TEAM_BILLING_ENABLED:
+        # The balances belong to the team: the owner spends them like anybody else who may run the AI
+        cap = None
+        if member.token_plus_limit is not None and org.owner_user_id != user.id:
+            cap = MemberCap(user.id, organization_id, max(int(member.token_plus_limit), 0))
+        return Payer(user_id=user.id, organization_id=organization_id, cap=cap, pooled=True, team=True)
+    if org.owner_user_id == user.id:
         return own
 
     owner_ent = await billing_service.get_entitlements(session, org.owner_user_id)

@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Popover } from 'antd';
-import { BellOutlined } from '@ant-design/icons';
+import { BellOutlined } from '../../shared/ui/materialIcons';
 import { useRegisterAuxiliaryPanelCloser } from '../../shared/context/appShellPanels.context';
 import { useOrganization } from '../../shared/hooks/organization.hooks';
 import { getMyInvitations } from '../../shared/api/organizations.api';
@@ -9,6 +9,7 @@ import { getNotifications } from '../../shared/api/notifications.api';
 import { NotificationsPanelContent } from '../organization/NotificationsPanel';
 
 interface Props {
+  icon?: ReactNode;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   closeProfile: () => void;
@@ -18,6 +19,7 @@ export const HeaderNotifications = ({
   open,
   onOpenChange,
   closeProfile,
+  icon,
 }: Props) => {
   const location = useLocation();
   const { refreshOrganizations } = useOrganization();
@@ -93,7 +95,7 @@ export const HeaderNotifications = ({
             handleOpenChange(!open);
           }}
         >
-          <BellOutlined style={{ fontSize: 16 }} />
+          {icon ?? <BellOutlined style={{ fontSize: 16 }} />}
         </button>
         {pendingCount > 0 ? (
           <span className="app-header-notifications-badge" aria-hidden>

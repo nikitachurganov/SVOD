@@ -8,7 +8,7 @@ import {
   PlusOutlined,
   TeamOutlined,
   UserOutlined,
-} from '@ant-design/icons';
+} from '../shared/ui/materialIcons';
 import { ConsentChecklist } from '../components/billing/ConsentChecklist';
 import { SeatStepper } from '../components/billing/SeatConfigurator';
 import { NOTHING_ACCEPTED, allAccepted, type Accepted } from '../components/billing/consents';
@@ -123,7 +123,7 @@ export const UpgradeFlowPage = () => {
   const pack = plans?.pack;
 
   // The seats are bought for one of the person's own teams, or for a new one made right before the payment
-  const ownTeams = organizations.filter((org) => !org.is_personal && org.owner_user_id === user?.id);
+  const ownTeams = organizations.filter((org) => org.owner_user_id === user?.id);
   const ownTeam = (id: string | null) => (id ? (ownTeams.find((org) => org.id === id) ?? null) : null);
   const defaultTeamId =
     ownTeam(activeOrganization?.id ?? null)?.id ?? (ownTeams.length > 0 ? ownTeams[0].id : NEW_TEAM);

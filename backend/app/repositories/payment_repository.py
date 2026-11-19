@@ -61,10 +61,20 @@ async def list_for_user(
 
 
 async def find_open_checkout(
-    session: AsyncSession, user_id: uuid.UUID, term: str, *, seats: int = 1, since: datetime
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    term: str,
+    *,
+    seats: int = 1,
+    since: datetime,
+    organization_id: uuid.UUID | None = None,
+    plan_code: str | None = None,
 ) -> Payment | None:
     """A payment of this person for this term and number of seats that is still waiting for them,
-    so a second click on «Оплатить» returns the same page instead of making another payment."""
+    so a second click on «Оплатить» returns the same page instead of making another payment.
+
+    A payment made for a team is told apart by the team and the plan: the same person may be paying
+    for two teams, or for the pack and a subscription of one team, at the same time."""
     stmt = (
         select(Payment)
         .where(
@@ -74,11 +84,29 @@ async def find_open_checkout(
             Payment.status == PAYMENT_PENDING,
             Payment.confirmation_url.is_not(None),
             Payment.created_at >= since,
+            Payment.organization_id == organization_id
+            if organization_id is not None
+            else Payment.organization_id.is_(None),
         )
         .order_by(Payment.created_at.desc())
         .limit(1)
     )
+    if plan_code is not None:
+        stmt = stmt.where(Payment.plan_code == plan_code)
     return (await session.execute(stmt)).scalar_one_or_none()
+
+
+async def list_for_organization(
+    session: AsyncSession, organization_id: uuid.UUID, *, limit: int
+) -> list[Payment]:
+    """The purchases of a team that went through (the history shown to its owner), newest first."""
+    result = await session.execute(
+        select(Payment)
+        .where(Payment.organization_id == organization_id, Payment.status == PAYMENT_SUCCEEDED)
+        .order_by(Payment.paid_at.desc().nulls_last(), Payment.created_at.desc())
+        .limit(limit)
+    )
+    return list(result.scalars().all())
 
 
 async def list_open_ids(

@@ -8,7 +8,7 @@ import {
 import { useAuth } from '../hooks/auth.hooks';
 import {
   getMyOrganizations,
-  getPersonalOrganization,
+  getDefaultOrganization,
   createOrganization as createOrganizationApi,
   type CreateOrganizationPayload,
 } from '../api/organizations.api';
@@ -19,16 +19,15 @@ import { OrganizationContext, type OrganizationContextValue } from './organizati
 const ACTIVE_ORG_KEY = 'active_organization_id';
 
 /**
- * The standalone surveys service opens in the user's own workspace (the server creates it on first call);
- * the teams the person created or joined follow it in the list.
+ * The standalone surveys service makes sure the person has a team (the server creates «Моя команда»
+ * on the first call); the list says which plan each team works on, the answer about one team does not.
  */
 const fetchOrganizations = async (): Promise<OrganizationResponse[]> => {
   if (!IS_SURVEYS_APP) return getMyOrganizations();
-  const personal = await getPersonalOrganization();
-  const all = await getMyOrganizations().catch(() => [personal]);
-  // The list says which plan each workspace works on; the answer about the personal one does not
-  const personalInList = all.find((org) => org.id === personal.id);
-  return [personalInList ?? personal, ...all.filter((org) => org.id !== personal.id)];
+  const first = await getDefaultOrganization();
+  const all = await getMyOrganizations().catch(() => [first]);
+  const firstInList = all.find((org) => org.id === first.id);
+  return [firstInList ?? first, ...all.filter((org) => org.id !== first.id)];
 };
 
 export const OrganizationProvider = ({ children }: { children: ReactNode }) => {

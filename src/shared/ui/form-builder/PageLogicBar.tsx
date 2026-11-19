@@ -39,10 +39,10 @@ export const PageLogicBar = ({ pages, pageIndex, problems, onChange }: PageLogic
           flexWrap: 'wrap',
           alignItems: 'center',
           gap: '8px 16px',
-          padding: '8px 12px',
-          borderRadius: 6,
+          padding: '10px 16px',
+          borderRadius: 'var(--app-radius-md)',
           background: 'var(--app-surface)',
-          border: '1px solid var(--app-border)',
+          border: '1px solid var(--app-border-secondary)',
           fontSize: 13,
         }}
       >

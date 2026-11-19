@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Button, Form, Input, Select } from 'antd';
-import { ArrowLeftOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined } from '../shared/ui/materialIcons';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import {

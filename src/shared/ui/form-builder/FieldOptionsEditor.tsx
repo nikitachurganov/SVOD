@@ -1,7 +1,7 @@
 import { Button, Switch } from 'antd';
 import { AutoGrowInput } from './AutoGrowInput';
 
-import { PlusOutlined, CloseOutlined } from '@ant-design/icons';
+import { PlusOutlined, CloseOutlined } from '../materialIcons';
 
 import type { FieldOption } from '../../types/form-builder.types';
 

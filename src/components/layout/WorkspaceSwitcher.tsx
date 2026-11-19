@@ -1,14 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Dropdown } from 'antd';
+import { Icon } from '@iconify/react';
 import type { MenuProps } from 'antd';
-import { PlusOutlined, TeamOutlined, UserOutlined } from '@ant-design/icons';
+import { PlusOutlined, TeamOutlined } from '../../shared/ui/materialIcons';
 import { useNavigate } from 'react-router-dom';
 import { getPlans } from '../../shared/api/billing.api';
 import { useAuth } from '../../shared/hooks/auth.hooks';
 import { useOrganization } from '../../shared/hooks/organization.hooks';
-import type { OrganizationResponse } from '../../types/organization';
 import { UpgradeModal } from '../billing/UpgradeModal';
 import { useWorkspaceUsage } from './useWorkspaceUsage';
+import { BEFORE_WORKSPACE_CHANGE } from '../../shared/hooks/useResearchUnsavedChanges';
 
 interface Props {
   onCreateTeam: () => void;
@@ -16,10 +17,6 @@ interface Props {
   /** Fill the width of the container (the side panel) instead of fitting the name */
   block?: boolean;
 }
-
-const PERSONAL_LABEL = 'Личное пространство';
-
-const workspaceName = (org: OrganizationResponse): string => (org.is_personal ? PERSONAL_LABEL : org.name);
 
 /** The plan of the workspace as the small tag next to its name; the free plan is the quiet one */
 const PLAN_TAGS: Record<string, { label: string; paid: boolean }> = {
@@ -40,26 +37,18 @@ const avatarColor = (name: string): string => {
 
 /** Two chevrons, one over the other: the switcher opens a list to choose from, not just a menu down */
 const ChevronsUpDown = () => (
-  <svg
+  <Icon
+    icon="material-symbols:unfold-more-rounded"
     className="workspace-switcher__arrow"
     width="14"
     height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
     aria-hidden
-  >
-    <path d="m7 15 5 5 5-5" />
-    <path d="m7 9 5-5 5 5" />
-  </svg>
+  />
 );
 
 /**
- * Standalone surveys service: which workspace the person is in (their own or one of their teams),
- * the way to the team's people and settings, and the way to start a new team.
+ * Standalone surveys service: which team the person is in, the way to the team's people and settings,
+ * and the way to start a new team.
  */
 export const WorkspaceSwitcher = ({ onCreateTeam, placement = 'bottomRight', block = false }: Props) => {
   const navigate = useNavigate();
@@ -71,6 +60,8 @@ export const WorkspaceSwitcher = ({ onCreateTeam, placement = 'bottomRight', blo
   // Whether the payment can be made online right now; without it the tag of a free plan is only a label
   const [canPay, setCanPay] = useState(false);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const switcherRef = useRef<HTMLDivElement>(null);
+  const [menuWidth, setMenuWidth] = useState<number>();
   const { user } = useAuth();
 
   useEffect(() => {
@@ -89,8 +80,7 @@ export const WorkspaceSwitcher = ({ onCreateTeam, placement = 'bottomRight', blo
 
   if (isLoading || !activeOrganization) return null;
 
-  const inTeam = !activeOrganization.is_personal;
-  const name = workspaceName(activeOrganization);
+  const name = activeOrganization.name;
   const tag = shown ? PLAN_TAGS[shown.usage.plan_code] : undefined;
   // The plan belongs to the person who pays, so only the owner of the workspace can change it: on the free
   // plan the tag opens the plans, on a paid one the page of the plan and its quota
@@ -108,10 +98,10 @@ export const WorkspaceSwitcher = ({ onCreateTeam, placement = 'bottomRight', blo
         const planTag = code ? PLAN_TAGS[code] : undefined;
         return {
           key: `org:${org.id}`,
-          icon: org.is_personal ? <UserOutlined /> : <TeamOutlined />,
+          icon: <TeamOutlined />,
           label: (
             <span className="workspace-menu-item">
-              <span className="workspace-menu-item__name">{workspaceName(org)}</span>
+              <span className="workspace-menu-item__name" title={org.name}>{org.name}</span>
               {planTag ? (
                 <span className={`workspace-switcher__plan${planTag.paid ? ' workspace-switcher__plan--paid' : ''}`}>
                   {planTag.label}
@@ -123,12 +113,20 @@ export const WorkspaceSwitcher = ({ onCreateTeam, placement = 'bottomRight', blo
       }),
     },
     { type: 'divider' },
+    { key: 'people', icon: <TeamOutlined />, label: 'Участники команды' },
+    { key: 'settings', label: 'Настройки пространства' },
+    ...(isOwner ? [{ key: 'plan', label: 'Тариф и квота' }] : []),
     { key: 'create', icon: <PlusOutlined />, label: 'Создать команду' },
   ];
 
   const onClick: MenuProps['onClick'] = ({ key }) => {
     if (key === 'create') onCreateTeam();
+    else if (key === 'people') navigate('/participants');
+    else if (key === 'settings') navigate('/settings');
+    else if (key === 'plan') navigate('/settings?tab=plans');
     else if (key.startsWith('org:')) {
+      if (key === `org:${activeOrganization.id}`) return;
+      if (!window.dispatchEvent(new Event(BEFORE_WORKSPACE_CHANGE, { cancelable: true }))) return;
       setActiveOrganizationId(key.slice('org:'.length));
       // A page of the previous workspace (a survey, a project) does not exist in the next one
       navigate('/surveys');
@@ -138,12 +136,16 @@ export const WorkspaceSwitcher = ({ onCreateTeam, placement = 'bottomRight', blo
   return (
     <>
       <Dropdown
-        classNames={{ root: 'app-menu-dropdown' }}
+        classNames={{ root: 'app-menu-dropdown workspace-dropdown' }}
+        styles={{ root: { width: menuWidth } }}
+        onOpenChange={(open) => {
+          if (open) setMenuWidth(Math.max(240, switcherRef.current?.getBoundingClientRect().width ?? 0));
+        }}
         menu={{ items, onClick, selectedKeys: [`org:${activeOrganization.id}`] }}
         trigger={['click']}
         placement={placement}
       >
-        <div className={`workspace-switcher${block ? ' workspace-switcher--block' : ''}`}>
+        <div ref={switcherRef} className={`workspace-switcher${block ? ' workspace-switcher--block' : ''}`}>
           <button
             type="button"
             className="workspace-switcher__main"
@@ -152,10 +154,10 @@ export const WorkspaceSwitcher = ({ onCreateTeam, placement = 'bottomRight', blo
           >
             <span
               className="workspace-switcher__avatar"
-              style={inTeam ? { background: avatarColor(name) } : undefined}
+              style={{ background: avatarColor(name) }}
               aria-hidden
             >
-              {inTeam ? name.trim().charAt(0).toUpperCase() : <UserOutlined />}
+              {name.trim().charAt(0).toUpperCase()}
             </span>
             <span className="workspace-switcher__name">{name}</span>
           </button>

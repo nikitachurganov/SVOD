@@ -6,7 +6,7 @@ import {
   MoreOutlined,
   PlusOutlined,
   SearchOutlined,
-} from '@ant-design/icons';
+} from '../shared/ui/materialIcons';
 import axios from 'axios';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
@@ -15,6 +15,7 @@ import {
   getSurveyProject,
   getSurveys,
   moveSurveyToProject,
+  SURVEYS_CHANGED_EVENT,
   updateSurveyProject,
   type SurveyListItem,
   type SurveyStatus,
@@ -106,6 +107,13 @@ export const ProjectSurveysPage = () => {
   useEffect(() => {
     loadProject();
   }, [loadProject]);
+
+  useEffect(() => {
+    if (!projectId) return;
+    const refreshProject = () => { void getSurveyProject(projectId).then(setProject).catch(() => {}); };
+    window.addEventListener(SURVEYS_CHANGED_EVENT, refreshProject);
+    return () => window.removeEventListener(SURVEYS_CHANGED_EVENT, refreshProject);
+  }, [projectId]);
 
   useEffect(() => {
     setEntityTitle(project?.name ?? null);
@@ -252,7 +260,7 @@ export const ProjectSurveysPage = () => {
             : 'Возможно, он был удалён или находится в другой команде.'
         }
         extra={
-          <Button type="primary" onClick={() => navigate('/surveys')}>
+          <Button type="primary" onClick={() => navigate(IS_SURVEYS_APP ? '/surveys/projects' : '/surveys')}>
             К проектам
           </Button>
         }

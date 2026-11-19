@@ -3,7 +3,7 @@ import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   SearchOutlined,
-} from '@ant-design/icons';
+} from '../../shared/ui/materialIcons';
 import { OrganizationSwitcher } from './OrganizationSwitcher';
 import { SidebarOrgActions } from './SidebarOrgActions';
 import { SidebarCollapsedOrgPopover } from './SidebarCollapsedOrgPopover';

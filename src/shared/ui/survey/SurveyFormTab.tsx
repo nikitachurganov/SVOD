@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Button, Card, Empty, Modal, Popover } from 'antd';
-import { EditOutlined, EyeOutlined, QuestionCircleOutlined } from '@ant-design/icons';
+import { EditOutlined, EyeOutlined, QuestionCircleOutlined } from '../materialIcons';
 
 import type { SurveyDetail } from '../../api/surveys.api';
 import type { CreateFormFieldPayload } from '../../api/forms.api';

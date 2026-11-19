@@ -25,7 +25,6 @@ class OrganizationResponse(BaseModel):
     owner_user_id: str
     owner: PublicAuthorResponse | None = None
     members_count: int = 0
-    is_personal: bool = False
     # The caller's role in this organization (owner, admin, editor, reader); None when the answer
     # is not about the caller's own membership
     my_role: str | None = None

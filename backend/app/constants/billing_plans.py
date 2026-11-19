@@ -200,6 +200,49 @@ def get_plan(code: str | None) -> Plan:
     return PLANS.get(code or "", START)
 
 
+# ─── The team catalogue of docs/MONETIZATION_TEAM_SPEC.md (TEAM_BILLING_ENABLED) ───────────────
+# Everything is bought by a team and counted on it: the plan, the two balances, the seats.
+
+PLAN_TEAM_PLUS = "plus"  # Plus
+PLAN_TEAM_PRO = "pro"  # Pro
+# The code a one-off pack of 99 ₽ is stored under in a payment (it is not a plan)
+PLAN_TEAM_PACK = "team_pack"
+
+# The free team: ordinary tokens of the base model, renewed to exactly this on every monthly
+# anniversary of the creation of the team
+TEAM_FREE_TOKENS = 150_000
+# The pack: Токены+ with no expiry, it can be bought again and again, also during a subscription
+TEAM_PACK_PRICE_KOPECKS = 9_900
+TEAM_PACK_TOKENS = 500_000
+# A paid month is 30 days; the subscription quota burns at its end
+TEAM_PERIOD_DAYS = 30
+# Токены+ for one token of a model: 0.2 for the base model, 1 for a strong one
+TEAM_BASE_MODEL_WEIGHT = 0.2
+TEAM_STRONG_MODEL_WEIGHT = 1.0
+
+
+@dataclass(frozen=True)
+class TeamPlan:
+    code: str
+    title: str
+    price_kopecks: int
+    quota_tokens: int
+    # Seats with the owner; admins and editors take one each, readers are over the limit
+    seats: int
+
+
+TEAM_PLANS: Mapping[str, TeamPlan] = MappingProxyType(
+    {
+        PLAN_TEAM_PLUS: TeamPlan(PLAN_TEAM_PLUS, "Plus", 49_900, 2_000_000, 3),
+        PLAN_TEAM_PRO: TeamPlan(PLAN_TEAM_PRO, "Pro", 139_900, 6_000_000, 10),
+    }
+)
+
+# A free team and a team with only a pack work for one person; who else may be invited there is
+# still to be decided (spec, section 6, item 2)
+TEAM_UNSUBSCRIBED_SEATS = 1
+
+
 def clean_overrides(overrides: Mapping[str, Any] | None) -> dict[str, int]:
     """Only the known limits with non-negative integer values; anything else is dropped."""
     if not isinstance(overrides, Mapping):

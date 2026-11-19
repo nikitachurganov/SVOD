@@ -9,6 +9,7 @@ from app.models.ai_usage_log import AIUsageLog
 from app.models.plan_request import PlanRequest
 from app.models.payment import Payment
 from app.models.token_grant import TokenGrant
+from app.models.team_billing import TeamBilling
 from app.models.form import Form
 from app.models.request import Request
 from app.models.form_file import FormFile

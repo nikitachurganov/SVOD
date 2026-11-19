@@ -21,8 +21,7 @@ export const SettingsPage = () => {
   const { activeOrganization } = useOrganization();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const inTeam = Boolean(activeOrganization && !activeOrganization.is_personal);
-  const tabs: SettingsTabKey[] = inTeam ? ['team', 'plans'] : ['plans'];
+  const tabs: SettingsTabKey[] = activeOrganization ? ['team', 'plans'] : ['plans'];
   const tabParam = searchParams.get('tab') as SettingsTabKey | null;
   const activeTab: SettingsTabKey = tabParam && tabs.includes(tabParam) ? tabParam : tabs[0];
   const setActiveTab = (key: SettingsTabKey) =>

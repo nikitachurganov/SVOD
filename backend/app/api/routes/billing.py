@@ -7,7 +7,9 @@ from app.api.deps import CurrentUser, DbSession
 from app.core.client_ip import client_ip
 from app.core.config import settings
 from app.models.payment import PAYMENT_FAILED, PAYMENT_NEW, Payment
-from app.repositories import payment_repository
+from app.constants import team_roles
+from app.constants.billing_plans import TEAM_FREE_TOKENS
+from app.repositories import organization_repository, payment_repository
 from app.schemas.billing import (
     CheckoutRequest,
     CheckoutResponse,
@@ -20,8 +22,17 @@ from app.schemas.billing import (
     SeatsRequest,
     SubscriptionHistoryItem,
     SubscriptionResponse,
+    TeamBillingSummary,
+    TeamCheckoutRequest,
+    TeamPaymentInfo,
 )
-from app.services import billing_service, payment_service, plan_request_service, yookassa_client
+from app.services import (
+    billing_service,
+    payment_service,
+    plan_request_service,
+    team_billing_service,
+    yookassa_client,
+)
 from app.services import subscription_lifecycle_service as lifecycle
 
 logger = logging.getLogger(__name__)
@@ -38,9 +49,33 @@ def _require_billing() -> None:
         )
 
 
+def _team_model_on() -> bool:
+    return settings.BILLING_ENABLED and settings.TEAM_BILLING_ENABLED
+
+
+def _require_person_model() -> None:
+    """The purchases of a person (the old plans, seats, add-on packs, the trial) are closed once the
+    plans belong to teams: everything is bought for a team through /teams/{id}/checkout."""
+    _require_billing()
+    if _team_model_on():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "team_billing_enabled",
+                "message": "Тарифы теперь подключаются для команды: откройте страницу «Тарифы».",
+            },
+        )
+
+
 @router.get("/plans", response_model=PlansResponse)
 async def get_plans() -> PlansResponse:
-    return billing_service.build_plans_response()
+    response = billing_service.build_plans_response()
+    if _team_model_on():
+        response.team_billing_enabled = True
+        response.team_offers = team_billing_service.offers()
+        response.team_free_tokens = TEAM_FREE_TOKENS
+        response.team_strong_models = list(team_billing_service.strong_models())
+    return response
 
 
 @router.get("/quote", response_model=QuoteResponse)
@@ -50,7 +85,7 @@ async def get_quote(
 ) -> QuoteResponse:
     """The price of a team of ``seats`` seats for a month or a year, for the price page and the cart.
     Public like the plans; the price of a first purchase (both kit places at 300 ₽)."""
-    if not settings.SEAT_PRICING_ENABLED:
+    if not settings.SEAT_PRICING_ENABLED or _team_model_on():
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail={"code": "seats_unavailable"}
         )
@@ -78,7 +113,7 @@ async def create_checkout(
     payload: CheckoutRequest, session: DbSession, user: CurrentUser
 ) -> CheckoutResponse:
     """Start paying for the paid plan online: the answer is the payment page to send the person to."""
-    _require_billing()
+    _require_person_model()
     payment = await payment_service.create_checkout(
         session, user, payload.term, seats=payload.seats, return_to=payload.return_to
     )
@@ -94,7 +129,7 @@ async def quote_seats(
     session: DbSession, user: CurrentUser, seats: int = Query(ge=2, le=100)
 ) -> SeatAdditionQuoteResponse:
     """The sum of adding seats now, to show before the person goes to pay; nothing is created."""
-    _require_billing()
+    _require_person_model()
     quote = await payment_service.quote_seat_addition(session, user, seats)
     return SeatAdditionQuoteResponse(
         seats=quote.seats, amount_kopecks=quote.amount_kopecks, days_left=quote.days_left
@@ -104,7 +139,7 @@ async def quote_seats(
 @router.post("/seats", response_model=CheckoutResponse)
 async def add_seats(payload: SeatsRequest, session: DbSession, user: CurrentUser) -> CheckoutResponse:
     """Pay for more seats in the middle of the period: the answer is the payment page."""
-    _require_billing()
+    _require_person_model()
     payment = await payment_service.create_seat_addition(
         session, user, payload.seats, return_to=payload.return_to
     )
@@ -118,7 +153,7 @@ async def add_seats(payload: SeatsRequest, session: DbSession, user: CurrentUser
 @router.post("/addon", response_model=CheckoutResponse)
 async def buy_addon(session: DbSession, user: CurrentUser) -> CheckoutResponse:
     """Buy the extra pack of Токены+ (1 million, 90 days): the answer is the payment page."""
-    _require_billing()
+    _require_person_model()
     payment = await payment_service.create_addon(session, user)
     if not payment.confirmation_url:
         raise HTTPException(
@@ -197,16 +232,85 @@ async def create_plan_request(
     background_tasks: BackgroundTasks,
 ) -> PlanRequestInfo:
     """Ask for a paid plan; an administrator activates it after the payment. One at a time."""
+    if _team_model_on():
+        _require_person_model()
     request = await plan_request_service.create_request(session, user, payload)
     await session.commit()
     background_tasks.add_task(plan_request_service.announce_to_admin, request, user)
     return PlanRequestInfo.model_validate(request, from_attributes=True)
 
 
+# ─── The team model (docs/MONETIZATION_TEAM_SPEC.md) ──────────────────────────
+
+
+def _require_team_billing() -> None:
+    if not (settings.BILLING_ENABLED and settings.TEAM_BILLING_ENABLED):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail={"code": "team_billing_disabled"}
+        )
+
+
+async def _team_member(session: DbSession, user: CurrentUser, organization_id: uuid.UUID):
+    member = await organization_repository.get_member(session, organization_id, user.id)
+    if member is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="You are not a member of this organization"
+        )
+    return member
+
+
+@router.get("/teams/{organization_id}", response_model=TeamBillingSummary)
+async def get_team_billing(
+    organization_id: uuid.UUID, session: DbSession, user: CurrentUser
+) -> TeamBillingSummary:
+    """The plan, the two balances and the rights of one team, for the plans and the balance screens.
+    The screen shows the team it was asked about, so a change of the active team changes the answer."""
+    _require_team_billing()
+    member = await _team_member(session, user, organization_id)
+    state = await team_billing_service.get_state(session, organization_id)
+    return team_billing_service.build_summary(
+        organization_id, state, can_buy=team_roles.can_manage_billing(member.role_tag)
+    )
+
+
+@router.post("/teams/{organization_id}/checkout", response_model=CheckoutResponse)
+async def create_team_checkout(
+    organization_id: uuid.UUID,
+    payload: TeamCheckoutRequest,
+    session: DbSession,
+    user: CurrentUser,
+) -> CheckoutResponse:
+    """Pay for the pack or a month of a plan, for this team only: the answer is the payment page."""
+    _require_team_billing()
+    payment = await payment_service.create_team_checkout(
+        session, user, organization_id, payload.kind, return_to=payload.return_to
+    )
+    if not payment.confirmation_url:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY, detail={"code": "payment_provider_rejected"}
+        )
+    return CheckoutResponse(payment_id=payment.id, confirmation_url=payment.confirmation_url)
+
+
+@router.get("/teams/{organization_id}/payments", response_model=list[TeamPaymentInfo])
+async def list_team_payments(
+    organization_id: uuid.UUID, session: DbSession, user: CurrentUser
+) -> list[Payment]:
+    """The purchases of the team that went through. Who may see the history is not decided yet (spec,
+    section 6, item 5), so it is the owner who does."""
+    _require_team_billing()
+    member = await _team_member(session, user, organization_id)
+    if not team_roles.can_manage_billing(member.role_tag):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "billing_forbidden"})
+    return await payment_repository.list_for_organization(
+        session, organization_id, limit=PAYMENT_HISTORY_LIMIT
+    )
+
+
 @router.post("/trial", response_model=SubscriptionResponse)
 async def start_trial(session: DbSession, user: CurrentUser) -> SubscriptionResponse:
     """The free trial of the paid plan: once per person, with a confirmed mailbox."""
-    _require_billing()
+    _require_person_model()
     await lifecycle.start_trial(session, user)
     await session.commit()
     return await billing_service.get_subscription_summary(session, user)

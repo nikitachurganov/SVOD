@@ -1,6 +1,9 @@
 import { Breadcrumb, Button, Tooltip } from 'antd';
-import { MenuUnfoldOutlined, ReadOutlined } from '@ant-design/icons';
-import { Link } from 'react-router-dom';
+import { MenuUnfoldOutlined, ReadOutlined } from '../../shared/ui/materialIcons';
+import { Link, useLocation } from 'react-router-dom';
+import { CreateResearchButton } from '../../shared/ui/survey/CreateResearchButton';
+import logoUrl from '../../assets/logo.svg';
+import { useOrganization } from '../../shared/hooks/organization.hooks';
 import { useTour } from '../tour/useTour';
 import type { AppBreadcrumbItem } from './appBreadcrumbs';
 import { HeaderNotifications } from './HeaderNotifications';
@@ -19,10 +22,11 @@ interface AppContentHeaderProps {
   onCreateOrg: () => void;
   /** Invitations to a team and decisions on join requests */
   showNotifications?: boolean;
-  /** Standalone surveys service: the brand and the workspace switcher live in its side panel, the account stays here */
+  /** Standalone surveys: workspace and account controls live in the sidebar. */
   standalone?: boolean;
   showMobileMenu?: boolean;
   onMobileMenuClick?: () => void;
+  showBrand?: boolean;
 }
 
 export const AppContentHeader = ({
@@ -40,13 +44,17 @@ export const AppContentHeader = ({
   standalone = false,
   showMobileMenu,
   onMobileMenuClick,
+  showBrand = false,
 }: AppContentHeaderProps) => {
   const { start: startTour } = useTour();
+  const { pathname } = useLocation();
+  const { canEdit, activeOrganization } = useOrganization();
 
   return (
-  <header className="app-content-header" aria-label="Верхняя панель">
+  <header className={`app-content-header${standalone ? ' research-header' : ''}`} aria-label="Верхняя панель">
     <div className="app-content-header__main">
       <div className="app-content-header__left">
+        {showBrand && <Link className="research-header__brand" to="/surveys" aria-label="СВОД — на главную"><img src={logoUrl} alt="СВОД" /></Link>}
         {showMobileMenu && (
           <Button
             type="text"
@@ -72,24 +80,25 @@ export const AppContentHeader = ({
         ) : null}
       </div>
       <div className="app-content-header__right">
-        {showNotifications && (
+        {standalone && canEdit && activeOrganization && /^\/surveys\/(?!studies(?:\/|$)|projects(?:\/|$)|templates(?:\/|$)|resources(?:\/|$)|create(?:\/|$)|from-demo(?:\/|$))[^/]+/.test(pathname) && <CreateResearchButton />}
+        {showNotifications && !standalone && (
           <HeaderNotifications
             open={notificationsOpen}
             onOpenChange={onNotificationsOpenChange}
             closeProfile={() => onProfileOpenChange(false)}
           />
         )}
-        <Tooltip title="Пройти обучение">
+        {!standalone && <Tooltip title="Пройти обучение">
           <Button
             type="text"
             icon={<ReadOutlined />}
             aria-label="Пройти обучение"
             onClick={() => void startTour()}
           />
-        </Tooltip>
+        </Tooltip>}
       </div>
     </div>
-    <HeaderProfileMenu
+    {!standalone && <HeaderProfileMenu
       open={profileOpen}
       onOpenChange={onProfileOpenChange}
       closeNotifications={() => onNotificationsOpenChange(false)}
@@ -99,7 +108,7 @@ export const AppContentHeader = ({
       resolvedEmail={resolvedEmail}
       onCreateOrg={onCreateOrg}
       showCreateOrg={!standalone}
-    />
+    />}
   </header>
   );
 };

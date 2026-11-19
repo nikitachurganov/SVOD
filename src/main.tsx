@@ -4,6 +4,7 @@ import faviconUrl from './assets/FAV icon.svg';
 import 'antd/dist/reset.css';
 import './brand-tokens.css';
 import './index.css';
+import './shadcn.css';
 import App from './App.tsx';
 import { ThemeProvider } from './shared/context/theme.context.tsx';
 import { AuthProvider } from './shared/context/auth.provider.tsx';

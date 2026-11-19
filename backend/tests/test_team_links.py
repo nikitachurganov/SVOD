@@ -91,7 +91,6 @@ class MyRoleTests(unittest.TestCase):
             description=None,
             owner_user_id=uuid.uuid4(),
             owner=None,
-            is_personal=False,
             created_at=now,
             updated_at=now,
         )

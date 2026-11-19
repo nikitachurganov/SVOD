@@ -202,10 +202,62 @@ def unlimited_entitlements(now: datetime) -> Entitlements:
     )
 
 
+def _team_model() -> bool:
+    return settings.BILLING_ENABLED and settings.TEAM_BILLING_ENABLED
+
+
+# The team model: which offer lifts what, and how it is said (docs/MONETIZATION_TEAM_SPEC.md, section 3)
+_TEAM_NEXT_PLAN = {PLAN_START: "plus", PLAN_PACK: "plus", "plus": "pro"}
+_TEAM_FEATURE_TEXT = {
+    "csv_export": (
+        "pack",
+        "Выгрузка ответов в CSV открывается навсегда после покупки пакета за 99 ₽ или на тарифах Plus и Pro.",
+    ),
+    "methodology": (
+        "pack",
+        "Все методики открываются навсегда после покупки пакета за 99 ₽ или на тарифах Plus и Pro.",
+    ),
+    "crosstabs": ("plus", "Сравнение групп доступно на тарифах Plus и Pro."),
+    "quality_filter": ("plus", "Фильтр некачественных ответов доступен на тарифах Plus и Pro."),
+}
+
+
+def _team_limit_detail(ent: Entitlements, limit: str, maximum: int) -> dict[str, object]:
+    """What the window says about a limit of the team model, with the offer that lifts it."""
+    upgrade = _TEAM_NEXT_PLAN.get(ent.plan.code)
+    if limit == "seats":
+        message = (
+            f"В тарифе команды {maximum} мест с учётом владельца, все заняты. Читателей можно приглашать сверх лимита."
+            + (" Больше мест — на тарифе Pro." if upgrade == "pro" else " Больше мест — на тарифах Plus и Pro." if upgrade else "")
+        )
+    elif limit == "ai_member_tokens":
+        message = "Ваш личный лимит Токенов+ в этой команде исчерпан. Попросите владельца команды увеличить его."
+        upgrade = None
+    elif limit == "readers":
+        message = f"В команде уже {maximum} читателей, это предел."
+        upgrade = None
+    else:
+        message = "Лимит тарифа команды исчерпан."
+    return {"upgrade_to": upgrade, "message": message}
+
+
 def limit_reached_error(
     ent: Entitlements, limit: str, used: int, maximum: int
 ) -> HTTPException:
     """402 in the one format the interface turns into the "choose a plan" window."""
+    if _team_model():
+        return HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail={
+                "code": "limit_reached",
+                "limit": limit,
+                "used": used,
+                "max": maximum,
+                "plan": ent.plan.code,
+                "resets_at": ent.period_end.isoformat(),
+                **_team_limit_detail(ent, limit, maximum),
+            },
+        )
     return HTTPException(
         status_code=status.HTTP_402_PAYMENT_REQUIRED,
         detail={
@@ -222,6 +274,23 @@ def limit_reached_error(
 
 def feature_locked_error(ent: Entitlements, feature: str, **extra: object) -> HTTPException:
     """402 for something the plan does not include, in the same envelope as limit_reached."""
+    if _team_model():
+        upgrade, message = _TEAM_FEATURE_TEXT.get(
+            feature, ("plus", "Эта возможность доступна на тарифах Plus и Pro.")
+        )
+        return HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail={
+                "code": "limit_reached",
+                "limit": "feature",
+                "feature": feature,
+                **extra,
+                "plan": ent.plan.code,
+                "upgrade_to": upgrade,
+                "message": message,
+                "resets_at": ent.period_end.isoformat(),
+            },
+        )
     return HTTPException(
         status_code=status.HTTP_402_PAYMENT_REQUIRED,
         detail={

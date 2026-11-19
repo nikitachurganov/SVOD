@@ -1,42 +1,65 @@
 /* The quota of a team above the table of its people (TeamQuotaSummary.tsx) */
 
+/* Gemini "Usage limits": each figure is a grey tile (surface-container), the way to buy more is an
+   outlined tile with a pill button (docs/DESIGN_GEMINI_STYLE.md) */
 .team-quota {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-  margin: 0 0 16px;
-  padding: 16px;
-  border: 1px solid var(--app-border-secondary);
-  border-radius: 12px;
-  background: var(--app-surface);
+  gap: 12px;
+  margin: 0 0 24px;
 }
 
 .team-quota__item {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   min-width: 0;
+  padding: 16px 20px;
+  border-radius: var(--app-radius-md);
+  background: var(--app-surface-accent);
 }
 
 .team-quota__item--action {
   align-items: flex-end;
   justify-content: space-between;
-  gap: 8px;
+  gap: 12px;
+  background: transparent;
+  border: 1px solid var(--app-border);
+}
+
+/* Only the button (no offer to show): it stands in the middle of the tile */
+.team-quota__item--action:has(> :only-child) {
+  align-items: center;
+  justify-content: center;
+}
+
+/* Nothing to offer and nothing to buy: no empty frame */
+.team-quota__item--action:empty {
+  display: none;
 }
 
 .team-quota__label {
-  font-size: 12px;
-  color: var(--app-text-secondary);
+  font-family: var(--app-font-display);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--app-text);
 }
 
 .team-quota__value {
+  font-family: var(--app-font-display);
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 400;
 }
 
 .team-quota__value--big {
-  font-size: 24px;
-  line-height: 1.2;
+  font-size: 28px;
+  line-height: 36px;
+}
+
+/* The bar's rail would vanish on the grey tile: one step darker */
+.team-quota .ant-progress-rail,
+.team-quota .ant-progress-inner {
+  background: var(--app-bg-hover);
 }
 
 .team-quota__hint {
@@ -61,8 +84,13 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  min-height: 32px;
   color: var(--app-text-secondary);
-  background: var(--app-surface-hover);
+}
+
+/* A free seat reads as an empty slot: a tonal row */
+.ant-table-summary .ant-table-cell:has(.team-quota-free-row) {
+  background: var(--app-surface-accent);
 }
 
 .team-quota-free-row strong {

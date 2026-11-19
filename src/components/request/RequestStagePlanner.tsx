@@ -18,7 +18,7 @@ import {
   ExclamationOutlined,
   PlayCircleOutlined,
   PlusOutlined,
-} from '@ant-design/icons';
+} from '../../shared/ui/materialIcons';
 import dayjs, { type Dayjs } from 'dayjs';
 import type { RequestStageDTO, RequestTimelineStageDTO } from '../../types/execution';
 import type { RequestPermissions } from '../../types/request';

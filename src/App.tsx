@@ -2,7 +2,8 @@ import { Suspense, useEffect, useState, type ReactNode } from 'react';
 
 import { useMediaQuery } from './shared/hooks/useMediaQuery';
 
-import { Spin } from 'antd';
+import { Button, Spin } from 'antd';
+import { MenuUnfoldOutlined } from '@ant-design/icons';
 
 import { GlobalScrollbarStyles } from './shared/ui/GlobalScrollbarStyles';
 
@@ -38,13 +39,11 @@ import { useOrganization } from './shared/hooks/organization.hooks';
 
 import { AppSidebar } from './components/layout/AppSidebar';
 import { SurveysSidebar } from './components/layout/SurveysSidebar';
-import { getSurveysNavKey } from './components/layout/surveysNavItems';
 import { NAV_ITEMS } from './components/layout/navItems';
 
 import { AppContentHeader } from './components/layout/AppContentHeader';
 
 import { getBreadcrumbsForPath, getTeamBreadcrumbs, withStandaloneRoot } from './components/layout/appBreadcrumbs';
-import { PersonalWorkspaceNotice } from './components/layout/PersonalWorkspaceNotice';
 
 import { BreadcrumbProvider, useBreadcrumbEntity } from './shared/context/breadcrumb.context';
 
@@ -64,6 +63,8 @@ import { NoOrganizationState } from './components/layout/NoOrganizationState';
 import { WorkspaceUnavailableState } from './components/layout/WorkspaceUnavailableState';
 import { lazyPage, preloadWhenIdle } from './shared/lib/lazyPage';
 import { AppShellSkeleton, PublicFormSkeleton, RouteSkeleton } from './shared/ui/skeletons/PageSkeletons';
+import './research-platform.css';
+import './survey-home.css';
 
 // Every page is a separate chunk: the first screen downloads only the shell and the page it shows
 
@@ -74,6 +75,11 @@ const OrganizationSettingsPage = lazyPage(() => import('./pages/OrganizationSett
 const FormViewPage = lazyPage(() => import('./pages/FormViewPage'), 'FormViewPage');
 const FormsPage = lazyPage(() => import('./pages/FormsPage'), 'FormsPage');
 const SurveysPage = lazyPage(() => import('./pages/SurveysPage'), 'SurveysPage');
+const SurveyHomePage = lazyPage(() => import('./pages/SurveyHomePage'), 'SurveyHomePage');
+const SurveyStudiesPage = lazyPage(() => import('./pages/SurveyStudiesPage'), 'SurveyStudiesPage');
+const SurveyProjectsPage = lazyPage(() => import('./pages/SurveyProjectsPage'), 'SurveyProjectsPage');
+const SurveyTemplatesPage = lazyPage(() => import('./pages/SurveyTemplatesPage'), 'SurveyTemplatesPage');
+const SurveyResourcePage = lazyPage(() => import('./pages/SurveyResourcePage'), 'SurveyResourcePage');
 const ProjectSurveysPage = lazyPage(() => import('./pages/ProjectSurveysPage'), 'ProjectSurveysPage');
 const CreateSurveyPage = lazyPage(() => import('./pages/CreateSurveyPage'), 'CreateSurveyPage');
 const EditSurveyPage = lazyPage(() => import('./pages/EditSurveyPage'), 'EditSurveyPage');
@@ -138,8 +144,6 @@ const AppLayoutContent = () => {
 
   const selectedKey = getSelectedMenuKey(location.pathname);
 
-  const surveysNavKey = getSurveysNavKey(location.pathname);
-
   const { user, profile } = useAuth();
 
 
@@ -170,7 +174,7 @@ const AppLayoutContent = () => {
 
 
 
-  const { organizations, isLoading: isOrgLoading, refreshOrganizations } = useOrganization();
+  const { organizations, activeOrganization, isLoading: isOrgLoading, refreshOrganizations } = useOrganization();
 
   const hasOrganizations = organizations.length > 0;
 
@@ -282,11 +286,21 @@ const AppLayoutContent = () => {
 
 
 
+  const showResearchSidebar = IS_SURVEYS_APP;
+  const isSurveyHome = IS_SURVEYS_APP && location.pathname === '/surveys';
+  // Pages with their own title row have no breadcrumb bar on desktop; it stays where the sidebar is hidden.
+  // Only a research's own pages (editor, results) keep the bar: it carries the breadcrumb trail and the create button there.
+  const isResearchPage = /^\/surveys\/(?!studies(?:\/|$)|projects(?:\/|$)|templates(?:\/|$)|resources(?:\/|$)|create(?:\/|$)|from-demo(?:\/|$))[^/]+/.test(location.pathname);
+  const hideContentHeader = isSurveyHome || (IS_SURVEYS_APP && isDesktop && !isResearchPage);
+
   const shellClass = [
 
     'app-shell-grid',
+    IS_SURVEYS_APP ? 'app-surveys-shell' : '',
+    isSurveyHome ? 'app-surveys-shell--home' : '',
 
-    !IS_SURVEYS_APP && isDesktop && isSidebarCollapsed ? 'app-shell-grid--collapsed' : '',
+    IS_SURVEYS_APP && !showResearchSidebar ? 'research-shell--without-sidebar' : '',
+    (!IS_SURVEYS_APP || showResearchSidebar) && isDesktop && isSidebarCollapsed ? 'app-shell-grid--collapsed' : '',
 
   ]
 
@@ -309,16 +323,18 @@ const AppLayoutContent = () => {
 
 
       <div className={shellClass}>
+        <a className="research-skip-link" href="#main-content">Перейти к содержимому</a>
 
         {IS_SURVEYS_APP ? (
 
-          <SurveysSidebar
-            selectedKey={surveysNavKey}
+          showResearchSidebar ? <SurveysSidebar
             isDesktop={isDesktop}
             isMobileOpen={mobileSidebarOpen}
             onNavigate={handleNav}
-            onCreateTeam={openCreateOrg}
-          />
+            isCollapsed={isSidebarCollapsed}
+            onToggleCollapse={toggleSidebar}
+            onCreateOrg={openCreateOrg}
+          /> : null
 
         ) : (
 
@@ -344,7 +360,7 @@ const AppLayoutContent = () => {
 
 
 
-        {!isDesktop && mobileSidebarOpen && (
+        {!isDesktop && mobileSidebarOpen && (!IS_SURVEYS_APP || showResearchSidebar) && (
 
           <button
 
@@ -362,9 +378,9 @@ const AppLayoutContent = () => {
 
 
 
-        <div className="app-shell-main">
+        <div className="app-shell-main" inert={IS_SURVEYS_APP && !isDesktop && mobileSidebarOpen}>
 
-          <AppContentHeader
+          {!hideContentHeader && <AppContentHeader
 
             breadcrumbs={
               IS_SURVEYS_APP
@@ -397,23 +413,25 @@ const AppLayoutContent = () => {
 
             standalone={IS_SURVEYS_APP}
 
-            showMobileMenu={!isDesktop}
+            showMobileMenu={!isDesktop && (!IS_SURVEYS_APP || showResearchSidebar)}
+            showBrand={IS_SURVEYS_APP && !showResearchSidebar}
 
             onMobileMenuClick={toggleSidebar}
 
-          />
+          />}
 
 
 
+          {isSurveyHome && !isDesktop && <Button className="app-home-mobile-menu" icon={<MenuUnfoldOutlined />} aria-label="Открыть боковую навигацию" onClick={toggleSidebar}>Меню</Button>}
           <EmailVerificationBanner />
 
-          <main id="main-content" className="app-shell-content">
+          <main id="main-content" tabIndex={-1} className="app-shell-content">
 
             {isProfileRoute ? (
 
               // The account settings do not depend on an organization: a person without one can still change the password
               <Suspense fallback={<RouteSkeleton />}>
-                <Outlet />
+                <Outlet key={activeOrganization?.id} />
               </Suspense>
 
             ) : isOrgLoading ? (
@@ -422,7 +440,7 @@ const AppLayoutContent = () => {
 
             ) : !hasOrganizations ? (
 
-              // The surveys service has no organizations: the personal workspace is created by the server
+              // The surveys service has no organizations: the first team is created by the server
               IS_SURVEYS_APP ? (
 
                 <WorkspaceUnavailableState onRetry={() => void refreshOrganizations()} />
@@ -436,7 +454,7 @@ const AppLayoutContent = () => {
             ) : (
 
               <Suspense fallback={<RouteSkeleton />}>
-                <Outlet />
+                <Outlet key={activeOrganization?.id} />
               </Suspense>
 
             )}
@@ -609,7 +627,13 @@ const EditSurveyRoute = () => {
 // Author's surveys section (children of the protected layout)
 const surveyRoutes: RouteObject[] = [
 
-  { path: 'surveys', element: <SurveysPage /> },
+  { path: 'surveys', element: IS_SURVEYS_APP ? <SurveyHomePage /> : <SurveysPage /> },
+  ...(IS_SURVEYS_APP ? [
+    { path: 'surveys/studies', element: <SurveyStudiesPage /> },
+    { path: 'surveys/projects', element: <SurveyProjectsPage /> },
+    { path: 'surveys/templates', element: <SurveyTemplatesPage /> },
+    { path: 'surveys/resources/:slug', element: <SurveyResourcePage /> },
+  ] : []),
 
   { path: 'surveys/create', element: <EditorOnly to="/surveys"><CreateSurveyPage /></EditorOnly> },
 
@@ -718,14 +742,6 @@ const publicLegalRoutes: RouteObject[] = [
 
 ];
 
-// The people and settings of a team have nothing to show in the person's own workspace: it is not shared
-const TeamOnly = ({ children }: { children: ReactNode }) => {
-  const { activeOrganization } = useOrganization();
-
-  if (activeOrganization?.is_personal) return <PersonalWorkspaceNotice />;
-
-  return <>{children}</>;
-};
 
 // Standalone surveys service: sign-in, the surveys section, teams and respondent pages only
 const surveysRoutes: RouteObject[] = [
@@ -770,7 +786,7 @@ const surveysRoutes: RouteObject[] = [
       // The plans are a tab of the settings
       { path: 'plans', element: <Navigate to="/settings?tab=plans" replace /> },
 
-      { path: 'participants', element: <TeamOnly><ParticipantsPage /></TeamOnly> },
+      { path: 'participants', element: <ParticipantsPage /> },
 
       // The team's settings and the plans: one section
       { path: 'settings', element: <SettingsPage /> },

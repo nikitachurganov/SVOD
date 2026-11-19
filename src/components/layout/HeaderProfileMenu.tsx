@@ -44,7 +44,7 @@ export const HeaderProfileMenu = ({
         onOpenChange={handleOpenChange}
         trigger="click"
         placement="bottomRight"
-        align={{ offset: [0, 0] }}
+        align={{ offset: [0, 8] }}
         arrow={false}
         destroyOnHidden
         content={

@@ -4,7 +4,7 @@ import {
   FormOutlined,
   TeamOutlined,
   SettingOutlined,
-} from '@ant-design/icons';
+} from '../../shared/ui/materialIcons';
 import type { ComponentType, CSSProperties } from 'react';
 
 export interface NavItem {

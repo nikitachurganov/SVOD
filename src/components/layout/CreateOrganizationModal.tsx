@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Button, Form, Input, Modal, Steps } from 'antd';
-import { CheckOutlined } from '@ant-design/icons';
+import { CheckOutlined } from '../../shared/ui/materialIcons';
 import { useOrganization } from '../../shared/hooks/organization.hooks';
 import { useSubscription } from '../../shared/hooks/subscription.hooks';
 import { organizationNameRules } from '../../shared/utils/formRules';

@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Switch } from 'antd';
+import { Icon } from '@iconify/react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../shared/hooks/auth.hooks';
-import { useThemeMode } from '../../shared/context/theme.context';
+import { useThemeMode, type ThemePreference } from '../../shared/context/theme.context';
 import { IS_SURVEYS_APP } from '../../shared/config/appMode';
 
 export interface HeaderProfileMenuContentProps {
@@ -18,7 +18,7 @@ export const HeaderProfileMenuContent = ({
 }: HeaderProfileMenuContentProps) => {
   const { signOut, profile } = useAuth();
   const navigate = useNavigate();
-  const { themeMode, toggleTheme } = useThemeMode();
+  const { themePreference, setThemePreference } = useThemeMode();
   const [isSigningOut, setIsSigningOut] = useState(false);
 
   const handleSignOut = async () => {
@@ -75,16 +75,6 @@ export const HeaderProfileMenuContent = ({
         </button>
       )}
 
-      {IS_SURVEYS_APP && profile?.role === 'admin' && (
-        <button
-          type="button"
-          className="app-profile-dropdown__item"
-          onClick={handleOpenAdmin}
-        >
-          Администрирование
-        </button>
-      )}
-
       {showCreateOrg && (
         <button
           type="button"
@@ -95,16 +85,38 @@ export const HeaderProfileMenuContent = ({
         </button>
       )}
 
+      <hr className="app-profile-dropdown__divider" />
+
       <div className="app-profile-dropdown__item app-profile-dropdown__item--switch">
-        <span className="app-profile-dropdown__label">Темная тема</span>
-        <Switch
-          size="small"
-          checked={themeMode === 'dark'}
-          onChange={toggleTheme}
-        />
+        <span className="app-profile-dropdown__label" id="profile-theme-label">Тема</span>
+        <div className="profile-theme-control" role="group" aria-labelledby="profile-theme-label">
+          {([
+            ['light', 'Светлая', 'light-mode'],
+            ['dark', 'Тёмная', 'dark-mode'],
+            ['system', 'Системная', 'desktop-windows'],
+          ] as const).map(([value, label, icon]) => (
+            <button
+              key={value}
+              type="button"
+              className="profile-theme-control__option"
+              aria-label={`${label} тема`}
+              aria-pressed={themePreference === value}
+              title={`${label} тема`}
+              onClick={() => setThemePreference(value as ThemePreference)}
+            >
+              <Icon icon={`material-symbols:${icon}-rounded`} width={18} height={18} aria-hidden="true" />
+            </button>
+          ))}
+        </div>
       </div>
 
       <hr className="app-profile-dropdown__divider" />
+
+      {IS_SURVEYS_APP && profile?.role === 'admin' && (
+        <button type="button" className="app-profile-dropdown__item" onClick={handleOpenAdmin}>
+          Админка
+        </button>
+      )}
 
       <button
         type="button"

@@ -70,7 +70,7 @@ class PoolCase(base.MeterCase):
         super().setUp()
         patch.object(ai_pool.settings, "OPENROUTER_MODEL", BASE_MODEL).start()
         self.owner = base.user()
-        self.org = SimpleNamespace(id=ORG_ID, owner_user_id=self.owner.id, is_personal=False)
+        self.org = SimpleNamespace(id=ORG_ID, owner_user_id=self.owner.id)
         self.member = SimpleNamespace(role_tag="editor", token_plus_limit=None)
         self.get_org = patch.object(
             ai_pool.organization_repository, "get_org_by_id", AsyncMock(return_value=self.org)
@@ -114,13 +114,6 @@ class PayerTests(PoolCase):
 
     async def test_a_team_of_a_free_owner_spends_the_personal_allowance(self):
         self.entitlements.return_value = base.ent(START)
-
-        await self.run_team(self.llm_body)
-
-        self.assertEqual(self.add_usage.await_args.args[1], self.user.id)
-
-    async def test_a_personal_workspace_spends_the_personal_counter(self):
-        self.org.is_personal = True
 
         await self.run_team(self.llm_body)
 
