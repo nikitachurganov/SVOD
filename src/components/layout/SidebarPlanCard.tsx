@@ -5,6 +5,7 @@ import { useOrganization } from '../../shared/hooks/organization.hooks';
 import { useWorkspaceUsage } from './useWorkspaceUsage';
 import { useSubscription } from '../../shared/hooks/subscription.hooks';
 import { getAiQuota, type AiQuota } from '../../shared/lib/aiQuota';
+import { IS_CLASSIC } from '../../shared/config/design';
 
 interface Props {
   onNavigate: (path: string) => void;
@@ -46,8 +47,19 @@ export const SidebarPlanCard = ({ onNavigate, showAiQuota = false }: Props) => {
       >
         <span className="sidebar-plan-card__text">
           <strong>Тариф: {team.plan_title ?? 'бесплатный'}</strong>
-          {seats && <small>{seats}</small>}
-          {quota.visible && <QuotaProgress quota={quota} />}
+          {IS_CLASSIC ? (
+            // The production design has no progress bar here: one line, as its card always had
+            <small>
+              {[seats, quota.visible ? `${quota.unit === 'tokens' ? 'Токены' : 'Токены+'} ${formatQuotaAmount(quota.remaining, quota.unit)}` : null]
+                .filter(Boolean)
+                .join(' · ')}
+            </small>
+          ) : (
+            <>
+              {seats && <small>{seats}</small>}
+              {quota.visible && <QuotaProgress quota={quota} />}
+            </>
+          )}
         </span>
         <RightOutlined aria-hidden />
       </button>

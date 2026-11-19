@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import { ConfigProvider, theme as antTheme, type ThemeConfig } from 'antd';
+import { IS_CLASSIC } from '../config/design';
 
 export type ThemeMode = 'light' | 'dark';
 export type ThemePreference = ThemeMode | 'system';
@@ -66,6 +67,33 @@ const DARK_PALETTE: typeof LIGHT_PALETTE = {
 
 const FONT_TEXT = "'Google Sans Text', 'Google Sans', Roboto, Inter, system-ui, -apple-system, 'Segoe UI', sans-serif";
 const ELEVATION_2 = '0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 6px 2px rgba(0, 0, 0, 0.15)';
+
+/** The antd theme of the production design (before the redesign): its colours, antd's own shapes */
+const classicThemeConfig = (isDark: boolean): ThemeConfig => ({
+  algorithm: isDark ? antTheme.darkAlgorithm : antTheme.defaultAlgorithm,
+  token: isDark
+    ? {
+        colorPrimary: '#ff8a4c',
+        colorText: '#f5f7fa',
+        colorTextSecondary: '#c7cdd6',
+        colorBgBase: '#121417',
+        colorBgLayout: '#121417',
+        colorBgContainer: '#1b1e23',
+        colorBorder: '#505762',
+        colorSplit: '#3e444d',
+      }
+    : {
+        colorPrimary: '#c2410c',
+        colorText: '#171a1f',
+        colorTextSecondary: '#4b5563',
+        colorBgBase: '#ffffff',
+        colorBgLayout: '#f6f7f9',
+        colorBgContainer: '#ffffff',
+        colorBorder: '#cbd1d8',
+        colorSplit: '#e2e5e9',
+      },
+  cssVar: { prefix: 'ant' },
+});
 
 const getInitialTheme = (): ThemePreference => {
   const stored = localStorage.getItem(STORAGE_KEY);
@@ -128,7 +156,7 @@ export const ThemeProvider = ({ children }: ThemeProviderProps) => {
   // Gemini / Material 3 surfaces with the СВОД orange as the accent (docs/DESIGN_GEMINI_STYLE.md)
   const palette = isDark ? DARK_PALETTE : LIGHT_PALETTE;
 
-  const themeConfig: ThemeConfig = {
+  const newThemeConfig: ThemeConfig = {
     algorithm: isDark ? antTheme.darkAlgorithm : antTheme.defaultAlgorithm,
     token: {
       colorPrimary: palette.primary,
@@ -232,6 +260,7 @@ export const ThemeProvider = ({ children }: ThemeProviderProps) => {
     },
     cssVar: { prefix: 'ant' },
   };
+  const themeConfig = IS_CLASSIC ? classicThemeConfig(isDark) : newThemeConfig;
 
   // Static notification/message/Modal calls render outside this tree;
   // holderRender wraps them so toasts follow the current theme too.

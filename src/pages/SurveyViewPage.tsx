@@ -462,7 +462,7 @@ const SurveyViewContent = () => {
 
         {/* The tab bar lives in the header (like the registry pages); the panels are below */}
         <div className="survey-page__container">
-          <Tabs activeKey={route.section} onChange={(section) => navigate(section === 'builder' ? tabPath('form') : section === 'publication' ? tabPath('publication') : tabPath('overview'))} items={[{ key: 'builder', label: 'Конструктор' }, { key: 'publication', label: 'Публикация' }, { key: 'results', label: 'Результаты' }]} />
+          <Tabs className="survey-page__section-tabs" activeKey={route.section} onChange={(section) => navigate(section === 'builder' ? tabPath('form') : section === 'publication' ? tabPath('publication') : tabPath('overview'))} items={[{ key: 'builder', label: 'Конструктор' }, { key: 'publication', label: 'Публикация' }, { key: 'results', label: 'Результаты' }]} />
           {route.section === 'results' &&
           <Tabs
             className="survey-page__tabs"

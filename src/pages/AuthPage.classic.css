@@ -1,0 +1,479 @@
+.auth-page {
+  /* Hero: light theme melts the glow into warm cream, dark theme into deep brown-red (never pure black) */
+  --auth-hero-base: #ffe9d6;
+  --auth-hero-fade: 255, 236, 220;
+  --auth-hero-text: #1c1410;
+  --auth-hero-logo-filter: none;
+  --auth-input-bg: transparent;
+  --auth-input-text: var(--app-text);
+  --auth-input-placeholder: var(--app-text-placeholder);
+  --auth-input-icon: var(--app-text-secondary);
+  --auth-social-bg: var(--app-surface);
+  --auth-social-bg-disabled: var(--app-surface-accent);
+  --auth-social-text-disabled: var(--app-text-secondary);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  min-height: 100vh;
+  padding: 20px;
+  background: var(--app-bg);
+  overflow: auto;
+}
+
+/* The hero: a glowing orange sphere that melts into the theme's base colour, the text sits on the lower part */
+.auth-page__hero {
+  position: relative;
+  min-height: 0;
+  border-radius: 20px;
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--auth-hero-base);
+}
+
+.auth-page__hero-bg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.auth-page__blob {
+  position: absolute;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  filter: blur(40px);
+  will-change: transform;
+}
+
+/* Warm yellow light that sweeps across the top */
+.auth-page__blob--sun {
+  width: 120%;
+  left: -10%;
+  top: -35%;
+  background: radial-gradient(circle, #ffd23f 0%, #ffa72b 45%, rgba(255, 167, 43, 0) 70%);
+  animation: auth-blob-sun 9s ease-in-out infinite alternate;
+}
+
+/* The red-orange sphere: it breathes and rolls around the middle */
+.auth-page__blob--core {
+  width: 115%;
+  left: -8%;
+  top: 0;
+  background: radial-gradient(circle, #ff3419 0%, #ff4d1c 50%, rgba(255, 77, 28, 0) 72%);
+  animation: auth-blob-core 12s ease-in-out infinite alternate;
+}
+
+/* A bright spot that travels over the whole glow */
+.auth-page__blob--ember {
+  width: 80%;
+  left: 30%;
+  top: -4%;
+  background: radial-gradient(circle, #ffb347 0%, rgba(255, 179, 71, 0) 66%);
+  animation: auth-blob-ember 8s ease-in-out infinite alternate;
+}
+
+@keyframes auth-blob-sun {
+  0% { transform: translate3d(-25%, -6%, 0) scale(0.95); }
+  100% { transform: translate3d(30%, 14%, 0) scale(1.2); }
+}
+
+@keyframes auth-blob-core {
+  0% { transform: translate3d(-20%, -10%, 0) scale(0.85); }
+  50% { transform: translate3d(14%, 16%, 0) scale(1.15); }
+  100% { transform: translate3d(22%, -8%, 0) scale(0.95); }
+}
+
+@keyframes auth-blob-ember {
+  0% { transform: translate3d(30%, -10%, 0) scale(0.8); }
+  100% { transform: translate3d(-70%, 90%, 0) scale(1.25); }
+}
+
+/* Melts into the base colour towards the bottom, where the logo and the tagline are */
+.auth-page__hero-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(var(--auth-hero-fade), 0) 42%,
+    rgba(var(--auth-hero-fade), 0.6) 72%,
+    rgba(var(--auth-hero-fade), 0.92) 100%
+  );
+}
+
+.auth-page__hero-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 20px;
+  height: 100%;
+  min-height: 480px;
+  padding: 40px;
+}
+
+.auth-page__hero-logo {
+  width: 150px;
+  height: auto;
+  /* The logo is dark: kept as is on the light hero, drawn white on the dark one */
+  filter: var(--auth-hero-logo-filter);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-page__blob {
+    animation: none;
+  }
+}
+
+.auth-page__hero-tagline {
+  margin: 0;
+  max-width: 100%;
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 38px;
+  color: var(--auth-hero-text);
+}
+
+html[data-theme='dark'] .auth-page {
+  --auth-hero-base: #3a1709;
+  --auth-hero-fade: 44, 17, 8;
+  --auth-hero-text: #fff;
+  --auth-hero-logo-filter: brightness(0) invert(1);
+}
+
+.auth-page__panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 48px 80px;
+  min-height: 0;
+}
+
+.auth-page__heading {
+  margin: auto 0 48px;
+  width: 100%;
+  max-width: 600px;
+  font-size: 38px;
+  font-weight: 600;
+  line-height: 46px;
+  color: var(--app-text);
+}
+
+.auth-page__panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+  max-width: 600px;
+}
+
+.auth-page__alert {
+  margin-bottom: 0;
+}
+
+.auth-page__form {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.auth-page__form-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.auth-page__field-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.auth-page__field {
+  margin-bottom: 0;
+  min-width: 0;
+}
+
+.auth-page__form-fields.ant-form-vertical .ant-form-item-label {
+  padding-bottom: 8px;
+}
+
+.auth-page__form-fields .ant-form-item-label > label {
+  height: auto;
+}
+
+.auth-page__form-fields .ant-form-item-label > label::after {
+  content: none;
+}
+
+.auth-page__form .ant-form-item {
+  margin-bottom: 0;
+}
+
+.auth-page__form .ant-form-item-label > label {
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--app-text);
+}
+
+.auth-page__input.ant-input,
+.auth-page__input.ant-input-affix-wrapper,
+.auth-page__input.ant-input-lg,
+.auth-page__input.ant-input-affix-wrapper-lg {
+  padding-inline: 0;
+  border: none;
+  border-bottom: 1px solid var(--app-border);
+  border-radius: 0;
+  background: var(--auth-input-bg);
+  color: var(--auth-input-text);
+  box-shadow: none;
+  font-size: 16px;
+  line-height: 24px;
+  min-height: 40px;
+}
+
+.auth-page__input.ant-input-affix-wrapper .ant-input {
+  border: none;
+  background: transparent;
+  color: var(--auth-input-text);
+  box-shadow: none;
+}
+
+.auth-page__input.ant-input::placeholder,
+.auth-page__input.ant-input-affix-wrapper .ant-input::placeholder {
+  color: var(--auth-input-placeholder);
+  opacity: 1;
+}
+
+.auth-page__input.ant-input-affix-wrapper .ant-input-suffix,
+.auth-page__input.ant-input-affix-wrapper .ant-input-password-icon {
+  color: var(--auth-input-icon);
+}
+
+.auth-page__input.ant-input:focus,
+.auth-page__input.ant-input-affix-wrapper:focus,
+.auth-page__input.ant-input-affix-wrapper-focused {
+  border-bottom-color: var(--app-primary);
+  box-shadow: none;
+}
+
+.auth-page__submit {
+  height: 40px;
+  font-size: 16px;
+  border-radius: 8px;
+  box-shadow: 0 2px 0 var(--brand-50);
+}
+
+.auth-page__divider {
+  margin: 0;
+  color: var(--app-text-secondary);
+  font-size: 14px;
+}
+
+.auth-page__divider.ant-divider-horizontal.ant-divider-with-text::before,
+.auth-page__divider.ant-divider-horizontal.ant-divider-with-text::after {
+  border-block-start-color: var(--app-border);
+}
+
+.auth-page__social-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+
+.auth-page__social-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  padding-inline: 15px;
+  font-size: 14px;
+  border-radius: 8px;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.02);
+}
+
+.auth-page__social-btn.ant-btn {
+  border-color: var(--app-border);
+  background: var(--auth-social-bg);
+}
+
+.auth-page__social-btn.ant-btn:disabled {
+  border-color: var(--app-border);
+  background: var(--auth-social-bg-disabled);
+  color: var(--auth-social-text-disabled);
+  opacity: 1;
+}
+
+.auth-page__social-icon {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.auth-page__switch {
+  margin: 0;
+  text-align: center;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--app-text-secondary);
+}
+
+/* Ant "link" button that reads as an inline link inside a line of text */
+.auth-page__switch-link.ant-btn {
+  height: auto;
+  padding: 0;
+  font-size: inherit;
+  line-height: inherit;
+  vertical-align: baseline;
+}
+
+/* Links of the page are brand orange, not the default blue */
+.auth-page a,
+.auth-page .auth-page__switch-link.ant-btn {
+  color: #c2410c;
+}
+
+.auth-page a:hover,
+.auth-page .auth-page__switch-link.ant-btn:hover {
+  color: #9a3412;
+}
+
+html[data-theme='dark'] .auth-page a,
+html[data-theme='dark'] .auth-page .auth-page__switch-link.ant-btn {
+  color: #ff8a4c;
+}
+
+html[data-theme='dark'] .auth-page a:hover,
+html[data-theme='dark'] .auth-page .auth-page__switch-link.ant-btn:hover {
+  color: #ffa573;
+}
+
+/* The same prompt is repeated under the heading, on phones only */
+.auth-page__switch--top {
+  display: none;
+}
+
+.auth-page__forgot-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -12px;
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.auth-page__hint {
+  margin: 0;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--app-text-secondary);
+}
+
+/* Legal links sit at the very bottom of the panel */
+.auth-page__legal {
+  margin-top: auto;
+  padding-top: 24px;
+  width: 100%;
+  max-width: 600px;
+}
+
+.auth-page__social-hint {
+  font-size: 12px;
+  line-height: 18px;
+}
+
+/* Sign-up ticks: the terms and the offer, the consent to personal data processing */
+.auth-page__consents {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--app-text-secondary);
+}
+
+/* A long label wraps; the box itself keeps its size and sits by the first line */
+.auth-page__consents .ant-checkbox-wrapper {
+  align-items: flex-start;
+}
+
+.auth-page__consents .ant-checkbox {
+  flex: none;
+  margin-top: 2px;
+}
+
+.auth-page__consent-error {
+  margin: -4px 0 0 24px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--ant-color-error, #ff4d4f);
+}
+
+@media (max-width: 980px) {
+  .auth-page {
+    grid-template-columns: 1fr;
+    padding: 16px;
+  }
+
+  .auth-page__hero {
+    min-height: 220px;
+  }
+
+  .auth-page__hero-content {
+    min-height: 220px;
+    padding: 24px;
+  }
+
+  .auth-page__hero-tagline {
+    font-size: 22px;
+    line-height: 28px;
+  }
+
+  .auth-page__panel {
+    padding: 24px 0 32px;
+  }
+
+  .auth-page__heading {
+    margin-bottom: 16px;
+    font-size: 28px;
+    line-height: 36px;
+  }
+
+  .auth-page__switch--top {
+    display: block;
+    margin-bottom: 16px;
+    text-align: left;
+  }
+
+  .auth-page__field-row,
+  .auth-page__social-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Theme switch (from origin/main) */
+.auth-page__theme-control {
+  position: fixed;
+  top: 32px;
+  right: 32px;
+  z-index: 10;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+}
+
+.auth-page__theme-control .ant-segmented-item-label {
+  min-width: 32px;
+  padding-inline: 8px;
+}
+
+html[data-theme='dark'] .auth-page__theme-control {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
+}
+
+@media (max-width: 980px) {
+  .auth-page__theme-control {
+    top: 24px;
+    right: 24px;
+  }
+}

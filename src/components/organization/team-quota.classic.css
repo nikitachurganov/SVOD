@@ -1,0 +1,113 @@
+/* The quota of a team above the table of its people (TeamQuotaSummary.tsx) */
+
+.team-quota {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin: 0 0 16px;
+  padding: 16px;
+  border: 1px solid var(--app-border-secondary);
+  border-radius: 12px;
+  background: var(--app-surface);
+}
+
+.team-quota__item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.team-quota__item--action {
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.team-quota__label {
+  font-size: 12px;
+  color: var(--app-text-secondary);
+}
+
+.team-quota__value {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.team-quota__value--big {
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.team-quota__hint {
+  font-size: 12px;
+  color: var(--app-text-secondary);
+}
+
+.team-quota__offer {
+  font-size: 12px;
+  text-align: right;
+  color: var(--app-primary);
+}
+
+.team-quota .ant-progress {
+  margin: 0;
+  line-height: 1;
+}
+
+/* A paid seat nobody has taken yet */
+.team-quota-free-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--app-text-secondary);
+  background: var(--app-surface-hover);
+}
+
+.team-quota-free-row strong {
+  font-weight: 500;
+}
+
+.team-quota-spent {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--app-text-secondary);
+}
+
+/* The spending of a person: credits and the share of the team's pool, the personal cap under it */
+.team-quota-usage {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  white-space: nowrap;
+}
+
+.team-quota-usage__share {
+  color: var(--app-text-secondary);
+}
+
+.team-quota-usage__cap {
+  font-size: 12px;
+  color: var(--app-text-secondary);
+}
+
+/* An invitation not answered yet: it holds its seat */
+.team-quota-pending {
+  color: var(--app-text-secondary);
+}
+
+@media (max-width: 900px) {
+  .team-quota {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .team-quota__item--action {
+    align-items: flex-start;
+  }
+
+  .team-quota__offer {
+    text-align: left;
+  }
+}

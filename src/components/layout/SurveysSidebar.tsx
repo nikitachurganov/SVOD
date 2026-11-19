@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   ArrowLeftRight, Check, ChevronDown, ChevronUp, CircleArrowUp, ClipboardList, Folder, Home, LogOut,
-  Monitor, Moon, PanelLeft, PanelLeftClose, Plus, Search, Settings, Sun, User, Users,
+  Monitor, Moon, PanelLeft, PanelLeftClose, Plus, Search, Settings, ShieldCheck, Sun, Undo2, User, Users,
 } from 'lucide-react';
+import { switchDesign } from '../../shared/config/design';
 import { useOrganization } from '../../shared/hooks/organization.hooks';
 import { useAuth } from '../../shared/hooks/auth.hooks';
 import { useThemeMode, type ThemePreference } from '../../shared/context/theme.context';
@@ -173,6 +174,12 @@ export const SurveysSidebar = ({ isDesktop, isMobileOpen, onNavigate, isCollapse
                   <DropdownMenuItem className={itemClass} onSelect={() => navigate('/profile')}><User className="h-4 w-4 text-muted-foreground" />Профиль</DropdownMenuItem>
                   <DropdownMenuItem className={itemClass} onSelect={() => navigate('/settings?tab=plans')}><CircleArrowUp className="h-4 w-4 text-muted-foreground" />Тарифы</DropdownMenuItem>
                   <DropdownMenuItem className={itemClass} onSelect={() => void start()}><ClipboardList className="h-4 w-4 text-muted-foreground" />Пройти обучение</DropdownMenuItem>
+                  {profile?.role === 'admin' && <>
+                    <DropdownMenuSeparator />
+                    {/* Administrators only: back to the design everybody else sees (src/shared/config/design.ts) */}
+                    <DropdownMenuItem className={itemClass} onSelect={() => switchDesign('classic')}><Undo2 className="h-4 w-4 text-muted-foreground" />Старый дизайн</DropdownMenuItem>
+                    <DropdownMenuItem className={itemClass} onSelect={() => navigate('/admin')}><ShieldCheck className="h-4 w-4 text-muted-foreground" />Админка</DropdownMenuItem>
+                  </>}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem className={cn(itemClass, 'text-muted-foreground')} onSelect={() => void signOut()}><LogOut className="h-4 w-4" />Выйти</DropdownMenuItem>
                 </DropdownMenuContent>

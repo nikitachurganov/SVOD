@@ -2661,12 +2661,32 @@ html[data-theme='light'] .survey-page__status--open.ant-tag {
   border-color: #a5dcb4 !important;
 }
 
+/* The tabs of «Результаты» are the last row of the header: they lie on its bottom border too */
 .survey-page__tabs.ant-tabs > .ant-tabs-nav {
-  margin: 0;
+  position: relative;
+  z-index: 1;
+  margin: 0 0 -1px;
 }
 
 .survey-page__tabs.ant-tabs > .ant-tabs-nav::before {
   border-bottom: 0;
+}
+
+/* The main tabs of a study lie on the bottom border of the header: no line of their own, and the
+   active tab's bar covers the header's border instead of sitting 16px above it */
+.survey-page__section-tabs.ant-tabs > .ant-tabs-nav {
+  position: relative;
+  z-index: 1;
+  margin: 0 0 -1px;
+}
+
+.survey-page__section-tabs.ant-tabs > .ant-tabs-nav::before {
+  border-bottom: 0;
+}
+
+/* «Результаты» has its own row of tabs below: that row lies on the border, the main one keeps a gap */
+.survey-page__section-tabs.ant-tabs:not(:last-child) > .ant-tabs-nav {
+  margin-bottom: 4px;
 }
 
 @media (max-width: 1023px) {

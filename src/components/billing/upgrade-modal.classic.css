@@ -1,0 +1,245 @@
+/* The plan wizard opened from the plan tag of the workspace switcher (UpgradeModal.tsx) */
+
+.upgrade-plans {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  align-items: stretch;
+}
+
+.upgrade-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 20px;
+  border: 1px solid var(--app-border-secondary);
+  border-radius: 12px;
+  background: var(--app-surface);
+}
+
+.upgrade-card--featured {
+  border-color: var(--app-primary);
+  box-shadow: 0 0 0 1px var(--app-primary);
+}
+
+.upgrade-card--current:not(.upgrade-card--featured) {
+  border-color: var(--app-primary);
+}
+
+.upgrade-card__title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.upgrade-card__badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+  color: var(--app-text-on-brand);
+  background: var(--app-primary);
+}
+
+.upgrade-card__cta {
+  margin: 12px 0 8px;
+}
+
+.upgrade-card .plan-card__list {
+  margin-top: 4px;
+}
+
+/* Who the plan is for */
+.upgrade-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.upgrade-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 16px;
+  border: 1px solid var(--app-border-secondary);
+  border-radius: 12px;
+  background: var(--app-surface);
+  color: var(--app-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.upgrade-option:hover {
+  background: var(--app-surface-hover);
+}
+
+.upgrade-option--selected,
+.upgrade-option--selected:hover {
+  border-color: var(--app-primary);
+  box-shadow: 0 0 0 1px var(--app-primary);
+  background: var(--app-surface-accent);
+}
+
+.upgrade-option__icon {
+  font-size: 22px;
+  margin-bottom: 8px;
+  color: var(--app-primary);
+}
+
+.upgrade-option span:not(.upgrade-option__icon) {
+  font-size: 13px;
+  color: var(--app-text-secondary);
+}
+
+/* Seats and checkout: the controls on the left, the summary on the right */
+.upgrade-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 24px;
+  align-items: start;
+}
+
+.upgrade-seats {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--app-border-secondary);
+  border-radius: 12px;
+}
+
+.upgrade-seats__label {
+  font-weight: 500;
+}
+
+.upgrade-summary {
+  padding: 16px;
+  border: 1px solid var(--app-border-secondary);
+  border-radius: 12px;
+  background: var(--app-surface-hover);
+}
+
+.upgrade-summary__title {
+  margin: 0 0 12px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.upgrade-summary__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.upgrade-summary__row--total {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--app-border-secondary);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.upgrade-summary__row--muted {
+  color: var(--app-text-secondary);
+}
+
+.upgrade-summary__saving {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--app-primary);
+}
+
+/* A month or a year */
+.upgrade-terms {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.upgrade-term {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--app-border-secondary);
+  border-radius: 12px;
+  background: var(--app-surface);
+  color: var(--app-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.upgrade-term:hover:not(:disabled) {
+  background: var(--app-surface-hover);
+}
+
+.upgrade-term:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.upgrade-term--selected,
+.upgrade-term--selected:hover:not(:disabled) {
+  border-color: var(--app-primary);
+  box-shadow: 0 0 0 1px var(--app-primary);
+  background: var(--app-surface-accent);
+}
+
+.upgrade-term__name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.upgrade-term__tag {
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  color: var(--app-text-on-brand);
+  background: var(--app-primary);
+}
+
+.upgrade-term__price {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.upgrade-term__note {
+  font-size: 12px;
+  color: var(--app-text-secondary);
+}
+
+.upgrade-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+@media (max-width: 900px) {
+  .upgrade-plans,
+  .upgrade-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .upgrade-options,
+  .upgrade-terms {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

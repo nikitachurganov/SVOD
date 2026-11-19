@@ -1,0 +1,635 @@
+/* Plans, usage and the paywall */
+
+.billing-usage {
+  margin-bottom: 8px;
+}
+
+/* A block of the usage list: the AI tokens with their note, then the plain counters */
+.billing-usage-group {
+  padding: 14px 0;
+  border-top: 1px solid var(--app-border-secondary);
+}
+
+.billing-usage-group .billing-usage {
+  margin-bottom: 0;
+}
+
+.billing-usage-group .billing-usage__head {
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.billing-usage-group .ant-progress {
+  margin: 4px 0 0;
+  line-height: 1;
+}
+
+.billing-usage-group__note {
+  margin-top: 8px;
+}
+
+.billing-usage-group--rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.billing-usage__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--app-text);
+}
+
+.billing-usage__head span:last-child {
+  color: var(--app-text-secondary);
+}
+
+.billing-note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--app-text-secondary);
+}
+
+/* A second line inside a table cell or a list row */
+.billing-note.billing-note--tight {
+  margin: 2px 0 0;
+}
+
+.billing-history {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.billing-history__item {
+  display: grid;
+  grid-template-columns: 132px 1fr;
+  gap: 4px 16px;
+}
+
+.billing-history__date {
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--app-text-secondary);
+}
+
+.billing-history__title {
+  font-size: 14px;
+  line-height: 20px;
+}
+
+@media (max-width: 575px) {
+  .billing-history__item {
+    grid-template-columns: 1fr;
+  }
+}
+
+.billing-how {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--app-text-secondary);
+}
+
+.billing-how li + li {
+  margin-top: 4px;
+}
+
+.billing-note--warn {
+  color: var(--app-text-error, var(--ant-color-error, #ff4d4f));
+}
+
+.billing-note a {
+  color: var(--app-menu-active-text);
+}
+
+/* Under the composer of an AI panel and inside the summary card */
+.billing-note.ai-quota-note {
+  margin: 0;
+  padding: 8px 16px 0;
+  flex-shrink: 0;
+}
+
+.billing-note.ai-quota-note--card {
+  margin: 0 0 8px;
+}
+
+.billing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.billing-alert {
+  margin-top: 12px;
+}
+
+/* The plans page */
+.plans-page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+/* Inside the signed-in app the content area does not scroll (overflow: hidden), so the page scrolls
+   itself: it takes the whole area, which keeps the scrollbar at the window edge, and the same
+   1040px column stays in the middle through the side padding */
+/* The plans inside the settings tab: the tab content already has its own padding */
+.settings-page__content > .plans-page {
+  padding: 0;
+}
+
+.app-shell-content > .plans-page {
+  flex: 1;
+  min-height: 0;
+  max-width: none;
+  margin: 0;
+  overflow-y: auto;
+  padding-inline: max(24px, calc((100% - 1040px) / 2));
+}
+
+.plans-page__title {
+  margin: 0;
+  font-size: 24px;
+  line-height: 32px;
+  font-weight: 600;
+  color: var(--app-text);
+}
+
+.plans-page__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  column-gap: 16px;
+  /* Room for the ribbon above a card when the cards wrap into a column */
+  row-gap: 28px;
+  padding-top: 12px;
+}
+
+/* Every card has the same five parts: head, price, AI tokens, button, what is included.
+   With subgrid the parts line up across the cards, so the buttons stand on one line */
+.plan-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+  border: 1px solid var(--app-border-secondary);
+  border-radius: 12px;
+  background: var(--app-surface);
+}
+
+@supports (grid-template-rows: subgrid) {
+  .plan-card {
+    display: grid;
+    grid-row: span 5;
+    grid-template-rows: subgrid;
+    align-content: start;
+  }
+}
+
+/* The plan we suggest: tinted at the top and outlined in the brand colour */
+.plan-card--featured {
+  border-color: var(--app-primary);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--app-primary) 9%, var(--app-surface)) 0,
+    var(--app-surface) 240px
+  );
+}
+
+/* The plan the person has: a thicker ring, so it reads at a glance without a coloured tag */
+.plan-card--current {
+  border-color: var(--app-primary);
+  box-shadow: 0 0 0 1px var(--app-primary);
+}
+
+.plan-card__ribbon {
+  position: absolute;
+  top: -11px;
+  left: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--app-primary);
+  color: var(--app-text-on-brand);
+  font-size: 12px;
+  line-height: 22px;
+  font-weight: 600;
+}
+
+.plan-card__head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.plan-card__title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.plan-card__name {
+  margin: 0;
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 600;
+  color: var(--app-text);
+}
+
+.plan-card__badge {
+  flex-shrink: 0;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--app-primary) 40%, transparent);
+  background: color-mix(in srgb, var(--app-primary) 14%, transparent);
+  color: var(--app-primary);
+  font-size: 12px;
+  line-height: 22px;
+  font-weight: 600;
+}
+
+.plan-card__tagline {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--app-text-secondary);
+}
+
+.plan-card__price {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 8px;
+  color: var(--app-text);
+}
+
+.plan-card__amount {
+  font-size: 36px;
+  line-height: 44px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.plan-card__period {
+  font-size: 14px;
+  color: var(--app-text-secondary);
+}
+
+.plan-card__price-note {
+  flex-basis: 100%;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--app-text-secondary);
+}
+
+/* The AI allowance: the one thing the plans differ in, so it gets its own block */
+.plan-card__tokens {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--app-surface-accent);
+}
+
+.plan-card__tokens-icon {
+  margin-top: 3px;
+  font-size: 16px;
+  color: var(--app-primary);
+}
+
+.plan-card__tokens-amount {
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 600;
+  color: var(--app-text);
+}
+
+.plan-card__tokens-amount span {
+  font-weight: 400;
+  color: var(--app-text-secondary);
+}
+
+.plan-card__tokens-hint {
+  margin: 2px 0 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--app-text-secondary);
+}
+
+.plan-card__cta {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.plan-card__cta .billing-actions {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.plan-card__cta .billing-note {
+  margin: 0;
+}
+
+.plan-card__features {
+  padding-top: 16px;
+  border-top: 1px solid var(--app-border-secondary);
+}
+
+.plan-card__features-title {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--app-text);
+}
+
+.plan-card__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--app-text);
+}
+
+.plan-card__list li {
+  position: relative;
+  padding-left: 22px;
+}
+
+.plan-card__list li::before {
+  content: '✓';
+  position: absolute;
+  left: 2px;
+  font-weight: 600;
+  color: var(--app-primary);
+}
+
+.plans-page__section-title {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--app-text);
+}
+
+.plans-page__faq {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.plans-faq__collapse.ant-collapse {
+  background: var(--app-surface);
+  border: 1px solid var(--app-border-secondary);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.plans-faq__collapse .ant-collapse-item {
+  border-bottom: 1px solid var(--app-border-secondary);
+}
+
+.plans-faq__collapse .ant-collapse-item:last-child {
+  border-bottom: none;
+}
+
+.plans-faq__collapse .ant-collapse-header {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--app-text) !important;
+  padding: 12px 16px !important;
+}
+
+.plans-faq__collapse .ant-collapse-content-box {
+  padding: 0 16px 14px !important;
+}
+
+.plans-faq__answer {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--app-text-secondary);
+}
+
+.plans-faq__answer a {
+  color: var(--app-menu-active-text);
+}
+
+.plans-legal-footer {
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--app-border-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--app-text-secondary);
+}
+
+.plans-legal-footer__note {
+  margin: 0;
+}
+
+.plans-legal-footer__note a,
+.plans-legal-footer__links a {
+  color: var(--app-menu-active-text);
+  text-decoration: none;
+}
+
+.plans-legal-footer__note a:hover,
+.plans-legal-footer__links a:hover {
+  text-decoration: underline;
+}
+
+.plans-legal-footer__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.plans-legal-footer__sep {
+  color: var(--app-border-secondary);
+  user-select: none;
+}
+
+.plans-page__terms {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--app-text);
+}
+
+.plans-page__terms a {
+  color: var(--app-menu-active-text);
+}
+
+.plans-page__table {
+  overflow-x: auto;
+}
+
+@media (max-width: 760px) {
+  .plans-page {
+    padding: 16px;
+    gap: 16px;
+  }
+
+  .billing-actions .ant-btn {
+    flex: 1 1 auto;
+  }
+}
+
+/* The seat configurator on the plans page and in the checkout window */
+.seat-config {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin-top: 8px;
+}
+
+.seat-config__label {
+  font-size: 13px;
+  color: var(--app-text-secondary);
+}
+
+.seat-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.seat-stepper__value {
+  min-width: 20px;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--app-text);
+}
+
+.seat-quote-lines {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--app-text-secondary);
+}
+
+.seat-quote-lines li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* The plan step of «Create a team»: the free plan next to the paid one */
+.team-plans {
+  display: grid;
+  grid-template-columns: 1fr 1.25fr;
+  gap: 12px;
+}
+
+.team-plan {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border-secondary);
+  border-radius: 12px;
+}
+
+.team-plan--accent {
+  border-color: var(--app-menu-active-text);
+}
+
+.team-plan__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--app-text);
+}
+
+.team-plan__price {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--app-text);
+}
+
+.team-plan__period {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--app-text-secondary);
+}
+
+.team-plan__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.team-plan__saving {
+  font-size: 12px;
+  color: var(--app-menu-active-text);
+}
+
+.team-plan__list {
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--app-text-secondary);
+}
+
+.team-plan__list li + li {
+  margin-top: 6px;
+}
+
+.team-plan__list .anticon {
+  margin-right: 6px;
+  color: var(--app-menu-active-text);
+}
+
+.team-plan .billing-actions {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.team-plans__skip {
+  margin-top: 8px;
+  text-align: center;
+}
+
+@media (max-width: 575px) {
+  .team-plans {
+    grid-template-columns: 1fr;
+  }
+}

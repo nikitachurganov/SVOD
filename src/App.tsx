@@ -39,9 +39,13 @@ import { useOrganization } from './shared/hooks/organization.hooks';
 
 import { AppSidebar } from './components/layout/AppSidebar';
 import { SurveysSidebar } from './components/layout/SurveysSidebar';
+import { SurveysSidebarClassic } from './components/layout/SurveysSidebar.classic';
+import { getSurveysNavKey } from './components/layout/surveysNavItems';
+import { IS_CLASSIC, switchDesign } from './shared/config/design';
 import { NAV_ITEMS } from './components/layout/navItems';
 
 import { AppContentHeader } from './components/layout/AppContentHeader';
+import { AppContentHeaderClassic } from './components/layout/AppContentHeader.classic';
 
 import { getBreadcrumbsForPath, getTeamBreadcrumbs, withStandaloneRoot } from './components/layout/appBreadcrumbs';
 
@@ -66,6 +70,18 @@ import { AppShellSkeleton, PublicFormSkeleton, RouteSkeleton } from './shared/ui
 import './research-platform.css';
 import './survey-home.css';
 
+/** Only administrators may keep the new design: anybody else who has it (a shared browser) goes back */
+const DesignGuard = () => {
+  const { profile } = useAuth();
+  useEffect(() => {
+    if (!IS_CLASSIC && profile && profile.role !== 'admin') switchDesign('classic');
+  }, [profile]);
+  return null;
+};
+
+// The top bar of the production design keeps the account menu and the notifications in it
+const ContentHeader = IS_CLASSIC ? AppContentHeaderClassic : AppContentHeader;
+
 // Every page is a separate chunk: the first screen downloads only the shell and the page it shows
 
 const CreateFormPage = lazyPage(() => import('./pages/CreateFormPage'), 'CreateFormPage');
@@ -75,15 +91,23 @@ const OrganizationSettingsPage = lazyPage(() => import('./pages/OrganizationSett
 const FormViewPage = lazyPage(() => import('./pages/FormViewPage'), 'FormViewPage');
 const FormsPage = lazyPage(() => import('./pages/FormsPage'), 'FormsPage');
 const SurveysPage = lazyPage(() => import('./pages/SurveysPage'), 'SurveysPage');
+// The production design (IS_CLASSIC) shows the screens as they were before the redesign
+const SurveysPageClassic = lazyPage(() => import('./pages/SurveysPage.classic'), 'SurveysPageClassic');
 const SurveyHomePage = lazyPage(() => import('./pages/SurveyHomePage'), 'SurveyHomePage');
 const SurveyStudiesPage = lazyPage(() => import('./pages/SurveyStudiesPage'), 'SurveyStudiesPage');
 const SurveyProjectsPage = lazyPage(() => import('./pages/SurveyProjectsPage'), 'SurveyProjectsPage');
 const SurveyTemplatesPage = lazyPage(() => import('./pages/SurveyTemplatesPage'), 'SurveyTemplatesPage');
 const SurveyResourcePage = lazyPage(() => import('./pages/SurveyResourcePage'), 'SurveyResourcePage');
 const ProjectSurveysPage = lazyPage(() => import('./pages/ProjectSurveysPage'), 'ProjectSurveysPage');
-const CreateSurveyPage = lazyPage(() => import('./pages/CreateSurveyPage'), 'CreateSurveyPage');
-const EditSurveyPage = lazyPage(() => import('./pages/EditSurveyPage'), 'EditSurveyPage');
-const SurveyViewPage = lazyPage(() => import('./pages/SurveyViewPage'), 'SurveyViewPage');
+const CreateSurveyPage = IS_CLASSIC
+  ? lazyPage(() => import('./pages/CreateSurveyPage.classic'), 'CreateSurveyPageClassic')
+  : lazyPage(() => import('./pages/CreateSurveyPage'), 'CreateSurveyPage');
+const EditSurveyPage = IS_CLASSIC
+  ? lazyPage(() => import('./pages/EditSurveyPage.classic'), 'EditSurveyPageClassic')
+  : lazyPage(() => import('./pages/EditSurveyPage'), 'EditSurveyPage');
+const SurveyViewPage = IS_CLASSIC
+  ? lazyPage(() => import('./pages/SurveyViewPage.classic'), 'SurveyViewPageClassic')
+  : lazyPage(() => import('./pages/SurveyViewPage'), 'SurveyViewPage');
 const PublicSurveyPage = lazyPage(() => import('./pages/PublicSurveyPage'), 'PublicSurveyPage');
 const SurveyFromDemoPage = lazyPage(() => import('./pages/DemoDraftPage'), 'SurveyFromDemoPage');
 const DemoDraftEntryPage = lazyPage(() => import('./pages/DemoDraftPage'), 'DemoDraftEntryPage');
@@ -96,7 +120,9 @@ const LegalPage = lazyPage(() => import('./pages/LegalPage'), 'LegalPage');
 const RequestsPage = lazyPage(() => import('./pages/RequestsPage'), 'RequestsPage');
 const CreateRequestPage = lazyPage(() => import('./pages/CreateRequestPage'), 'CreateRequestPage');
 const RequestViewPage = lazyPage(() => import('./pages/RequestViewPage'), 'RequestViewPage');
-const AuthPage = lazyPage(() => import('./pages/AuthPage'), 'AuthPage');
+const AuthPage = IS_CLASSIC
+  ? lazyPage(() => import('./pages/AuthPage.classic'), 'AuthPageClassic')
+  : lazyPage(() => import('./pages/AuthPage'), 'AuthPage');
 const ResetPasswordPage = lazyPage(() => import('./pages/ResetPasswordPage'), 'ResetPasswordPage');
 const VerifyEmailPage = lazyPage(() => import('./pages/VerifyEmailPage'), 'VerifyEmailPage');
 const OAuthCallbackPage = lazyPage(() => import('./pages/OAuthCallbackPage'), 'OAuthCallbackPage');
@@ -286,14 +312,18 @@ const AppLayoutContent = () => {
 
 
 
-  const showResearchSidebar = IS_SURVEYS_APP;
-  const isSurveyHome = IS_SURVEYS_APP && location.pathname === '/surveys';
+  // The production design keeps its own side panel and always shows the top bar (src/shared/config/design.ts)
+  const showResearchSidebar = IS_SURVEYS_APP && !IS_CLASSIC;
+  const isSurveyHome = IS_SURVEYS_APP && !IS_CLASSIC && location.pathname === '/surveys';
   // Pages with their own title row have no breadcrumb bar on desktop; it stays where the sidebar is hidden.
   // Only a research's own pages (editor, results) keep the bar: it carries the breadcrumb trail and the create button there.
   const isResearchPage = /^\/surveys\/(?!studies(?:\/|$)|projects(?:\/|$)|templates(?:\/|$)|resources(?:\/|$)|create(?:\/|$)|from-demo(?:\/|$))[^/]+/.test(location.pathname);
-  const hideContentHeader = isSurveyHome || (IS_SURVEYS_APP && isDesktop && !isResearchPage);
+  const hideContentHeader = !IS_CLASSIC && (isSurveyHome || (IS_SURVEYS_APP && isDesktop && !isResearchPage));
 
-  const shellClass = [
+  const shellClass = (IS_CLASSIC ? [
+    'app-shell-grid',
+    !IS_SURVEYS_APP && isDesktop && isSidebarCollapsed ? 'app-shell-grid--collapsed' : '',
+  ] : [
 
     'app-shell-grid',
     IS_SURVEYS_APP ? 'app-surveys-shell' : '',
@@ -302,7 +332,7 @@ const AppLayoutContent = () => {
     IS_SURVEYS_APP && !showResearchSidebar ? 'research-shell--without-sidebar' : '',
     (!IS_SURVEYS_APP || showResearchSidebar) && isDesktop && isSidebarCollapsed ? 'app-shell-grid--collapsed' : '',
 
-  ]
+  ])
 
     .filter(Boolean)
 
@@ -318,14 +348,24 @@ const AppLayoutContent = () => {
 
       <OnboardingGate />
 
+      <DesignGuard />
+
       {IS_SURVEYS_APP && <PaywallModalHost />}
 
 
 
       <div className={shellClass}>
-        <a className="research-skip-link" href="#main-content">Перейти к содержимому</a>
+        {!IS_CLASSIC && <a className="research-skip-link" href="#main-content">Перейти к содержимому</a>}
 
-        {IS_SURVEYS_APP ? (
+        {IS_SURVEYS_APP && IS_CLASSIC ? (
+          <SurveysSidebarClassic
+            selectedKey={getSurveysNavKey(location.pathname)}
+            isDesktop={isDesktop}
+            isMobileOpen={mobileSidebarOpen}
+            onNavigate={handleNav}
+            onCreateTeam={openCreateOrg}
+          />
+        ) : IS_SURVEYS_APP ? (
 
           showResearchSidebar ? <SurveysSidebar
             isDesktop={isDesktop}
@@ -360,7 +400,7 @@ const AppLayoutContent = () => {
 
 
 
-        {!isDesktop && mobileSidebarOpen && (!IS_SURVEYS_APP || showResearchSidebar) && (
+        {!isDesktop && mobileSidebarOpen && (!IS_SURVEYS_APP || IS_CLASSIC || showResearchSidebar) && (
 
           <button
 
@@ -378,9 +418,9 @@ const AppLayoutContent = () => {
 
 
 
-        <div className="app-shell-main" inert={IS_SURVEYS_APP && !isDesktop && mobileSidebarOpen}>
+        <div className="app-shell-main" inert={IS_SURVEYS_APP && !IS_CLASSIC && !isDesktop && mobileSidebarOpen}>
 
-          {!hideContentHeader && <AppContentHeader
+          {!hideContentHeader && <ContentHeader
 
             breadcrumbs={
               IS_SURVEYS_APP
@@ -413,8 +453,8 @@ const AppLayoutContent = () => {
 
             standalone={IS_SURVEYS_APP}
 
-            showMobileMenu={!isDesktop && (!IS_SURVEYS_APP || showResearchSidebar)}
-            showBrand={IS_SURVEYS_APP && !showResearchSidebar}
+            showMobileMenu={!isDesktop && (!IS_SURVEYS_APP || IS_CLASSIC || showResearchSidebar)}
+            showBrand={IS_SURVEYS_APP && !IS_CLASSIC && !showResearchSidebar}
 
             onMobileMenuClick={toggleSidebar}
 
@@ -627,8 +667,15 @@ const EditSurveyRoute = () => {
 // Author's surveys section (children of the protected layout)
 const surveyRoutes: RouteObject[] = [
 
-  { path: 'surveys', element: IS_SURVEYS_APP ? <SurveyHomePage /> : <SurveysPage /> },
-  ...(IS_SURVEYS_APP ? [
+  { path: 'surveys', element: IS_SURVEYS_APP ? (IS_CLASSIC ? <SurveysPageClassic /> : <SurveyHomePage />) : <SurveysPage /> },
+  // The production design has no research home, studies, templates or resources: they lead to the list
+  ...(IS_SURVEYS_APP && IS_CLASSIC ? [
+    { path: 'surveys/studies', element: <Navigate to="/surveys" replace /> },
+    { path: 'surveys/projects', element: <Navigate to="/surveys" replace /> },
+    { path: 'surveys/templates', element: <Navigate to="/surveys" replace /> },
+    { path: 'surveys/resources/:slug', element: <Navigate to="/surveys" replace /> },
+  ] : []),
+  ...(IS_SURVEYS_APP && !IS_CLASSIC ? [
     { path: 'surveys/studies', element: <SurveyStudiesPage /> },
     { path: 'surveys/projects', element: <SurveyProjectsPage /> },
     { path: 'surveys/templates', element: <SurveyTemplatesPage /> },

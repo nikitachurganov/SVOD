@@ -1,0 +1,417 @@
+// The production design (src/shared/config/design.ts): this screen as it was before the redesign (ace7f37).
+// Shown while IS_CLASSIC; the new design uses the file without `.classic`. Delete together once the new one is the only one.
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, Button, Dropdown, Empty, Grid, Input, Modal } from 'antd';
+import type { MenuProps } from 'antd';
+import { FileTextOutlined, FolderOutlined, MoreOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons';
+import axios from 'axios';
+import { Link, useNavigate } from 'react-router-dom';
+
+import {
+  createSurveyProject,
+  deleteSurveyProject,
+  getSurveyProjects,
+  getSurveys,
+  updateSurveyProject,
+  type SurveyListItem,
+  type SurveyProject,
+  type SurveyProjectPayload,
+} from '../shared/api/surveys.api';
+import { resolveFolderColor } from '../shared/lib/folderColors';
+import { BetaBanner } from '../components/layout/BetaBanner';
+import { useOrganization } from '../shared/hooks/organization.hooks';
+import { IS_SURVEYS_APP } from '../shared/config/appMode';
+import { useNotifications } from '../shared/context/notifications.context';
+import { CreateSurveyModal } from '../shared/ui/survey/CreateSurveyModal';
+import { NewProjectFolder } from '../shared/ui/survey/NewProjectFolder';
+import { ProjectFormModal } from '../shared/ui/survey/ProjectFormModal';
+import { Bone, ProjectGridSkeleton } from '../shared/ui/skeletons/PageSkeletons';
+import {
+  SURVEY_STATUS_LABEL,
+  pluralizeResponses,
+  pluralizeSurveys,
+} from './surveyStatus';
+
+/** The search box is only worth its space once the catalog is long enough to scan */
+const SEARCH_FROM = 6;
+const SKELETON_CARDS = 6;
+const RECENT_SURVEYS = 6;
+
+export const SurveysPageClassic = () => {
+  const { activeOrganization, canEdit } = useOrganization();
+  const { notifySuccess, notifyError } = useNotifications();
+  const organizationId = activeOrganization?.id ?? null;
+
+  const [projects, setProjects] = useState<SurveyProject[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [surveys, setSurveys] = useState<SurveyListItem[]>([]);
+  const [surveysLoading, setSurveysLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [search, setSearch] = useState('');
+  const [formOpen, setFormOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const navigate = useNavigate();
+  const [editing, setEditing] = useState<SurveyProject | null>(null);
+  const [deleting, setDeleting] = useState<SurveyProject | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const isMobile = Grid.useBreakpoint().md === false;
+
+  const load = useCallback(() => {
+    if (!organizationId) {
+      setProjects([]);
+      setSurveys([]);
+      setSurveysLoading(false);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setSurveysLoading(true);
+    setLoadFailed(false);
+    // The survey list only feeds the stats; the page still works without it
+    getSurveys(organizationId)
+      .then(setSurveys)
+      .catch(() => setSurveys([]))
+      .finally(() => setSurveysLoading(false));
+    getSurveyProjects(organizationId)
+      .then(setProjects)
+      .catch(() => setLoadFailed(true))
+      .finally(() => setLoading(false));
+  }, [organizationId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const visibleProjects = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    return needle ? projects.filter((p) => p.name.toLowerCase().includes(needle)) : projects;
+  }, [projects, search]);
+
+  const projectColors = useMemo(
+    () => new Map(projects.map((project) => [project.id, project.color])),
+    [projects],
+  );
+
+  const recentSurveys = useMemo(
+    () =>
+      surveys
+        .filter((survey) => survey.status !== 'archived')
+        .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+        .slice(0, RECENT_SURVEYS),
+    [surveys],
+  );
+
+  const openForm = (project: SurveyProject | null) => {
+    setEditing(project);
+    setFormOpen(true);
+  };
+
+  const closeForm = () => {
+    setFormOpen(false);
+    setEditing(null);
+  };
+
+  const handleSubmit = async (payload: SurveyProjectPayload) => {
+    if (editing) {
+      const updated = await updateSurveyProject(editing.id, payload);
+      setProjects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+      notifySuccess('Проект сохранён');
+    } else if (organizationId) {
+      const created = await createSurveyProject(organizationId, payload);
+      setProjects((prev) => [created, ...prev]);
+      notifySuccess('Проект создан', `«${created.name}»`);
+    }
+    closeForm();
+  };
+
+  const handleDelete = async () => {
+    if (!deleting) return;
+    setDeleteBusy(true);
+    try {
+      await deleteSurveyProject(deleting.id);
+      setProjects((prev) => prev.filter((p) => p.id !== deleting.id));
+      notifySuccess('Проект удалён');
+    } catch (err) {
+      const notEmpty = axios.isAxiosError(err) && err.response?.data?.detail === 'project_not_empty';
+      notifyError(
+        'Не удалось удалить проект',
+        notEmpty
+          ? 'В проекте есть опросы (возможно, в архиве). Сначала переместите их в другой проект.'
+          : undefined,
+      );
+      if (notEmpty) load();
+    } finally {
+      setDeleteBusy(false);
+      setDeleting(null);
+    }
+  };
+
+  const menuFor = (project: SurveyProject): MenuProps => ({
+    items: [
+      { key: 'rename', label: 'Изменить' },
+      { key: 'delete', label: 'Удалить', danger: true },
+    ],
+    onClick: ({ key }) => {
+      if (key === 'rename') openForm(project);
+      if (key === 'delete') setDeleting(project);
+    },
+  });
+
+  const deleteBlocked = !!deleting && deleting.surveys_count > 0;
+
+  const renderBody = () => {
+    if (!organizationId) {
+      return (
+        <Empty
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description={IS_SURVEYS_APP ? 'Пространство ещё загружается.' : 'Выберите команду, чтобы увидеть проекты.'}
+        />
+      );
+    }
+    if (loadFailed) {
+      return (
+        <Alert
+          type="error"
+          showIcon
+          message="Не удалось загрузить проекты"
+          action={
+            <Button size="small" onClick={load}>
+              Повторить
+            </Button>
+          }
+        />
+      );
+    }
+    if (loading) {
+      return (
+        <div role="status" aria-busy="true" aria-label="Загрузка проектов">
+          <Bone w={120} h={24} style={{ marginBottom: 16 }} />
+          <ProjectGridSkeleton count={SKELETON_CARDS} />
+        </div>
+      );
+    }
+    if (projects.length === 0) {
+      return (
+        <>
+          <h2 className="home-section__title">Проекты</h2>
+          <section className="projects-empty" aria-label="Первый проект">
+            <div className="projects-empty__body">
+              <h3 className="projects-empty__title">
+                {canEdit ? 'Создайте первый проект' : 'Проектов пока нет'}
+              </h3>
+              <p className="projects-empty__text">
+                {canEdit
+                  ? 'Проект — это папка для опросов одной темы. В ней собираются опросы, ответы и аналитика.'
+                  : 'Проекты и опросы команды появятся здесь, когда их создадут редакторы.'}
+              </p>
+              {canEdit && (
+                <div className="projects-empty__actions">
+                  <Button
+                    type="primary"
+                    size="large"
+                    icon={<PlusOutlined />}
+                    data-tour="new-project"
+                    onClick={() => openForm(null)}
+                  >
+                    Создать проект
+                  </Button>
+                  <Button size="large" onClick={() => setCreateOpen(true)}>
+                    Сразу создать опрос
+                  </Button>
+                </div>
+              )}
+              <ol className="projects-empty__steps">
+                <li>
+                  <span className="projects-empty__step-num">1</span>
+                  Создайте проект
+                </li>
+                <li>
+                  <span className="projects-empty__step-num">2</span>
+                  Добавьте опрос
+                </li>
+                <li>
+                  <span className="projects-empty__step-num">3</span>
+                  Соберите ответы
+                </li>
+              </ol>
+            </div>
+            {/* A sample folder shows what the first project will look like */}
+            <div className="projects-empty__preview" aria-hidden>
+              <div className="project-env projects-empty__folder" data-folder-color="orange">
+                <div className="project-env__tab" />
+                <div className="project-env__shell" />
+                <div className="project-env__sheet" />
+                <div className="project-env__panel">
+                  <div className="project-env__head">
+                    <span className="project-env__link">Мой первый проект</span>
+                  </div>
+                  <div className="project-env__count">0 опросов</div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </>
+      );
+    }
+    return (
+      <>
+        <h2 className="home-section__title">Проекты</h2>
+        {projects.length > SEARCH_FROM && (
+          <Input
+            allowClear
+            prefix={<SearchOutlined />}
+            placeholder="Поиск по названию проекта"
+            aria-label="Поиск проекта по названию"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            size={isMobile ? 'large' : 'middle'}
+            style={{ maxWidth: isMobile ? undefined : 360, marginBottom: 16 }}
+          />
+        )}
+        {visibleProjects.length === 0 ? (
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Ничего не найдено" />
+        ) : (
+          <ul className="project-grid" aria-label="Проекты">
+            {visibleProjects.map((project) => (
+              <li key={project.id} className="project-env" data-folder-color={resolveFolderColor(project.color, project.id)}>
+                <div className="project-env__tab" aria-hidden />
+                <div className="project-env__shell" aria-hidden />
+                <div className="project-env__sheet" aria-hidden />
+                <div className="project-env__panel">
+                  <div className="project-env__head">
+                    {/* The link is stretched over the whole card; the menu button sits above it */}
+                    <Link
+                      to={`/surveys/projects/${project.id}`}
+                      className="project-env__link"
+                      title={project.description || undefined}
+                    >
+                      {project.name}
+                    </Link>
+                    {canEdit && (
+                      <Dropdown menu={menuFor(project)} trigger={['click']} placement="bottomRight">
+                        <Button
+                          type="text"
+                          className="project-env__menu"
+                          icon={<MoreOutlined />}
+                          aria-label={`Действия с проектом «${project.name}»`}
+                        />
+                      </Dropdown>
+                    )}
+                  </div>
+                  <div className="project-env__count">{pluralizeSurveys(project.surveys_count)}</div>
+                </div>
+              </li>
+            ))}
+            {canEdit && !search.trim() && (
+              <li className="project-env project-env--new" data-tour="new-project">
+                <NewProjectFolder onClick={() => openForm(null)} />
+              </li>
+            )}
+          </ul>
+        )}
+        {canEdit && <BetaBanner onCreateSurvey={() => setCreateOpen(true)} />}
+        <section className="home-section" aria-label="Недавние опросы">
+          <h2 className="home-section__title">Недавние опросы</h2>
+          {surveysLoading ? (
+            <div role="status" aria-busy="true" aria-label="Загрузка опросов">
+              <Bone w="100%" h={66} style={{ marginBottom: 10 }} />
+              <Bone w="100%" h={66} />
+            </div>
+          ) : recentSurveys.length === 0 ? (
+            <div className="recent-empty">
+              <FileTextOutlined className="recent-empty__icon" aria-hidden />
+              <div className="recent-empty__body">
+                <div className="recent-empty__title">Опросов пока нет</div>
+                <div className="recent-empty__text">
+                  Здесь появятся опросы, с которыми вы работали в последнее время.
+                </div>
+              </div>
+              {canEdit && (
+                <Button onClick={() => setCreateOpen(true)}>Создать опрос</Button>
+              )}
+            </div>
+          ) : (
+            <ul className="recent-surveys">
+              {recentSurveys.map((survey) => (
+                <li key={survey.id} className="recent-surveys__item">
+                  <div className="recent-surveys__main">
+                    <Link to={`/surveys/${survey.id}`} className="recent-surveys__name">
+                      {survey.name}
+                    </Link>
+                    <div className="recent-surveys__meta">
+                      {pluralizeResponses(survey.responses_count)}
+                    </div>
+                  </div>
+                  <div className="recent-surveys__side">
+                    <span className={`recent-surveys__status recent-surveys__status--${survey.status}`}>
+                      {SURVEY_STATUS_LABEL[survey.status]}
+                    </span>
+                    <span
+                      className="recent-surveys__project"
+                      data-folder-color={resolveFolderColor(
+                        projectColors.get(survey.project_id),
+                        survey.project_id,
+                      )}
+                      title={survey.project_name}
+                    >
+                      <FolderOutlined aria-hidden />
+                      <span className="recent-surveys__project-name">{survey.project_name}</span>
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </>
+    );
+  };
+
+  return (
+    <div className="registry-page">
+      <div className="registry-page__content">{renderBody()}</div>
+
+      <CreateSurveyModal
+        open={createOpen}
+        organizationId={organizationId}
+        projects={projects}
+        onContinue={(project, created) => {
+          if (created) setProjects((prev) => [project, ...prev]);
+          setCreateOpen(false);
+          navigate(`/surveys/create?project=${project.id}`);
+        }}
+        onClose={() => setCreateOpen(false)}
+      />
+
+      <ProjectFormModal
+        open={formOpen}
+        project={editing}
+        onSubmit={handleSubmit}
+        onClose={closeForm}
+      />
+
+      <Modal
+        open={!!deleting}
+        title={deleteBlocked ? 'Нельзя удалить проект' : 'Удалить проект?'}
+        okText={deleteBlocked ? 'Понятно' : 'Удалить'}
+        cancelText="Отмена"
+        cancelButtonProps={{ style: deleteBlocked ? { display: 'none' } : undefined }}
+        okButtonProps={{ danger: !deleteBlocked, loading: deleteBusy }}
+        onCancel={() => setDeleting(null)}
+        onOk={() => (deleteBlocked ? setDeleting(null) : void handleDelete())}
+      >
+        {deleteBlocked ? (
+          <p>
+            В проекте «{deleting?.name}» есть опросы ({pluralizeSurveys(deleting?.surveys_count ?? 0)}).
+            Чтобы не потерять ответы, сначала переместите их в другой проект.
+          </p>
+        ) : (
+          <p>
+            Проект «{deleting?.name}» пуст и будет удалён. Если в нём остались опросы из архива,
+            удаление не выполнится.
+          </p>
+        )}
+      </Modal>
+    </div>
+  );
+};
